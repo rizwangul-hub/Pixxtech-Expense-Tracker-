@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import handlebars from 'handlebars';
-import puppeteer from 'puppeteer';
+import chromium from '@sparticuz/chromium';
+import puppeteer from 'puppeteer-core';
 
 import Transaction from '../models/Transaction.js';
 import Property from '../models/Property.js';
@@ -426,19 +427,18 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   });
 
   // 8. Launch Puppeteer with fallback
-  const executablePath = getBrowserExecutablePath();
+  const localExecutablePath = getBrowserExecutablePath();
+  const executablePath = localExecutablePath || await chromium.executablePath();
   const launchOptions = {
-    headless: 'new',
-    args: [
+    headless: true,
+    args: localExecutablePath ? [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-    ],
+    ] : chromium.args,
+    executablePath,
   };
-  if (executablePath) {
-    launchOptions.executablePath = executablePath;
-  }
 
   const browser = await puppeteer.launch(launchOptions);
   try {
