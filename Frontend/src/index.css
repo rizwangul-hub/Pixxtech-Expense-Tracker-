@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+/* Keep the header logo animation independent from page styles. */
+.pixx-logo-spin {
+  display: block;
+  transform-origin: center;
+  transform-style: preserve-3d;
+  backface-visibility: visible;
+  will-change: transform;
+  animation: pixx-logo-x-spin 3s linear infinite;
+}
+
+@keyframes pixx-logo-x-spin {
+  from {
+    transform: rotateX(0deg);
+  }
+  to {
+    transform: rotateX(360deg);
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-slate-900 text-slate-100 antialiased font-sans min-h-screen;
+  }
+}
+
+/* Custom scrollbars for clean accounting tables */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}

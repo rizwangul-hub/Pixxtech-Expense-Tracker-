@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pixx Technologies - Funds Management Report - {{periodName}}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 10mm 10mm 12mm 10mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 8pt;
+      line-height: 1.25;
+      color: #000000;
+      background: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+
+    .page-container {
+      position: relative;
+      min-height: 260mm;
+    }
+
+    .page-break {
+      page-break-after: always;
+      break-after: page;
+      clear: both;
+    }
+
+    /* Official Brand Banner */
+    .brand-banner {
+      background-color: #ffc000;
+      border: 1px solid #c99700;
+      position: relative;
+      text-align: center;
+      padding: 6px 0;
+      margin-bottom: 6px;
+    }
+
+    .brand-banner .purple-bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 14px;
+      background-color: #3b0764;
+    }
+
+    .brand-title {
+      font-size: 22pt;
+      font-weight: 900;
+      color: #002060;
+      margin: 0;
+      letter-spacing: -0.5px;
+    }
+
+    .report-subtitle {
+      font-size: 11pt;
+      font-weight: 700;
+      color: #000000;
+      text-align: center;
+      margin: 3px 0 1px 0;
+    }
+
+    .report-date {
+      font-size: 9pt;
+      font-weight: 700;
+      color: #000000;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    /* Standard Accounting Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+      font-size: 7.5pt;
+    }
+
+    th, td {
+      border: 1px solid #000000;
+      padding: 3.5px 5px;
+      vertical-align: middle;
+    }
+
+    .text-right { text-align: right !important; }
+    .text-center { text-align: center !important; }
+    .text-left { text-align: left !important; }
+    .font-mono { font-family: 'Consolas', 'Courier New', monospace; }
+    .font-bold { font-weight: bold !important; }
+    .negative { color: #b91c1c !important; }
+
+    /* Highlights & Sections */
+    .bg-income-hdr { background-color: #d9ead3; color: #274e13; font-weight: bold; }
+    .bg-expense-hdr { background-color: #f4cccc; color: #990000; font-weight: bold; }
+    .bg-yellow-hdr { background-color: #ffc000; font-weight: bold; }
+    .bg-yellow-highlight { background-color: #ffff00 !important; font-weight: bold; }
+    .bg-subtotal { background-color: #f3f4f6; font-weight: bold; }
+    .bg-teal-hdr { background-color: #00cccc; color: #000000; font-weight: bold; }
+
+    /* Compact styles for Page 3 Tenancy Register to fit on 1 single page */
+    .page-3-table th, .page-3-table td {
+      padding: 1.1px 2.5px !important;
+      font-size: 5.5pt !important;
+      line-height: 1.05 !important;
+    }
+
+    /* Compact styles for Account Statements to prevent orphan pages */
+    .statement-table th, .statement-table td {
+      padding: 1.5px 3.5px !important;
+      font-size: 6.2pt !important;
+      line-height: 1.1 !important;
+    }
+
+    /* Sign-off Blocks */
+    .signoff-row {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 50px;
+      padding: 0 40px;
+    }
+
+    .signoff-box {
+      width: 220px;
+      text-align: center;
+    }
+
+    .signoff-line {
+      border-bottom: 1.5px solid #000000;
+      margin-bottom: 6px;
+      height: 1px;
+    }
+
+    .signoff-label {
+      font-size: 9pt;
+      font-weight: bold;
+      color: #000000;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 1: FINANCIAL POSITION AT A GLANCE                       -->
+  <!-- ============================================================ -->
+  <div class="page-container">
+    <div class="brand-banner">
+      <div class="purple-bar"></div>
+      <div class="brand-title">Pixx Technologies</div>
+    </div>
+    <div class="report-subtitle">Financial Position At a Glance</div>
+    <div class="report-date">{{asOfDate}}</div>
+    <div style="text-align: center; margin-top: -8px; margin-bottom: 12px;">
+      <span style="font-size: 8pt; font-weight: bold; padding: 2px 8px; border-radius: 3px; border: 1px solid #6b7280; text-transform: uppercase; background: #f3f4f6; color: #111827;">
+        Report Status: {{reportStatus}} &bull; Generated: {{generatedDate}}
+      </span>
+    </div>
+
+    <!-- INCOME TABLE -->
+    <table>
+      <thead>
+        <tr>
+          <th colspan="2" class="bg-income-hdr text-center" style="font-size: 10.5pt; text-transform: uppercase; padding: 6px;">
+            INCOME
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="width: 65%; font-size: 8.5pt;">
+            <strong>Rent Received In {{monthNameYear}}</strong>
+            <div style="font-size: 7pt; color: #374151;">(Includes All Rent Received)</div>
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9pt; width: 35%;">
+            {{formatPKRZero macro.totalRentalIncomeReceived}}
+          </td>
+        </tr>
+        <tr>
+          <td style="font-size: 8.5pt;">
+            <strong>Other Receipts/Returned Cash/Security Received</strong>
+            <div style="font-size: 7pt; color: #374151;">(Cash received for Re-payments / Cash returned by vendors / employees Or Sale of an Old Asset)</div>
+          </td>
+          <td class="text-right font-mono" style="font-size: 9pt;">
+            {{#if macro.totalOtherReceipts}}{{formatPKRZero macro.totalOtherReceipts}}{{else}}-{{/if}}
+          </td>
+        </tr>
+        <tr class="bg-income-hdr">
+          <td class="text-center font-bold" style="font-size: 9pt;">
+            TOTAL INCOME
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9.5pt;">
+            {{formatPKRZero macro.totalRentalIncomeReceived}}
+          </td>
+        </tr>
+        <tr>
+          <td class="text-center font-bold" style="color: #274e13; font-size: 9pt; background: #f0fdf4;">
+            TOTAL AMOUNT AVAILABLE
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 10pt; background: #f0fdf4;">
+            {{formatPKRZero macro.totalAmountAvailable}}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="height: 14px;"></div>
+
+    <!-- EXPENSES TABLE -->
+    <table>
+      <thead>
+        <tr>
+          <th colspan="2" class="bg-expense-hdr text-center" style="font-size: 10.5pt; padding: 6px;">
+            Expenses
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="width: 65%; font-size: 8.5pt;">
+            <strong>Net Expenses In {{monthNameYear}}</strong>
+            <div style="font-size: 7pt; color: #374151;">(All Payments Made During This month)</div>
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9pt; width: 35%;">
+            {{formatInt macro.totalNetExpenses}}
+          </td>
+        </tr>
+        <tr class="bg-expense-hdr">
+          <td class="text-center font-bold" style="font-size: 9pt;">
+            TOTAL EXPENSES
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9.5pt;">
+            {{formatInt macro.totalNetExpenses}}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="height: 14px;"></div>
+
+    <!-- CLOSING AVAILABLE BALANCE CALLOUT -->
+    <table>
+      <tbody>
+        <tr style="border: 2px solid #000000;">
+          <td class="text-center" style="width: 65%; padding: 10px;">
+            <div style="font-size: 11pt; font-weight: bold; color: #000000;">Closing Available Balance</div>
+            <div style="font-size: 8pt; color: #374151; margin-top: 2px;">{{dayDateString}}</div>
+          </td>
+          <td class="text-right font-mono font-bold negative" style="width: 35%; font-size: 12pt; padding: 10px;">
+            {{formatPKRZero macro.netPosition}}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- SIGN-OFF BLOCKS -->
+    <div class="signoff-row" style="margin-top: 60px;">
+      <div class="signoff-box">
+        <div style="font-size: 8pt; font-weight: bold; color: #111827; margin-bottom: 4px;">{{preparedByName}}</div>
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Prepared By</div>
+      </div>
+      <div class="signoff-box">
+        <div style="font-size: 8pt; font-weight: bold; color: #111827; margin-bottom: 4px;">{{checkedByName}}</div>
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Checked By</div>
+      </div>
+      {{#if publishedByName}}
+      <div class="signoff-box">
+        <div style="font-size: 8pt; font-weight: bold; color: #047857; margin-bottom: 4px;">{{publishedByName}}</div>
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Published By</div>
+      </div>
+      {{/if}}
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 2: OPENING & CLOSING BALANCE DETAIL                     -->
+  <!-- ============================================================ -->
+  <div class="page-container">
+    <div class="brand-banner">
+      <div class="purple-bar"></div>
+      <div class="brand-title">Pixx Technologies</div>
+    </div>
+    <div class="report-subtitle">Opening & Closing Balance Detail</div>
+    <div class="report-date">{{asOfDate}}</div>
+
+    <table style="font-size: 7pt;">
+      <thead>
+        <tr>
+          <th rowspan="2" style="width: 20%;" class="text-center">Cash & Bank A/C</th>
+          <th rowspan="2" style="width: 10%;" class="text-center">Opening<br>Balance</th>
+          <th colspan="3" class="bg-income-hdr text-center">INPUT</th>
+          <th colspan="3" class="bg-expense-hdr text-center">OUTPUT</th>
+          <th rowspan="2" style="width: 11%;" class="text-center">Closing Balances<br>As On {{shortAsOfDate}}</th>
+        </tr>
+        <tr>
+          <th class="bg-income-hdr text-center" style="width: 9%;">Rental Income</th>
+          <th class="bg-income-hdr text-center" style="width: 9%;">Other Input</th>
+          <th class="bg-income-hdr text-center" style="width: 9%;">Total Input</th>
+          <th class="bg-expense-hdr text-center" style="width: 9%;">Rental Expenses</th>
+          <th class="bg-expense-hdr text-center" style="width: 9%;">Other Expenses</th>
+          <th class="bg-expense-hdr text-center" style="width: 9%;">Total Output</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each page2Matrix.rows}}
+        <tr>
+          <td><strong>{{this.name}}</strong></td>
+          <td class="text-right font-mono">{{formatPKR this.openingBalance}}</td>
+          <td class="text-right font-mono">{{formatPKR this.rentalIncome}}</td>
+          <td class="text-right font-mono">{{formatPKR this.otherInput}}</td>
+          <td class="text-right font-mono font-bold">{{formatPKR this.totalInput}}</td>
+          <td class="text-right font-mono">{{formatPKR this.rentalExpenses}}</td>
+          <td class="text-right font-mono">{{formatPKR this.otherExpenses}}</td>
+          <td class="text-right font-mono font-bold">{{formatPKR this.totalOutput}}</td>
+          <td class="text-right font-mono font-bold">{{formatPKR this.closingBalance}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+      <tfoot>
+        <tr style="border-top: 2px solid #000000; font-weight: bold;">
+          <td class="text-center">TOTAL</td>
+          <td class="text-right font-mono">{{formatPKR page2Matrix.totals.openingBalance}}</td>
+          <td class="text-right font-mono bg-yellow-highlight">{{formatPKR page2Matrix.totals.rentalIncome}}</td>
+          <td class="text-right font-mono">{{formatPKR page2Matrix.totals.otherInput}}</td>
+          <td class="text-right font-mono">{{formatPKR page2Matrix.totals.totalInput}}</td>
+          <td class="text-right font-mono bg-yellow-highlight">{{formatPKR page2Matrix.totals.rentalExpenses}}</td>
+          <td class="text-right font-mono">{{formatPKR page2Matrix.totals.otherExpenses}}</td>
+          <td class="text-right font-mono">{{formatPKR page2Matrix.totals.totalOutput}}</td>
+          <td class="text-right font-mono">{{formatPKR page2Matrix.totals.closingBalance}}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="signoff-row" style="margin-top: 60px;">
+      <div class="signoff-box">
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Prepared By</div>
+      </div>
+      <div class="signoff-box">
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Checked By</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 3: RENTAL INCOME SUMMARY (7 PLAZAS REGISTER)            -->
+  <!-- ============================================================ -->
+  <div class="page-container">
+    <div style="text-align: center; margin-bottom: 4px;">
+      <div style="font-size: 15pt; font-weight: 800; color: #002060;">Pixx Technologies</div>
+      <div style="font-size: 9.5pt; font-weight: bold; margin-top: 1px;">Rental Income Summary</div>
+      <div style="font-size: 8.5pt; font-weight: bold;">{{monthNameYear}} Rent</div>
+    </div>
+
+    <!-- Rental Income Banner -->
+    <div class="bg-teal-hdr text-center" style="padding: 2px; font-size: 8.5pt; border: 1px solid #000000; margin-bottom: 2px;">
+      Rental Income
+    </div>
+
+    <table class="page-3-table" style="margin-bottom: 4px;">
+      <thead>
+        <tr style="background: #e0f2fe;">
+          <th style="width: 17%;">Properties Detail</th>
+          <th style="width: 4.5%;">Due Dates</th>
+          <th style="width: 8%;" class="text-right">Actual Rent as<br>per Agreements</th>
+          <th style="width: 8%;" class="text-right">July-2026<br>Receivable</th>
+          <th style="width: 8%;" class="text-right">August-2026<br>Actual Rent</th>
+          <th style="width: 8%;" class="text-right">Received In<br>August-2026</th>
+          <th style="width: 9%;">Checked By<br>Fahad</th>
+          <th style="width: 7%;">Received<br>Date</th>
+          <th style="width: 13%;">Receiving Bank</th>
+          <th style="width: 7.5%;">Renewal<br>Date</th>
+          <th style="width: 8%;" class="text-right">Receivable</th>
+          <th style="width: 8%;" class="text-right">Advance Rent<br>Received</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each page3Tenancy.plazas}}
+          <!-- Plaza Header Row -->
+          <tr style="background: #f3f4f6; font-weight: bold;">
+            <td colspan="12" style="font-size: 6pt; color: #111827;">{{this.plazaName}}</td>
+          </tr>
+          {{#each this.units}}
+          <tr>
+            <td style="padding-left: 6px;">{{this.unitName}}</td>
+            <td class="text-center">{{this.dueDay}}</td>
+            <td class="text-right font-mono">{{formatPKR this.agreedRent}}</td>
+            <td class="text-right font-mono {{#if this.isPriorNeg}}negative{{/if}}">{{formatPKR this.julyReceivable}}</td>
+            <td class="text-right font-mono">{{formatPKR this.augustActualRent}}</td>
+            <td class="text-right font-mono font-bold">{{formatPKR this.receivedAmount}}</td>
+            <td class="text-center" style="font-size: 5.5pt;">Checked By Fahad</td>
+            <td class="text-center font-mono">{{this.receivedDate}}</td>
+            <td style="font-size: 5.5pt;">{{this.receivingBank}}</td>
+            <td class="text-center font-mono">{{this.renewalDate}}</td>
+            <td class="text-right font-mono font-bold {{#if this.receivable}}negative{{/if}}">{{formatPKR this.receivable}}</td>
+            <td class="text-right font-mono">{{formatPKR this.advanceRent}}</td>
+          </tr>
+          {{/each}}
+        {{/each}}
+      </tbody>
+      <tfoot>
+        <tr style="background: #f8fafc; font-weight: bold; border-top: 1.5px solid #000000;">
+          <td colspan="2" class="text-center">TOTAL INCOME</td>
+          <td class="text-right font-mono">{{formatPKR page3Tenancy.totals.agreedRent}}</td>
+          <td class="text-right font-mono {{#if page3Tenancy.totals.isPriorNeg}}negative{{/if}}">{{formatPKR page3Tenancy.totals.julyReceivable}}</td>
+          <td class="text-right font-mono">{{formatPKR page3Tenancy.totals.augustActualRent}}</td>
+          <td class="text-right font-mono font-bold">{{formatPKR page3Tenancy.totals.receivedAmount}}</td>
+          <td colspan="4"></td>
+          <td class="text-right font-mono font-bold negative">{{formatPKR page3Tenancy.totals.receivable}}</td>
+          <td class="text-right font-mono font-bold">{{formatPKR page3Tenancy.totals.advanceRent}}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <!-- Other Income Banner & Table -->
+    <div class="bg-teal-hdr text-center" style="padding: 2px; font-size: 8.5pt; border: 1px solid #000000; margin-bottom: 2px;">
+      Other Income
+    </div>
+    <table class="page-3-table" style="margin-bottom: 4px;">
+      <tbody>
+        <tr>
+          <td style="width: 17%;">Other Receipts Detail</td>
+          <td style="width: 4.5%;">-</td>
+          <td style="width: 8%;" class="text-right">-</td>
+          <td style="width: 8%;" class="text-right">-</td>
+          <td style="width: 8%;" class="text-right">-</td>
+          <td style="width: 8%;" class="text-right">-</td>
+          <td style="width: 9%;">-</td>
+          <td style="width: 7%;">-</td>
+          <td style="width: 13%;">-</td>
+          <td style="width: 7.5%;">-</td>
+          <td style="width: 8%;" class="text-right">-</td>
+          <td style="width: 8%;" class="text-right">-</td>
+        </tr>
+        <tr style="background: #f8fafc; font-weight: bold;">
+          <td colspan="2" class="text-center">TOTAL Other Receipts</td>
+          <td class="text-right font-mono">-</td>
+          <td class="text-right font-mono">-</td>
+          <td class="text-right font-mono">-</td>
+          <td class="text-right font-mono">-</td>
+          <td colspan="4"></td>
+          <td class="text-right font-mono">-</td>
+          <td class="text-right font-mono">-</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Grand Total Yellow Bar -->
+    <table class="page-3-table" style="font-weight: bold; margin-top: 2px; margin-bottom: 0;">
+      <tr class="bg-yellow-highlight" style="border: 2px solid #000000;">
+        <td style="width: 21.5%; font-size: 7.5pt;" class="text-center">Grand Total</td>
+        <td style="width: 8%;" class="text-right font-mono {{#if page3Tenancy.totals.isPriorNeg}}negative{{/if}}">{{formatPKR page3Tenancy.totals.julyReceivable}}</td>
+        <td style="width: 8%;" class="text-right font-mono">{{formatPKR page3Tenancy.totals.augustActualRent}}</td>
+        <td style="width: 8%;" class="text-right font-mono">{{formatPKR page3Tenancy.totals.receivedAmount}}</td>
+        <td style="width: 36.5%;"></td>
+        <td style="width: 8%;" class="text-right font-mono negative">{{formatPKR page3Tenancy.totals.receivable}}</td>
+        <td style="width: 8%;" class="text-right font-mono"></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ============================================================ -->
+  <!-- PAGES 4 & 5: ALL TRANSACTIONS (MASTER JOURNAL)               -->
+  <!-- ============================================================ -->
+  <div class="page-container">
+    <div style="text-align: center; margin-bottom: 12px;">
+      <div style="font-size: 16pt; font-weight: 800; color: #002060;">Pixx Technologies</div>
+      <div style="font-size: 10pt; font-weight: bold; margin-top: 2px;">All Transactions</div>
+      <div style="font-size: 9pt; font-weight: bold;">{{asOfDate}}</div>
+    </div>
+
+    <table style="font-size: 6.8pt;">
+      <thead>
+        <tr style="background: #f3f4f6;">
+          <th style="width: 7.5%;" class="text-center">Date</th>
+          <th style="width: 5.5%;" class="text-center">V.N</th>
+          <th>Transaction Detail</th>
+          <th style="width: 17%;">Account Head</th>
+          <th style="width: 8%;" class="text-center">Category</th>
+          <th style="width: 16%;">Account (Dr.)</th>
+          <th style="width: 16%;">Account (Cr.)</th>
+          <th style="width: 9%;" class="text-right">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each masterJournal.vouchers}}
+        <tr>
+          <td class="text-center font-mono">{{this.date}}</td>
+          <td class="text-center font-mono font-bold">{{this.vn}}</td>
+          <td>{{this.detail}}</td>
+          <td>{{this.head}}</td>
+          <td class="text-center">{{this.category}}</td>
+          <td style="font-size: 6.3pt; color: #047857;">{{this.dr}}</td>
+          <td style="font-size: 6.3pt; color: #b91c1c;">{{this.cr}}</td>
+          <td class="text-right font-mono font-bold">{{formatInt this.amount}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+      <tfoot>
+        <tr style="border-top: 2px solid #000000; font-weight: bold; background: #f3f4f6;">
+          <td colspan="7" class="text-right" style="font-size: 8pt;">TOTAL</td>
+          <td class="text-right font-mono font-bold" style="font-size: 8.5pt;">{{formatPKRZero masterJournal.totalAmount}}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ============================================================ -->
+  <!-- PAGES 6, 7 & 8: HEAD WISE EXPENSES SUMMARY                   -->
+  <!-- ============================================================ -->
+  <div class="page-container">
+    <div style="text-align: center; margin-bottom: 12px;">
+      <div style="font-size: 16pt; font-weight: 800; color: #002060;">Pixx Technologies</div>
+      <div style="font-size: 10pt; font-weight: bold; margin-top: 2px;">Head Wise Expenses Summary</div>
+      <div style="font-size: 9pt; font-weight: bold;">{{asOfDate}}</div>
+    </div>
+
+    <table style="font-size: 7.2pt;">
+      <thead>
+        <tr class="bg-yellow-hdr" style="font-size: 8.5pt;">
+          <th>Expenses Report Head-Wise</th>
+          <th class="text-right" style="width: 22%;">Amount (Rs)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each headWiseReport.groups}}
+          <!-- Head Group Header -->
+          <tr style="background: #e2e8f0; font-weight: bold; border-top: 1.5px solid #000000;">
+            <td style="font-size: 8pt;">{{this.headName}}</td>
+            <td class="text-right font-mono" style="font-size: 8.5pt;">{{formatInt this.totalAmount}}</td>
+          </tr>
+          <!-- Head Items -->
+          {{#each this.items}}
+          <tr>
+            <td style="padding-left: 14px;">{{this.detail}}</td>
+            <td class="text-right font-mono">{{formatInt this.amount}}</td>
+          </tr>
+          {{/each}}
+        {{/each}}
+      </tbody>
+      <tfoot>
+        <tr class="bg-yellow-hdr" style="font-size: 9pt; border-top: 2px solid #000000;">
+          <td class="text-center font-bold">Grand Total</td>
+          <td class="text-right font-mono font-bold">{{formatInt headWiseReport.grandTotal}}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- PAGES 9+: INDIVIDUAL ACCOUNT LEDGER STATEMENTS               -->
+  <!-- ============================================================ -->
+  {{#each accountStatements}}
+  <div class="page-break"></div>
+  <div class="page-container">
+    <div style="text-align: center; margin-bottom: 14px;">
+      <div style="font-size: 15pt; font-weight: 800; color: #b91c1c;">{{this.bankOrCashTitle}}</div>
+      <div style="font-size: 11pt; font-weight: bold; color: #1d4ed8; margin-top: 2px;">{{this.accountSubtitle}}</div>
+      {{#if this.accountNumber}}
+        <div style="font-size: 8.5pt; font-weight: bold; margin-top: 2px;">Account Number # {{this.accountNumber}}</div>
+      {{/if}}
+    </div>
+
+    {{#if this.isCashCustodian}}
+      <!-- Cash Custodian Layout -->
+      <table class="statement-table">
+        <thead>
+          <tr style="background: #f3f4f6;">
+            <th style="width: 7.5%;" class="text-center">Date</th>
+            <th style="width: 5.5%;" class="text-center">V.N</th>
+            <th>Transaction Detail</th>
+            <th style="width: 18%;">Account (Dr.)</th>
+            <th style="width: 18%;">Account (Cr.)</th>
+            <th style="width: 10%;" class="text-right">Amount (Dr.)</th>
+            <th style="width: 10%;" class="text-right">Amount (Cr.)</th>
+            <th style="width: 11%;" class="text-right">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-center font-mono">{{this.priorDate}}</td>
+            <td class="text-center font-mono">-</td>
+            <td><strong>Opening Balance</strong></td>
+            <td>-</td>
+            <td>-</td>
+            <td class="text-right font-mono">-</td>
+            <td class="text-right font-mono">-</td>
+            <td class="text-right font-mono font-bold">{{formatPKR this.openingBalance}}</td>
+          </tr>
+          {{#each this.entries}}
+          <tr>
+            <td class="text-center font-mono">{{this.date}}</td>
+            <td class="text-center font-mono font-bold">{{this.vn}}</td>
+            <td>{{this.detail}}</td>
+            <td style="font-size: 6.2pt;">{{this.drAccount}}</td>
+            <td style="font-size: 6.2pt;">{{this.crAccount}}</td>
+            <td class="text-right font-mono" style="color: #047857;">{{#if this.drAmount}}{{formatInt this.drAmount}}{{else}}-{{/if}}</td>
+            <td class="text-right font-mono" style="color: #b91c1c;">{{#if this.crAmount}}{{formatInt this.crAmount}}{{else}}-{{/if}}</td>
+            <td class="text-right font-mono font-bold {{#if this.isNeg}}negative{{/if}}">{{formatPKR this.balance}}</td>
+          </tr>
+          {{/each}}
+        </tbody>
+        <tfoot>
+          <tr style="border-top: 2px solid #000000; font-weight: bold; background: #f3f4f6;">
+            <td colspan="5" class="text-center">TOTAL</td>
+            <td class="text-right font-mono font-bold">{{formatPKR this.totalDr}}</td>
+            <td class="text-right font-mono font-bold">{{formatPKR this.totalCr}}</td>
+            <td class="text-right font-mono font-bold {{#if this.isClosingNeg}}negative{{/if}}">{{formatPKR this.closingBalance}}</td>
+          </tr>
+        </tfoot>
+      </table>
+    {{else}}
+      <!-- Bank Account Statement Layout -->
+      <table class="statement-table">
+        <thead>
+          <tr style="background: #f3f4f6;">
+            <th style="width: 10%;" class="text-center">Date</th>
+            <th>Description</th>
+            <th style="width: 14%;" class="text-right">Debit<br>Rupees</th>
+            <th style="width: 14%;" class="text-right">Credit<br>Rupees</th>
+            <th style="width: 15%;" class="text-right">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-center font-mono">{{this.priorDate}}</td>
+            <td><strong>Opening Balance</strong></td>
+            <td class="text-right font-mono">-</td>
+            <td class="text-right font-mono">-</td>
+            <td class="text-right font-mono font-bold">{{formatPKR this.openingBalance}}</td>
+          </tr>
+          {{#each this.entries}}
+          <tr>
+            <td class="text-center font-mono">{{this.date}}</td>
+            <td>{{this.detail}}</td>
+            <td class="text-right font-mono" style="color: #b91c1c;">{{#if this.debit}}{{formatPKR this.debit}}{{else}}-{{/if}}</td>
+            <td class="text-right font-mono" style="color: #047857;">{{#if this.credit}}{{formatPKR this.credit}}{{else}}-{{/if}}</td>
+            <td class="text-right font-mono font-bold">{{formatPKR this.balance}}</td>
+          </tr>
+          {{/each}}
+        </tbody>
+        <tfoot>
+          <tr style="border-top: 2px solid #000000; font-weight: bold; background: #f3f4f6;">
+            <td colspan="2" class="text-center">GRAND TOTAL</td>
+            <td class="text-right font-mono font-bold">{{formatPKR this.totalDr}}</td>
+            <td class="text-right font-mono font-bold">{{formatPKR this.totalCr}}</td>
+            <td class="text-right font-mono font-bold">{{formatPKR this.closingBalance}}</td>
+          </tr>
+        </tfoot>
+      </table>
+    {{/if}}
+
+    <div class="signoff-row" style="margin-top: 15px;">
+      <div class="signoff-box">
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Prepared By</div>
+      </div>
+      <div class="signoff-box">
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Checked By</div>
+      </div>
+    </div>
+  </div>
+  {{/each}}
+
+</body>
+</html>

@@ -1,0 +1,61 @@
+.pixx-logo-spin {
+	perspective: 800px;
+	transform-style: preserve-3d;
+	backface-visibility: visible;
+	animation: pixx-logo-y-spin 3s linear infinite;
+}
+
+@keyframes pixx-logo-y-spin {
+	from {
+		transform: rotateY(0deg);
+	}
+	to {
+		transform: rotateY(360deg);
+	}
+}
+
+.auth-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 15% 10%, #d8e8e1 0, transparent 35%), #f4f1e8; }
+.auth-panel { width: min(100%, 430px); padding: 42px; background: #fffdf7; border: 1px solid #d8d6cb; box-shadow: 14px 14px 0 #c9d8d1; }
+.eyebrow { margin: 0 0 10px; color: #147d70; font-size: 11px; font-weight: 800; letter-spacing: .14em; }
+h1, h2, p { margin-top: 0; }
+h1 { font-family: Georgia, serif; font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1; color: #172c2a; }
+h2 { margin-bottom: 0; color: #172c2a; }
+.muted, .connection-note, small { color: #66736f; }
+form { display: grid; gap: 17px; margin-top: 30px; }
+label { display: grid; gap: 7px; color: #33423e; font-size: 13px; font-weight: 700; }
+input { width: 100%; box-sizing: border-box; padding: 12px 13px; border: 1px solid #c7cec9; background: #fff; color: #172c2a; font: inherit; }
+button { cursor: pointer; border: 0; font: inherit; }
+.primary-button, .user-menu button { padding: 12px 18px; background: #147d70; color: white; font-weight: 700; }
+.primary-button:disabled { opacity: .65; cursor: wait; }
+.error { color: #af3d35; font-size: 13px; }
+.connection-note { margin: 24px 0 0; font-size: 11px; overflow-wrap: anywhere; }
+.app-shell { min-height: 100vh; padding: 32px clamp(20px, 5vw, 76px); background: radial-gradient(circle at 90% 0, #d8e8e1 0, transparent 30%), #f4f1e8; }
+.topbar { max-width: 1440px; margin: 0 auto 42px; display: flex; align-items: end; justify-content: space-between; gap: 24px; border-bottom: 1px solid #cbd4ce; padding-bottom: 22px; }
+.topbar h1 { margin-bottom: 0; font-size: clamp(2rem, 4vw, 3.2rem); }
+.user-menu { display: flex; align-items: center; gap: 18px; text-align: right; }
+.user-menu span { display: grid; gap: 4px; color: #172c2a; font-weight: 700; }
+.user-menu small { text-transform: capitalize; }
+.summary-grid, .content-grid { max-width: 1440px; margin-inline: auto; display: grid; gap: 18px; }
+.summary-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 34px; }
+.summary-card, .panel { border: 1px solid #d4d8d1; background: #fffdf7; }
+.summary-card { min-height: 130px; padding: 22px; display: grid; align-content: space-between; }
+.summary-card span, .panel-heading > span { color: #6a7770; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.summary-card strong { color: #172c2a; font-size: 28px; }
+.summary-card small { font-size: 12px; }
+.summary-card.accent { background: #147d70; border-color: #147d70; color: #fff; }
+.summary-card.accent strong, .summary-card.accent span, .summary-card.accent small { color: #fff; }
+.content-grid { grid-template-columns: 1fr 1fr; }
+.panel { min-width: 0; padding: 24px; }
+.panel-heading { display: flex; justify-content: space-between; gap: 14px; align-items: start; margin-bottom: 20px; }
+.account-list, .transaction-list { display: grid; }
+.account-row, .transaction-row { display: flex; justify-content: space-between; gap: 16px; padding: 15px 0; border-top: 1px solid #e1e3dd; }
+.account-row div:first-child, .transaction-row div:first-child { min-width: 0; display: grid; gap: 5px; }
+.account-row strong, .transaction-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #263b37; }
+.account-row small, .transaction-row small { font-size: 12px; }
+.balance { display: grid; text-align: right; color: #147d70; font-weight: 800; white-space: nowrap; }
+.balance.negative { color: #af3d35; }
+.balance small { color: inherit; font-size: 10px; }
+.transaction-row > strong { white-space: nowrap; color: #172c2a; }
+.empty, .state { color: #68756e; }
+.state { max-width: 1440px; margin: 70px auto; }
+@media (max-width: 800px) { .summary-grid, .content-grid { grid-template-columns: 1fr; } .topbar { align-items: start; flex-direction: column; } .user-menu { width: 100%; justify-content: space-between; text-align: left; } .auth-panel { padding: 30px 24px; } }
