@@ -1,5 +1,16 @@
 # React + Vite
 
+## API configuration
+
+Set this Vercel environment variable for production builds:
+
+```text
+VITE_API_URL=https://pixxtech-expense-tracker.vercel.app
+```
+
+For local development, leave `VITE_API_URL` unset to use the Vite proxy at
+`http://127.0.0.1:5000`.
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:
