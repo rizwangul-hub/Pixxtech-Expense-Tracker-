@@ -485,4 +485,97 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   }
 };
 
-export default { generateMonthlyFundsReport };
+const getImageBase64 = (filePath) => {
+  try {
+    if (fs.existsSync(filePath)) {
+      const fileBuffer = fs.readFileSync(filePath);
+      return `data:image/png;base64,${fileBuffer.toString('base64')}`;
+    }
+  } catch (err) {
+    console.error('Failed to load image for PDF:', filePath, err.message);
+  }
+  return '';
+};
+
+const frontendAssetPath = path.join(__dirname, '..', '..', 'Frontend', 'src', 'assets', 'image');
+const logoBase64 = getImageBase64(path.join(frontendAssetPath, 'logo.png'));
+const sarfrazSignBase64 = getImageBase64(path.join(frontendAssetPath, 'sarfrazsign.png'));
+const khurshidSignBase64 = getImageBase64(path.join(frontendAssetPath, 'khurshidsign.png'));
+
+/**
+ * Generate A4 Single Voucher PDF Buffer
+ */
+export const generateSingleVoucherPDF = async (printDetail) => {
+  const templatePath = path.join(__dirname, '..', 'templates', 'singleVoucherTemplate.html');
+  const templateSource = fs.readFileSync(templatePath, 'utf8');
+  const compiledTemplate = handlebars.compile(templateSource);
+
+  const isVerified = printDetail.status !== 'PENDING' && printDetail.status !== 'PENDING_VERIFICATION';
+  const isRent = printDetail.documentTitle?.includes('RENT') || printDetail.reportCategory === 'Rent';
+
+  let expenseClassificationLabel = '';
+  if (!isRent) {
+    if (printDetail.expenseClassification === 'UNIT_EXPENSE') {
+      expenseClassificationLabel = 'Unit Expense';
+    } else if (printDetail.expenseClassification === 'PROPERTY_OWN_EXPENSE') {
+      expenseClassificationLabel = 'Property Own Expense';
+    } else {
+      expenseClassificationLabel = 'General Expense';
+    }
+  }
+
+  const htmlContent = compiledTemplate({
+    ...printDetail,
+    formattedDate: formatReportDate(printDetail.date),
+    isVerified,
+    isRent,
+    expenseClassificationLabel,
+    actionLabel: isRent ? 'RECEIVED' : 'PAID',
+    category: printDetail.category || { name: 'General' },
+    drAccount: printDetail.drAccount || { name: '-' },
+    crAccount: printDetail.crAccount || { name: '-' },
+    logoBase64,
+    sarfrazSignBase64,
+    khurshidSignBase64,
+    generatedDate: new Date().toLocaleString('en-GB'),
+  });
+
+  const localExecutablePath = getBrowserExecutablePath();
+  const executablePath = localExecutablePath || (await chromium.executablePath());
+  const launchOptions = {
+    headless: true,
+    args: localExecutablePath
+      ? [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ]
+      : chromium.args,
+    executablePath,
+  };
+
+  const browser = await puppeteer.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '8mm',
+        right: '8mm',
+        bottom: '8mm',
+        left: '8mm',
+      },
+    });
+
+    return pdfBuffer;
+  } finally {
+    await browser.close();
+  }
+};
+
+export default { generateMonthlyFundsReport, generateSingleVoucherPDF };
+

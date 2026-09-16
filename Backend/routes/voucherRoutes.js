@@ -8,6 +8,7 @@ import {
   reverseVoucher,
   syncLegacyVouchers,
   getVoucherPrintDetail,
+  downloadSingleVoucherPDF,
 } from '../controllers/voucherController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -20,6 +21,7 @@ router.use(protect);
 router.get('/transactions', getAllTransactions);
 router.get('/suggest-vn', suggestNextVn);
 router.get('/print-detail/:id', getVoucherPrintDetail);
+router.get('/download-pdf/:id', downloadSingleVoucherPDF);
 router.get('/number/:voucherNo', getVoucherByNumber);
 router.get('/:id', getVoucherById);
 

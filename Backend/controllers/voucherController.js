@@ -10,6 +10,7 @@ import {
   round2,
 } from '../services/ledgerService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
+import { generateSingleVoucherPDF } from '../services/pdfReportService.js';
 
 /**
  * @desc    Get all transactions for the central ledger with multi-filters and pagination
@@ -393,6 +394,146 @@ export const getVoucherPrintDetail = async (req, res) => {
 };
 
 /**
+ * @desc    Download A4 Single Voucher PDF
+ * @route   GET /api/vouchers/download-pdf/:id
+ * @access  Private (Authenticated)
+ */
+export const downloadSingleVoucherPDF = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return apiError(res, 'Invalid transaction or voucher ID.', 400);
+    }
+
+    // 1. Try finding in Transaction model
+    let tx = await Transaction.findById(id)
+      .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
+      .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
+      .populate('categoryId', 'name type isRentalHead')
+      .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+      .populate('tenantId', 'tenantName name cnic phone')
+      .populate('createdBy', 'name email role')
+      .lean();
+
+    // 2. If not found in Transaction, try finding in Voucher model
+    if (!tx) {
+      const vHeader = await Voucher.findById(id).lean();
+      if (vHeader) {
+        tx = await Transaction.findOne({
+          $or: [{ voucherId: vHeader._id }, { voucherNo: vHeader.voucherNumber }],
+        })
+          .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
+          .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
+          .populate('categoryId', 'name type isRentalHead')
+          .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+          .populate('tenantId', 'tenantName name cnic phone')
+          .populate('createdBy', 'name email role')
+          .lean();
+      }
+    }
+
+    if (!tx) {
+      return apiError(res, 'Transaction/Voucher record not found.', 404);
+    }
+
+    // Resolve property and unit details
+    let propertyName = tx.propertyId?.propertyName || tx.propertyId?.plazaName || '';
+    let propertyCode = tx.propertyId?.propertyCode || '';
+    let unitName = '';
+    let unitNumber = '';
+
+    if (tx.propertyId?.units && tx.unitId) {
+      const foundUnit = tx.propertyId.units.find(
+        (u) => u._id?.toString() === tx.unitId.toString()
+      );
+      if (foundUnit) {
+        unitName = foundUnit.unitName || '';
+        unitNumber = foundUnit.unitNumber || foundUnit.unitName || '';
+      }
+    }
+
+    let expenseClassification = 'GENERAL_EXPENSE';
+    if (unitName) {
+      expenseClassification = 'UNIT_EXPENSE';
+    } else if (propertyName) {
+      expenseClassification = 'PROPERTY_OWN_EXPENSE';
+    }
+
+    const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED' || tx.transactionType === 'INCOME';
+    const documentTitle = isRent ? 'RENT RECEIPT / VOUCHER' : 'EXPENSE VOUCHER';
+
+    const printDetail = {
+      _id: tx._id,
+      voucherNo: tx.voucherNo,
+      date: tx.date,
+      documentTitle,
+      transactionType: tx.transactionType,
+      sourceModule: tx.sourceModule,
+      reportCategory: tx.reportCategory,
+      status: tx.status || 'POSTED',
+      detail: tx.detail,
+      amount: round2(tx.amount),
+      reference: tx.reference || '',
+      rentMonth: tx.rentMonth || null,
+      expenseClassification,
+      property: {
+        id: tx.propertyId?._id || null,
+        name: propertyName,
+        code: propertyCode,
+        city: tx.propertyId?.city || 'Lahore',
+        address: tx.propertyId?.address || '',
+      },
+      unit: {
+        id: tx.unitId || null,
+        name: unitName,
+        number: unitNumber,
+      },
+      tenant: {
+        id: tx.tenantId?._id || null,
+        name: tx.tenantId?.tenantName || tx.tenantId?.name || '',
+        cnic: tx.tenantId?.cnic || '',
+        phone: tx.tenantId?.phone || '',
+      },
+      drAccount: {
+        id: tx.drAccountId?._id || null,
+        name: tx.drAccountId?.name || '',
+        type: tx.drAccountId?.type || '',
+        bankName: tx.drAccountId?.bankName || '',
+        accountNumber: tx.drAccountId?.accountNumber || '',
+        cashHolder: tx.drAccountId?.cashHolder || '',
+      },
+      crAccount: {
+        id: tx.crAccountId?._id || null,
+        name: tx.crAccountId?.name || '',
+        type: tx.crAccountId?.type || '',
+        bankName: tx.crAccountId?.bankName || '',
+        accountNumber: tx.crAccountId?.accountNumber || '',
+        cashHolder: tx.crAccountId?.cashHolder || '',
+      },
+      category: {
+        id: tx.categoryId?._id || null,
+        name: tx.categoryId?.name || 'General',
+        type: tx.categoryId?.type || 'EXPENSE',
+        isRentalHead: tx.categoryId?.isRentalHead || false,
+      },
+      preparedBy: tx.createdBy?.name || 'Sarfraz',
+      checkedBy: tx.checkedBy || 'Khurshid Anwar',
+    };
+
+    const pdfBuffer = await generateSingleVoucherPDF(printDetail);
+    const filename = `Voucher_${tx.voucherNo || tx._id}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.status(200).send(pdfBuffer);
+  } catch (error) {
+    console.error('[Download Single Voucher PDF Error]:', error);
+    return apiError(res, error.message || 'Failed to generate voucher PDF.', 500);
+  }
+};
+
+/**
  * @desc    Sync legacy transactions into single/multi-line Vouchers
  * @route   POST /api/vouchers/sync-legacy
  * @access  Private (ADMIN_PUBLISHER, ADMIN)
@@ -416,4 +557,5 @@ export default {
   reverseVoucher,
   syncLegacyVouchers,
   getVoucherPrintDetail,
+  downloadSingleVoucherPDF,
 };

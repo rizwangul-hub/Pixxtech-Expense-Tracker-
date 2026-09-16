@@ -290,6 +290,21 @@ export const vouchersAPI = {
     const res = await api.get(`/vouchers/print-detail/${id}`);
     return res.data;
   },
+  downloadSingleVoucherPDF: async (id, voucherNo) => {
+    const res = await api.get(`/vouchers/download-pdf/${id}`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `Voucher_${voucherNo || id}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+    return true;
+  },
 };
 
 export const accountsAPI = {

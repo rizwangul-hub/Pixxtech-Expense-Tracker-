@@ -9,8 +9,9 @@ import {
   X,
   Save,
   Printer,
+  Download,
 } from 'lucide-react';
-import { transactionsAPI } from '../services/api.js';
+import { transactionsAPI, vouchersAPI } from '../services/api.js';
 import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
 
 const formatPKR = (val) => {
@@ -26,10 +27,24 @@ export const RecentEntriesTable = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [editingEntry, setEditingEntry] = useState(null);
   const [printingTx, setPrintingTx] = useState(null);
+  const [downloadingPdfId, setDownloadingPdfId] = useState(null);
   const [editDetail, setEditDetail] = useState('');
   const [editCheckedBy, setEditCheckedBy] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState(null);
+
+  const handleDownloadPdf = async (tx) => {
+    try {
+      setDownloadingPdfId(tx._id);
+      await vouchersAPI.downloadSingleVoucherPDF(tx._id, tx.voucherNo);
+    } catch (err) {
+      console.error('Download PDF error:', err);
+      alert('Failed to generate PDF. Opening Print preview instead...');
+      setPrintingTx(tx);
+    } finally {
+      setDownloadingPdfId(null);
+    }
+  };
 
   // Filter entries
   const filtered = entries.filter((tx) => {
@@ -204,9 +219,21 @@ export const RecentEntriesTable = ({
                     <td className="text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1">
                         <button
+                          onClick={() => handleDownloadPdf(tx)}
+                          disabled={downloadingPdfId === tx._id}
+                          className="p-1.5 text-rose-700 hover:bg-rose-50 rounded-lg transition border border-rose-200 disabled:opacity-50"
+                          title="Generate & Download A4 PDF Voucher"
+                        >
+                          {downloadingPdfId === tx._id ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
                           onClick={() => setPrintingTx(tx)}
                           className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg transition border border-blue-200"
-                          title="Print A4 Single Voucher"
+                          title="Print A4 Single Voucher Preview"
                         >
                           <Printer className="w-4 h-4" />
                         </button>

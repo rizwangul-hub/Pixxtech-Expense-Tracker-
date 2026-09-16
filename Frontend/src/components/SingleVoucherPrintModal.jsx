@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Printer, X, CheckCircle2, AlertTriangle, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Printer, Download, X, CheckCircle2, AlertTriangle, ShieldCheck, RefreshCw } from 'lucide-react';
 import { vouchersAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
 
@@ -11,6 +11,7 @@ import khurshidSign from '../assets/image/khurshidsign.png';
 export function SingleVoucherPrintModal({ transactionId, voucherId, initialData, onClose }) {
   const [data, setData] = useState(initialData || null);
   const [loading, setLoading] = useState(!initialData);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [error, setError] = useState('');
 
   const targetId = transactionId || voucherId || initialData?._id;
@@ -43,6 +44,18 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      setDownloadingPdf(true);
+      await vouchersAPI.downloadSingleVoucherPDF(targetId, data?.voucherNo);
+    } catch (err) {
+      console.error('Download PDF error:', err);
+      alert('Failed to download PDF. Please try the Print Voucher option.');
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   if (loading) {
@@ -85,14 +98,24 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
           <div className="flex items-center gap-2">
             <Printer size={18} className="text-blue-400" />
             <span className="text-xs font-black uppercase tracking-wider">
-              A4 Single-Page Voucher Print Preview ({data.voucherNo})
+              A4 Single-Page Voucher Print / PDF Preview ({data.voucherNo})
             </span>
           </div>
 
           <div className="flex items-center gap-3">
             <button
+              onClick={handleDownloadPDF}
+              disabled={downloadingPdf}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs shadow-md transition"
+              title="Download official A4 PDF"
+            >
+              <Download size={16} />
+              {downloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+            </button>
+            <button
               onClick={handlePrint}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition"
+              title="Print voucher or save via browser print"
             >
               <Printer size={16} /> Print Voucher (Ctrl+P)
             </button>
