@@ -212,17 +212,6 @@ export function MainLayout({
         : 'bg-slate-100 text-slate-400 border-slate-200',
       permission: PERMISSIONS.MANAGE_USERS,
     },
-    {
-      id: 'settings',
-      label: 'Settings',
-      icon: Settings,
-      status: canManageSettings ? 'active' : 'locked',
-      badge: canManageSettings ? 'Config' : 'Restricted',
-      badgeColor: canManageSettings
-        ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
-        : 'bg-slate-100 text-slate-400 border-slate-200',
-      permission: PERMISSIONS.MANAGE_SETTINGS,
-    },
   ];
 
   const visibleNavigationItems = navigationItems.filter(
