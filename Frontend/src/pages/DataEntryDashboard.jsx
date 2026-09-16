@@ -269,6 +269,18 @@ export const DataEntryDashboard = ({ user }) => {
         {/* Part 23: Tab Navigation Controls */}
         <div className="flex items-center gap-2 overflow-x-auto border-b border-slate-200 pb-2">
           <button
+            onClick={() => { setActiveTab('voucher'); setActionMessage({ text: '', type: '' }); }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+              activeTab === 'voucher'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
+            }`}
+          >
+            <DollarSign className="w-4 h-4" />
+            Tab A: Expense Voucher
+          </button>
+
+          <button
             onClick={() => { setActiveTab('rent'); setActionMessage({ text: '', type: '' }); }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'rent'
@@ -307,6 +319,17 @@ export const DataEntryDashboard = ({ user }) => {
 
         {/* Active Work Tab Content */}
         <div className="mb-8">
+          {activeTab === 'voucher' && (
+            <VoucherEntryForm
+              accounts={accounts}
+              categories={categories}
+              properties={properties}
+              canManageMasterData={isAdmin(user) || isVerifier(user)}
+              onMasterDataChanged={loadMasterData}
+              onVoucherCreated={refreshEntries}
+            />
+          )}
+
           {activeTab === 'rent' && (
             <RentCollectionModal
               properties={properties}
