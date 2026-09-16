@@ -52,10 +52,23 @@ export function MainLayout({
       label: 'Ledgers',
       icon: BookOpen,
       status: 'active',
-      permission: PERMISSIONS.VIEW_FINANCIALS,
+      permission: PERMISSIONS.ENTER_DATA,
       badge: 'Journal',
       badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
     },
+    ...(userIsAdmin || userIsVerifier
+      ? [
+          {
+            id: 'expenses',
+            label: 'Expenses',
+            icon: Receipt,
+            status: 'active',
+            permission: PERMISSIONS.ENTER_DATA,
+            badge: 'Voucher',
+            badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
+          },
+        ]
+      : []),
     ...(userIsAdmin
       ? [
           {

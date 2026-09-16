@@ -33,7 +33,7 @@ const sectionFromPath = (pathname) => {
 const pathForSection = (section) => (section === 'dashboard' ? '/' : `/${section}`);
 
 const SECTION_PERMISSIONS = {
-  ledgers: PERMISSIONS.VIEW_FINANCIALS,
+  ledgers: PERMISSIONS.ENTER_DATA,
   properties: PERMISSIONS.VIEW_FINANCIALS,
   tenants: PERMISSIONS.VIEW_FINANCIALS,
   agreements: PERMISSIONS.VIEW_FINANCIALS,
@@ -55,6 +55,9 @@ const SECTION_PERMISSIONS = {
 
 const getAccessibleSection = (section, user) => {
   if (section === 'chart-of-accounts' && !isAdmin(user)) {
+    return 'dashboard';
+  }
+  if (section === 'expenses' && !isAdmin(user) && !isVerifier(user)) {
     return 'dashboard';
   }
   const requiredPermission = SECTION_PERMISSIONS[section];
