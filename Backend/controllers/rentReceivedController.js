@@ -104,6 +104,7 @@ export const recordRentReceived = async (req, res) => {
       description = '',
       checkedBy,
       allocatePriorReceivable = true,
+      attachments = [],
     } = req.body;
 
     // 0. Role check: Executive Managers (Fahad) have supervisory oversight only
@@ -133,6 +134,7 @@ export const recordRentReceived = async (req, res) => {
         rentMonth: cleanMonth,
         propertyId: propId,
         unitId: uId,
+        attachments,
         tenantId: tenant._id,
         agreementId: agreement._id,
         receivingAccountId: receivingAccount._id,
@@ -319,6 +321,7 @@ export const recordRentReceived = async (req, res) => {
       checkedAt: new Date(),
       createdBy: req.user?._id,
       updatedBy: req.user?._id,
+      attachments,
     });
 
     // 7. Update Rent Due Status(es)

@@ -25,10 +25,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  Printer,
 } from 'lucide-react';
 import { vouchersAPI, accountsAPI } from '../services/api.js';
 import { formatPKR, formatDate } from '../utils/formatters.js';
 import { isAdmin } from '../utils/permissions.js';
+import { SingleVoucherPrintModal } from '../components/SingleVoucherPrintModal.jsx';
 
 export function TransactionsPage({ user }) {
   const userIsAdmin = isAdmin(user);
@@ -68,6 +70,7 @@ export function TransactionsPage({ user }) {
   // Modal States
   const [showNewVoucherModal, setShowNewVoucherModal] = useState(false);
   const [selectedVoucher, setSelectedVoucher] = useState(null);
+  const [printingTx, setPrintingTx] = useState(null);
   const [loadingVoucherDetail, setLoadingVoucherDetail] = useState(false);
   const [showReverseModal, setShowReverseModal] = useState(false);
   const [reverseReason, setReverseReason] = useState('');
@@ -1286,6 +1289,14 @@ export function TransactionsPage({ user }) {
               </div>
 
               <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPrintingTx(selectedVoucher?.voucher?._id || selectedVoucher?.lines?.[0]?._id)}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shadow-md"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print A4 Voucher</span>
+                </button>
                 {userIsAdmin && selectedVoucher.voucher?.status !== 'REVERSED' && (
                   <button
                     type="button"
@@ -1307,6 +1318,15 @@ export function TransactionsPage({ user }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Print Single Voucher Modal */}
+      {printingTx && (
+        <SingleVoucherPrintModal
+          transactionId={printingTx._id || printingTx}
+          initialData={typeof printingTx === 'object' ? printingTx : null}
+          onClose={() => setPrintingTx(null)}
+        />
       )}
 
       {/* 7. Modal: Reversal Confirmation */}

@@ -20,6 +20,7 @@ export const collectRent = async (req, res) => {
       amountPaid,
       paymentDate,
       notes,
+      attachments = [],
     } = req.body;
 
     // 0. Role check: Executive Managers (Fahad) have supervisory oversight only
@@ -66,6 +67,7 @@ export const collectRent = async (req, res) => {
         rentMonth,
         propertyId: property._id,
         unitId: unit._id,
+        attachments,
         tenantId: unit.tenantId || null,
         receivingAccountId,
         detail: `Rent Received: ${property.plazaName} - ${unit.unitName} for ${rentMonth}. ${notes ? `Note: ${notes}` : ''}`.trim(),
@@ -164,6 +166,7 @@ export const collectRent = async (req, res) => {
       amount: paid,
       propertyId: property._id,
       unitId: unit._id,
+      attachments,
       rentMonth,
       status: 'PENDING',
       checkedBy: req.user.name,

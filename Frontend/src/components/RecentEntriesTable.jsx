@@ -8,8 +8,10 @@ import {
   RefreshCw,
   X,
   Save,
+  Printer,
 } from 'lucide-react';
 import { transactionsAPI } from '../services/api.js';
+import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
 
 const formatPKR = (val) => {
   return new Intl.NumberFormat('en-PK').format(Number(val));
@@ -23,6 +25,7 @@ export const RecentEntriesTable = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingEntry, setEditingEntry] = useState(null);
+  const [printingTx, setPrintingTx] = useState(null);
   const [editDetail, setEditDetail] = useState('');
   const [editCheckedBy, setEditCheckedBy] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
@@ -186,17 +189,24 @@ export const RecentEntriesTable = ({
                       )}
                     </td>
                     <td className="text-center whitespace-nowrap">
-                      {!isVerified ? (
+                      <div className="flex items-center justify-center gap-1">
                         <button
-                          onClick={() => openEditModal(tx)}
-                          className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
-                          title="Edit pending voucher"
+                          onClick={() => setPrintingTx(tx)}
+                          className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg transition border border-blue-200"
+                          title="Print A4 Single Voucher"
                         >
-                          <Edit3 className="w-4 h-4" />
+                          <Printer className="w-4 h-4" />
                         </button>
-                      ) : (
-                        <span className="text-slate-400 text-xs">-</span>
-                      )}
+                        {!isVerified && (
+                          <button
+                            onClick={() => openEditModal(tx)}
+                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition border border-slate-200"
+                            title="Edit pending voucher"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -205,6 +215,15 @@ export const RecentEntriesTable = ({
           </tbody>
         </table>
       </div>
+
+      {/* Print Single Voucher Modal */}
+      {printingTx && (
+        <SingleVoucherPrintModal
+          transactionId={printingTx._id}
+          initialData={printingTx}
+          onClose={() => setPrintingTx(null)}
+        />
+      )}
 
       {/* Edit Pending Voucher Modal */}
       {editingEntry && (

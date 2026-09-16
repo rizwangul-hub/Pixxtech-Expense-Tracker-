@@ -271,6 +271,7 @@ export const recordOtherIncome = async (req, res) => {
       description = '',
       status = 'POSTED',
       checkedBy,
+      attachments = [],
     } = req.body;
 
     // 1. Mandatory Validations
@@ -415,6 +416,7 @@ export const recordOtherIncome = async (req, res) => {
         transactionType: 'INCOME',
         reportCategory: 'Other Income',
         sourceModule: 'OTHER_INCOME',
+        attachments,
         reference: referenceNumber || '',
         checkedBy: checkedBy || req.user?.name || 'Authorized Auditor',
         status: 'POSTED',
@@ -446,6 +448,7 @@ export const recordOtherIncome = async (req, res) => {
       checkedBy: checkedBy || req.user?.name || null,
       createdBy: req.user?._id,
       updatedBy: req.user?._id,
+      attachments,
     });
 
     // Update Voucher sourceId if newly created

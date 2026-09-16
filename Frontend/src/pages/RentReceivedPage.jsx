@@ -19,10 +19,12 @@ import {
   RotateCcw,
   ShieldCheck,
   ChevronRight,
+  Printer,
 } from 'lucide-react';
 import { rentReceivedAPI, accountsAPI, propertiesAPI, tenantsAPI } from '../services/api.js';
 import { formatPKR, formatDate } from '../utils/formatters.js';
 import { isAdmin, isVerifier, isDataEntry, isOperationalEntryBlocked } from '../utils/permissions.js';
+import SingleVoucherPrintModal from '../components/SingleVoucherPrintModal.jsx';
 
 export function RentReceivedPage({
   currentUser,
@@ -72,6 +74,7 @@ export function RentReceivedPage({
 
   // Receipt Details Modal
   const [detailsReceipt, setDetailsReceipt] = useState(null);
+  const [printVoucherId, setPrintVoucherId] = useState(null);
 
   // Fetch receipts and summary
   const fetchReceiptsAndSummary = async () => {
@@ -665,6 +668,14 @@ export function RentReceivedPage({
                       <td className="py-3 px-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            onClick={() => setPrintVoucherId(rcpt.transactionId?._id || rcpt.transactionId || rcpt._id)}
+                            className="bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800/60 px-2 py-1 rounded text-[11px] transition flex items-center gap-1"
+                            title="Print A4 Receipt Voucher"
+                          >
+                            <Printer size={12} />
+                            Print
+                          </button>
+                          <button
                             onClick={() => setDetailsReceipt(rcpt)}
                             className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded text-[11px] transition flex items-center gap-1"
                             title="View Full Breakdown"
@@ -1101,7 +1112,14 @@ export function RentReceivedPage({
               </div>
             </div>
 
-            <div className="flex items-center justify-end pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setPrintVoucherId(detailsReceipt.transactionId?._id || detailsReceipt.transactionId || detailsReceipt._id)}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition flex items-center gap-1.5 text-xs"
+              >
+                <Printer size={14} />
+                Print A4 Voucher
+              </button>
               <button
                 onClick={() => setDetailsReceipt(null)}
                 className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition"
@@ -1111,6 +1129,14 @@ export function RentReceivedPage({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Printable Single A4 Voucher Modal */}
+      {printVoucherId && (
+        <SingleVoucherPrintModal
+          voucherId={printVoucherId}
+          onClose={() => setPrintVoucherId(null)}
+        />
       )}
     </div>
   );

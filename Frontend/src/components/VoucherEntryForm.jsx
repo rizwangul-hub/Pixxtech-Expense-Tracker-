@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { accountsAPI, transactionsAPI } from '../services/api.js';
+import { accountsAPI, transactionsAPI, uploadAPI } from '../services/api.js';
+import { EvidenceImageUpload } from './EvidenceImageUpload.jsx';
 import {
   Send,
   AlertCircle,
@@ -48,6 +49,7 @@ export const VoucherEntryForm = ({
   const [propertyId, setPropertyId] = useState('');
   const [expenseClassification, setExpenseClassification] = useState('GENERAL_EXPENSE');
   const [unitId, setUnitId] = useState('');
+  const [evidenceFiles, setEvidenceFiles] = useState([]);
   const [rentMonth, setRentMonth] = useState('');
 
   const [loading, setLoading] = useState(false);
@@ -149,6 +151,9 @@ export const VoucherEntryForm = ({
 
     try {
       setLoading(true);
+      const uploadedImages = evidenceFiles.length
+        ? (await uploadAPI.images(evidenceFiles)).images
+        : [];
       const res = await transactionsAPI.recordVoucher({
         date,
         voucherNo: voucherNo.trim(),
@@ -160,6 +165,7 @@ export const VoucherEntryForm = ({
         propertyId: propertyId || null,
         unitId: unitId || null,
         expenseClassification,
+        attachments: uploadedImages,
         rentMonth: rentMonth || null,
       });
 
@@ -171,6 +177,7 @@ export const VoucherEntryForm = ({
       setPropertyId('');
       setUnitId('');
       setExpenseClassification('GENERAL_EXPENSE');
+      setEvidenceFiles([]);
       setRentMonth('');
       setError(null);
 
@@ -339,6 +346,8 @@ export const VoucherEntryForm = ({
                 </select>
               </div>
             )}
+
+            <EvidenceImageUpload files={evidenceFiles} onChange={setEvidenceFiles} disabled={loading} />
           </div>
         )}
 

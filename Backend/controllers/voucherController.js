@@ -257,17 +257,138 @@ export const reverseVoucher = async (req, res) => {
 };
 
 /**
- * @desc    Trigger synchronization of unlinked legacy transactions to Voucher headers
- * @route   POST /api/vouchers/sync-legacy
- * @access  Private (ADMIN_PUBLISHER, ADMIN)
+ * @desc    Get detailed print voucher data for a single Rent or Expense transaction
+ * @route   GET /api/vouchers/print-detail/:id
+ * @access  Private (Authenticated)
  */
-export const syncLegacyVouchers = async (req, res) => {
+export const getVoucherPrintDetail = async (req, res) => {
   try {
-    const syncResult = await syncLegacyTransactionsToVouchers();
-    return apiSuccess(res, syncResult, 'Legacy transactions synchronized with Voucher headers.');
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return apiError(res, 'Invalid transaction or voucher ID.', 400);
+    }
+
+    // 1. Try finding in Transaction model
+    let tx = await Transaction.findById(id)
+      .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
+      .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
+      .populate('categoryId', 'name type isRentalHead')
+      .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+      .populate('tenantId', 'tenantName name cnic phone')
+      .populate('createdBy', 'name email role')
+      .lean();
+
+    // 2. If not found in Transaction, try finding in Voucher model
+    if (!tx) {
+      const vHeader = await Voucher.findById(id).lean();
+      if (vHeader) {
+        tx = await Transaction.findOne({
+          $or: [{ voucherId: vHeader._id }, { voucherNo: vHeader.voucherNumber }],
+        })
+          .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
+          .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
+          .populate('categoryId', 'name type isRentalHead')
+          .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+          .populate('tenantId', 'tenantName name cnic phone')
+          .populate('createdBy', 'name email role')
+          .lean();
+      }
+    }
+
+    if (!tx) {
+      return apiError(res, 'Transaction/Voucher record not found.', 404);
+    }
+
+    // Resolve property and unit details
+    let propertyName = tx.propertyId?.propertyName || tx.propertyId?.plazaName || '';
+    let propertyCode = tx.propertyId?.propertyCode || '';
+    let unitName = '';
+    let unitNumber = '';
+
+    if (tx.propertyId?.units && tx.unitId) {
+      const foundUnit = tx.propertyId.units.find(
+        (u) => u._id?.toString() === tx.unitId.toString()
+      );
+      if (foundUnit) {
+        unitName = foundUnit.unitName || '';
+        unitNumber = foundUnit.unitNumber || foundUnit.unitName || '';
+      }
+    }
+
+    // Derive Expense Classification (GENERAL_EXPENSE, PROPERTY_OWN_EXPENSE, UNIT_EXPENSE)
+    let expenseClassification = 'GENERAL_EXPENSE';
+    if (unitName) {
+      expenseClassification = 'UNIT_EXPENSE';
+    } else if (propertyName) {
+      expenseClassification = 'PROPERTY_OWN_EXPENSE';
+    }
+
+    // Derive Document Title
+    const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED' || tx.transactionType === 'INCOME';
+    const documentTitle = isRent ? 'RENT RECEIPT / VOUCHER' : 'EXPENSE VOUCHER';
+
+    const printDetail = {
+      _id: tx._id,
+      voucherNo: tx.voucherNo,
+      date: tx.date,
+      documentTitle,
+      transactionType: tx.transactionType,
+      sourceModule: tx.sourceModule,
+      reportCategory: tx.reportCategory,
+      status: tx.status || 'POSTED',
+      detail: tx.detail,
+      amount: round2(tx.amount),
+      reference: tx.reference || '',
+      rentMonth: tx.rentMonth || null,
+      expenseClassification,
+      property: {
+        id: tx.propertyId?._id || null,
+        name: propertyName,
+        code: propertyCode,
+        city: tx.propertyId?.city || 'Lahore',
+        address: tx.propertyId?.address || '',
+      },
+      unit: {
+        id: tx.unitId || null,
+        name: unitName,
+        number: unitNumber,
+      },
+      tenant: {
+        id: tx.tenantId?._id || null,
+        name: tx.tenantId?.tenantName || tx.tenantId?.name || '',
+        cnic: tx.tenantId?.cnic || '',
+        phone: tx.tenantId?.phone || '',
+      },
+      drAccount: {
+        id: tx.drAccountId?._id || null,
+        name: tx.drAccountId?.name || '',
+        type: tx.drAccountId?.type || '',
+        bankName: tx.drAccountId?.bankName || '',
+        accountNumber: tx.drAccountId?.accountNumber || '',
+        cashHolder: tx.drAccountId?.cashHolder || '',
+      },
+      crAccount: {
+        id: tx.crAccountId?._id || null,
+        name: tx.crAccountId?.name || '',
+        type: tx.crAccountId?.type || '',
+        bankName: tx.crAccountId?.bankName || '',
+        accountNumber: tx.crAccountId?.accountNumber || '',
+        cashHolder: tx.crAccountId?.cashHolder || '',
+      },
+      category: {
+        id: tx.categoryId?._id || null,
+        name: tx.categoryId?.name || 'General',
+        type: tx.categoryId?.type || 'EXPENSE',
+        isRentalHead: tx.categoryId?.isRentalHead || false,
+      },
+      preparedBy: tx.createdBy?.name || 'Sarfraz',
+      checkedBy: tx.checkedBy || 'Khurshid Anwar',
+    };
+
+    return apiSuccess(res, printDetail, 'Print voucher detail retrieved successfully.');
   } catch (error) {
-    console.error('[Sync Legacy Vouchers Error]:', error);
-    return apiError(res, error.message || 'Failed to sync legacy vouchers.', 500);
+    console.error('[Get Voucher Print Detail Error]:', error);
+    return apiError(res, error.message || 'Failed to retrieve voucher print detail.', 500);
   }
 };
 
@@ -279,4 +400,5 @@ export default {
   suggestNextVn,
   reverseVoucher,
   syncLegacyVouchers,
+  getVoucherPrintDetail,
 };

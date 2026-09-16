@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { rentAPI } from '../services/api.js';
+import { rentAPI, uploadAPI } from '../services/api.js';
+import { EvidenceImageUpload } from './EvidenceImageUpload.jsx';
 import {
   Building2,
   Home,
@@ -32,6 +33,7 @@ export const RentCollectionModal = ({
   const [receivingAccountId, setReceivingAccountId] = useState('');
   const [amountPaid, setAmountPaid] = useState('');
   const [notes, setNotes] = useState('');
+  const [evidenceFiles, setEvidenceFiles] = useState([]);
 
   const [loadingUnits, setLoadingUnits] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -112,6 +114,9 @@ export const RentCollectionModal = ({
 
     try {
       setSubmitting(true);
+      const uploadedImages = evidenceFiles.length
+        ? (await uploadAPI.images(evidenceFiles)).images
+        : [];
       const res = await rentAPI.collectRent({
         propertyId: selectedPropertyId,
         unitId: selectedUnitId,
@@ -120,6 +125,7 @@ export const RentCollectionModal = ({
         amountPaid: numericPaid,
         paymentDate,
         notes,
+        attachments: uploadedImages,
       });
 
       setSuccess(
@@ -134,6 +140,7 @@ export const RentCollectionModal = ({
       // Reset amount
       setAmountPaid('');
       setNotes('');
+      setEvidenceFiles([]);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to collect rent.');
     } finally {
@@ -273,6 +280,8 @@ export const RentCollectionModal = ({
             </div>
           </div>
         )}
+
+        <EvidenceImageUpload files={evidenceFiles} onChange={setEvidenceFiles} disabled={submitting} />
 
         {/* Row 3: Amount Paid & Payment Date */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

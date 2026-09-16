@@ -110,6 +110,18 @@ const rentReceivedSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    attachments: {
+      type: [
+        {
+          url: { type: String, required: true },
+          publicId: { type: String, required: true },
+          originalName: { type: String, default: '' },
+          mimeType: { type: String, default: '' },
+          size: { type: Number, default: 0 },
+        },
+      ],
+      default: [],
+    },
     description: {
       type: String,
       trim: true,

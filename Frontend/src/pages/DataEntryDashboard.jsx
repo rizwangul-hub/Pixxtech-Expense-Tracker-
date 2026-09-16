@@ -17,7 +17,8 @@ import { CashCustodianBar } from '../components/CashCustodianBar.jsx';
 import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 import { RentCollectionModal } from '../components/RentCollectionModal.jsx';
 import { RecentEntriesTable } from '../components/RecentEntriesTable.jsx';
-import { accountsAPI, transactionsAPI, otherIncomeAPI, transfersAPI } from '../services/api.js';
+import { accountsAPI, transactionsAPI, otherIncomeAPI, transfersAPI, uploadAPI } from '../services/api.js';
+import { EvidenceImageUpload } from '../components/EvidenceImageUpload.jsx';
 import { formatPKR } from '../utils/formatters.js';
 import { isAdmin, isVerifier } from '../utils/permissions.js';
 
@@ -47,6 +48,7 @@ export const DataEntryDashboard = ({ user }) => {
     reference: '',
   });
   const [submittingOther, setSubmittingOther] = useState(false);
+  const [otherEvidenceFiles, setOtherEvidenceFiles] = useState([]);
 
   // Transfer Form State
   const [transferForm, setTransferForm] = useState({
@@ -122,10 +124,15 @@ export const DataEntryDashboard = ({ user }) => {
     setSubmittingOther(true);
     setActionMessage({ text: '', type: '' });
     try {
+      const uploadedImages = otherEvidenceFiles.length
+        ? (await uploadAPI.images(otherEvidenceFiles)).images
+        : [];
       const res = await otherIncomeAPI.record({
         ...otherForm,
         amount: Number(otherForm.amount),
+        attachments: uploadedImages,
       });
+      setOtherEvidenceFiles([]);
       if (res.success) {
         setActionMessage({ text: 'Other income recorded successfully.', type: 'success' });
         setOtherForm({
@@ -351,6 +358,8 @@ export const DataEntryDashboard = ({ user }) => {
                       className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     />
                   </div>
+
+                  <EvidenceImageUpload files={otherEvidenceFiles} onChange={setOtherEvidenceFiles} disabled={submittingOther} />
                   <div>
                     <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Amount (PKR)</label>
                     <input

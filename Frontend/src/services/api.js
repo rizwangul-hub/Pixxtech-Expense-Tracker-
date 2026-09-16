@@ -12,6 +12,17 @@ const api = axios.create({
   },
 });
 
+export const uploadAPI = {
+  images: async (files) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('images', file));
+    const res = await api.post('/uploads/images', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+};
+
 // Request interceptor: attach JWT token if present in localStorage
 api.interceptors.request.use(
   (config) => {
@@ -273,6 +284,10 @@ export const vouchersAPI = {
   },
   syncLegacy: async () => {
     const res = await api.post('/vouchers/sync-legacy');
+    return res.data;
+  },
+  getPrintDetail: async (id) => {
+    const res = await api.get(`/vouchers/print-detail/${id}`);
     return res.data;
   },
 };
@@ -597,4 +612,3 @@ export const ledgersAPI = {
 };
 
 export default api;
-

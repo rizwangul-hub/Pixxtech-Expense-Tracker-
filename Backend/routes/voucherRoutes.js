@@ -7,6 +7,7 @@ import {
   suggestNextVn,
   reverseVoucher,
   syncLegacyVouchers,
+  getVoucherPrintDetail,
 } from '../controllers/voucherController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -18,6 +19,7 @@ router.use(protect);
 // 1. Central Ledger Transactions & Suggestions
 router.get('/transactions', getAllTransactions);
 router.get('/suggest-vn', suggestNextVn);
+router.get('/print-detail/:id', getVoucherPrintDetail);
 router.get('/number/:voucherNo', getVoucherByNumber);
 router.get('/:id', getVoucherById);
 

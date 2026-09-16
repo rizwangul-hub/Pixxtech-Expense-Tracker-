@@ -24,6 +24,18 @@ const pendingEntrySchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    attachments: {
+      type: [
+        {
+          url: { type: String, required: true },
+          publicId: { type: String, required: true },
+          originalName: { type: String, default: '' },
+          mimeType: { type: String, default: '' },
+          size: { type: Number, default: 0 },
+        },
+      ],
+      default: [],
+    },
     status: {
       type: String,
       required: true,

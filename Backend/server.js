@@ -22,6 +22,7 @@ import voucherRoutes from './routes/voucherRoutes.js';
 import otherIncomeRoutes from './routes/otherIncomeRoutes.js';
 import verificationRoutes from './routes/verificationRoutes.js';
 import ledgerRoutes from './routes/ledgerRoutes.js';
+import uploadRoutes from './routes/uploadRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -102,6 +103,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/monthly-reports', monthlyReportRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/ledgers', ledgerRoutes);
+app.use('/api/uploads', uploadRoutes);
 
 // 404 Not Found Handler
 app.use((req, res, next) => {

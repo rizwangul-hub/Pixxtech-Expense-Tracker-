@@ -70,6 +70,18 @@ const otherIncomeSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    attachments: {
+      type: [
+        {
+          url: { type: String, required: true },
+          publicId: { type: String, required: true },
+          originalName: { type: String, default: '' },
+          mimeType: { type: String, default: '' },
+          size: { type: Number, default: 0 },
+        },
+      ],
+      default: [],
+    },
     transactionDetail: {
       type: String,
       required: [true, 'Transaction detail is required'],

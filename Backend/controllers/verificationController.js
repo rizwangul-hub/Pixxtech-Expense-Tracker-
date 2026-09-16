@@ -308,6 +308,7 @@ export const updatePendingEntry = async (req, res) => {
       rentMonth: entry.rentMonth,
       detail: entry.detail,
       expenseClassification: entry.expenseClassification,
+      attachments: entry.attachments || [],
       propertyId: entry.propertyId,
       unitId: entry.unitId,
       tenantId: entry.tenantId,
@@ -327,6 +328,7 @@ export const updatePendingEntry = async (req, res) => {
     if (updates.propertyId === null || updates.propertyId === '') entry.propertyId = null;
     if (updates.unitId) entry.unitId = updates.unitId;
     if (updates.unitId === null || updates.unitId === '') entry.unitId = null;
+    if (updates.attachments !== undefined) entry.attachments = updates.attachments || [];
     if (updates.expenseClassification !== undefined) {
       entry.expenseClassification = updates.expenseClassification || null;
     }
@@ -339,8 +341,10 @@ export const updatePendingEntry = async (req, res) => {
     if (entry.entryType === 'EXPENSE') {
       const classification = await validateExpenseClassification({
         expenseClassification: entry.expenseClassification,
+        attachments: entry.attachments || [],
         propertyId: entry.propertyId,
         unitId: entry.unitId,
+        attachments: entry.attachments || [],
       });
       entry.expenseClassification = classification.expenseClassification;
       entry.propertyId = classification.propertyId;

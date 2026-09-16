@@ -22,6 +22,7 @@ export const recordVoucher = async (req, res) => {
       propertyId,
       unitId,
       expenseClassification,
+      attachments = [],
       rentMonth,
     } = req.body;
 
@@ -84,6 +85,7 @@ export const recordVoucher = async (req, res) => {
         propertyId: propertyId || null,
         unitId: unitId || null,
         expenseClassification: classification.expenseClassification,
+        attachments,
         rentMonth: rentMonth || null,
         entryData: req.body,
         status: 'PENDING_VERIFICATION',
@@ -131,6 +133,7 @@ export const recordVoucher = async (req, res) => {
       propertyId: propertyId || null,
       unitId: unitId || null,
       expenseClassification: classification.expenseClassification,
+      attachments,
       rentMonth: rentMonth || null,
       status: 'PENDING',
       createdBy: req.user._id,

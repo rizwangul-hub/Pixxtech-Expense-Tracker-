@@ -17,13 +17,18 @@ import {
   Clock,
   ArrowUpRight,
   ArrowDownLeft,
+  Printer,
 } from 'lucide-react';
 import { ledgersAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
+import SingleVoucherPrintModal from '../components/SingleVoucherPrintModal.jsx';
 
 export function LedgersPage({ currentUser }) {
   // Ledger Type Selector
   const [ledgerType, setLedgerType] = useState('BANK');
+
+  // Print Modal State
+  const [printVoucherId, setPrintVoucherId] = useState(null);
 
   // Selectable entities
   const [entities, setEntities] = useState([]);
@@ -418,13 +423,22 @@ export function LedgersPage({ currentUser }) {
                           {formatPKR(tx.balance)}
                         </td>
                         <td className="p-3 whitespace-nowrap text-center">
-                          <button
-                            onClick={() => setActiveModalTx(tx)}
-                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-800 transition"
-                            title="View Voucher Details"
-                          >
-                            <Eye size={14} />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => setPrintVoucherId(tx._id)}
+                              className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-900 transition"
+                              title="Print A4 Voucher"
+                            >
+                              <Printer size={14} />
+                            </button>
+                            <button
+                              onClick={() => setActiveModalTx(tx)}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-800 transition"
+                              title="View Voucher Details"
+                            >
+                              <Eye size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -513,7 +527,14 @@ export function LedgersPage({ currentUser }) {
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+              <button
+                onClick={() => setPrintVoucherId(activeModalTx._id)}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition"
+              >
+                <Printer size={14} />
+                Print A4 Voucher
+              </button>
               <button
                 onClick={() => setActiveModalTx(null)}
                 className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs"
@@ -523,6 +544,14 @@ export function LedgersPage({ currentUser }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Single Voucher A4 Printable Modal */}
+      {printVoucherId && (
+        <SingleVoucherPrintModal
+          voucherId={printVoucherId}
+          onClose={() => setPrintVoucherId(null)}
+        />
       )}
     </div>
   );
