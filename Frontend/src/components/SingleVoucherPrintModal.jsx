@@ -312,11 +312,11 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
               </div>
 
               {/* 6. Prominent Total Amount Banner */}
-              <div className="bg-slate-900 text-white p-3.5 rounded-lg flex items-center justify-between shadow-sm">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-300">
+              <div className="bg-slate-50 border-2 border-slate-900 text-slate-900 p-3.5 rounded-lg flex items-center justify-between shadow-xs">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-900">
                   TOTAL AMOUNT {isRent ? 'RECEIVED' : 'PAID'}
                 </span>
-                <span className="text-2xl font-black font-mono tracking-tight text-white">
+                <span className="text-2xl font-black font-mono tracking-tight text-slate-900">
                   {formatPKR(data.amount)}
                 </span>
               </div>
@@ -424,14 +424,14 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
           }
 
           /* Total Banner high contrast print styling */
-          .printable-a4-voucher .bg-slate-900 {
-            background-color: #0f172a !important;
+          .printable-a4-voucher .bg-slate-50 {
+            background-color: #f8fafc !important;
             border: 2px solid #000000 !important;
           }
 
-          .printable-a4-voucher .bg-slate-900 *,
-          .printable-a4-voucher .bg-slate-900 span {
-            color: #ffffff !important;
+          .printable-a4-voucher .bg-slate-50 *,
+          .printable-a4-voucher .bg-slate-50 span {
+            color: #000000 !important;
           }
 
           /* High contrast solid borders */
