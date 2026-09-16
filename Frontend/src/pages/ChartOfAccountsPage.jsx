@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Banknote,
   Building2,
-  CheckCircle2,
-  CircleDollarSign,
-  Landmark,
-  Plus,
+  Banknote,
   Tag,
+  CircleDollarSign,
+  Plus,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  Layers,
+  Landmark,
+  FileText,
+  Search,
+  Wallet,
 } from 'lucide-react';
 import { accountsAPI, otherIncomeAPI, propertiesAPI } from '../services/api.js';
+import { formatPKR } from '../utils/formatters.js';
 
 const initialProperty = {
   propertyName: '',
@@ -18,6 +25,7 @@ const initialProperty = {
   area: '',
   address: '',
   description: '',
+  notes: '',
 };
 
 const initialAccount = {
@@ -26,37 +34,154 @@ const initialAccount = {
   bankName: '',
   cashHolder: '',
   accountNumber: '',
+  iban: '',
+  branch: '',
   ownerName: '',
   openingBalance: '0',
-  openingBalanceDate: new Date().toISOString().split('T')[0],
-  currency: 'PKR',
   notes: '',
 };
 
-const panelClasses = 'bg-white border border-slate-200 rounded-xl p-5 shadow-sm';
-const inputClasses =
-  'w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-teal-600';
+const initialExpenseCategory = {
+  name: '',
+  type: 'EXPENSE',
+  isRentalHead: false,
+};
+
+const initialIncomeHead = {
+  name: '',
+  code: '',
+  description: '',
+};
 
 export function ChartOfAccountsPage({ currentUser }) {
+  // Navigation sub-tab state
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'expense' | 'account' | 'property' | 'income'
+
+  // Form states
   const [property, setProperty] = useState(initialProperty);
   const [account, setAccount] = useState(initialAccount);
-  const [expenseName, setExpenseName] = useState('');
-  const [incomeHead, setIncomeHead] = useState({ name: '', code: '', description: '' });
+  const [expenseCategory, setExpenseCategory] = useState(initialExpenseCategory);
+  const [incomeHead, setIncomeHead] = useState(initialIncomeHead);
+
+  // Master Data lists from backend
+  const [propertiesList, setPropertiesList] = useState([]);
+  const [accountsList, setAccountsList] = useState([]);
+  const [categoriesList, setCategoriesList] = useState([]);
+  const [incomeHeadsList, setIncomeHeadsList] = useState([]);
+
+  // System states
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [searchQuery, setSearchQuery] = useState('');
 
   const notify = (type, text) => {
     setMessage({ type, text });
-    window.setTimeout(() => setMessage({ type: '', text: '' }), 4500);
+    window.setTimeout(() => setMessage({ type: '', text: '' }), 5000);
   };
 
-  const handlePropertySubmit = async (event) => {
-    event.preventDefault();
+  // Load all master data records
+  const loadChartData = async () => {
+    try {
+      setLoading(true);
+      const [propRes, accRes, catRes, headsRes] = await Promise.all([
+        accountsAPI.getProperties().catch(() => ({ properties: [] })),
+        accountsAPI.getAccounts().catch(() => ({ accounts: [] })),
+        accountsAPI.getCategories().catch(() => ({ categories: [] })),
+        otherIncomeAPI.getHeads().catch(() => ({ heads: [] })),
+      ]);
+
+      setPropertiesList(propRes.properties || propRes || []);
+      setAccountsList(accRes.accounts || accRes || []);
+      setCategoriesList(catRes.categories || catRes || []);
+      setIncomeHeadsList(headsRes.heads || headsRes.data?.heads || headsRes || []);
+    } catch (err) {
+      console.error('Failed to load chart of accounts data:', err);
+      notify('error', 'Failed to load master ledger records.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadChartData();
+  }, []);
+
+  // 1. Submit New Expense Category / Head
+  const handleExpenseSubmit = async (e) => {
+    e.preventDefault();
+    if (!expenseCategory.name.trim()) {
+      notify('error', 'Expense category head name is required.');
+      return;
+    }
+    setSaving('expense');
+    try {
+      await accountsAPI.createCategory({
+        name: expenseCategory.name.trim(),
+        type: 'EXPENSE',
+        isRentalHead: expenseCategory.isRentalHead,
+      });
+      setExpenseCategory(initialExpenseCategory);
+      notify('success', `Expense category "${expenseCategory.name.trim()}" created successfully.`);
+      await loadChartData();
+    } catch (error) {
+      notify('error', error.response?.data?.message || error.message || 'Failed to create expense category.');
+    } finally {
+      setSaving('');
+    }
+  };
+
+  // 2. Submit New Bank or Cash Account
+  const handleAccountSubmit = async (e) => {
+    e.preventDefault();
+    if (!account.accountName.trim()) {
+      notify('error', 'Account title is required.');
+      return;
+    }
+    setSaving('account');
+    try {
+      const payload = {
+        name: account.accountName.trim(),
+        accountName: account.accountName.trim(),
+        type: account.accountType,
+        accountType: account.accountType,
+        bankName: account.accountType === 'BANK' ? account.bankName.trim() : '',
+        cashHolder: account.accountType === 'CASH' ? account.cashHolder.trim() : '',
+        accountNumber: account.accountNumber.trim(),
+        iban: account.iban.trim(),
+        branch: account.branch.trim(),
+        ownerName: account.ownerName.trim(),
+        openingBalance: Number(account.openingBalance) || 0,
+        notes: account.notes.trim(),
+      };
+      await accountsAPI.createAccount(payload);
+      setAccount(initialAccount);
+      notify('success', `${payload.accountType === 'BANK' ? 'Bank Account' : 'Cash Custodian'} created successfully.`);
+      await loadChartData();
+    } catch (error) {
+      notify('error', error.response?.data?.message || error.message || 'Failed to create financial account.');
+    } finally {
+      setSaving('');
+    }
+  };
+
+  // 3. Submit New Property / Plaza
+  const handlePropertySubmit = async (e) => {
+    e.preventDefault();
+    if (!property.propertyName.trim()) {
+      notify('error', 'Property name is required.');
+      return;
+    }
     setSaving('property');
     try {
-      await propertiesAPI.createProperty(property);
+      await propertiesAPI.createProperty({
+        ...property,
+        propertyName: property.propertyName.trim(),
+        plazaName: property.propertyName.trim(),
+      });
       setProperty(initialProperty);
-      notify('success', 'Property created successfully.');
+      notify('success', `Property "${property.propertyName.trim()}" registered successfully.`);
+      await loadChartData();
     } catch (error) {
       notify('error', error.response?.data?.message || error.message || 'Failed to create property.');
     } finally {
@@ -64,64 +189,23 @@ export function ChartOfAccountsPage({ currentUser }) {
     }
   };
 
-  const handleAccountSubmit = async (event) => {
-    event.preventDefault();
-    setSaving('account');
-    try {
-      const payload = {
-        ...account,
-        accountName: account.accountName.trim(),
-        name: account.accountName.trim(),
-        accountType: account.accountType,
-        type: account.accountType,
-        bankName: account.accountType === 'BANK' ? account.bankName.trim() : '',
-        cashHolder: account.accountType === 'CASH' ? account.cashHolder.trim() : '',
-        openingBalance: Number(account.openingBalance) || 0,
-      };
-      await accountsAPI.createAccount(payload);
-      setAccount(initialAccount);
-      notify('success', `${payload.accountType === 'BANK' ? 'Bank' : 'Cash'} account created successfully.`);
-    } catch (error) {
-      notify('error', error.response?.data?.message || error.message || 'Failed to create account.');
-    } finally {
-      setSaving('');
-    }
-  };
-
-  const handleExpenseSubmit = async (event) => {
-    event.preventDefault();
-    if (!expenseName.trim()) {
-      notify('error', 'Expense head name is required.');
-      return;
-    }
-    setSaving('expense');
-    try {
-      await accountsAPI.createCategory({ name: expenseName.trim(), type: 'EXPENSE' });
-      setExpenseName('');
-      notify('success', 'Expense head created successfully.');
-    } catch (error) {
-      notify('error', error.response?.data?.message || error.message || 'Failed to create expense head.');
-    } finally {
-      setSaving('');
-    }
-  };
-
-  const handleIncomeSubmit = async (event) => {
-    event.preventDefault();
+  // 4. Submit New Other Income Head
+  const handleIncomeSubmit = async (e) => {
+    e.preventDefault();
     if (!incomeHead.name.trim()) {
-      notify('error', 'Other-income head name is required.');
+      notify('error', 'Income head name is required.');
       return;
     }
     setSaving('income');
     try {
       await otherIncomeAPI.createHead({
-        ...incomeHead,
         name: incomeHead.name.trim(),
         code: incomeHead.code.trim(),
         description: incomeHead.description.trim(),
       });
-      setIncomeHead({ name: '', code: '', description: '' });
-      notify('success', 'Other-income head created successfully.');
+      setIncomeHead(initialIncomeHead);
+      notify('success', `Other Income Head "${incomeHead.name.trim()}" created successfully.`);
+      await loadChartData();
     } catch (error) {
       notify('error', error.response?.data?.message || error.message || 'Failed to create income head.');
     } finally {
@@ -129,108 +213,586 @@ export function ChartOfAccountsPage({ currentUser }) {
     }
   };
 
+  // Filtered lists for quick search
+  const q = searchQuery.toLowerCase().trim();
+  const filteredCategories = categoriesList.filter((c) => !q || c.name?.toLowerCase().includes(q));
+  const filteredAccounts = accountsList.filter(
+    (a) => !q || a.name?.toLowerCase().includes(q) || a.bankName?.toLowerCase().includes(q) || a.cashHolder?.toLowerCase().includes(q)
+  );
+  const filteredProperties = propertiesList.filter(
+    (p) => !q || p.propertyName?.toLowerCase().includes(q) || p.city?.toLowerCase().includes(q) || p.propertyCode?.toLowerCase().includes(q)
+  );
+  const filteredIncomeHeads = incomeHeadsList.filter((h) => !q || h.name?.toLowerCase().includes(q) || h.code?.toLowerCase().includes(q));
+
+  // Compute total account liquidity
+  const totalAccountBalance = accountsList.reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex items-center gap-2">
-          <Landmark className="text-teal-700" size={22} />
-          <h1 className="text-2xl font-bold text-slate-900">Chart of Accounts</h1>
+    <div className="space-y-6 max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-full font-sans text-slate-900">
+      {/* Top Header & Context */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-teal-700 text-white rounded-xl shadow-sm">
+              <Layers size={22} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">Chart of Accounts</h1>
+              <p className="text-xs font-medium text-slate-600">
+                Master System Directory &bull; Centralized Creation of Accounts, Categories, Properties &amp; Income Heads
+              </p>
+            </div>
+          </div>
         </div>
-        <p className="text-sm text-slate-600 mt-1">
-          Create and organize the properties, accounts, expense heads, and other-income heads used by the system.
-        </p>
-        <p className="text-xs text-slate-500 mt-1">Administrator: {currentUser?.name || 'Authorized administrator'}</p>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={loadChartData}
+            disabled={loading}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-xs shadow-sm transition"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin text-teal-600' : 'text-slate-600'} />
+            Refresh Directory
+          </button>
+        </div>
       </div>
 
+      {/* KPI Stats Header Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Expense Heads</span>
+            <Tag size={18} className="text-rose-600" />
+          </div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{categoriesList.length}</div>
+          <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Active categories</div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Bank &amp; Cash Accounts</span>
+            <Landmark size={18} className="text-blue-600" />
+          </div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{accountsList.length}</div>
+          <div className="text-[11px] font-semibold text-slate-500 mt-0.5">{formatPKR(totalAccountBalance)} liquidity</div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Properties &amp; Plazas</span>
+            <Building2 size={18} className="text-emerald-600" />
+          </div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{propertiesList.length}</div>
+          <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Registered locations</div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Other Income Heads</span>
+            <CircleDollarSign size={18} className="text-teal-600" />
+          </div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{incomeHeadsList.length}</div>
+          <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Receipt heads</div>
+        </div>
+      </div>
+
+      {/* Action Message Alert Banner */}
       {message.text && (
         <div
-          className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${
+          className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-bold shadow-sm ${
             message.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              : 'bg-rose-50 border-rose-200 text-rose-800'
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+              : 'bg-rose-50 border-rose-300 text-rose-900'
           }`}
         >
-          {message.type === 'success' && <CheckCircle2 size={16} />}
-          {message.text}
+          {message.type === 'success' ? <CheckCircle2 size={18} className="text-emerald-600" /> : <AlertTriangle size={18} className="text-rose-600" />}
+          <span>{message.text}</span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <section className={panelClasses}>
-          <h2 className="flex items-center gap-2 text-base font-bold text-slate-900 mb-4">
-            <Building2 size={18} className="text-emerald-700" /> New Property
-          </h2>
-          <form onSubmit={handlePropertySubmit} className="space-y-3">
-            <input className={inputClasses} placeholder="Property / plaza name" value={property.propertyName} onChange={(e) => setProperty({ ...property, propertyName: e.target.value })} required />
-            <div className="grid grid-cols-2 gap-3">
-              <input className={inputClasses} placeholder="Property code" value={property.propertyCode} onChange={(e) => setProperty({ ...property, propertyCode: e.target.value })} />
-              <select className={inputClasses} value={property.propertyType} onChange={(e) => setProperty({ ...property, propertyType: e.target.value })}>
-                <option value="PLAZA">Plaza</option>
-                <option value="BUILDING">Building</option>
-                <option value="HOUSE">House</option>
-                <option value="SHOPS">Shops</option>
-                <option value="OTHER">Other</option>
-              </select>
+      {/* Navigation Filter Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+              activeTab === 'all'
+                ? 'bg-teal-700 text-white shadow-sm'
+                : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+            }`}
+          >
+            All 4 Master Modules
+          </button>
+          <button
+            onClick={() => setActiveTab('expense')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+              activeTab === 'expense'
+                ? 'bg-rose-700 text-white shadow-sm'
+                : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+            }`}
+          >
+            <Tag size={14} /> New Expense Head
+          </button>
+          <button
+            onClick={() => setActiveTab('account')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+              activeTab === 'account'
+                ? 'bg-blue-700 text-white shadow-sm'
+                : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+            }`}
+          >
+            <Banknote size={14} /> New Bank / Cash Account
+          </button>
+          <button
+            onClick={() => setActiveTab('property')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+              activeTab === 'property'
+                ? 'bg-emerald-700 text-white shadow-sm'
+                : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+            }`}
+          >
+            <Building2 size={14} /> New Property / Plaza
+          </button>
+          <button
+            onClick={() => setActiveTab('income')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+              activeTab === 'income'
+                ? 'bg-teal-700 text-white shadow-sm'
+                : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+            }`}
+          >
+            <CircleDollarSign size={14} /> New Other Income Head
+          </button>
+        </div>
+
+        <div className="relative min-w-[220px]">
+          <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search chart items..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-teal-600 font-semibold"
+          />
+        </div>
+      </div>
+
+      {/* Main Form Grid Sections */}
+      <div className="space-y-8">
+        {/* Module 1: Expense Head / Category Creation */}
+        {(activeTab === 'all' || activeTab === 'expense') && (
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+            <div className="border-b border-slate-200 pb-3 mb-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Tag className="text-rose-600" size={20} />
+                <h2 className="text-base font-bold text-slate-900">1. Expense Heads &amp; Categories</h2>
+              </div>
+              <span className="text-xs font-bold bg-rose-100 text-rose-800 px-2.5 py-1 rounded-full">
+                {categoriesList.length} Active Heads
+              </span>
             </div>
-            <input className={inputClasses} placeholder="City" value={property.city} onChange={(e) => setProperty({ ...property, city: e.target.value })} />
-            <input className={inputClasses} placeholder="Address" value={property.address} onChange={(e) => setProperty({ ...property, address: e.target.value })} />
-            <button type="submit" disabled={saving === 'property'} className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">
-              <Plus size={16} /> {saving === 'property' ? 'Creating...' : 'Create Property'}
-            </button>
-          </form>
-        </section>
 
-        <section className={panelClasses}>
-          <h2 className="flex items-center gap-2 text-base font-bold text-slate-900 mb-4">
-            <Banknote size={18} className="text-blue-700" /> New Bank / Cash Account
-          </h2>
-          <form onSubmit={handleAccountSubmit} className="space-y-3">
-            <input className={inputClasses} placeholder="Account name" value={account.accountName} onChange={(e) => setAccount({ ...account, accountName: e.target.value })} required />
-            <select className={inputClasses} value={account.accountType} onChange={(e) => setAccount({ ...account, accountType: e.target.value })}>
-              <option value="BANK">Bank account</option>
-              <option value="CASH">Cash in hand / custodian</option>
-            </select>
-            {account.accountType === 'BANK' ? (
-              <input className={inputClasses} placeholder="Bank name" value={account.bankName} onChange={(e) => setAccount({ ...account, bankName: e.target.value })} required />
-            ) : (
-              <input className={inputClasses} placeholder="Cash custodian name" value={account.cashHolder} onChange={(e) => setAccount({ ...account, cashHolder: e.target.value })} required />
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <input className={inputClasses} placeholder="Account number" value={account.accountNumber} onChange={(e) => setAccount({ ...account, accountNumber: e.target.value })} />
-              <input className={inputClasses} type="number" step="any" placeholder="Opening balance" value={account.openingBalance} onChange={(e) => setAccount({ ...account, openingBalance: e.target.value })} />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Form Column */}
+              <form onSubmit={handleExpenseSubmit} className="lg:col-span-5 space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider">Create New Expense Category</h3>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Expense Category Head Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Electrical Repairs, Office Supplies, Generator Fuel"
+                    value={expenseCategory.name}
+                    onChange={(e) => setExpenseCategory({ ...expenseCategory, name: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-rose-600"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="isRentalHead"
+                    checked={expenseCategory.isRentalHead}
+                    onChange={(e) => setExpenseCategory({ ...expenseCategory, isRentalHead: e.target.checked })}
+                    className="w-4 h-4 text-rose-600 rounded border-slate-300"
+                  />
+                  <label htmlFor="isRentalHead" className="text-xs font-semibold text-slate-700">
+                    Flag as Property Maintenance Head
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={saving === 'expense'}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-rose-700 hover:bg-rose-800 px-4 py-2.5 text-xs font-bold text-white transition disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  {saving === 'expense' ? 'Saving Head...' : 'Add Expense Head'}
+                </button>
+              </form>
+
+              {/* Directory List Column */}
+              <div className="lg:col-span-7">
+                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider mb-3">Active Expense Heads Directory</h3>
+                <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-200 bg-white">
+                  {filteredCategories.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-slate-500 font-semibold">No expense heads matching filter.</div>
+                  ) : (
+                    filteredCategories.map((c, i) => (
+                      <div key={c._id || i} className="p-3 flex items-center justify-between hover:bg-slate-50">
+                        <div className="flex items-center gap-2.5">
+                          <Tag size={14} className="text-rose-600" />
+                          <span className="text-xs font-bold text-slate-900">{c.name}</span>
+                        </div>
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                          {c.type || 'EXPENSE'}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
-            <button type="submit" disabled={saving === 'account'} className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50">
-              <Plus size={16} /> {saving === 'account' ? 'Creating...' : 'Create Account'}
-            </button>
-          </form>
-        </section>
+          </div>
+        )}
 
-        <section className={panelClasses}>
-          <h2 className="flex items-center gap-2 text-base font-bold text-slate-900 mb-4">
-            <Tag size={18} className="text-rose-700" /> New Expense Head
-          </h2>
-          <form onSubmit={handleExpenseSubmit} className="space-y-3">
-            <p className="text-sm text-slate-600">These heads appear in Expense Voucher Entry for categorizing expenses.</p>
-            <input className={inputClasses} placeholder="Expense head name" value={expenseName} onChange={(e) => setExpenseName(e.target.value)} required />
-            <button type="submit" disabled={saving === 'expense'} className="inline-flex items-center gap-2 rounded-lg bg-rose-700 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-800 disabled:opacity-50">
-              <Plus size={16} /> {saving === 'expense' ? 'Creating...' : 'Create Expense Head'}
-            </button>
-          </form>
-        </section>
+        {/* Module 2: Bank & Cash Liquidity Accounts Creation */}
+        {(activeTab === 'all' || activeTab === 'account') && (
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+            <div className="border-b border-slate-200 pb-3 mb-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Landmark className="text-blue-600" size={20} />
+                <h2 className="text-base font-bold text-slate-900">2. Bank &amp; Cash Accounts</h2>
+              </div>
+              <span className="text-xs font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full">
+                {accountsList.length} Active Accounts
+              </span>
+            </div>
 
-        <section className={panelClasses}>
-          <h2 className="flex items-center gap-2 text-base font-bold text-slate-900 mb-4">
-            <CircleDollarSign size={18} className="text-teal-700" /> New Other-Income Head
-          </h2>
-          <form onSubmit={handleIncomeSubmit} className="space-y-3">
-            <input className={inputClasses} placeholder="Income head name" value={incomeHead.name} onChange={(e) => setIncomeHead({ ...incomeHead, name: e.target.value })} required />
-            <input className={inputClasses} placeholder="Code (optional)" value={incomeHead.code} onChange={(e) => setIncomeHead({ ...incomeHead, code: e.target.value })} />
-            <textarea className={inputClasses} rows="3" placeholder="Description (optional)" value={incomeHead.description} onChange={(e) => setIncomeHead({ ...incomeHead, description: e.target.value })} />
-            <button type="submit" disabled={saving === 'income'} className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">
-              <Plus size={16} /> {saving === 'income' ? 'Creating...' : 'Create Income Head'}
-            </button>
-          </form>
-        </section>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Form Column */}
+              <form onSubmit={handleAccountSubmit} className="lg:col-span-5 space-y-3.5 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider">Create Bank / Cash Account</h3>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Account Type *</label>
+                    <select
+                      value={account.accountType}
+                      onChange={(e) => setAccount({ ...account, accountType: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600"
+                    >
+                      <option value="BANK">Bank Account</option>
+                      <option value="CASH">Cash in Hand / Custodian</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Opening Balance (PKR)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="0.00"
+                      value={account.openingBalance}
+                      onChange={(e) => setAccount({ ...account, openingBalance: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-600"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Account Title / Display Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder={account.accountType === 'BANK' ? 'e.g. Bank Al Falah (Kamran Ijaz)' : 'e.g. Cash in Hand (Majid Javed)'}
+                    value={account.accountName}
+                    onChange={(e) => setAccount({ ...account, accountName: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600"
+                  />
+                </div>
+
+                {account.accountType === 'BANK' ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Bank Name *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Bank Al Falah"
+                          value={account.bankName}
+                          onChange={(e) => setAccount({ ...account, bankName: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Account / IBAN No.</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 550192831002"
+                          value={account.accountNumber}
+                          onChange={(e) => setAccount({ ...account, accountNumber: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600"
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Cash Custodian / Holder Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Majid Javed (Cashier)"
+                      value={account.cashHolder}
+                      onChange={(e) => setAccount({ ...account, cashHolder: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600"
+                    />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={saving === 'account'}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 hover:bg-blue-800 px-4 py-2.5 text-xs font-bold text-white transition disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  {saving === 'account' ? 'Creating Account...' : 'Register Account'}
+                </button>
+              </form>
+
+              {/* Directory List Column */}
+              <div className="lg:col-span-7">
+                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider mb-3">Active Accounts &amp; Current Balances</h3>
+                <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-200 bg-white">
+                  {filteredAccounts.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-slate-500 font-semibold">No financial accounts found.</div>
+                  ) : (
+                    filteredAccounts.map((a, i) => (
+                      <div key={a._id || i} className="p-3 flex items-center justify-between hover:bg-slate-50">
+                        <div className="flex items-center gap-3">
+                          {a.type === 'CASH' ? <Wallet size={16} className="text-amber-600" /> : <Landmark size={16} className="text-blue-600" />}
+                          <div>
+                            <div className="text-xs font-bold text-slate-900">{a.name}</div>
+                            <div className="text-[10px] text-slate-500 font-medium">
+                              {a.type === 'CASH' ? `Custodian: ${a.cashHolder || 'General Cash'}` : `Bank: ${a.bankName || 'Bank'} ${a.accountNumber ? `(${a.accountNumber})` : ''}`}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs font-extrabold font-mono text-slate-900">{formatPKR(a.currentBalance)}</div>
+                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                            {a.type}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Module 3: Property / Plaza Portfolio Creation */}
+        {(activeTab === 'all' || activeTab === 'property') && (
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+            <div className="border-b border-slate-200 pb-3 mb-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Building2 className="text-emerald-600" size={20} />
+                <h2 className="text-base font-bold text-slate-900">3. Properties &amp; Commercial Plazas</h2>
+              </div>
+              <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full">
+                {propertiesList.length} Registered Plazas
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Form Column */}
+              <form onSubmit={handlePropertySubmit} className="lg:col-span-5 space-y-3.5 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider">Register Property / Plaza</h3>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Property Name / Plaza Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Zam Zam Heights, Pixx Plaza, Commercial Market"
+                    value={property.propertyName}
+                    onChange={(e) => setProperty({ ...property, propertyName: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Property Type</label>
+                    <select
+                      value={property.propertyType}
+                      onChange={(e) => setProperty({ ...property, propertyType: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    >
+                      <option value="PLAZA">Plaza</option>
+                      <option value="BUILDING">Building</option>
+                      <option value="HOUSE">House</option>
+                      <option value="SHOPS">Shops</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">City</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Lahore"
+                      value={property.city}
+                      onChange={(e) => setProperty({ ...property, city: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Address / Location</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Main Boulevard, Gulberg III"
+                    value={property.address}
+                    onChange={(e) => setProperty({ ...property, address: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={saving === 'property'}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 px-4 py-2.5 text-xs font-bold text-white transition disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  {saving === 'property' ? 'Registering Property...' : 'Add Property'}
+                </button>
+              </form>
+
+              {/* Directory List Column */}
+              <div className="lg:col-span-7">
+                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider mb-3">Registered Properties Directory</h3>
+                <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-200 bg-white">
+                  {filteredProperties.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-slate-500 font-semibold">No properties registered.</div>
+                  ) : (
+                    filteredProperties.map((p, i) => (
+                      <div key={p._id || i} className="p-3 flex items-center justify-between hover:bg-slate-50">
+                        <div className="flex items-center gap-3">
+                          <Building2 size={16} className="text-emerald-600" />
+                          <div>
+                            <div className="text-xs font-bold text-slate-900">{p.propertyName || p.plazaName}</div>
+                            <div className="text-[10px] text-slate-500 font-medium">
+                              Code: <span className="font-mono">{p.propertyCode}</span> &bull; {p.city || 'Lahore'} &bull; {p.units?.length || 0} units
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          {p.propertyType || 'PLAZA'}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Module 4: Other Income Heads Creation */}
+        {(activeTab === 'all' || activeTab === 'income') && (
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+            <div className="border-b border-slate-200 pb-3 mb-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CircleDollarSign className="text-teal-600" size={20} />
+                <h2 className="text-base font-bold text-slate-900">4. Other Income Heads</h2>
+              </div>
+              <span className="text-xs font-bold bg-teal-100 text-teal-800 px-2.5 py-1 rounded-full">
+                {incomeHeadsList.length} Active Receipt Heads
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Form Column */}
+              <form onSubmit={handleIncomeSubmit} className="lg:col-span-5 space-y-3.5 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider">Create Other-Income Head</h3>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Income Head Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Scrap Sale, Late Payment Fine, Utility Recovery"
+                    value={incomeHead.name}
+                    onChange={(e) => setIncomeHead({ ...incomeHead, name: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-teal-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Head Code / Reference (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. INC-04"
+                    value={incomeHead.code}
+                    onChange={(e) => setIncomeHead({ ...incomeHead, code: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-teal-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Description (Optional)</label>
+                  <textarea
+                    rows="2"
+                    placeholder="Short description of income type..."
+                    value={incomeHead.description}
+                    onChange={(e) => setIncomeHead({ ...incomeHead, description: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:border-teal-600"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={saving === 'income'}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-2.5 text-xs font-bold text-white transition disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  {saving === 'income' ? 'Creating Head...' : 'Add Other-Income Head'}
+                </button>
+              </form>
+
+              {/* Directory List Column */}
+              <div className="lg:col-span-7">
+                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider mb-3">Other Income Heads Directory</h3>
+                <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-200 bg-white">
+                  {filteredIncomeHeads.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-slate-500 font-semibold">No other-income heads found.</div>
+                  ) : (
+                    filteredIncomeHeads.map((h, i) => (
+                      <div key={h._id || i} className="p-3 flex items-center justify-between hover:bg-slate-50">
+                        <div className="flex items-center gap-3">
+                          <CircleDollarSign size={16} className="text-teal-600" />
+                          <div>
+                            <div className="text-xs font-bold text-slate-900">{h.name}</div>
+                            <div className="text-[10px] text-slate-500 font-medium">{h.description || 'General Income Head'}</div>
+                          </div>
+                        </div>
+                        {h.code && (
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
+                            {h.code}
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

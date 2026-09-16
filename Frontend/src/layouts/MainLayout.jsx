@@ -46,6 +46,18 @@ export function MainLayout({
       badge: 'Core',
       badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
     },
+    ...(userIsAdmin
+      ? [
+          {
+            id: 'chart-of-accounts',
+            label: 'Chart of Accounts',
+            icon: Layers,
+            status: 'active',
+            badge: 'Admin',
+            badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
+          },
+        ]
+      : []),
     ...(userIsVerifier || userIsAdmin
       ? [
           {
@@ -143,18 +155,6 @@ export function MainLayout({
       badge: 'Active',
       badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
     },
-    ...(userIsAdmin
-      ? [
-          {
-            id: 'chart-of-accounts',
-            label: 'Chart of Accounts',
-            icon: Layers,
-            status: 'active',
-            badge: 'Admin',
-            badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
-          },
-        ]
-      : []),
     {
       id: 'transfers',
       label: 'Transfers',
