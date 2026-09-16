@@ -44,7 +44,7 @@ export function MainLayout({
       icon: LayoutDashboard,
       status: 'active',
       badge: 'Core',
-      badgeColor: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60',
+      badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
     },
     ...(userIsVerifier || userIsAdmin
       ? [
@@ -54,7 +54,7 @@ export function MainLayout({
             icon: ShieldCheck,
             status: 'active',
             badge: 'Verifier',
-            badgeColor: 'bg-amber-950/80 text-amber-300 border-amber-700/60',
+            badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
           },
         ]
       : []),
@@ -66,7 +66,7 @@ export function MainLayout({
             icon: Receipt,
             status: 'active',
             badge: 'Operator',
-            badgeColor: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60',
+            badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
           },
         ]
       : []),
@@ -77,7 +77,7 @@ export function MainLayout({
       status: 'active',
       permission: PERMISSIONS.VIEW_FINANCIALS,
       badge: 'Portfolio',
-      badgeColor: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60',
+      badgeColor: 'bg-slate-100 text-slate-700 border-slate-200',
     },
     {
       id: 'tenants',
@@ -86,7 +86,7 @@ export function MainLayout({
       status: 'active',
       permission: PERMISSIONS.VIEW_FINANCIALS,
       badge: 'Active',
-      badgeColor: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     },
     {
       id: 'agreements',
@@ -95,7 +95,7 @@ export function MainLayout({
       status: 'active',
       permission: PERMISSIONS.VIEW_FINANCIALS,
       badge: 'Active',
-      badgeColor: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60',
+      badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     },
     {
       id: 'rent-due',
@@ -104,7 +104,7 @@ export function MainLayout({
       status: 'active',
       permission: PERMISSIONS.VIEW_FINANCIALS,
       badge: 'Billing',
-      badgeColor: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60',
+      badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
     },
     {
       id: 'income',
@@ -113,7 +113,7 @@ export function MainLayout({
       status: 'active',
       permission: PERMISSIONS.VIEW_FINANCIALS,
       badge: 'Active',
-      badgeColor: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     },
     {
       id: 'other-income',
@@ -122,7 +122,7 @@ export function MainLayout({
       status: 'active',
       permission: PERMISSIONS.ENTER_DATA,
       badge: 'Active',
-      badgeColor: 'bg-amber-950/80 text-amber-300 border-amber-700/60',
+      badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
     },
     {
       id: 'expenses',
@@ -131,8 +131,8 @@ export function MainLayout({
       status: canEnterData ? 'active' : 'locked',
       badge: canEnterData ? 'Active' : 'Restricted',
       badgeColor: canEnterData
-        ? 'bg-amber-950/80 text-amber-300 border-amber-700/60'
-        : 'bg-slate-800 text-slate-500 border-slate-700',
+        ? 'bg-rose-100 text-rose-800 border-rose-200'
+        : 'bg-slate-100 text-slate-400 border-slate-200',
     },
     {
       id: 'accounts',
@@ -141,7 +141,7 @@ export function MainLayout({
       status: 'active',
       permission: PERMISSIONS.MANAGE_MASTER_DATA,
       badge: 'Active',
-      badgeColor: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60',
+      badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
     },
     {
       id: 'transfers',
@@ -150,7 +150,7 @@ export function MainLayout({
       status: 'active',
       permission: PERMISSIONS.ENTER_DATA,
       badge: 'Active',
-      badgeColor: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60',
+      badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     },
     {
       id: 'transactions',
@@ -159,7 +159,7 @@ export function MainLayout({
       status: 'active',
       permission: PERMISSIONS.VIEW_FINANCIALS,
       badge: 'Ledger',
-      badgeColor: 'bg-blue-950/80 text-blue-300 border-blue-700/60',
+      badgeColor: 'bg-slate-100 text-slate-700 border-slate-200',
     },
     {
       id: 'reports',
@@ -168,7 +168,7 @@ export function MainLayout({
       status: 'active',
       permission: PERMISSIONS.VIEW_FINANCIALS,
       badge: 'Financial',
-      badgeColor: 'bg-violet-950/80 text-violet-300 border-violet-700/60',
+      badgeColor: 'bg-violet-100 text-violet-800 border-violet-200',
     },
     {
       id: 'monthly-reports',
@@ -177,7 +177,7 @@ export function MainLayout({
       status: 'active',
       permission: PERMISSIONS.EXPORT_REPORTS,
       badge: 'Publish',
-      badgeColor: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     },
     {
       id: 'users',
@@ -186,8 +186,8 @@ export function MainLayout({
       status: userIsAdmin ? 'active' : 'locked',
       badge: userIsAdmin ? 'Admin' : 'Restricted',
       badgeColor: userIsAdmin
-        ? 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60'
-        : 'bg-slate-800 text-slate-500 border-slate-700',
+        ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
+        : 'bg-slate-100 text-slate-400 border-slate-200',
       permission: PERMISSIONS.MANAGE_USERS,
     },
     {
@@ -195,10 +195,10 @@ export function MainLayout({
       label: 'Settings',
       icon: Settings,
       status: canManageSettings ? 'active' : 'locked',
-      badge: canManageSettings ? 'Configuration' : 'Restricted',
+      badge: canManageSettings ? 'Config' : 'Restricted',
       badgeColor: canManageSettings
-        ? 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60'
-        : 'bg-slate-800 text-slate-500 border-slate-700',
+        ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
+        : 'bg-slate-100 text-slate-400 border-slate-200',
       permission: PERMISSIONS.MANAGE_SETTINGS,
     },
   ];
@@ -215,15 +215,15 @@ export function MainLayout({
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="h-screen overflow-hidden bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Top Header */}
-      <header className="shrink-0 sticky top-0 z-40 h-20 bg-slate-900/95 border-b border-slate-800 backdrop-blur-md px-4 lg:px-6 py-0 flex items-center justify-between shadow-md">
+      <header className="shrink-0 sticky top-0 z-40 h-20 bg-white border-b border-slate-200 px-4 lg:px-6 py-0 flex items-center justify-between shadow-xs">
         {/* Left Branding */}
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition"
+            className="md:hidden p-2 rounded-lg bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200 transition"
             aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -232,15 +232,15 @@ export function MainLayout({
           <img
             src={logo}
             alt="Pixx Technologies logo"
-            className="pixx-logo-spin h-18 w-18 rounded-lg object-contain"
+            className="pixx-logo-spin h-16 w-16 rounded-lg object-contain"
           />
         </div>
 
         {/* Right User & Actions */}
         <div className="flex items-center gap-3">
           {/* Status Indicator */}
-          <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-xs text-slate-300">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>API Online</span>
           </div>
 
@@ -248,10 +248,10 @@ export function MainLayout({
           {onOpenTerminal && (
             <button
               onClick={onOpenTerminal}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition shadow-2xs"
               title="Open operational voucher entry & reporting terminal"
             >
-              <FileText size={14} className="text-emerald-400" />
+              <FileText size={15} className="text-blue-600" />
               <span className="hidden md:inline">
                 {userIsAdmin ? 'Publisher Control Center' : 'Voucher Entry Terminal'}
               </span>
@@ -260,20 +260,20 @@ export function MainLayout({
           )}
 
           {/* User Profile Pill */}
-          <div className="flex items-center gap-2 bg-slate-800/90 border border-slate-700/80 px-2.5 py-1 rounded-lg">
-            <div className="h-7 w-7 rounded-full bg-slate-700 flex items-center justify-center text-slate-300">
-              <UserIcon size={14} />
+          <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg">
+            <div className="h-7 w-7 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
+              <UserIcon size={14} className="text-white-keep" />
             </div>
             <div className="text-left hidden sm:block">
-              <div className="text-xs font-semibold text-slate-200 leading-tight">
+              <div className="text-xs font-bold text-slate-900 leading-tight">
                 {user?.name || 'Authorized User'}
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 mt-0.5">
                 <span
-                  className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded border ${
+                  className={`text-[10px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded border ${
                     userIsAdmin
-                      ? 'bg-indigo-950 text-indigo-300 border-indigo-700/60'
-                      : 'bg-teal-950 text-teal-300 border-teal-700/60'
+                      ? 'bg-blue-100 text-blue-900 border-blue-300'
+                      : 'bg-emerald-100 text-emerald-900 border-emerald-300'
                   }`}
                 >
                   {userIsAdmin ? 'ADMIN' : 'DATA ENTRY'}
@@ -286,7 +286,7 @@ export function MainLayout({
           <button
             type="button"
             onClick={onLogout}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 hover:border-rose-700 text-xs font-medium transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition shadow-2xs"
             title="Sign out of system"
           >
             <LogOut size={14} />
@@ -298,10 +298,10 @@ export function MainLayout({
       {/* Body: Sidebar + Main Content */}
       <div className="min-h-0 flex-1 flex overflow-hidden">
         {/* Desktop Sidebar */}
-        <aside className="hidden md:flex md:w-64 h-full flex-col bg-slate-900 border-r border-slate-800 shrink-0">
-          <div className="p-4 border-b border-slate-800/80">
-            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Layers size={13} className="text-emerald-400" />
+        <aside className="hidden md:flex md:w-64 h-full flex-col bg-white border-r border-slate-200 shrink-0 shadow-xs">
+          <div className="p-4 border-b border-slate-200">
+            <div className="text-[11px] uppercase font-black tracking-wider text-slate-600 flex items-center gap-1.5">
+              <Layers size={14} className="text-blue-600" />
               Navigation Modules
             </div>
           </div>
@@ -317,24 +317,24 @@ export function MainLayout({
                   key={item.id}
                   disabled={!isItemActive}
                   onClick={() => handleNavClick(item)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-bold transition ${
                     isActive
-                      ? 'bg-emerald-600 text-white shadow-sm font-semibold'
+                      ? 'bg-blue-600 text-white shadow-sm font-black text-white-keep'
                       : isItemActive
-                      ? 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                      : 'text-slate-500 cursor-not-allowed opacity-60 hover:bg-transparent'
+                      ? 'text-slate-800 hover:bg-slate-100 hover:text-blue-700 font-semibold'
+                      : 'text-slate-400 cursor-not-allowed opacity-60 hover:bg-transparent'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <Icon size={16} className={isActive ? 'text-white' : isItemActive ? 'text-slate-400' : 'text-slate-600'} />
+                  <div className="flex items-center gap-3">
+                    <Icon size={17} className={isActive ? 'text-white-keep' : isItemActive ? 'text-slate-600' : 'text-slate-400'} />
                     <span>{item.label}</span>
                   </div>
 
                   {item.badge && (
                     <span
-                      className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
                         isActive
-                          ? 'bg-emerald-700 text-emerald-100 border-emerald-500'
+                          ? 'bg-blue-700 text-white border-blue-500 text-white-keep'
                           : item.badgeColor
                       }`}
                     >
@@ -347,11 +347,11 @@ export function MainLayout({
           </nav>
 
           {/* Sidebar Footer */}
-          <div className="p-3 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-400">
+          <div className="p-3.5 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-600">
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-slate-500">Software Developer</div>
-              <div className="text-xs font-semibold text-slate-200">Rizwan Ullah</div>
-              <div className="text-[10px] text-emerald-400">Pixx Technologies</div>
+              <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Software Developer</div>
+              <div className="text-xs font-black text-slate-900">Rizwan Ullah</div>
+              <div className="text-[11px] font-semibold text-blue-700">Pixx Technologies</div>
             </div>
           </div>
         </aside>
@@ -361,20 +361,20 @@ export function MainLayout({
           <div className="fixed inset-0 z-50 md:hidden flex">
             {/* Backdrop */}
             <div
-              className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
               onClick={() => setMobileMenuOpen(false)}
             />
 
             {/* Slide-over Drawer */}
-            <div className="relative w-64 max-w-[80%] bg-slate-900 border-r border-slate-800 flex flex-col z-10">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                  <Layers size={14} className="text-emerald-400" />
+            <div className="relative w-64 max-w-[80%] bg-white border-r border-slate-200 flex flex-col z-10 shadow-xl">
+              <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+                <div className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                  <Layers size={15} className="text-blue-600" />
                   Navigation
                 </div>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"
+                  className="p-1 rounded bg-slate-100 text-slate-600 hover:text-slate-900"
                 >
                   <X size={18} />
                 </button>
@@ -391,12 +391,12 @@ export function MainLayout({
                       key={item.id}
                       disabled={!isItemActive}
                       onClick={() => handleNavClick(item)}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition ${
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-bold transition ${
                         isActive
-                          ? 'bg-emerald-600 text-white font-semibold'
+                          ? 'bg-blue-600 text-white font-black text-white-keep'
                           : isItemActive
-                          ? 'text-slate-300 hover:bg-slate-800'
-                          : 'text-slate-500 cursor-not-allowed opacity-60'
+                          ? 'text-slate-800 hover:bg-slate-100'
+                          : 'text-slate-400 cursor-not-allowed opacity-60'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
@@ -404,7 +404,7 @@ export function MainLayout({
                         <span>{item.label}</span>
                       </div>
                       {item.badge && (
-                        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${item.badgeColor}`}>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${item.badgeColor}`}>
                           {item.badge}
                         </span>
                       )}
@@ -413,15 +413,15 @@ export function MainLayout({
                 })}
               </nav>
 
-              <div className="p-3 border-t border-slate-800 text-[11px] text-slate-400">
-                Logged in as: <strong className="text-slate-200">{user?.name}</strong>
+              <div className="p-3 border-t border-slate-200 text-[11px] text-slate-600 bg-slate-50">
+                Logged in as: <strong className="text-slate-900 font-bold">{user?.name}</strong>
               </div>
             </div>
           </div>
         )}
 
         {/* Main Scrollable Content Area */}
-        <main className="min-w-0 min-h-0 flex-1 overflow-y-auto bg-slate-950 p-4 sm:p-6 lg:p-8">
+        <main className="min-w-0 min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto space-y-6">
             {children}
           </div>

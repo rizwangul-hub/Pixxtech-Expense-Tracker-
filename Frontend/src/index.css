@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Keep the header logo animation independent from page styles. */
+/* Keep logo spin animation */
 .pixx-logo-spin {
   display: block;
   transform-origin: center;
@@ -19,178 +19,198 @@
   }
 }
 
-@layer base {
-  body {
-    @apply bg-slate-900 text-slate-100 antialiased font-sans min-h-screen;
-  }
+:root {
+  color-scheme: light;
+  --pixx-bg: #f8fafc;
+  --pixx-surface: #ffffff;
+  --pixx-border: #e2e8f0;
+  --pixx-text-heading: #0f172a;
+  --pixx-text-body: #1e293b;
+  --pixx-text-muted: #475569;
 }
 
-/* Custom scrollbars for clean accounting tables */
+body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Light Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #f1f5f9;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 3px;
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #94a3b8;
 }
 
-/* Professional light theme overrides for the existing Tailwind utility surface. */
-@layer base {
-  :root {
-    color-scheme: light;
-    --pixx-bg: #f8fafc;
-    --pixx-surface: #ffffff;
-    --pixx-border: #e2e8f0;
-    --pixx-text: #111827;
-    --pixx-secondary: #475569;
-    --pixx-muted: #64748b;
-    --pixx-disabled: #94a3b8;
-    --pixx-primary: #047857;
-  }
+/* -------------------------------------------------------------
+   COMPREHENSIVE HIGH-CONTRAST WHITE THEME OVERRIDES
+   Designed specifically for maximum clarity & senior readability
+------------------------------------------------------------- */
 
-  body {
-    @apply bg-slate-50 text-slate-900;
-    background: var(--pixx-bg) !important;
-    color: var(--pixx-text) !important;
-  }
-
-  input,
-  select,
-  textarea {
-    background-color: #ffffff !important;
-    color: var(--pixx-text) !important;
-    border-color: var(--pixx-border) !important;
-  }
-
-  input::placeholder,
-  textarea::placeholder {
-    color: #94a3b8 !important;
-  }
-
-  option,
-  optgroup {
-    background: #ffffff;
-    color: var(--pixx-text);
-  }
+/* Form Control Defaults */
+input,
+select,
+textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  font-weight: 500;
 }
 
-/* Surfaces */
-[class~="bg-slate-950"],
-[class~="bg-slate-900"],
-[class~="bg-slate-800"],
-[class~="bg-slate-950/40"],
-[class~="bg-slate-950/60"],
-[class~="bg-slate-950/80"],
-[class~="bg-slate-900/95"],
-[class~="bg-slate-900/60"],
-[class~="bg-slate-800/30"],
-[class~="bg-slate-800/40"],
-[class~="bg-slate-800/60"],
-[class~="bg-slate-800/80"],
-[class~="bg-slate-800/90"] {
-  background-color: var(--pixx-surface) !important;
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+  outline: none !important;
 }
 
-[class~="bg-slate-950/40"],
-[class~="bg-slate-950/60"],
-[class~="bg-slate-950/80"],
-[class~="bg-slate-800/30"],
-[class~="bg-slate-800/40"],
-[class~="bg-slate-800/60"],
-[class~="bg-slate-800/80"] {
+input::placeholder,
+textarea::placeholder {
+  color: #64748b !important;
+}
+
+option,
+optgroup {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Base Surfaces (Dark container classes -> Crisp White / Soft Gray) */
+[class*="bg-slate-950"],
+[class*="bg-slate-900"],
+[class*="bg-slate-850"] {
+  background-color: #ffffff !important;
+}
+
+[class*="bg-slate-800"],
+[class*="bg-slate-800/"],
+[class*="bg-slate-900/"],
+[class*="bg-slate-950/"] {
   background-color: #f8fafc !important;
 }
 
-/* Text */
-[class~="text-white"],
-[class~="text-slate-100"],
-[class~="text-slate-200"] {
-  color: var(--pixx-text) !important;
-}
-
-[class~="text-slate-300"] {
-  color: #334155 !important;
-}
-
-[class~="text-slate-400"] {
-  color: var(--pixx-secondary) !important;
-}
-
-[class~="text-slate-500"] {
-  color: var(--pixx-muted) !important;
-}
-
-[class~="text-slate-600"] {
-  color: #475569 !important;
-}
-
-/* Borders and dividers */
-[class~="border-slate-800"],
-[class~="border-slate-700"],
-[class~="border-slate-600"],
-[class~="border-slate-800/40"],
-[class~="border-slate-800/60"],
-[class~="border-slate-800/80"],
-[class~="border-slate-700/60"],
-[class~="border-slate-700/80"] {
-  border-color: var(--pixx-border) !important;
-}
-
-[class~="divide-slate-800/80"] > :not([hidden]) ~ :not([hidden]),
-[class~="divide-slate-800"] > :not([hidden]) ~ :not([hidden]) {
-  border-color: var(--pixx-border) !important;
-}
-
-/* Common light-theme hover and focus states. */
-[class~="hover:bg-slate-800"]:hover,
-[class~="hover:bg-slate-700"]:hover,
-[class~="hover:bg-slate-800/40"]:hover,
-[class~="hover:bg-slate-800/80"]:hover,
-[class~="hover:bg-slate-900"]:hover {
+/* Nested card hover */
+[class*="hover:bg-slate-800"]:hover,
+[class*="hover:bg-slate-700"]:hover,
+[class*="hover:bg-slate-900"]:hover {
   background-color: #f1f5f9 !important;
 }
 
-[class~="hover:text-white"]:hover,
-[class~="hover:text-slate-200"]:hover,
-[class~="hover:text-slate-300"]:hover {
-  color: var(--pixx-text) !important;
+/* Text High-Contrast Rules */
+[class*="text-slate-100"],
+[class*="text-slate-200"],
+[class*="text-white"]:not(.text-white-keep) {
+  color: #0f172a !important;
 }
 
-[class~="focus:border-blue-500"]:focus,
-[class~="focus:border-emerald-500"]:focus,
-[class~="focus:border-slate-600"]:focus {
-  border-color: #0f766e !important;
-  box-shadow: 0 0 0 3px rgb(13 148 136 / 0.14);
+[class*="text-slate-300"] {
+  color: #1e293b !important;
 }
 
-/* Keep white labels on saturated action buttons and badges. */
-button.text-white,
-a.text-white,
-[class~="bg-blue-600"].text-white,
-[class~="bg-emerald-600"].text-white,
-[class~="bg-indigo-600"].text-white,
-[class~="bg-rose-600"].text-white,
-[class~="bg-amber-600"].text-white,
-[class~="bg-teal-600"].text-white {
+[class*="text-slate-400"] {
+  color: #334155 !important;
+}
+
+[class*="text-slate-500"] {
+  color: #475569 !important;
+}
+
+/* Borders & Dividers */
+[class*="border-slate-900"],
+[class*="border-slate-800"],
+[class*="border-slate-700"],
+[class*="border-slate-600"] {
+  border-color: #e2e8f0 !important;
+}
+
+/* Preserve White Text on Solid Color Buttons & Actions */
+button.bg-blue-600,
+button.bg-blue-700,
+button.bg-emerald-600,
+button.bg-emerald-700,
+button.bg-indigo-600,
+button.bg-rose-600,
+button.bg-rose-700,
+button.bg-amber-600,
+button.bg-teal-600,
+a.bg-blue-600,
+a.bg-emerald-600,
+.btn-primary,
+.text-white-keep,
+[class*="bg-blue-600"] > *,
+[class*="bg-emerald-600"] > *,
+[class*="bg-indigo-600"] > *,
+[class*="bg-rose-600"] > * {
   color: #ffffff !important;
 }
 
-/* Light scrollbar and modal backdrop. */
-::-webkit-scrollbar-track {
-  background: #f8fafc;
+button.bg-blue-600,
+button.bg-emerald-600,
+button.bg-indigo-600,
+button.bg-rose-600,
+button.bg-amber-600,
+a.bg-blue-600,
+a.bg-emerald-600 {
+  color: #ffffff !important;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+/* Badge Transformations for Senior Accessibility */
+[class*="bg-emerald-950"] {
+  background-color: #d1fae5 !important;
+  color: #065f46 !important;
+  border-color: #6ee7b7 !important;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+[class*="bg-amber-950"] {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  border-color: #fcd34d !important;
+}
+
+[class*="bg-indigo-950"] {
+  background-color: #e0e7ff !important;
+  color: #3730a3 !important;
+  border-color: #a5b4fc !important;
+}
+
+[class*="bg-blue-950"] {
+  background-color: #dbeafe !important;
+  color: #1e40af !important;
+  border-color: #93c5fd !important;
+}
+
+[class*="bg-violet-950"] {
+  background-color: #ede9fe !important;
+  color: #5b21b6 !important;
+  border-color: #c4b5fd !important;
+}
+
+[class*="bg-rose-950"] {
+  background-color: #ffe4e6 !important;
+  color: #9f1239 !important;
+  border-color: #fda4af !important;
+}
+
+[class*="bg-teal-950"] {
+  background-color: #ccfbf1 !important;
+  color: #115e59 !important;
+  border-color: #5eead4 !important;
+}
+
+/* Modal Backdrops & Overlays */
+.modal-backdrop,
+[class*="fixed inset-0 bg-black"] {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
 }

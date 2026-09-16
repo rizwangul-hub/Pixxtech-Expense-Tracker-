@@ -35,69 +35,69 @@ export const LoginForm = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-8 shadow-2xl">
+    <div className="min-h-[85vh] flex items-center justify-center p-4 bg-slate-50">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-8 shadow-xl">
         <div className="text-center mb-8 flex flex-col items-center">
           <img
             src={logo}
             alt="Pixx Technologies Logo"
-            className="h-20 w-auto object-contain mb-3 drop-shadow-md"
+            className="h-24 w-auto object-contain mb-3 drop-shadow-sm"
           />
-          <h1 className="text-2xl font-black tracking-tight text-white">
+          <h1 className="text-2xl font-black tracking-tight text-slate-900">
             Pixx Technologies
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Property Funds & Double-Entry Expense Tracking Portal
+          <p className="text-sm font-semibold text-slate-600 mt-1">
+            Property Funds & Expense Tracking System
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-300 text-xs flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-            <div>{error}</div>
+          <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-bold flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div className="leading-snug">{error}</div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="space-y-5 text-sm">
           <div>
-            <label className="block text-slate-400 font-semibold mb-1 uppercase tracking-wider">
+            <label className="block text-slate-800 font-bold mb-1.5 uppercase tracking-wider text-xs">
               Email Address
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+              <Mail className="w-5 h-5 text-slate-500 absolute left-3 top-3" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="e.g. entry@pixxtechnologies.com"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-slate-300 rounded-xl pl-10 pr-3 py-3 text-sm font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition"
                 required
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-slate-400 font-semibold mb-1 uppercase tracking-wider">
+            <label className="block text-slate-800 font-bold mb-1.5 uppercase tracking-wider text-xs">
               Password
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+              <Lock className="w-5 h-5 text-slate-500 absolute left-3 top-3" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-10 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-slate-300 rounded-xl pl-10 pr-11 py-3 text-sm font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((visible) => !visible)}
-                className="absolute right-2 top-2 p-1 text-slate-500 hover:text-slate-300 transition"
+                className="absolute right-3 top-3 p-0.5 text-slate-500 hover:text-slate-800 transition"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 title={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
           </div>
@@ -105,13 +105,12 @@ export const LoginForm = ({ onLoginSuccess }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg hover:shadow-blue-900/30 transition flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+            className="w-full py-3.5 mt-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow-md transition flex items-center justify-center gap-2 text-base text-white-keep disabled:opacity-50"
           >
             {loading ? 'Authenticating...' : 'Sign In to Dashboard'}
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-5 h-5 text-white-keep" />
           </button>
         </form>
-
       </div>
     </div>
   );
