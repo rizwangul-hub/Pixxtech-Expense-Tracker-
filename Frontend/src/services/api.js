@@ -305,6 +305,46 @@ export const vouchersAPI = {
     window.URL.revokeObjectURL(downloadUrl);
     return true;
   },
+  printSingleVoucherPDF: async (id) => {
+    const res = await api.get(`/vouchers/download-pdf/${id}`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    iframe.src = blobUrl;
+
+    document.body.appendChild(iframe);
+
+    return new Promise((resolve) => {
+      iframe.onload = () => {
+        setTimeout(() => {
+          try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+          } catch (e) {
+            console.error('Iframe print failed, falling back to window.open:', e);
+            window.open(blobUrl, '_blank');
+          }
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+            window.URL.revokeObjectURL(blobUrl);
+            resolve(true);
+          }, 60000);
+        }, 500);
+      };
+    });
+  },
 };
 
 export const accountsAPI = {
