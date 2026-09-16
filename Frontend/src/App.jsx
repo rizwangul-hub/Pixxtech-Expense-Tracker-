@@ -10,6 +10,7 @@ import { AgreementsPage } from './pages/AgreementsPage.jsx';
 import { RentDuePage } from './pages/RentDuePage.jsx';
 import { RentReceivedPage } from './pages/RentReceivedPage.jsx';
 import { AccountsPage } from './pages/AccountsPage.jsx';
+import { ChartOfAccountsPage } from './pages/ChartOfAccountsPage.jsx';
 import { AccountLedgerPage } from './pages/AccountLedgerPage.jsx';
 import { TransfersPage } from './pages/TransfersPage.jsx';
 import { TransactionsPage } from './pages/TransactionsPage.jsx';
@@ -51,6 +52,9 @@ const SECTION_PERMISSIONS = {
 };
 
 const getAccessibleSection = (section, user) => {
+  if (section === 'chart-of-accounts' && !isAdmin(user)) {
+    return 'dashboard';
+  }
   const requiredPermission = SECTION_PERMISSIONS[section];
   if (requiredPermission && !hasPermission(user, requiredPermission)) {
     return 'dashboard';
@@ -305,6 +309,8 @@ export function App() {
           onNavigateToAccounts={() => setCurrentSection('accounts')}
           onNavigateToTransactions={() => setCurrentSection('transactions')}
         />
+      ) : currentSection === 'chart-of-accounts' && isAdmin(user) ? (
+        <ChartOfAccountsPage currentUser={user} />
       ) : currentSection === 'accounts' || currentSection === 'settings' ? (
         <AccountsPage
           currentUser={user}
