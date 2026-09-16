@@ -10,7 +10,6 @@ import {
   RefreshCw,
   Layers,
   Landmark,
-  FileText,
   Search,
   Wallet,
 } from 'lucide-react';
@@ -63,7 +62,7 @@ export function ChartOfAccountsPage({ currentUser }) {
   const [expenseCategory, setExpenseCategory] = useState(initialExpenseCategory);
   const [incomeHead, setIncomeHead] = useState(initialIncomeHead);
 
-  // Master Data lists from backend
+  // Master Data lists from backend (initialized as empty arrays)
   const [propertiesList, setPropertiesList] = useState([]);
   const [accountsList, setAccountsList] = useState([]);
   const [categoriesList, setCategoriesList] = useState([]);
@@ -80,7 +79,7 @@ export function ChartOfAccountsPage({ currentUser }) {
     window.setTimeout(() => setMessage({ type: '', text: '' }), 5000);
   };
 
-  // Load all master data records
+  // Load all master data records safely
   const loadChartData = async () => {
     try {
       setLoading(true);
@@ -91,10 +90,51 @@ export function ChartOfAccountsPage({ currentUser }) {
         otherIncomeAPI.getHeads().catch(() => ({ heads: [] })),
       ]);
 
-      setPropertiesList(propRes.properties || propRes || []);
-      setAccountsList(accRes.accounts || accRes || []);
-      setCategoriesList(catRes.categories || catRes || []);
-      setIncomeHeadsList(headsRes.heads || headsRes.data?.heads || headsRes || []);
+      // Robust array extraction logic
+      const extractedProps = Array.isArray(propRes?.properties)
+        ? propRes.properties
+        : Array.isArray(propRes?.data?.properties)
+        ? propRes.data.properties
+        : Array.isArray(propRes?.data)
+        ? propRes.data
+        : Array.isArray(propRes)
+        ? propRes
+        : [];
+
+      const extractedAccs = Array.isArray(accRes?.accounts)
+        ? accRes.accounts
+        : Array.isArray(accRes?.data?.accounts)
+        ? accRes.data.accounts
+        : Array.isArray(accRes?.data)
+        ? accRes.data
+        : Array.isArray(accRes)
+        ? accRes
+        : [];
+
+      const extractedCats = Array.isArray(catRes?.categories)
+        ? catRes.categories
+        : Array.isArray(catRes?.data?.categories)
+        ? catRes.data.categories
+        : Array.isArray(catRes?.data)
+        ? catRes.data
+        : Array.isArray(catRes)
+        ? catRes
+        : [];
+
+      const extractedHeads = Array.isArray(headsRes?.heads)
+        ? headsRes.heads
+        : Array.isArray(headsRes?.data?.heads)
+        ? headsRes.data.heads
+        : Array.isArray(headsRes?.data)
+        ? headsRes.data
+        : Array.isArray(headsRes)
+        ? headsRes
+        : [];
+
+      setPropertiesList(extractedProps);
+      setAccountsList(extractedAccs);
+      setCategoriesList(extractedCats);
+      setIncomeHeadsList(extractedHeads);
     } catch (err) {
       console.error('Failed to load chart of accounts data:', err);
       notify('error', 'Failed to load master ledger records.');
@@ -213,19 +253,24 @@ export function ChartOfAccountsPage({ currentUser }) {
     }
   };
 
-  // Filtered lists for quick search
+  // Guaranteed safe array fallbacks for search filters
   const q = searchQuery.toLowerCase().trim();
-  const filteredCategories = categoriesList.filter((c) => !q || c.name?.toLowerCase().includes(q));
-  const filteredAccounts = accountsList.filter(
+  const safeCategories = Array.isArray(categoriesList) ? categoriesList : [];
+  const safeAccounts = Array.isArray(accountsList) ? accountsList : [];
+  const safeProperties = Array.isArray(propertiesList) ? propertiesList : [];
+  const safeIncomeHeads = Array.isArray(incomeHeadsList) ? incomeHeadsList : [];
+
+  const filteredCategories = safeCategories.filter((c) => !q || c.name?.toLowerCase().includes(q));
+  const filteredAccounts = safeAccounts.filter(
     (a) => !q || a.name?.toLowerCase().includes(q) || a.bankName?.toLowerCase().includes(q) || a.cashHolder?.toLowerCase().includes(q)
   );
-  const filteredProperties = propertiesList.filter(
+  const filteredProperties = safeProperties.filter(
     (p) => !q || p.propertyName?.toLowerCase().includes(q) || p.city?.toLowerCase().includes(q) || p.propertyCode?.toLowerCase().includes(q)
   );
-  const filteredIncomeHeads = incomeHeadsList.filter((h) => !q || h.name?.toLowerCase().includes(q) || h.code?.toLowerCase().includes(q));
+  const filteredIncomeHeads = safeIncomeHeads.filter((h) => !q || h.name?.toLowerCase().includes(q) || h.code?.toLowerCase().includes(q));
 
   // Compute total account liquidity
-  const totalAccountBalance = accountsList.reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+  const totalAccountBalance = safeAccounts.reduce((sum, a) => sum + (a.currentBalance || 0), 0);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-full font-sans text-slate-900">
@@ -264,7 +309,7 @@ export function ChartOfAccountsPage({ currentUser }) {
             <span className="text-[11px] font-bold uppercase tracking-wider">Expense Heads</span>
             <Tag size={18} className="text-rose-600" />
           </div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{categoriesList.length}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{safeCategories.length}</div>
           <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Active categories</div>
         </div>
 
@@ -273,7 +318,7 @@ export function ChartOfAccountsPage({ currentUser }) {
             <span className="text-[11px] font-bold uppercase tracking-wider">Bank &amp; Cash Accounts</span>
             <Landmark size={18} className="text-blue-600" />
           </div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{accountsList.length}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{safeAccounts.length}</div>
           <div className="text-[11px] font-semibold text-slate-500 mt-0.5">{formatPKR(totalAccountBalance)} liquidity</div>
         </div>
 
@@ -282,7 +327,7 @@ export function ChartOfAccountsPage({ currentUser }) {
             <span className="text-[11px] font-bold uppercase tracking-wider">Properties &amp; Plazas</span>
             <Building2 size={18} className="text-emerald-600" />
           </div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{propertiesList.length}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{safeProperties.length}</div>
           <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Registered locations</div>
         </div>
 
@@ -291,7 +336,7 @@ export function ChartOfAccountsPage({ currentUser }) {
             <span className="text-[11px] font-bold uppercase tracking-wider">Other Income Heads</span>
             <CircleDollarSign size={18} className="text-teal-600" />
           </div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{incomeHeadsList.length}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{safeIncomeHeads.length}</div>
           <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Receipt heads</div>
         </div>
       </div>
@@ -388,7 +433,7 @@ export function ChartOfAccountsPage({ currentUser }) {
                 <h2 className="text-base font-bold text-slate-900">1. Expense Heads &amp; Categories</h2>
               </div>
               <span className="text-xs font-bold bg-rose-100 text-rose-800 px-2.5 py-1 rounded-full">
-                {categoriesList.length} Active Heads
+                {safeCategories.length} Active Heads
               </span>
             </div>
 
@@ -465,7 +510,7 @@ export function ChartOfAccountsPage({ currentUser }) {
                 <h2 className="text-base font-bold text-slate-900">2. Bank &amp; Cash Accounts</h2>
               </div>
               <span className="text-xs font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full">
-                {accountsList.length} Active Accounts
+                {safeAccounts.length} Active Accounts
               </span>
             </div>
 
@@ -603,7 +648,7 @@ export function ChartOfAccountsPage({ currentUser }) {
                 <h2 className="text-base font-bold text-slate-900">3. Properties &amp; Commercial Plazas</h2>
               </div>
               <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full">
-                {propertiesList.length} Registered Plazas
+                {safeProperties.length} Registered Plazas
               </span>
             </div>
 
@@ -711,7 +756,7 @@ export function ChartOfAccountsPage({ currentUser }) {
                 <h2 className="text-base font-bold text-slate-900">4. Other Income Heads</h2>
               </div>
               <span className="text-xs font-bold bg-teal-100 text-teal-800 px-2.5 py-1 rounded-full">
-                {incomeHeadsList.length} Active Receipt Heads
+                {safeIncomeHeads.length} Active Receipt Heads
               </span>
             </div>
 
