@@ -18,6 +18,7 @@ import {
   Layers,
   FileText,
   Coins,
+  BookOpen,
 } from 'lucide-react';
 import { hasPermission, isAdmin, isVerifier, isDataEntry, PERMISSIONS } from '../utils/permissions.js';
 import logo from '../assets/image/logo.png';
@@ -44,6 +45,15 @@ export function MainLayout({
       icon: LayoutDashboard,
       status: 'active',
       badge: 'Core',
+      badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
+    },
+    {
+      id: 'ledgers',
+      label: 'Ledgers',
+      icon: BookOpen,
+      status: 'active',
+      permission: PERMISSIONS.VIEW_FINANCIALS,
+      badge: 'Journal',
       badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
     },
     ...(userIsAdmin

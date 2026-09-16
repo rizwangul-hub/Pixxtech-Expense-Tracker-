@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { EXPENSE_CLASSIFICATION_LIST } from '../constants/expenseClassification.js';
 
 /**
  * Transaction / Master Journal Ledger Schema
@@ -36,6 +37,12 @@ const transactionSchema = new mongoose.Schema(
         message: 'Invalid transaction type',
       },
       default: 'EXPENSE',
+      index: true,
+    },
+    expenseClassification: {
+      type: String,
+      enum: EXPENSE_CLASSIFICATION_LIST,
+      default: null,
       index: true,
     },
     categoryId: {

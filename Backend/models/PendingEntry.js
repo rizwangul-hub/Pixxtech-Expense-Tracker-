@@ -1,4 +1,5 @@
 ﻿import mongoose from 'mongoose';
+import { EXPENSE_CLASSIFICATION_LIST } from '../constants/expenseClassification.js';
 
 /**
  * PendingEntry Schema
@@ -15,6 +16,12 @@ const pendingEntrySchema = new mongoose.Schema(
         values: ['RENT', 'EXPENSE'],
         message: 'entryType must be either RENT or EXPENSE',
       },
+      index: true,
+    },
+    expenseClassification: {
+      type: String,
+      enum: EXPENSE_CLASSIFICATION_LIST,
+      default: null,
       index: true,
     },
     status: {

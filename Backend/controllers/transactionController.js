@@ -2,6 +2,7 @@ import Transaction from '../models/Transaction.js';
 import PendingEntry from '../models/PendingEntry.js';
 import { createTransaction, round2 } from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
+import { validateExpenseClassification } from '../services/expenseClassificationService.js';
 
 /**
  * @desc    Record a new double-entry voucher transaction
@@ -20,6 +21,7 @@ export const recordVoucher = async (req, res) => {
       amount,
       propertyId,
       unitId,
+      expenseClassification,
       rentMonth,
     } = req.body;
 
@@ -62,6 +64,12 @@ export const recordVoucher = async (req, res) => {
       });
     }
 
+    const classification = await validateExpenseClassification({
+      expenseClassification,
+      propertyId,
+      unitId,
+    });
+
     // 4. If submitted by DATA_ENTRY (Sarfraz), save as temporary pending entry awaiting Khurshid's verification
     if (req.user.role === 'DATA_ENTRY') {
       const pending = await PendingEntry.create({
@@ -75,6 +83,7 @@ export const recordVoucher = async (req, res) => {
         crAccountId,
         propertyId: propertyId || null,
         unitId: unitId || null,
+        expenseClassification: classification.expenseClassification,
         rentMonth: rentMonth || null,
         entryData: req.body,
         status: 'PENDING_VERIFICATION',
@@ -118,8 +127,10 @@ export const recordVoucher = async (req, res) => {
       drAccountId,
       crAccountId,
       amount: numericAmount,
+      transactionType: 'EXPENSE',
       propertyId: propertyId || null,
       unitId: unitId || null,
+      expenseClassification: classification.expenseClassification,
       rentMonth: rentMonth || null,
       status: 'PENDING',
       createdBy: req.user._id,

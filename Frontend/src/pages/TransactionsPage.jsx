@@ -45,6 +45,7 @@ export function TransactionsPage({ user }) {
   const [drAccountId, setDrAccountId] = useState('');
   const [crAccountId, setCrAccountId] = useState('');
   const [propertyId, setPropertyId] = useState('');
+  const [expenseClassification, setExpenseClassification] = useState('ALL');
   const [transactionType, setTransactionType] = useState('ALL');
   const [status, setStatus] = useState('ALL');
 
@@ -138,6 +139,7 @@ export function TransactionsPage({ user }) {
       if (drAccountId) params.drAccountId = drAccountId;
       if (crAccountId) params.crAccountId = crAccountId;
       if (propertyId) params.propertyId = propertyId;
+      if (expenseClassification !== 'ALL') params.expenseClassification = expenseClassification;
       if (transactionType && transactionType !== 'ALL') params.transactionType = transactionType;
       if (status && status !== 'ALL') params.status = status;
 
@@ -171,6 +173,7 @@ export function TransactionsPage({ user }) {
     drAccountId,
     crAccountId,
     propertyId,
+    expenseClassification,
     transactionType,
     status,
   ]);
@@ -191,6 +194,7 @@ export function TransactionsPage({ user }) {
     setDrAccountId('');
     setCrAccountId('');
     setPropertyId('');
+    setExpenseClassification('ALL');
     setTransactionType('ALL');
     setStatus('ALL');
     setUseDateRange(false);
@@ -630,6 +634,20 @@ export function TransactionsPage({ user }) {
             ))}
           </select>
 
+          <select
+            value={expenseClassification}
+            onChange={(e) => {
+              setExpenseClassification(e.target.value);
+              setPage(1);
+            }}
+            className="bg-slate-950/70 border border-slate-800 text-xs text-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500"
+          >
+            <option value="ALL">All Expense Types</option>
+            <option value="GENERAL_EXPENSE">General Expense</option>
+            <option value="PROPERTY_OWN_EXPENSE">Property Own Expense</option>
+            <option value="UNIT_EXPENSE">Unit Expense</option>
+          </select>
+
           {/* Status Filter */}
           <select
             value={status}
@@ -674,6 +692,7 @@ export function TransactionsPage({ user }) {
                 <th className="py-3 px-4 min-w-[240px]">Transaction Detail</th>
                 <th className="py-3 px-3.5">Account Head</th>
                 <th className="py-3 px-3.5">Category</th>
+                <th className="py-3 px-3.5">Expense Type</th>
                 <th className="py-3 px-3.5">Account (Dr.)</th>
                 <th className="py-3 px-3.5">Account (Cr.)</th>
                 <th className="py-3 px-3.5 text-right">Amount (PKR)</th>
@@ -683,14 +702,14 @@ export function TransactionsPage({ user }) {
             <tbody className="divide-y divide-slate-800/60">
               {loading ? (
                 <tr>
-                  <td colSpan="9" className="py-12 text-center text-slate-500">
+                  <td colSpan="10" className="py-12 text-center text-slate-500">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-500" />
                     <span>Loading central ledger transactions...</span>
                   </td>
                 </tr>
               ) : transactions.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="py-12 text-center text-slate-500">
+                  <td colSpan="10" className="py-12 text-center text-slate-500">
                     No transactions found for the selected criteria.
                   </td>
                 </tr>
@@ -752,6 +771,19 @@ export function TransactionsPage({ user }) {
                       >
                         {tx.reportCategory || 'Payments'}
                       </span>
+                    </td>
+
+                    {/* 6. Expense Type */}
+                    <td className="py-2.5 px-3.5 whitespace-nowrap text-[10px]">
+                      {tx.expenseClassification === 'UNIT_EXPENSE'
+                        ? 'Unit Expense'
+                        : tx.expenseClassification === 'PROPERTY_OWN_EXPENSE'
+                        ? 'Property Own Expense'
+                        : tx.expenseClassification === 'GENERAL_EXPENSE'
+                        ? 'General Expense'
+                        : tx.transactionType === 'EXPENSE'
+                        ? (tx.unitId ? 'Unit Expense' : tx.propertyId ? 'Property Own Expense' : 'General Expense')
+                        : '—'}
                     </td>
 
                     {/* 6. Account (Dr.) */}

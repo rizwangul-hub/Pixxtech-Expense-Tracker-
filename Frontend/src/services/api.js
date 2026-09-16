@@ -583,5 +583,18 @@ export const verificationAPI = {
   },
 };
 
+// Central Ledger API
+export const ledgersAPI = {
+  getEntities: async (type) => {
+    const params = type ? { type } : {};
+    const res = await api.get('/ledgers/entities', { params });
+    return res.data;
+  },
+  queryLedger: async (params = {}) => {
+    const res = await api.get('/ledgers/query', { params });
+    return res.data;
+  },
+};
+
 export default api;
 

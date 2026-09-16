@@ -158,6 +158,17 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   const totalOtherReceipts = round2(otherIncomeTxs.reduce((sum, t) => sum + (t.amount || 0), 0));
   const totalAmountAvailable = round2(totalRentalIncomeReceived + totalOtherReceipts);
   const totalNetExpenses = round2(expenseTxs.reduce((sum, t) => sum + (t.amount || 0), 0));
+  const expenseClassificationTotals = expenseTxs.reduce((totals, tx) => {
+    const classification = tx.expenseClassification
+      || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
+    if (classification === 'GENERAL_EXPENSE') totals.generalExpenses += tx.amount || 0;
+    if (classification === 'PROPERTY_OWN_EXPENSE') totals.propertyOwnExpenses += tx.amount || 0;
+    if (classification === 'UNIT_EXPENSE') totals.unitExpenses += tx.amount || 0;
+    return totals;
+  }, { generalExpenses: 0, propertyOwnExpenses: 0, unitExpenses: 0 });
+  Object.keys(expenseClassificationTotals).forEach((key) => {
+    expenseClassificationTotals[key] = round2(expenseClassificationTotals[key]);
+  });
   const closingAvailableBalance = round2(totalAmountAvailable - totalNetExpenses);
 
   // Part 21: Pre-generation Reconciliation Validation
@@ -173,6 +184,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     totalOtherReceipts,
     totalAmountAvailable,
     totalNetExpenses,
+    ...expenseClassificationTotals,
     closingAvailableBalance,
     netPosition: closingAvailableBalance,
   };
@@ -226,6 +238,8 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     dr: tx.drAccountId?.name || 'Cash Custodian',
     cr: tx.crAccountId?.name || tx.categoryId?.name || 'Expense Head',
     amount: round2(tx.amount),
+    expenseClassification: tx.expenseClassification
+      || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE'),
   }));
 
   const totalJournalAmount = round2(
@@ -246,6 +260,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
       detail: t.detail,
       amount: t.amount,
       vn: t.voucherNo,
+      expenseClassification: t.expenseClassification,
     })),
   }));
 

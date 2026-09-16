@@ -10,6 +10,7 @@ import Category from '../models/Category.js';
 import Account from '../models/Account.js';
 import { createTransaction, round2 } from '../services/ledgerService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
+import { validateExpenseClassification } from '../services/expenseClassificationService.js';
 
 /**
  * Generate sequential Receipt Number for Rent
@@ -306,6 +307,7 @@ export const updatePendingEntry = async (req, res) => {
       date: entry.date,
       rentMonth: entry.rentMonth,
       detail: entry.detail,
+      expenseClassification: entry.expenseClassification,
       propertyId: entry.propertyId,
       unitId: entry.unitId,
       tenantId: entry.tenantId,
@@ -322,12 +324,28 @@ export const updatePendingEntry = async (req, res) => {
     if (updates.detail !== undefined) entry.detail = updates.detail.trim();
     if (updates.voucherNo !== undefined) entry.voucherNo = updates.voucherNo.trim();
     if (updates.propertyId) entry.propertyId = updates.propertyId;
+    if (updates.propertyId === null || updates.propertyId === '') entry.propertyId = null;
     if (updates.unitId) entry.unitId = updates.unitId;
+    if (updates.unitId === null || updates.unitId === '') entry.unitId = null;
+    if (updates.expenseClassification !== undefined) {
+      entry.expenseClassification = updates.expenseClassification || null;
+    }
     if (updates.tenantId) entry.tenantId = updates.tenantId;
     if (updates.categoryId) entry.categoryId = updates.categoryId;
     if (updates.drAccountId) entry.drAccountId = updates.drAccountId;
     if (updates.crAccountId) entry.crAccountId = updates.crAccountId;
     if (updates.receivingAccountId) entry.receivingAccountId = updates.receivingAccountId;
+
+    if (entry.entryType === 'EXPENSE') {
+      const classification = await validateExpenseClassification({
+        expenseClassification: entry.expenseClassification,
+        propertyId: entry.propertyId,
+        unitId: entry.unitId,
+      });
+      entry.expenseClassification = classification.expenseClassification;
+      entry.propertyId = classification.propertyId;
+      entry.unitId = classification.unitId;
+    }
 
     entry.status = 'EDITED';
     entry.auditLog.push({
@@ -396,8 +414,10 @@ export const verifyEntry = async (req, res) => {
         drAccountId: entry.drAccountId,
         crAccountId: entry.crAccountId,
         amount: entry.amount,
+        transactionType: 'EXPENSE',
         propertyId: entry.propertyId,
         unitId: entry.unitId,
+        expenseClassification: entry.expenseClassification,
         rentMonth: entry.rentMonth,
         status: 'VERIFIED',
         checkedBy: req.user.name,

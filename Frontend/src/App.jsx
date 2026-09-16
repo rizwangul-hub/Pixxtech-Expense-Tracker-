@@ -12,6 +12,7 @@ import { RentReceivedPage } from './pages/RentReceivedPage.jsx';
 import { AccountsPage } from './pages/AccountsPage.jsx';
 import { ChartOfAccountsPage } from './pages/ChartOfAccountsPage.jsx';
 import { AccountLedgerPage } from './pages/AccountLedgerPage.jsx';
+import { LedgersPage } from './pages/LedgersPage.jsx';
 import { TransfersPage } from './pages/TransfersPage.jsx';
 import { TransactionsPage } from './pages/TransactionsPage.jsx';
 import { OtherIncomePage } from './pages/OtherIncomePage.jsx';
@@ -32,6 +33,7 @@ const sectionFromPath = (pathname) => {
 const pathForSection = (section) => (section === 'dashboard' ? '/' : `/${section}`);
 
 const SECTION_PERMISSIONS = {
+  ledgers: PERMISSIONS.VIEW_FINANCIALS,
   properties: PERMISSIONS.VIEW_FINANCIALS,
   tenants: PERMISSIONS.VIEW_FINANCIALS,
   agreements: PERMISSIONS.VIEW_FINANCIALS,
@@ -311,6 +313,8 @@ export function App() {
         />
       ) : currentSection === 'chart-of-accounts' && isAdmin(user) ? (
         <ChartOfAccountsPage currentUser={user} />
+      ) : currentSection === 'ledgers' ? (
+        <LedgersPage currentUser={user} />
       ) : currentSection === 'accounts' || currentSection === 'settings' ? (
         <AccountsPage
           currentUser={user}

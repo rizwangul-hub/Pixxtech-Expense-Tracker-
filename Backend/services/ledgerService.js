@@ -5,6 +5,7 @@ import Category from '../models/Category.js';
 import Property from '../models/Property.js';
 import Voucher from '../models/Voucher.js';
 import MonthlyReport from '../models/MonthlyReport.js';
+import { validateExpenseClassification } from './expenseClassificationService.js';
 
 /**
  * Helper to round numbers to 2 decimal places (standard financial precision)
@@ -56,6 +57,19 @@ export const createTransaction = async (data, externalSession = null) => {
   }
 
   const executeAtomicOperation = async (session) => {
+    const classification = (data.transactionType === 'EXPENSE'
+      || (!data.transactionType && data.sourceModule === 'EXPENSE'))
+      ? await validateExpenseClassification({
+          expenseClassification: data.expenseClassification,
+          propertyId: data.propertyId,
+          unitId: data.unitId,
+          session,
+        })
+      : {
+          expenseClassification: null,
+          propertyId: data.propertyId || null,
+          unitId: data.unitId || null,
+        };
     // 1. Validate existence and active status of both accounts
     const [drAccount, crAccount] = await Promise.all([
       Account.findById(drAccountId).session(session || null),
@@ -144,6 +158,7 @@ export const createTransaction = async (data, externalSession = null) => {
       [
         {
           ...data,
+          ...classification,
           voucherId,
           reportCategory: repCategory,
           sourceModule: srcModule,
@@ -541,6 +556,9 @@ export const getHeadWiseExpenseReport = async (year, month) => {
   }
 
   let totalExpensesOverall = 0;
+  let generalExpenses = 0;
+  let propertyOwnExpenses = 0;
+  let unitExpenses = 0;
 
   for (const tx of transactions) {
     const catId = tx.categoryId?._id?.toString() || tx.categoryId?.toString();
@@ -560,6 +578,11 @@ export const getHeadWiseExpenseReport = async (year, month) => {
     group.totalSpent = round2(group.totalSpent + amt);
     group.transactionCount += 1;
     totalExpensesOverall = round2(totalExpensesOverall + amt);
+    const classification = tx.expenseClassification
+      || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
+    if (classification === 'GENERAL_EXPENSE') generalExpenses = round2(generalExpenses + amt);
+    if (classification === 'PROPERTY_OWN_EXPENSE') propertyOwnExpenses = round2(propertyOwnExpenses + amt);
+    if (classification === 'UNIT_EXPENSE') unitExpenses = round2(unitExpenses + amt);
 
     group.transactions.push({
       _id: tx._id,
@@ -570,6 +593,9 @@ export const getHeadWiseExpenseReport = async (year, month) => {
       paidFromAccount: tx.crAccountId?.name || null,
       debitedAccount: tx.drAccountId?.name || null,
       property: tx.propertyId?.plazaName || null,
+      expenseClassification: tx.expenseClassification
+        || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE'),
+      unitId: tx.unitId || null,
       status: tx.status,
       checkedBy: tx.checkedBy,
     });
@@ -588,6 +614,11 @@ export const getHeadWiseExpenseReport = async (year, month) => {
     month,
     periodName: `${year}-${String(month).padStart(2, '0')}`,
     totalExpensesOverall: round2(totalExpensesOverall),
+    classificationTotals: {
+      generalExpenses: round2(generalExpenses),
+      propertyOwnExpenses: round2(propertyOwnExpenses),
+      unitExpenses: round2(unitExpenses),
+    },
     heads,
   };
 };
@@ -919,6 +950,7 @@ export const getTransactionsFiltered = async (filters = {}) => {
     crAccountId,
     accountId,
     propertyId,
+    expenseClassification,
     transactionType,
     status,
     page = 1,
@@ -972,6 +1004,10 @@ export const getTransactionsFiltered = async (filters = {}) => {
   // 6. Property filtering
   if (propertyId) {
     query.propertyId = propertyId;
+  }
+
+  if (expenseClassification && expenseClassification !== 'ALL') {
+    query.expenseClassification = expenseClassification;
   }
 
   // 7. Transaction Type filtering
@@ -1029,6 +1065,8 @@ export const getTransactionsFiltered = async (filters = {}) => {
       transactionType: 1,
       reportCategory: 1,
       propertyId: 1,
+      unitId: 1,
+      expenseClassification: 1,
       status: 1,
     }).lean(),
   ]);
@@ -1039,6 +1077,9 @@ export const getTransactionsFiltered = async (filters = {}) => {
   let totalOtherIncome = 0;
   let totalRentalExpenses = 0;
   let totalOtherExpenses = 0;
+  let totalGeneralExpenses = 0;
+  let totalPropertyOwnExpenses = 0;
+  let totalUnitExpenses = 0;
   let totalTransfers = 0;
 
   const distinctVouchers = new Set();
@@ -1060,10 +1101,17 @@ export const getTransactionsFiltered = async (filters = {}) => {
         totalOtherIncome = round2(totalOtherIncome + amt);
       }
     } else if (t.transactionType === 'EXPENSE') {
-      if (t.propertyId || t.reportCategory === 'Rent') {
+      const classification = t.expenseClassification
+        || (t.unitId ? 'UNIT_EXPENSE' : t.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
+      if (classification === 'GENERAL_EXPENSE') {
+        totalGeneralExpenses = round2(totalGeneralExpenses + amt);
+        totalOtherExpenses = round2(totalOtherExpenses + amt);
+      } else if (classification === 'PROPERTY_OWN_EXPENSE') {
+        totalPropertyOwnExpenses = round2(totalPropertyOwnExpenses + amt);
         totalRentalExpenses = round2(totalRentalExpenses + amt);
       } else {
-        totalOtherExpenses = round2(totalOtherExpenses + amt);
+        totalUnitExpenses = round2(totalUnitExpenses + amt);
+        totalRentalExpenses = round2(totalRentalExpenses + amt);
       }
     } else if (t.transactionType === 'TRANSFER') {
       totalTransfers = round2(totalTransfers + amt);
@@ -1091,6 +1139,9 @@ export const getTransactionsFiltered = async (filters = {}) => {
       totalOtherIncome,
       totalRentalExpenses,
       totalOtherExpenses,
+      totalGeneralExpenses,
+      totalPropertyOwnExpenses,
+      totalUnitExpenses,
       totalTransfers,
       totalFinancialActivity: round2(filteredLineTotal),
     },
@@ -1109,4 +1160,3 @@ export default {
   getHeadWiseExpenseReport,
   round2,
 };
-

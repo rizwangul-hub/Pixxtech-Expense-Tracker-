@@ -192,7 +192,11 @@ export const getMonthlyFinancialSummary = async (req, res) => {
       accountMatrix: { accounts: accountSummary, bankRows, cashRows, grandTotal, totalBankBalance, totalCashBalance, grandClosingBalance },
       rentalIncomeSummary: { grandTotalAgreed: grandTotalRentalAgreed, grandTotalReceived: grandTotalRentalReceived, grandTotalOutstanding: grandTotalRentalOutstanding, collectionRate: rentalCollectionRate, properties: rentalByProperty },
       otherIncomeSummary: { totalOtherIncome, breakdown: Array.from(otherIncomeByHead.entries()).map(([head, amount]) => ({ head, amount })), transactionCount: otherIncomeTxns.length },
-      expenseSummary: { totalExpenses, heads: expenseHeadSummary },
+      expenseSummary: {
+        totalExpenses,
+        ...expenseReport.classificationTotals,
+        heads: expenseHeadSummary,
+      },
       financialPosition: { totalRentalIncome: grandTotalRentalReceived, totalOtherIncome, totalIncome, totalExpenses, netSurplusDeficit, totalTransfers, grandClosingBalance },
     });
   } catch (error) {
@@ -245,21 +249,23 @@ export const getAccountLedgerReport = async (req, res) => {
 export const getExpenseSummaryReport = async (req, res) => {
   try {
     const { year, month, periodString, startDate, endDate } = parseDateFilters(req.query);
-    const { propertyId } = req.query;
+    const { propertyId, expenseClassification } = req.query;
 
     const report = await getHeadWiseExpenseReport(year, month);
 
     // Property filter: if propertyId supplied, re-run targeted query
     let filteredHeads = report.heads;
     let filteredTotal = report.totalExpensesOverall;
+    let classificationTotals = report.classificationTotals;
 
-    if (propertyId && propertyId !== 'ALL') {
+    if ((propertyId && propertyId !== 'ALL') || (expenseClassification && expenseClassification !== 'ALL')) {
       // Re-query transactions filtered by property
       const expenseCats = await Category.find({ type: 'EXPENSE' }).lean();
       const txns = await Transaction.find({
         date: { $gte: startDate, $lte: endDate },
         categoryId: { $in: expenseCats.map((c) => c._id) },
-        propertyId,
+        ...(propertyId && propertyId !== 'ALL' ? { propertyId } : {}),
+        ...(expenseClassification && expenseClassification !== 'ALL' ? { expenseClassification } : {}),
       }).populate('categoryId', 'name type isRentalHead').lean();
 
       const headMap = new Map();
@@ -274,6 +280,14 @@ export const getExpenseSummaryReport = async (req, res) => {
         h.transactionCount += 1;
       }
       filteredHeads = Array.from(headMap.values()).sort((a, b) => b.totalSpent - a.totalSpent);
+      classificationTotals = txns.reduce((totals, tx) => {
+        const classification = tx.expenseClassification
+          || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
+        if (classification === 'GENERAL_EXPENSE') totals.generalExpenses += tx.amount;
+        if (classification === 'PROPERTY_OWN_EXPENSE') totals.propertyOwnExpenses += tx.amount;
+        if (classification === 'UNIT_EXPENSE') totals.unitExpenses += tx.amount;
+        return totals;
+      }, { generalExpenses: 0, propertyOwnExpenses: 0, unitExpenses: 0 });
     }
 
     // Property names for filter UI
@@ -284,6 +298,7 @@ export const getExpenseSummaryReport = async (req, res) => {
       period: periodString,
       propertyFilter: propertyId || 'ALL',
       totalExpenses: filteredTotal,
+      ...classificationTotals,
       heads: filteredHeads.filter((h) => h.totalSpent > 0),
       properties,
     });
@@ -812,9 +827,12 @@ export const exportCSV = async (req, res) => {
       'Cr. Account': tx.crAccountId?.name || '',
       'Amount (Rs.)': tx.amount,
       Property: tx.propertyId?.plazaName || '',
+      'Expense Type': tx.expenseClassification
+        || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE'),
+      Unit: tx.unitId || '',
       Status: tx.status || '',
     }));
-    return sendCSV(res, `Pixx_Transactions_${periodString}.csv`, rows, ['Date', 'V.N', 'Description', 'Category', 'Type', 'Dr. Account', 'Cr. Account', 'Amount (Rs.)', 'Property', 'Status']);
+    return sendCSV(res, `Pixx_Transactions_${periodString}.csv`, rows, ['Date', 'V.N', 'Description', 'Category', 'Type', 'Dr. Account', 'Cr. Account', 'Amount (Rs.)', 'Property', 'Expense Type', 'Unit', 'Status']);
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to generate CSV export.', error: error.message });
   }

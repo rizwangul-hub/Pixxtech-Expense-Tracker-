@@ -46,6 +46,8 @@ export const VoucherEntryForm = ({
   const [amount, setAmount] = useState('');
   const [detail, setDetail] = useState('');
   const [propertyId, setPropertyId] = useState('');
+  const [expenseClassification, setExpenseClassification] = useState('GENERAL_EXPENSE');
+  const [unitId, setUnitId] = useState('');
   const [rentMonth, setRentMonth] = useState('');
 
   const [loading, setLoading] = useState(false);
@@ -60,6 +62,8 @@ export const VoucherEntryForm = ({
   // Group accounts for dropdowns
   const bankAccounts = accounts.filter((a) => a.type === 'BANK');
   const cashAccounts = accounts.filter((a) => a.type === 'CASH');
+  const selectedProperty = properties.find((property) => property._id === propertyId);
+  const units = selectedProperty?.units || [];
 
   // Fetch next sequential Voucher Number
   const fetchNextVn = async () => {
@@ -128,6 +132,14 @@ export const VoucherEntryForm = ({
       setError('Please select a Credit Account (Cr.) - Disbursing / Paid From Account.');
       return;
     }
+    if (expenseClassification === 'PROPERTY_OWN_EXPENSE' && !propertyId) {
+      setError('Select a property for a property-own expense.');
+      return;
+    }
+    if (expenseClassification === 'UNIT_EXPENSE' && (!propertyId || !unitId)) {
+      setError('Select both a property and unit for a unit expense.');
+      return;
+    }
 
     const numAmount = Number(amount);
     if (!amount || isNaN(numAmount) || numAmount <= 0) {
@@ -146,6 +158,8 @@ export const VoucherEntryForm = ({
         crAccountId,
         amount: numAmount,
         propertyId: propertyId || null,
+        unitId: unitId || null,
+        expenseClassification,
         rentMonth: rentMonth || null,
       });
 
@@ -155,6 +169,8 @@ export const VoucherEntryForm = ({
       setAmount('');
       setDetail('');
       setPropertyId('');
+      setUnitId('');
+      setExpenseClassification('GENERAL_EXPENSE');
       setRentMonth('');
       setError(null);
 
@@ -270,22 +286,61 @@ export const VoucherEntryForm = ({
 
         {/* Row 2: Optional Property Link (Replaces old Category location) */}
         <div>
+          <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Expense Type</label>
+          <select
+            value={expenseClassification}
+            onChange={(e) => {
+              setExpenseClassification(e.target.value);
+              setPropertyId('');
+              setUnitId('');
+            }}
+            className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
+          >
+            <option value="GENERAL_EXPENSE">General Expense</option>
+            <option value="PROPERTY_OWN_EXPENSE">Property Expense - Property Own Expense</option>
+            <option value="UNIT_EXPENSE">Property Expense - Unit Expense</option>
+          </select>
+        </div>
+
+        {expenseClassification !== 'GENERAL_EXPENSE' && (
+          <div className={expenseClassification === 'UNIT_EXPENSE' ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : ''}>
+            <div>
           <label className="block text-xs font-bold uppercase text-slate-700 mb-1 flex items-center gap-1">
-            <Building className="w-4 h-4 text-blue-600" /> Optional Property Link (Select Plaza / Building)
+            <Building className="w-4 h-4 text-blue-600" /> Property
           </label>
           <select
             value={propertyId}
             onChange={(e) => setPropertyId(e.target.value)}
             className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
           >
-            <option value="">-- General / Non-Property Expense --</option>
+            <option value="">-- Select Property --</option>
             {properties.map((p) => (
               <option key={p._id} value={p._id}>
                 {p.plazaName} ({p.location || 'Commercial Plaza'})
               </option>
             ))}
           </select>
-        </div>
+            </div>
+            {expenseClassification === 'UNIT_EXPENSE' && (
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Unit</label>
+                <select
+                  value={unitId}
+                  onChange={(e) => setUnitId(e.target.value)}
+                  disabled={!propertyId}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
+                >
+                  <option value="">-- Select Unit --</option>
+                  {units.map((unit) => (
+                    <option key={unit._id} value={unit._id}>
+                      {unit.unitName || unit.unitNumber || unit.name || 'Unit'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Row 3: Account Head / Category (Replaces Dr location) & Credit Disbursing Account */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
