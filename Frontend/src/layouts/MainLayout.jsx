@@ -56,19 +56,14 @@ export function MainLayout({
       badge: 'Journal',
       badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
     },
-    ...(userIsAdmin || userIsVerifier
-      ? [
-          {
-            id: 'expenses',
-            label: 'Expenses',
-            icon: Receipt,
-            status: 'active',
-            permission: PERMISSIONS.ENTER_DATA,
-            badge: 'Voucher',
-            badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
-          },
-        ]
-      : []),
+    {
+      id: 'expenses',
+      label: 'Expenses',
+      icon: Receipt,
+      status: 'active',
+      badge: 'Voucher',
+      badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
+    },
     ...(userIsAdmin
       ? [
           {
@@ -90,18 +85,6 @@ export function MainLayout({
             status: 'active',
             badge: 'Verifier',
             badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
-          },
-        ]
-      : []),
-    ...(userIsDataEntry
-      ? [
-          {
-            id: 'operational',
-            label: 'Data Entry Terminal',
-            icon: Receipt,
-            status: 'active',
-            badge: 'Operator',
-            badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
           },
         ]
       : []),

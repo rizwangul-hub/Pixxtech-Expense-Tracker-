@@ -251,21 +251,7 @@ export function App() {
           onOpenProperties={() => setCurrentSection('properties')}
         />
       ) : currentSection === 'expenses' || currentSection === 'operational' ? (
-        isVerifier(user) ? (
-          <VerifierDashboard
-            user={user}
-            onOpenMasterAccounts={() => setCurrentSection('accounts')}
-            onOpenProperties={() => setCurrentSection('properties')}
-          />
-        ) : isAdmin(user) ? (
-          <AdminPublisherDashboard
-            user={user}
-            onLogout={handleLogout}
-            onSwitchToDataEntry={() => setCurrentSection('verification')}
-          />
-        ) : (
-          <DataEntryDashboard user={user} />
-        )
+        <DataEntryDashboard user={user} />
       ) : currentSection === 'users' && isAdmin(user) ? (
         <UserManager currentUser={user} />
       ) : currentSection === 'properties' ? (
