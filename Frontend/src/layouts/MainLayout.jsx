@@ -52,17 +52,9 @@ export function MainLayout({
       label: 'Ledgers',
       icon: BookOpen,
       status: 'active',
-      permission: PERMISSIONS.ENTER_DATA,
+      permission: PERMISSIONS.VIEW_FINANCIALS,
       badge: 'Journal',
       badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
-    },
-    {
-      id: 'expenses',
-      label: 'Expenses',
-      icon: Receipt,
-      status: 'active',
-      badge: 'Voucher',
-      badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
     },
     ...(userIsAdmin
       ? [
@@ -85,6 +77,18 @@ export function MainLayout({
             status: 'active',
             badge: 'Verifier',
             badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
+          },
+        ]
+      : []),
+    ...(userIsDataEntry
+      ? [
+          {
+            id: 'operational',
+            label: 'Data Entry Terminal',
+            icon: Receipt,
+            status: 'active',
+            badge: 'Operator',
+            badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
           },
         ]
       : []),
@@ -141,6 +145,16 @@ export function MainLayout({
       permission: PERMISSIONS.ENTER_DATA,
       badge: 'Active',
       badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
+    },
+    {
+      id: 'expenses',
+      label: 'Expenses',
+      icon: Receipt,
+      status: canEnterData ? 'active' : 'locked',
+      badge: canEnterData ? 'Active' : 'Restricted',
+      badgeColor: canEnterData
+        ? 'bg-rose-100 text-rose-800 border-rose-200'
+        : 'bg-slate-100 text-slate-400 border-slate-200',
     },
     {
       id: 'accounts',

@@ -16,10 +16,12 @@ import {
  ArrowLeftRight,
  TrendingUp,
  FileSpreadsheet,
+ PlusCircle,
 } from 'lucide-react';
 import { formatPKR } from '../utils/formatters.js';
-import { isAdmin } from '../utils/permissions.js';
+import { isAdmin, isVerifier } from '../utils/permissions.js';
 import { propertiesAPI, tenantsAPI, agreementsAPI, rentDueAPI, accountsAPI, rentReceivedAPI, vouchersAPI, otherIncomeAPI } from '../services/api.js';
+import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 
 export function DashboardHome({
  user,
@@ -48,11 +50,16 @@ export function DashboardHome({
  const [otherIncomeStats, setOtherIncomeStats] = useState(null);
  const [transactionStats, setTransactionStats] = useState(null);
  const [loadingPortfolio, setLoadingPortfolio] = useState(true);
+ const canCreateExpenseDirectly = userIsAdmin || isVerifier(user);
+ const [showCreateExpenseModal, setShowCreateExpenseModal] = useState(false);
+ const [categoriesList, setCategoriesList] = useState([]);
+ const [accountsList, setAccountsList] = useState([]);
+ const [propertiesList, setPropertiesList] = useState([]);
 
  useEffect(() => {
  const fetchDashboardStats = async () => {
  try {
- const [propsRes, tenantsRes, agreementsRes, rentDueRes, accountsRes, rentReceivedRes, otherIncomeRes, txRes] = await Promise.all([
+ const [propsRes, tenantsRes, agreementsRes, rentDueRes, accountsRes, rentReceivedRes, otherIncomeRes, txRes, catRes, fullAccRes, fullPropsRes] = await Promise.all([
  propertiesAPI.getProperties({ limit: 1 }),
  tenantsAPI.getTenants({ limit: 1 }),
  agreementsAPI.getAgreements({ limit: 1 }),
@@ -61,6 +68,9 @@ export function DashboardHome({
  rentReceivedAPI.getSummary({ month: '2026-08' }),
  otherIncomeAPI.getMonthlySummary({ month: '2026-08' }),
  vouchersAPI.getAllTransactions({ month: '2026-08', limit: 1 }),
+ accountsAPI.getCategories().catch(() => ({ categories: [] })),
+ accountsAPI.getActiveSummary().catch(() => ({ accounts: [] })),
+ propertiesAPI.getProperties().catch(() => ({ properties: [] })),
  ]);
 
  if (propsRes?.success && propsRes.data?.summary) {
@@ -87,6 +97,9 @@ export function DashboardHome({
  if (txRes?.success && txRes.data?.summary) {
  setTransactionStats(txRes.data.summary);
  }
+ setCategoriesList(catRes.categories || []);
+ setAccountsList(fullAccRes.accounts || []);
+ setPropertiesList(fullPropsRes.data?.properties || fullPropsRes.properties || []);
  } catch (err) {
  console.error('Failed to load dashboard portfolio stats:', err);
  } finally {
@@ -121,6 +134,16 @@ export function DashboardHome({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {canCreateExpenseDirectly && (
+              <button
+                onClick={() => setShowCreateExpenseModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-2xs text-white-keep"
+                title="Directly create and post expense voucher"
+              >
+                <PlusCircle size={16} className="text-white-keep" />
+                + Create Expense
+              </button>
+            )}
             {onNavigateToProperties && (
               <button
                 onClick={onNavigateToProperties}
@@ -592,6 +615,46 @@ export function DashboardHome({
  </div>
  </div>
  </div>
+
+ {/* Direct Create Expense Modal */}
+ {showCreateExpenseModal && (
+ <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+ <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+ <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+ <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+ <PlusCircle className="w-5 h-5 text-emerald-600" />
+ Direct Admin Expense Creation
+ </h3>
+ <button
+ onClick={() => setShowCreateExpenseModal(false)}
+ className="text-slate-400 hover:text-slate-900 text-xl font-bold"
+ >
+ &times;
+ </button>
+ </div>
+
+ <VoucherEntryForm
+ accounts={accountsList}
+ categories={categoriesList}
+ properties={propertiesList}
+ canManageMasterData={true}
+ onMasterDataChanged={async () => {
+ const [catRes, accRes, propRes] = await Promise.all([
+ accountsAPI.getCategories(),
+ accountsAPI.getActiveSummary(),
+ propertiesAPI.getProperties().catch(() => ({ properties: [] })),
+ ]);
+ setCategoriesList(catRes.categories || []);
+ setAccountsList(accRes.accounts || []);
+ setPropertiesList(propRes.data?.properties || propRes.properties || []);
+ }}
+ onVoucherCreated={async () => {
+ setShowCreateExpenseModal(false);
+ }}
+ />
+ </div>
+ </div>
+ )}
 
  </div>
  );

@@ -73,6 +73,9 @@ export const validateExpenseClassification = async ({
   }
 
   if (classification === EXPENSE_CLASSIFICATIONS.GENERAL) {
+    if (normalizedPropertyId || normalizedUnitId) {
+      throw new Error('General expenses cannot have a property or unit selected.');
+    }
     return { expenseClassification: classification, propertyId: null, unitId: null };
   }
 
