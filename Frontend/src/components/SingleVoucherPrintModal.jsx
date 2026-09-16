@@ -43,6 +43,78 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
   }, [targetId]);
 
   const handlePrint = () => {
+    const printContent = document.getElementById('printable-voucher-area');
+    if (printContent) {
+      const printWindow = window.open('', '_blank', 'width=850,height=1000');
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Voucher ${data?.voucherNo || ''}</title>
+              <style>
+                @page { size: A4 portrait; margin: 6mm 10mm; }
+                * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+                body { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #0f172a; background: #ffffff; margin: 0; padding: 12px; }
+                .printable-a4-voucher { width: 100%; min-height: 270mm; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #cbd5e1; }
+                .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; }
+                .header-logo { display: flex; align-items: center; gap: 14px; }
+                .logo-img { height: 52px; width: auto; }
+                .company-name { font-size: 16pt; font-weight: 900; color: #0f172a; margin: 0; }
+                .company-sub { font-size: 8pt; font-weight: 700; color: #475569; margin-top: 2px; }
+                .voucher-badge-box { text-align: right; }
+                .voucher-badge-box .subtitle { font-size: 7.5pt; text-transform: uppercase; font-weight: 800; color: #64748b; }
+                .voucher-number { font-family: Consolas, monospace; font-size: 10pt; font-weight: 900; color: #1e3a8a; background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 4px 8px; border-radius: 4px; margin-top: 4px; display: inline-block; }
+                .status-banner { display: flex; justify-content: space-between; align-items: center; background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; }
+                .doc-title { font-size: 11pt; font-weight: 900; color: #0f172a; text-transform: uppercase; }
+                .doc-date { font-size: 8.5pt; color: #475569; }
+                .status-pill { font-size: 8pt; font-weight: 800; text-transform: uppercase; padding: 4px 10px; border-radius: 4px; }
+                .status-verified { background-color: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+                .status-pending { background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+                .grid-cards { display: flex; gap: 12px; margin-bottom: 16px; }
+                .card { flex: 1; background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; }
+                .card-title { font-size: 7.5pt; text-transform: uppercase; font-weight: 800; color: #64748b; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 8px; }
+                .info-row { margin-bottom: 5px; font-size: 8.5pt; }
+                .info-label { color: #64748b; font-weight: 600; }
+                .info-val { font-weight: 700; color: #0f172a; }
+                .narration-box { margin-bottom: 16px; }
+                .narration-label { font-size: 7.5pt; text-transform: uppercase; font-weight: 800; color: #64748b; margin-bottom: 4px; }
+                .narration-text { background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 12px; font-size: 8.5pt; font-weight: 600; color: #0f172a; }
+                table { width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 16px; }
+                th { background-color: #f1f5f9; color: #334155; font-size: 8pt; text-transform: uppercase; font-weight: 800; padding: 8px 10px; text-align: left; border-bottom: 1px solid #cbd5e1; }
+                td { padding: 8px 10px; font-size: 8.5pt; font-weight: 600; border-bottom: 1px solid #e2e8f0; }
+                .text-right { text-align: right; }
+                .font-mono { font-family: Consolas, monospace; }
+                .total-banner { background-color: #f8fafc; border: 2px solid #0f172a; color: #0f172a; border-radius: 6px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+                .total-label { font-size: 8.5pt; font-weight: 900; text-transform: uppercase; color: #0f172a; }
+                .total-amount { font-family: Consolas, monospace; font-size: 16pt; font-weight: 900; color: #0f172a; }
+                .signatures-row { display: flex; gap: 20px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 14px; background-color: #f8fafc; margin-bottom: 12px; }
+                .sig-box { flex: 1; text-align: center; }
+                .sig-title { font-size: 7.5pt; text-transform: uppercase; font-weight: 800; color: #64748b; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 6px; }
+                .sig-img { height: 44px; width: auto; margin: 0 auto; display: block; }
+                .sig-name { font-size: 8.5pt; font-weight: 900; color: #0f172a; margin-top: 4px; }
+                .sig-role { font-size: 7.5pt; color: #64748b; font-weight: 600; }
+                .footer-note { text-align: center; font-size: 7.5pt; color: #64748b; font-weight: 600; }
+              </style>
+            </head>
+            <body>
+              <div class="printable-a4-voucher">
+                ${printContent.innerHTML}
+              </div>
+              <script>
+                window.onload = function() {
+                  window.focus();
+                  window.print();
+                  setTimeout(function() { window.close(); }, 500);
+                };
+              </script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        return;
+      }
+    }
     window.print();
   };
 
@@ -378,43 +450,47 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
             color-adjust: exact !important;
           }
 
-          body {
+          html, body {
             background: #ffffff !important;
             color: #000000 !important;
-            font-size: 11pt !important;
+            font-size: 10pt !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
 
-          /* Hide everything outside printable area */
+          /* Hide modal backdrop, navigation and screen controls */
           .no-print,
           .no-print * {
             display: none !important;
             visibility: hidden !important;
           }
 
-          /* Force printable voucher to top of paper */
+          /* Force printable voucher to top left of print page */
+          #printable-voucher-area,
           .printable-a4-voucher {
-            position: absolute !important;
+            position: fixed !important;
             left: 0 !important;
             top: 0 !important;
-            width: 100% !important;
-            min-height: 275mm !important;
+            width: 100vw !important;
+            max-width: 210mm !important;
+            height: 100vh !important;
+            min-height: 270mm !important;
             margin: 0 !important;
             padding: 6mm !important;
             box-shadow: none !important;
             border: none !important;
             background: #ffffff !important;
-            page-break-inside: avoid !important;
+            color: #000000 !important;
+            z-index: 999999 !important;
+            box-sizing: border-box !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
           }
 
           .printable-a4-voucher,
           .printable-a4-voucher * {
             visibility: visible !important;
-          }
-
-          /* Universal text & border visibility fixes for un-checked background graphics */
-          .printable-a4-voucher h1,
-          .printable-a4-voucher h2,
-          .printable-a4-voucher p,
           .printable-a4-voucher span,
           .printable-a4-voucher div,
           .printable-a4-voucher strong,
