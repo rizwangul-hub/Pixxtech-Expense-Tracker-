@@ -147,14 +147,6 @@ export function MainLayout({
       badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
     },
     {
-      id: 'expenses',
-      label: 'Expenses',
-      icon: Receipt,
-      status: 'active',
-      badge: 'Active',
-      badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
-    },
-    {
       id: 'accounts',
       label: 'Accounts',
       icon: Landmark,

@@ -237,8 +237,8 @@ export function App() {
       onViewChange={handleNavChange}
       onLogout={handleLogout}
       onOpenTerminal={() => {
-        setCurrentSection('expenses');
-        window.history.pushState({}, '', '/expenses');
+        setCurrentSection('operational');
+        window.history.pushState({}, '', '/operational');
       }}
     >
       {currentSection === 'verification' && (isVerifier(user) || isAdmin(user)) ? (
