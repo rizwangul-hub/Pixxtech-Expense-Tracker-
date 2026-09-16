@@ -1,6 +1,7 @@
 import Transaction from '../models/Transaction.js';
 import PendingEntry from '../models/PendingEntry.js';
 import { createTransaction, round2 } from '../services/ledgerService.js';
+import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
 
 /**
  * @desc    Record a new double-entry voucher transaction
@@ -9,7 +10,7 @@ import { createTransaction, round2 } from '../services/ledgerService.js';
  */
 export const recordVoucher = async (req, res) => {
   try {
-    const {
+    let {
       date,
       voucherNo,
       detail,
@@ -30,11 +31,17 @@ export const recordVoucher = async (req, res) => {
       });
     }
 
+    // Auto-resolve drAccountId if omitted for simplified expense entry
+    if (!drAccountId && categoryId && crAccountId) {
+      const clearingAcc = await getOrCreateOtherIncomeClearingAccount();
+      drAccountId = clearingAcc._id;
+    }
+
     // 1. Mandatory field checks
     if (!voucherNo || !detail || !categoryId || !drAccountId || !crAccountId || amount === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'All fields (voucherNo, detail, categoryId, drAccountId, crAccountId, amount) are required.',
+        message: 'Required fields: voucherNo, detail, categoryId, crAccountId, amount.',
       });
     }
 
@@ -42,7 +49,7 @@ export const recordVoucher = async (req, res) => {
     if (drAccountId.toString() === crAccountId.toString()) {
       return res.status(400).json({
         success: false,
-        message: 'Debit (Dr) and Credit (Cr) accounts cannot be identical.',
+        message: 'Expense head category and disbursing account cannot be identical.',
       });
     }
 

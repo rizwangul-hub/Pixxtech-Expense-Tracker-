@@ -185,7 +185,7 @@ export const DataEntryDashboard = ({ user }) => {
   };
 
   return (
-    <div className="min-h-full bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-full bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Persistent Live Cash Custodian Bar */}
@@ -197,77 +197,77 @@ export const DataEntryDashboard = ({ user }) => {
 
         {/* Part 23: Operator KPI Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-slate-400">Today's Entries</span>
-              <Clock size={14} className="text-blue-400" />
+              <span className="text-[11px] uppercase font-bold text-slate-500">Today's Entries</span>
+              <Clock size={16} className="text-blue-600" />
             </div>
-            <div className="text-xl font-black font-mono text-white mt-1">
+            <div className="text-2xl font-black font-mono text-slate-900 mt-1">
               {todayEntries.length}
             </div>
-            <div className="text-[10px] text-slate-500">
+            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
               {formatPKR(todayEntries.reduce((s, e) => s + (e.amount || 0), 0))} recorded
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-slate-400">This Month</span>
-              <Calendar size={14} className="text-emerald-400" />
+              <span className="text-[11px] uppercase font-bold text-slate-500">This Month</span>
+              <Calendar size={16} className="text-emerald-600" />
             </div>
-            <div className="text-xl font-black font-mono text-white mt-1">
+            <div className="text-2xl font-black font-mono text-slate-900 mt-1">
               {monthEntries.length}
             </div>
-            <div className="text-[10px] text-slate-500">
+            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
               {formatPKR(monthEntries.reduce((s, e) => s + (e.amount || 0), 0))} posted
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-amber-400">Pending Review</span>
-              <AlertTriangle size={14} className="text-amber-400" />
+              <span className="text-[11px] uppercase font-bold text-amber-700">Pending Review</span>
+              <AlertTriangle size={16} className="text-amber-600" />
             </div>
-            <div className="text-xl font-black font-mono text-amber-300 mt-1">
+            <div className="text-2xl font-black font-mono text-amber-600 mt-1">
               {pendingEntries.length}
             </div>
-            <div className="text-[10px] text-slate-500">Awaiting management signoff</div>
+            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Awaiting management signoff</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-rose-400">Corrections / Reversals</span>
-              <CheckCircle2 size={14} className="text-rose-400" />
+              <span className="text-[11px] uppercase font-bold text-rose-700">Corrections / Reversals</span>
+              <CheckCircle2 size={16} className="text-rose-600" />
             </div>
-            <div className="text-xl font-black font-mono text-rose-300 mt-1">
+            <div className="text-2xl font-black font-mono text-rose-600 mt-1">
               {reversedEntries.length}
             </div>
-            <div className="text-[10px] text-slate-500">Reversed journal vouchers</div>
+            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Reversed journal vouchers</div>
           </div>
         </div>
 
         {/* Action Message Alert */}
         {actionMessage.text && (
           <div
-            className={`p-3 rounded-lg text-xs flex items-center gap-2 border ${
+            className={`p-3.5 rounded-lg text-xs font-semibold flex items-center gap-2 border ${
               actionMessage.type === 'success'
-                ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
-                : 'bg-rose-950/40 border-rose-800/60 text-rose-300'
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                : 'bg-rose-50 border-rose-300 text-rose-900'
             }`}
           >
-            {actionMessage.type === 'success' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+            {actionMessage.type === 'success' ? <CheckCircle2 size={16} className="text-emerald-600" /> : <AlertTriangle size={16} className="text-rose-600" />}
             <span>{actionMessage.text}</span>
           </div>
         )}
 
-        {/* Part 23: Tab Navigation Controls (Add Expense, Rent, Other Income, Transfer) */}
-        <div className="flex items-center gap-2 overflow-x-auto border-b border-slate-800 pb-2">
+        {/* Part 23: Tab Navigation Controls */}
+        <div className="flex items-center gap-2 overflow-x-auto border-b border-slate-200 pb-2">
           <button
             onClick={() => { setActiveTab('voucher'); setActionMessage({ text: '', type: '' }); }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'voucher'
-                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/30'
-                : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
             }`}
           >
             <DollarSign className="w-4 h-4" />
@@ -278,8 +278,8 @@ export const DataEntryDashboard = ({ user }) => {
             onClick={() => { setActiveTab('rent'); setActionMessage({ text: '', type: '' }); }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'rent'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
-                : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
             }`}
           >
             <Receipt className="w-4 h-4" />
@@ -290,8 +290,8 @@ export const DataEntryDashboard = ({ user }) => {
             onClick={() => { setActiveTab('other'); setActionMessage({ text: '', type: '' }); }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'other'
-                ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/30'
-                : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
             }`}
           >
             <Banknote className="w-4 h-4" />
@@ -302,8 +302,8 @@ export const DataEntryDashboard = ({ user }) => {
             onClick={() => { setActiveTab('transfer'); setActionMessage({ text: '', type: '' }); }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'transfer'
-                ? 'bg-sky-600 text-white shadow-lg shadow-sky-900/30'
-                : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+                ? 'bg-sky-600 text-white shadow-sm'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
             }`}
           >
             <ArrowLeftRight className="w-4 h-4" />
@@ -334,25 +334,25 @@ export const DataEntryDashboard = ({ user }) => {
 
           {/* Tab C: Other Income Direct Entry */}
           {activeTab === 'other' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm">
-              <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                <Banknote size={16} className="text-amber-400" />
+            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+              <h2 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <Banknote size={16} className="text-amber-600" />
                 Record Other Income / Other Receipts
               </h2>
               <form onSubmit={handleOtherIncomeSubmit} className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">Date</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Date</label>
                     <input
                       type="date"
                       value={otherForm.date}
                       onChange={(e) => setOtherForm({ ...otherForm, date: e.target.value })}
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">Amount (PKR)</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Amount (PKR)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -361,16 +361,16 @@ export const DataEntryDashboard = ({ user }) => {
                       value={otherForm.amount}
                       onChange={(e) => setOtherForm({ ...otherForm, amount: e.target.value })}
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">Income Head</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Income Head</label>
                     <select
                       value={otherForm.headId}
                       onChange={(e) => setOtherForm({ ...otherForm, headId: e.target.value })}
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     >
                       <option value="">Select Income Head...</option>
                       {otherHeads.map((h) => (
@@ -382,12 +382,12 @@ export const DataEntryDashboard = ({ user }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">Receiving Account (Dr.)</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Receiving Account (Dr.)</label>
                     <select
                       value={otherForm.accountId}
                       onChange={(e) => setOtherForm({ ...otherForm, accountId: e.target.value })}
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     >
                       <option value="">Select Receiving Account...</option>
                       {accounts.map((a) => (
@@ -396,27 +396,27 @@ export const DataEntryDashboard = ({ user }) => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">Received From (Payee)</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Received From (Payee)</label>
                     <input
                       type="text"
                       placeholder="e.g. Tenant, Client, Scrap buyer"
                       value={otherForm.receivedFrom}
                       onChange={(e) => setOtherForm({ ...otherForm, receivedFrom: e.target.value })}
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">Narration / Detail</label>
+                  <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Narration / Detail</label>
                   <textarea
                     rows="2"
                     placeholder="Description of the receipt..."
                     value={otherForm.detail}
                     onChange={(e) => setOtherForm({ ...otherForm, detail: e.target.value })}
                     required
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white"
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 font-semibold"
                   />
                 </div>
 
@@ -424,7 +424,7 @@ export const DataEntryDashboard = ({ user }) => {
                   <button
                     type="submit"
                     disabled={submittingOther}
-                    className="px-5 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold transition disabled:opacity-50 flex items-center gap-1.5"
+                    className="px-5 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold transition disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {submittingOther ? 'Recording...' : 'Post Other Income'}
                   </button>
@@ -435,20 +435,20 @@ export const DataEntryDashboard = ({ user }) => {
 
           {/* Tab D: Internal Transfer Direct Entry */}
           {activeTab === 'transfer' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm">
-              <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                <ArrowLeftRight size={16} className="text-sky-400" />
+            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+              <h2 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <ArrowLeftRight size={16} className="text-sky-600" />
                 Record Internal Funds Transfer (Bank &harr; Cash)
               </h2>
               <form onSubmit={handleTransferSubmit} className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">From Account (Credit)</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">From Account (Credit)</label>
                     <select
                       value={transferForm.fromAccountId}
                       onChange={(e) => setTransferForm({ ...transferForm, fromAccountId: e.target.value })}
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     >
                       <option value="">Select Source Account...</option>
                       {accounts.map((a) => (
@@ -457,12 +457,12 @@ export const DataEntryDashboard = ({ user }) => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">To Account (Debit)</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">To Account (Debit)</label>
                     <select
                       value={transferForm.toAccountId}
                       onChange={(e) => setTransferForm({ ...transferForm, toAccountId: e.target.value })}
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     >
                       <option value="">Select Destination Account...</option>
                       {accounts.map((a) => (
@@ -471,7 +471,7 @@ export const DataEntryDashboard = ({ user }) => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">Transfer Amount (PKR)</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Transfer Amount (PKR)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -480,43 +480,43 @@ export const DataEntryDashboard = ({ user }) => {
                       value={transferForm.amount}
                       onChange={(e) => setTransferForm({ ...transferForm, amount: e.target.value })}
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">Transfer Date</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Transfer Date</label>
                     <input
                       type="date"
                       value={transferForm.transferDate}
                       onChange={(e) => setTransferForm({ ...transferForm, transferDate: e.target.value })}
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">Reference / Cheque No.</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Reference / Cheque No.</label>
                     <input
                       type="text"
                       placeholder="e.g. Cheque #49202"
                       value={transferForm.reference}
                       onChange={(e) => setTransferForm({ ...transferForm, reference: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">Transfer Description / Reason</label>
+                  <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Transfer Description / Reason</label>
                   <textarea
                     rows="2"
                     placeholder="e.g. Cash withdrawal from bank for operational expenses"
                     value={transferForm.description}
                     onChange={(e) => setTransferForm({ ...transferForm, description: e.target.value })}
                     required
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white"
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 font-semibold"
                   />
                 </div>
 
@@ -524,7 +524,7 @@ export const DataEntryDashboard = ({ user }) => {
                   <button
                     type="submit"
                     disabled={submittingTransfer}
-                    className="px-5 py-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold transition disabled:opacity-50 flex items-center gap-1.5"
+                    className="px-5 py-2.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold transition disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {submittingTransfer ? 'Transferring...' : 'Execute Internal Transfer'}
                   </button>
@@ -544,7 +544,7 @@ export const DataEntryDashboard = ({ user }) => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-slate-950 border-t border-slate-900 py-4 px-6 text-center text-xs text-slate-500">
+      <footer className="bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-500 font-medium">
         Pixx Technologies Financial Systems &bull; Operational Workspace &bull; Double-Entry General Ledger
       </footer>
     </div>
