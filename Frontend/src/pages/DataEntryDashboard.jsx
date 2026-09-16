@@ -14,6 +14,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { CashCustodianBar } from '../components/CashCustodianBar.jsx';
+import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 import { RentCollectionModal } from '../components/RentCollectionModal.jsx';
 import { RecentEntriesTable } from '../components/RecentEntriesTable.jsx';
 import { accountsAPI, transactionsAPI, otherIncomeAPI, transfersAPI, uploadAPI } from '../services/api.js';
@@ -22,7 +23,7 @@ import { formatPKR } from '../utils/formatters.js';
 import { isAdmin, isVerifier } from '../utils/permissions.js';
 
 export const DataEntryDashboard = ({ user }) => {
-  const [activeTab, setActiveTab] = useState('rent'); // 'rent' | 'other' | 'transfer'
+  const [activeTab, setActiveTab] = useState('voucher'); // 'voucher' | 'rent' | 'other' | 'transfer'
 
   // Master data state
   const [accounts, setAccounts] = useState([]);
