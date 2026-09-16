@@ -369,7 +369,13 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
         @media print {
           @page {
             size: A4 portrait;
-            margin: 8mm 10mm;
+            margin: 6mm 10mm;
+          }
+
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
           }
 
           body {
@@ -379,12 +385,25 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
           }
 
           /* Hide everything outside printable area */
-          body * {
+          .no-print,
+          .no-print * {
+            display: none !important;
             visibility: hidden !important;
           }
 
-          .no-print {
-            display: none !important;
+          /* Force printable voucher to top of paper */
+          .printable-a4-voucher {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            min-height: 275mm !important;
+            margin: 0 !important;
+            padding: 6mm !important;
+            box-shadow: none !important;
+            border: none !important;
+            background: #ffffff !important;
+            page-break-inside: avoid !important;
           }
 
           .printable-a4-voucher,
@@ -392,22 +411,55 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
             visibility: visible !important;
           }
 
-          .printable-a4-voucher {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            min-height: 280mm !important;
-            margin: 0 !important;
-            padding: 10mm !important;
-            box-shadow: none !important;
-            border: none !important;
-            background: #ffffff !important;
-            page-break-inside: avoid !important;
+          /* Universal text & border visibility fixes for un-checked background graphics */
+          .printable-a4-voucher h1,
+          .printable-a4-voucher h2,
+          .printable-a4-voucher p,
+          .printable-a4-voucher span,
+          .printable-a4-voucher div,
+          .printable-a4-voucher strong,
+          .printable-a4-voucher td,
+          .printable-a4-voucher th {
+            color: #000000 !important;
           }
 
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
+          /* Total Banner high contrast print styling */
+          .printable-a4-voucher .bg-slate-900 {
+            background-color: #0f172a !important;
+            border: 2px solid #000000 !important;
+          }
+
+          .printable-a4-voucher .bg-slate-900 *,
+          .printable-a4-voucher .bg-slate-900 span {
+            color: #ffffff !important;
+          }
+
+          /* High contrast solid borders */
+          .printable-a4-voucher .border,
+          .printable-a4-voucher .border-b,
+          .printable-a4-voucher .border-t,
+          .printable-a4-voucher .border-b-2,
+          .printable-a4-voucher .border-slate-300,
+          .printable-a4-voucher .border-slate-200 {
+            border-color: #000000 !important;
+          }
+
+          .printable-a4-voucher table {
+            border: 1px solid #000000 !important;
+            border-collapse: collapse !important;
+          }
+
+          .printable-a4-voucher th,
+          .printable-a4-voucher td {
+            border: 1px solid #000000 !important;
+            color: #000000 !important;
+          }
+
+          .printable-a4-voucher .bg-slate-50,
+          .printable-a4-voucher .bg-slate-100 {
+            background-color: #f8fafc !important;
+            border-color: #000000 !important;
+          }
         }
       `}</style>
     </div>
