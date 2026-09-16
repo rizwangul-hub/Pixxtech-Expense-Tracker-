@@ -273,7 +273,7 @@ export const DataEntryDashboard = ({ user }) => {
             onClick={() => { setActiveTab('voucher'); setActionMessage({ text: '', type: '' }); }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'voucher'
-                ? 'bg-emerald-600 text-white shadow-sm'
+                ? 'bg-blue-600 text-white shadow-sm'
                 : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
             }`}
           >

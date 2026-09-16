@@ -8,20 +8,55 @@ import {
 const cleanId = (value) => (value ? value.toString() : null);
 
 /**
+ * Derive expense classification from 2-level UI parameters:
+ * - expenseScope: 'GENERAL' | 'PROPERTY'
+ * - propertyExpenseType: 'OWN' | 'UNIT'
+ */
+export const deriveExpenseClassification = (expenseScope, propertyExpenseType) => {
+  if (expenseScope === 'GENERAL' || (!expenseScope && !propertyExpenseType)) {
+    return EXPENSE_CLASSIFICATIONS.GENERAL;
+  }
+  if (expenseScope === 'PROPERTY') {
+    if (propertyExpenseType === 'OWN') return EXPENSE_CLASSIFICATIONS.PROPERTY_OWN;
+    if (propertyExpenseType === 'UNIT') return EXPENSE_CLASSIFICATIONS.UNIT;
+  }
+  return null;
+};
+
+export const getExpenseScope = (classification) => {
+  if (classification === EXPENSE_CLASSIFICATIONS.GENERAL) return 'GENERAL';
+  if (
+    classification === EXPENSE_CLASSIFICATIONS.PROPERTY_OWN ||
+    classification === EXPENSE_CLASSIFICATIONS.UNIT
+  ) {
+    return 'PROPERTY';
+  }
+  return 'GENERAL';
+};
+
+export const getPropertyExpenseType = (classification) => {
+  if (classification === EXPENSE_CLASSIFICATIONS.PROPERTY_OWN) return 'OWN';
+  if (classification === EXPENSE_CLASSIFICATIONS.UNIT) return 'UNIT';
+  return null;
+};
+
+/**
  * Normalize and validate expense classification and its property/unit links.
- * Existing callers that omit classification retain the legacy deterministic
- * behavior: no property is general, property without unit is property-owned,
- * and property plus unit is unit expense.
  */
 export const validateExpenseClassification = async ({
   expenseClassification,
+  expenseScope,
+  propertyExpenseType,
   propertyId,
   unitId,
   session = null,
 }) => {
   const normalizedPropertyId = cleanId(propertyId);
   const normalizedUnitId = cleanId(unitId);
-  let classification = expenseClassification;
+
+  let classification =
+    expenseClassification ||
+    deriveExpenseClassification(expenseScope, propertyExpenseType);
 
   if (!classification) {
     classification = normalizedUnitId
@@ -78,8 +113,17 @@ export const validateExpenseClassification = async ({
   };
 };
 
-export const getExpenseClassificationLabel = (classification) => ({
-  [EXPENSE_CLASSIFICATIONS.GENERAL]: 'General Expense',
-  [EXPENSE_CLASSIFICATIONS.PROPERTY_OWN]: 'Property Own Expense',
-  [EXPENSE_CLASSIFICATIONS.UNIT]: 'Unit Expense',
-}[classification] || 'Unclassified Expense');
+export const getExpenseClassificationLabel = (classification) =>
+  ({
+    [EXPENSE_CLASSIFICATIONS.GENERAL]: 'General Expense',
+    [EXPENSE_CLASSIFICATIONS.PROPERTY_OWN]: 'Property Own Expense',
+    [EXPENSE_CLASSIFICATIONS.UNIT]: 'Unit Expense',
+  }[classification] || 'General Expense');
+
+export default {
+  validateExpenseClassification,
+  deriveExpenseClassification,
+  getExpenseScope,
+  getPropertyExpenseType,
+  getExpenseClassificationLabel,
+};

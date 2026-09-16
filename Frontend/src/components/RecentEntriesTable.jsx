@@ -160,6 +160,19 @@ export const RecentEntriesTable = ({
                           {tx.propertyId.plazaName}
                         </span>
                       )}
+                      {tx.expenseClassification === 'UNIT_EXPENSE' ? (
+                        <span className="inline-block mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
+                          Unit: {tx.unitId || 'Unit-Linked'}
+                        </span>
+                      ) : tx.expenseClassification === 'PROPERTY_OWN_EXPENSE' ? (
+                        <span className="inline-block mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                          Property Own
+                        </span>
+                      ) : tx.expenseClassification === 'GENERAL_EXPENSE' ? (
+                        <span className="inline-block mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                          General
+                        </span>
+                      ) : null}
                     </td>
                     <td className="whitespace-nowrap">
                       <span className="bg-slate-100 px-2.5 py-0.5 rounded-md text-slate-800 font-bold border border-slate-300 text-xs">

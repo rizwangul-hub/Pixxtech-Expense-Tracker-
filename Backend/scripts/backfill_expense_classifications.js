@@ -12,7 +12,10 @@ const classify = (record, propertiesById) => {
   if (!property) return { classification: null, safe: false };
   if (!record.unitId) return { classification: 'PROPERTY_OWN_EXPENSE', safe: true };
   const belongs = (property.units || []).some(
-    (unit) => unit._id?.toString() === record.unitId.toString()
+    (unit) =>
+      unit._id?.toString() === record.unitId.toString() ||
+      unit.unitName === record.unitId ||
+      unit.unitNumber === record.unitId
   );
   return belongs
     ? { classification: 'UNIT_EXPENSE', safe: true }

@@ -9,6 +9,7 @@ import Tenant from '../models/Tenant.js';
 import Category from '../models/Category.js';
 import Account from '../models/Account.js';
 import { createTransaction, round2 } from '../services/ledgerService.js';
+import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { validateExpenseClassification } from '../services/expenseClassificationService.js';
 
@@ -341,6 +342,8 @@ export const updatePendingEntry = async (req, res) => {
     if (entry.entryType === 'EXPENSE') {
       const classification = await validateExpenseClassification({
         expenseClassification: entry.expenseClassification,
+        expenseScope: updates.expenseScope,
+        propertyExpenseType: updates.propertyExpenseType,
         propertyId: entry.propertyId,
         unitId: entry.unitId,
       });
@@ -407,6 +410,26 @@ export const verifyEntry = async (req, res) => {
     let postedRentReceived = null;
 
     if (entry.entryType === 'EXPENSE') {
+      // Older pending vouchers could contain a user/category ID in drAccountId
+      // because the expense form did not have a separate debit-account field.
+      // Use the system clearing account only when the stored reference is not
+      // an actual account; valid account references still go through normal
+      // active-account validation in createTransaction.
+      const debitAccount = entry.drAccountId
+        ? await Account.findById(entry.drAccountId).select('_id')
+        : null;
+      if (!debitAccount) {
+        const clearingAccount = await getOrCreateOtherIncomeClearingAccount();
+        entry.drAccountId = clearingAccount._id;
+        entry.auditLog.push({
+          action: 'ACCOUNT_REFERENCE_NORMALIZED',
+          performedBy: req.user.name,
+          performedById: req.user._id,
+          timestamp: new Date(),
+          notes: 'Replaced a missing or invalid debit-account reference with the system clearing account during verification.',
+        });
+      }
+
       // 1. Post expense voucher transaction
       postedTransaction = await createTransaction({
         date: entry.date || new Date(),
@@ -652,9 +675,21 @@ export const createPendingEntry = async (req, res) => {
       return apiError(res, 'Valid entryType (RENT or EXPENSE) is required.', 400);
     }
 
-    const numAmount = round2(Number(amount));
-    if (!amount || isNaN(numAmount) || numAmount <= 0) {
-      return apiError(res, 'Amount must be a positive number greater than 0.', 400);
+    let finalClassification = null;
+    let finalPropertyId = propertyId || null;
+    let finalUnitId = unitId || null;
+
+    if (entryType === 'EXPENSE') {
+      const classificationResult = await validateExpenseClassification({
+        expenseClassification: req.body.expenseClassification,
+        expenseScope: req.body.expenseScope,
+        propertyExpenseType: req.body.propertyExpenseType,
+        propertyId,
+        unitId,
+      });
+      finalClassification = classificationResult.expenseClassification;
+      finalPropertyId = classificationResult.propertyId;
+      finalUnitId = classificationResult.unitId;
     }
 
     const pending = await PendingEntry.create({
@@ -663,8 +698,9 @@ export const createPendingEntry = async (req, res) => {
       date: date ? new Date(date) : new Date(),
       voucherNo: voucherNo ? voucherNo.trim() : '',
       rentMonth: rentMonth || null,
-      propertyId: propertyId || null,
-      unitId: unitId || null,
+      propertyId: finalPropertyId,
+      unitId: finalUnitId,
+      expenseClassification: finalClassification,
       tenantId: tenantId || null,
       agreementId: agreementId || null,
       categoryId: categoryId || null,

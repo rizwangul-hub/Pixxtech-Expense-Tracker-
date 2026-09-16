@@ -1,4 +1,4 @@
-﻿import mongoose from 'mongoose';
+import mongoose from 'mongoose';
 import { EXPENSE_CLASSIFICATION_LIST } from '../constants/expenseClassification.js';
 
 /**
@@ -214,6 +214,21 @@ const pendingEntrySchema = new mongoose.Schema(
     toObject: { virtuals: true },
   }
 );
+
+// Virtual getters for normalized classification structure
+pendingEntrySchema.virtual('expenseScope').get(function () {
+  if (this.expenseClassification === 'GENERAL_EXPENSE') return 'GENERAL';
+  if (this.expenseClassification === 'PROPERTY_OWN_EXPENSE' || this.expenseClassification === 'UNIT_EXPENSE') return 'PROPERTY';
+  return this.propertyId ? 'PROPERTY' : 'GENERAL';
+});
+
+pendingEntrySchema.virtual('propertyExpenseType').get(function () {
+  if (this.expenseClassification === 'PROPERTY_OWN_EXPENSE') return 'OWN';
+  if (this.expenseClassification === 'UNIT_EXPENSE') return 'UNIT';
+  if (this.unitId) return 'UNIT';
+  if (this.propertyId) return 'OWN';
+  return null;
+});
 
 // Strategic compound indexes for performant querying and filtering
 pendingEntrySchema.index({ status: 1, submittedAt: -1 });

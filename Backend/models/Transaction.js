@@ -176,6 +176,21 @@ const transactionSchema = new mongoose.Schema(
   }
 );
 
+// Virtual getters for normalized classification structure
+transactionSchema.virtual('expenseScope').get(function () {
+  if (this.expenseClassification === 'GENERAL_EXPENSE') return 'GENERAL';
+  if (this.expenseClassification === 'PROPERTY_OWN_EXPENSE' || this.expenseClassification === 'UNIT_EXPENSE') return 'PROPERTY';
+  return this.propertyId ? 'PROPERTY' : 'GENERAL';
+});
+
+transactionSchema.virtual('propertyExpenseType').get(function () {
+  if (this.expenseClassification === 'PROPERTY_OWN_EXPENSE') return 'OWN';
+  if (this.expenseClassification === 'UNIT_EXPENSE') return 'UNIT';
+  if (this.unitId) return 'UNIT';
+  if (this.propertyId) return 'OWN';
+  return null;
+});
+
 // Prevent identical Debit and Credit accounts on the same transaction
 transactionSchema.pre('validate', function () {
   if (

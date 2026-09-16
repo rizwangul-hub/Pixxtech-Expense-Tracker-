@@ -67,6 +67,8 @@ export const recordVoucher = async (req, res) => {
 
     const classification = await validateExpenseClassification({
       expenseClassification,
+      expenseScope: req.body.expenseScope,
+      propertyExpenseType: req.body.propertyExpenseType,
       propertyId,
       unitId,
     });
