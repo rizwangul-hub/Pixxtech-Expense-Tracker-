@@ -100,120 +100,111 @@ export function DashboardHome({
  const [testAmount, setTestAmount] = useState('1500000');
  const [testDate, setTestDate] = useState(new Date().toISOString().split('T')[0]);
 
- return (
- <div className="space-y-6">
- {/* Welcome & Overview Header */}
- <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 shadow-sm">
- <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
- <div>
- <div className="flex items-center gap-2 mb-1">
- <span className="text-xs text-slate-400">
- Pixx Technologies • Pakistan Operations
- </span>
- </div>
- <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
- Pakistan Property Finance & Expense Management System
- </h1>
- <p className="text-sm text-slate-400 mt-1 max-w-3xl">
- Foundation dashboard establishing secure JWT authentication, Role-Based Access Control (RBAC),
- standardized Pakistan Rupee (PKR) formatting, and audit trail architecture for all upcoming property and expense modules.
- </p>
- </div>
+  return (
+    <div className="space-y-6">
+      {/* Welcome & Overview Header */}
+      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Pixx Technologies • Pakistan Operations
+              </span>
+            </div>
+            <h1 className="page-title">
+              Pakistan Property Finance & Expense Management System
+            </h1>
+            <p className="text-sm text-slate-600 mt-1 max-w-3xl font-medium leading-relaxed">
+              Foundation dashboard establishing secure JWT authentication, Role-Based Access Control (RBAC),
+              standardized Pakistan Rupee (PKR) formatting, and audit trail architecture for all upcoming property and expense modules.
+            </p>
+          </div>
 
- <div className="flex flex-wrap items-center gap-2 shrink-0">
- {onNavigateToProperties && (
- <button
- onClick={onNavigateToProperties}
- className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm"
- >
- <Building2 size={16} />
- Properties Directory
- </button>
- )}
- {userIsAdmin && (
- <button
- onClick={onNavigateToUsers}
- className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
- >
- <ShieldCheck size={16} />
- Manage Users
- </button>
- )}
- {onOpenTerminal && (
- <button
- onClick={onOpenTerminal}
- className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition shadow-sm"
- >
- <FileText size={16} />
- Launch Operational View
- </button>
- )}
- </div>
- </div>
- </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {onNavigateToProperties && (
+              <button
+                onClick={onNavigateToProperties}
+                className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition shadow-2xs text-white-keep"
+              >
+                <Building2 size={16} className="text-white-keep" />
+                Properties Directory
+              </button>
+            )}
+            {userIsAdmin && (
+              <button
+                onClick={onNavigateToUsers}
+                className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-2xs text-white-keep"
+              >
+                <ShieldCheck size={16} className="text-white-keep" />
+                Manage Users
+              </button>
+            )}
+            {onOpenTerminal && (
+              <button
+                onClick={onOpenTerminal}
+                className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition shadow-2xs"
+              >
+                <FileText size={16} className="text-slate-700" />
+                Launch Operational View
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
- {/* Live Properties Portfolio Metrics () */}
- {portfolioStats && (
- <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
- <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
- <div>
- <div className="flex items-center gap-2">
- <Building2 size={16} className="text-emerald-400" />
- <h2 className="text-sm font-bold text-white uppercase tracking-wider">
- Live Properties Portfolio & Occupancy
- </h2>
- <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-1.5 py-0.2 rounded border border-emerald-800/50">
- Database Synced
- </span>
- </div>
- <p className="text-xs text-slate-400 mt-0.5">
- Real-time count derived directly from active properties and individual unit records.
- </p>
- </div>
- {onNavigateToProperties && (
- <button
- onClick={onNavigateToProperties}
- className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition"
- >
- Open Full Directory <ChevronRight size={14} />
- </button>
- )}
- </div>
+      {/* Live Properties Portfolio Metrics */}
+      {portfolioStats && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">
+          <div className="section-bar">
+            <div className="flex items-center gap-2">
+              <Building2 size={18} className="text-white" />
+              <span className="section-title">Live Properties Portfolio & Occupancy</span>
+              <span className="section-count-badge">{portfolioStats.totalProperties} Props</span>
+            </div>
+            {onNavigateToProperties && (
+              <button
+                onClick={onNavigateToProperties}
+                className="text-xs font-bold text-white hover:underline flex items-center gap-1 transition text-white-keep"
+              >
+                Open Full Directory <ChevronRight size={14} className="text-white-keep" />
+              </button>
+            )}
+          </div>
 
- <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2 border-t border-slate-800">
- <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3">
- <div className="text-[11px] text-slate-400 font-medium">Properties</div>
- <div className="text-xl font-black text-white mt-0.5">{portfolioStats.totalProperties}</div>
- <div className="text-[10px] text-slate-500">Commercial & Plazas</div>
- </div>
- <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3">
- <div className="text-[11px] text-slate-400 font-medium">Total Units</div>
- <div className="text-xl font-black text-white mt-0.5">{portfolioStats.totalUnits}</div>
- <div className="text-[10px] text-slate-500">Individual spaces</div>
- </div>
- <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3">
- <div className="text-[11px] text-emerald-400 font-medium">Occupied</div>
- <div className="text-xl font-black text-emerald-400 mt-0.5">{portfolioStats.occupiedUnits}</div>
- <div className="text-[10px] text-emerald-500/70">Let to tenants</div>
- </div>
- <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3">
- <div className="text-[11px] text-amber-400 font-medium">Vacant</div>
- <div className="text-xl font-black text-amber-400 mt-0.5">{portfolioStats.vacantUnits}</div>
- <div className="text-[10px] text-amber-500/70">Available spaces</div>
- </div>
- <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3 col-span-2 sm:col-span-1">
- <div className="text-[11px] text-sky-400 font-medium">Occupancy Rate</div>
- <div className="text-xl font-black text-sky-400 mt-0.5">{portfolioStats.occupancyRate}%</div>
- <div className="w-full bg-slate-800 rounded-full h-1.5 mt-1 overflow-hidden">
- <div
- className="bg-sky-400 h-1.5 rounded-full"
- style={{ width: `${Math.min(100, portfolioStats.occupancyRate)}%` }}
- />
- </div>
- </div>
- </div>
- </div>
- )}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+              <div className="text-xs text-slate-600 font-bold">Properties</div>
+              <div className="text-2xl font-black text-slate-900 mt-0.5">{portfolioStats.totalProperties}</div>
+              <div className="text-[11px] text-slate-500 font-medium">Commercial & Plazas</div>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+              <div className="text-xs text-slate-600 font-bold">Total Units</div>
+              <div className="text-2xl font-black text-slate-900 mt-0.5">{portfolioStats.totalUnits}</div>
+              <div className="text-[11px] text-slate-500 font-medium">Individual spaces</div>
+            </div>
+            <div className="bg-emerald-50/50 border border-emerald-200 rounded-xl p-3.5">
+              <div className="text-xs text-emerald-800 font-bold">Occupied</div>
+              <div className="text-2xl font-black text-emerald-700 mt-0.5">{portfolioStats.occupiedUnits}</div>
+              <div className="text-[11px] text-emerald-600 font-medium">Let to tenants</div>
+            </div>
+            <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-3.5">
+              <div className="text-xs text-amber-800 font-bold">Vacant</div>
+              <div className="text-2xl font-black text-amber-700 mt-0.5">{portfolioStats.vacantUnits}</div>
+              <div className="text-[11px] text-amber-600 font-medium">Available spaces</div>
+            </div>
+            <div className="bg-blue-50/50 border border-blue-200 rounded-xl p-3.5 col-span-2 sm:col-span-1">
+              <div className="text-xs text-blue-800 font-bold">Occupancy Rate</div>
+              <div className="text-2xl font-black text-blue-700 mt-0.5">{portfolioStats.occupancyRate}%</div>
+              <div className="w-full bg-slate-200 rounded-full h-2 mt-1.5 overflow-hidden">
+                <div
+                  className="bg-blue-600 h-2 rounded-full"
+                  style={{ width: `${Math.min(100, portfolioStats.occupancyRate)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
  {/* Live Tenancy, Rental Agreements & Billing Engine () */}
  {(tenancyStats || agreementStats || rentDueStats) && (

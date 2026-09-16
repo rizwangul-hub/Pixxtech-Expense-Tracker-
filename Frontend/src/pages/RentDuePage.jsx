@@ -116,13 +116,13 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-white tracking-wide">Monthly Rent Due</h1>
-            <span className="text-xs uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/60">
+          <div className="flex items-center gap-3">
+            <h1 className="page-title">Monthly Rent Due</h1>
+            <span className="text-xs uppercase font-bold tracking-wider px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-300">
               Expected Billing Ledger
             </span>
           </div>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-sm text-slate-600 mt-1 font-medium">
             Tracks scheduled monthly rental expectations derived from active leases.
           </p>
         </div>
@@ -136,15 +136,15 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
                 setGenResult(null);
                 setGenerateModalOpen(true);
               }}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg text-sm transition flex items-center gap-2 shadow-lg shadow-emerald-900/30"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition flex items-center gap-2 shadow-sm text-white-keep"
             >
-              <Play size={15} />
+              <Play size={16} className="text-white-keep" />
               <span>Generate Monthly Rent Due</span>
             </button>
           )}
           <button
             onClick={loadRentDue}
-            className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition"
+            className="p-2.5 rounded-xl bg-white border border-slate-300 text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition shadow-2xs"
             title="Refresh list"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -153,68 +153,77 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
       </div>
 
       {/* Scope Disclaimer Banner */}
-      <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl flex items-start gap-3 text-xs text-slate-300">
-        <Info size={18} className="text-indigo-400 shrink-0 mt-0.5" />
-        <div className="leading-relaxed">
-          <strong className="text-white">Accounting Register:</strong> This register tracks expected rent dues generated from active leases and reconciles against rental collection receipts.
+      <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-start gap-3 text-xs text-slate-700 shadow-2xs">
+        <Info size={18} className="text-blue-600 shrink-0 mt-0.5" />
+        <div className="leading-relaxed font-medium">
+          <strong className="text-slate-900 font-bold">Accounting Register:</strong> This register tracks expected rent dues generated from active leases and reconciles against rental collection receipts.
         </div>
       </div>
 
       {/* KPI Summary Cards */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 font-medium">Total Expected Rent</span>
-              <Receipt size={16} className="text-emerald-400" />
+              <span className="text-xs text-slate-600 font-bold uppercase tracking-wider">Total Expected Rent</span>
+              <Receipt size={18} className="text-emerald-600" />
             </div>
-            <div className="text-2xl font-bold text-emerald-400 font-mono mt-1">
+            <div className="text-2xl font-bold text-slate-900 font-mono mt-1">
               {formatPKR(summary.totalExpectedAmount)}
             </div>
-            <div className="text-xs text-slate-500 mt-1">For {summary.filteredMonth}</div>
+            <div className="text-xs text-slate-500 mt-1 font-medium">For {summary.filteredMonth}</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 font-medium">Billable Units</span>
-              <Building size={16} className="text-indigo-400" />
+              <span className="text-xs text-slate-600 font-bold uppercase tracking-wider">Billable Units</span>
+              <Building size={18} className="text-blue-600" />
             </div>
-            <div className="text-2xl font-bold text-white mt-1">{summary.totalRecords}</div>
-            <div className="text-xs text-slate-500 mt-1">Active agreement units</div>
+            <div className="text-2xl font-bold text-slate-900 mt-1">{summary.totalRecords}</div>
+            <div className="text-xs text-slate-500 mt-1 font-medium">Active agreement units</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 font-medium">Due Status</span>
-              <Clock size={16} className="text-amber-400" />
+              <span className="text-xs text-slate-600 font-bold uppercase tracking-wider">Due Status</span>
+              <Clock size={18} className="text-amber-600" />
             </div>
-            <div className="text-2xl font-bold text-amber-300 mt-1">{summary.dueCount}</div>
-            <div className="text-xs text-slate-500 mt-1">Awaiting rent receipt</div>
+            <div className="text-2xl font-bold text-amber-700 mt-1">{summary.dueCount}</div>
+            <div className="text-xs text-slate-500 mt-1 font-medium">Awaiting rent receipt</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 font-medium">Target Month</span>
-              <CalendarDays size={16} className="text-indigo-400" />
+              <span className="text-xs text-slate-600 font-bold uppercase tracking-wider">Target Month</span>
+              <CalendarDays size={18} className="text-indigo-600" />
             </div>
-            <div className="text-2xl font-bold text-white font-mono mt-1">
+            <div className="text-2xl font-bold text-slate-900 font-mono mt-1">
               {summary.filteredMonth}
             </div>
-            <div className="text-xs text-slate-500 mt-1">Active billing period</div>
+            <div className="text-xs text-slate-500 mt-1 font-medium">Active billing period</div>
           </div>
         </div>
       )}
 
+      {/* Medium Grey Section Bar Header */}
+      <div className="section-bar shadow-2xs">
+        <div className="flex items-center gap-3">
+          <span className="section-title">Rents and Charges</span>
+          <span className="section-count-badge">{rentDueRecords.length}</span>
+        </div>
+        <span className="text-xs text-white/90 font-medium">Active Ledger Records</span>
+      </div>
+
       {/* Filter Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-4">
           {/* Month Selector */}
           <div className="flex items-center gap-2">
-            <label className="text-xs text-slate-400 font-semibold">Rent Month:</label>
+            <label className="text-xs text-slate-700 font-bold">Rent Month:</label>
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-sm text-emerald-400 font-mono font-semibold focus:outline-none focus:border-emerald-500"
+              className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-900 font-mono font-bold focus:outline-none focus:border-blue-600"
             >
               <option value="2026-07">2026-07 (July)</option>
               <option value="2026-08">2026-08 (August)</option>
@@ -228,11 +237,11 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
 
           {/* Property Filter */}
           <div className="flex items-center gap-2">
-            <label className="text-xs text-slate-400 font-semibold">Property:</label>
+            <label className="text-xs text-slate-700 font-bold">Property:</label>
             <select
               value={propertyFilter}
               onChange={(e) => setPropertyFilter(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-emerald-500 max-w-[200px]"
+              className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600 max-w-[200px]"
             >
               <option value="">All Properties</option>
               {propertiesList.map((p) => (
@@ -245,11 +254,11 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
 
           {/* Status Filter */}
           <div className="flex items-center gap-2">
-            <label className="text-xs text-slate-400 font-semibold">Status:</label>
+            <label className="text-xs text-slate-700 font-bold">Status:</label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-emerald-500"
+              className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
             >
               <option value="">All Statuses</option>
               <option value="DUE">DUE</option>
@@ -261,7 +270,7 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
 
         <button
           onClick={loadRentDue}
-          className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-lg text-xs font-medium transition"
+          className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-2xs"
         >
           Apply Filter
         </button>
@@ -269,94 +278,94 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-950/50 border border-red-800 text-red-300 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} className="text-red-400 shrink-0" />
-          <p className="text-sm">{error}</p>
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl flex items-center gap-3">
+          <AlertCircle size={20} className="text-rose-600 shrink-0" />
+          <p className="text-sm font-semibold">{error}</p>
         </div>
       )}
 
       {/* Rent Due Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-slate-400">
-            <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-emerald-500" />
-            <p className="text-sm">Loading rent due records...</p>
+          <div className="p-12 text-center text-slate-600">
+            <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-blue-600" />
+            <p className="text-sm font-semibold">Loading rent due records...</p>
           </div>
         ) : rentDueRecords.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            <Receipt size={36} className="mx-auto mb-2 text-slate-600" />
-            <p className="text-base font-semibold text-slate-300">No Rent Due Records Found</p>
-            <p className="text-sm text-slate-500 mt-1">
+          <div className="p-12 text-center text-slate-600">
+            <Receipt size={36} className="mx-auto mb-2 text-slate-400" />
+            <p className="text-base font-bold text-slate-900">No Rent Due Records Found</p>
+            <p className="text-sm text-slate-600 mt-1">
               Click &quot;Generate Monthly Rent Due&quot; above to create billing expectations for active leases.
             </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+            <table className="custom-table">
               <thead>
-                <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 font-semibold text-xs uppercase tracking-wider">
-                  <th className="py-3.5 px-4">Rent Month</th>
-                  <th className="py-3.5 px-4">Due Date</th>
-                  <th className="py-3.5 px-4">Tenant</th>
-                  <th className="py-3.5 px-4">Property & Leased Unit</th>
-                  <th className="py-3.5 px-4 text-right">Expected Rent</th>
-                  <th className="py-3.5 px-4 text-center">Status</th>
-                  <th className="py-3.5 px-4 text-right">Agreement #</th>
+                <tr>
+                  <th className="text-left">Rent Month</th>
+                  <th className="text-left">Due Date</th>
+                  <th className="text-left">Tenant / Payer</th>
+                  <th className="text-left">Property & Leased Unit</th>
+                  <th className="text-right">Expected Rent</th>
+                  <th className="text-center">Status</th>
+                  <th className="text-right">Agreement #</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody>
                 {rentDueRecords.map((rd) => (
-                  <tr key={rd._id} className="hover:bg-slate-800/40 transition">
+                  <tr key={rd._id} className="hover:bg-slate-50 transition">
                     {/* Month */}
-                    <td className="py-3.5 px-4 font-mono font-bold text-white text-xs">
+                    <td className="font-mono font-bold text-slate-900">
                       {rd.rentMonth}
                     </td>
 
                     {/* Due Date */}
-                    <td className="py-3.5 px-4 text-slate-300 text-xs">
+                    <td className="text-slate-800 font-semibold">
                       {formatDate(rd.dueDate)}
                     </td>
 
-                    {/* Tenant */}
-                    <td className="py-3.5 px-4">
+                    {/* Tenant / Payer */}
+                    <td>
                       <div
                         onClick={() => onSelectTenant && rd.tenantId?._id && onSelectTenant(rd.tenantId._id)}
-                        className="font-medium text-white hover:text-emerald-400 transition cursor-pointer text-xs"
+                        className="font-bold text-slate-900 hover:text-blue-700 transition cursor-pointer"
                       >
                         {rd.tenantId?.fullName || 'Tenant'}
                       </div>
                       {rd.tenantId?.companyName && (
-                        <div className="text-[11px] text-slate-400">{rd.tenantId.companyName}</div>
+                        <div className="text-xs text-slate-600 font-normal">{rd.tenantId.companyName}</div>
                       )}
                     </td>
 
                     {/* Property & Unit */}
-                    <td className="py-3.5 px-4">
-                      <div className="font-medium text-slate-200 text-xs flex items-center gap-1">
-                        <Building2 size={13} className="text-emerald-400 shrink-0" />
+                    <td>
+                      <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                        <Building2 size={15} className="text-blue-600 shrink-0" />
                         <span>{rd.propertyId?.propertyName}</span>
                       </div>
-                      <div className="text-xs text-slate-400 mt-0.5">
-                        Unit: <span className="text-slate-200 font-medium">{rd.unitDetails?.unitName || 'Unit'}</span>
+                      <div className="text-xs text-slate-600 font-medium mt-0.5">
+                        Unit: <span className="text-slate-900 font-bold">{rd.unitDetails?.unitName || 'Unit'}</span>
                       </div>
                     </td>
 
                     {/* Expected Rent */}
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="font-bold text-emerald-400 font-mono text-sm">
+                    <td className="text-right">
+                      <div className="currency-amount text-slate-900 font-mono">
                         {formatPKR(rd.expectedRentAmount)}
                       </div>
                     </td>
 
                     {/* Status */}
-                    <td className="py-3.5 px-4 text-center">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60">
+                    <td className="text-center">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
                         {rd.status}
                       </span>
                     </td>
 
                     {/* Agreement Number */}
-                    <td className="py-3.5 px-4 text-right font-mono text-xs text-indigo-300">
+                    <td className="text-right font-mono text-xs font-bold text-slate-700">
                       {rd.agreementId?.agreementNumber || '—'}
                     </td>
                   </tr>

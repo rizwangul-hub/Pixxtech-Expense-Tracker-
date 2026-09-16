@@ -298,15 +298,15 @@ export function MainLayout({
       {/* Body: Sidebar + Main Content */}
       <div className="min-h-0 flex-1 flex overflow-hidden">
         {/* Desktop Sidebar */}
-        <aside className="hidden md:flex md:w-64 h-full flex-col bg-white border-r border-slate-200 shrink-0 shadow-xs">
+        <aside className="hidden md:flex md:w-72 h-full flex-col bg-white border-r border-slate-200 shrink-0 shadow-xs">
           <div className="p-4 border-b border-slate-200">
-            <div className="text-[11px] uppercase font-black tracking-wider text-slate-600 flex items-center gap-1.5">
-              <Layers size={14} className="text-blue-600" />
+            <div className="text-xs uppercase font-black tracking-wider text-slate-700 flex items-center gap-2">
+              <Layers size={16} className="text-blue-600" />
               Navigation Modules
             </div>
           </div>
 
-          <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+          <nav className="flex-1 overflow-y-auto p-3 space-y-1.5">
             {visibleNavigationItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentView === item.id;
@@ -317,22 +317,22 @@ export function MainLayout({
                   key={item.id}
                   disabled={!isItemActive}
                   onClick={() => handleNavClick(item)}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-bold transition ${
+                  className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-base font-bold transition min-h-[50px] ${
                     isActive
-                      ? 'bg-blue-600 text-white shadow-sm font-black text-white-keep'
+                      ? 'bg-blue-600 text-white shadow-md font-black text-white-keep'
                       : isItemActive
-                      ? 'text-slate-800 hover:bg-slate-100 hover:text-blue-700 font-semibold'
+                      ? 'text-slate-900 hover:bg-slate-100 hover:text-blue-700 font-bold'
                       : 'text-slate-400 cursor-not-allowed opacity-60 hover:bg-transparent'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <Icon size={17} className={isActive ? 'text-white-keep' : isItemActive ? 'text-slate-600' : 'text-slate-400'} />
-                    <span>{item.label}</span>
+                  <div className="flex items-center gap-3.5">
+                    <Icon size={21} className={isActive ? 'text-white-keep' : isItemActive ? 'text-slate-700' : 'text-slate-400'} />
+                    <span className="text-[15px] font-bold leading-none">{item.label}</span>
                   </div>
 
                   {item.badge && (
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                      className={`text-xs font-bold px-2.5 py-0.5 rounded-md border ${
                         isActive
                           ? 'bg-blue-700 text-white border-blue-500 text-white-keep'
                           : item.badgeColor
@@ -347,11 +347,11 @@ export function MainLayout({
           </nav>
 
           {/* Sidebar Footer */}
-          <div className="p-3.5 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-600">
+          <div className="p-4 border-t border-slate-200 bg-slate-50 text-xs text-slate-600">
             <div>
-              <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Software Developer</div>
-              <div className="text-xs font-black text-slate-900">Rizwan Ullah</div>
-              <div className="text-[11px] font-semibold text-blue-700">Pixx Technologies</div>
+              <div className="text-[11px] uppercase font-bold tracking-wider text-slate-500">Software Developer</div>
+              <div className="text-sm font-black text-slate-900">Rizwan Ullah</div>
+              <div className="text-xs font-bold text-blue-700">Pixx Technologies</div>
             </div>
           </div>
         </aside>
@@ -366,21 +366,21 @@ export function MainLayout({
             />
 
             {/* Slide-over Drawer */}
-            <div className="relative w-64 max-w-[80%] bg-white border-r border-slate-200 flex flex-col z-10 shadow-xl">
+            <div className="relative w-72 max-w-[85%] bg-white border-r border-slate-200 flex flex-col z-10 shadow-xl">
               <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-                <div className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
-                  <Layers size={15} className="text-blue-600" />
+                <div className="text-sm font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                  <Layers size={18} className="text-blue-600" />
                   Navigation
                 </div>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
                   className="p-1 rounded bg-slate-100 text-slate-600 hover:text-slate-900"
                 >
-                  <X size={18} />
+                  <X size={20} />
                 </button>
               </div>
 
-              <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+              <nav className="flex-1 overflow-y-auto p-3 space-y-1.5">
                 {visibleNavigationItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = currentView === item.id;
@@ -391,20 +391,20 @@ export function MainLayout({
                       key={item.id}
                       disabled={!isItemActive}
                       onClick={() => handleNavClick(item)}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-bold transition ${
+                      className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-base font-bold transition min-h-[48px] ${
                         isActive
                           ? 'bg-blue-600 text-white font-black text-white-keep'
                           : isItemActive
-                          ? 'text-slate-800 hover:bg-slate-100'
+                          ? 'text-slate-900 hover:bg-slate-100'
                           : 'text-slate-400 cursor-not-allowed opacity-60'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <Icon size={16} />
-                        <span>{item.label}</span>
+                      <div className="flex items-center gap-3">
+                        <Icon size={20} />
+                        <span className="text-[15px] font-bold">{item.label}</span>
                       </div>
                       {item.badge && (
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${item.badgeColor}`}>
+                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-md border ${item.badgeColor}`}>
                           {item.badge}
                         </span>
                       )}
@@ -413,7 +413,7 @@ export function MainLayout({
                 })}
               </nav>
 
-              <div className="p-3 border-t border-slate-200 text-[11px] text-slate-600 bg-slate-50">
+              <div className="p-4 border-t border-slate-200 text-xs text-slate-600 bg-slate-50">
                 Logged in as: <strong className="text-slate-900 font-bold">{user?.name}</strong>
               </div>
             </div>
