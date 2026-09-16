@@ -693,11 +693,31 @@ export const getActiveAccountsSummary = async (req, res) => {
 };
 
 /**
- * Legacy support: Get list of all active categories (Heads)
+ * Get list of all active categories (Heads) with property details
  */
 export const getCategories = async (req, res) => {
   try {
-    const categories = await Category.find({}).sort({ type: 1, name: 1 }).lean();
+    const { type, expenseClassification, propertyId, unitId } = req.query;
+    const filter = {};
+
+    if (type) {
+      filter.type = type.toUpperCase();
+    }
+    if (expenseClassification) {
+      filter.expenseClassification = expenseClassification;
+    }
+    if (propertyId) {
+      filter.propertyId = propertyId;
+    }
+    if (unitId) {
+      filter.unitId = unitId;
+    }
+
+    const categories = await Category.find(filter)
+      .populate('propertyId', 'plazaName propertyName')
+      .sort({ type: 1, name: 1 })
+      .lean();
+
     return res.status(200).json({
       success: true,
       count: categories.length,
@@ -713,35 +733,56 @@ export const getCategories = async (req, res) => {
 };
 
 /**
- * Create a persistent expense account head for voucher entry.
+ * Create a persistent expense account head for voucher entry with optional property/unit scoping.
  */
 export const createCategory = async (req, res) => {
   try {
     const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+    const propertyId = req.body.propertyId && mongoose.Types.ObjectId.isValid(req.body.propertyId) ? req.body.propertyId : null;
+    const unitId = req.body.unitId && mongoose.Types.ObjectId.isValid(req.body.unitId) ? req.body.unitId : null;
+    const isRentalHead = Boolean(req.body.isRentalHead);
 
     if (name.length < 2) {
       return apiError(res, 'Expense head name must be at least 2 characters long.', 400);
     }
 
-    const existingCategories = await Category.find({}, { name: 1 }).lean();
-    const duplicate = existingCategories.find(
-      (category) => category.name.trim().toLowerCase() === name.toLowerCase()
-    );
-    if (duplicate) {
-      return apiError(res, `Expense head '${name}' already exists.`, 409);
+    let expenseClassification = 'GENERAL_EXPENSE';
+    if (unitId) {
+      expenseClassification = 'UNIT_EXPENSE';
+    } else if (propertyId) {
+      expenseClassification = 'PROPERTY_OWN_EXPENSE';
     }
 
-    const category = await Category.create({
+    const duplicateFilter = {
+      name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      expenseClassification,
+      propertyId,
+      unitId,
+    };
+
+    const duplicate = await Category.findOne(duplicateFilter).lean();
+    if (duplicate) {
+      return apiError(res, `Expense head '${name}' already exists for this scope.`, 409);
+    }
+
+    let category = await Category.create({
       name,
       type: 'EXPENSE',
-      isRentalHead: false,
+      expenseClassification,
+      propertyId,
+      unitId,
+      isRentalHead,
     });
+
+    if (propertyId) {
+      category = await Category.findById(category._id).populate('propertyId', 'plazaName propertyName').lean();
+    }
 
     return apiSuccess(res, { category }, `Expense head '${name}' created successfully.`, 201);
   } catch (error) {
     console.error('[Create Category Error]:', error);
     if (error.code === 11000) {
-      return apiError(res, 'An expense head with this name already exists.', 409);
+      return apiError(res, 'An expense head with this name already exists for this scope.', 409);
     }
     return apiError(res, 'Failed to create expense head.', 500);
   }

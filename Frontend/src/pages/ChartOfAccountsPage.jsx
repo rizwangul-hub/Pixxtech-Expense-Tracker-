@@ -43,6 +43,8 @@ const initialAccount = {
 const initialExpenseCategory = {
   name: '',
   type: 'EXPENSE',
+  propertyId: '',
+  unitId: '',
   isRentalHead: false,
 };
 
@@ -159,13 +161,15 @@ export function ChartOfAccountsPage({ currentUser }) {
       await accountsAPI.createCategory({
         name: expenseCategory.name.trim(),
         type: 'EXPENSE',
+        propertyId: expenseCategory.propertyId || null,
+        unitId: expenseCategory.unitId || null,
         isRentalHead: expenseCategory.isRentalHead,
       });
       setExpenseCategory(initialExpenseCategory);
-      notify('success', `Expense category "${expenseCategory.name.trim()}" created successfully.`);
+      notify('success', `Expense head "${expenseCategory.name.trim()}" created successfully.`);
       await loadChartData();
     } catch (error) {
-      notify('error', error.response?.data?.message || error.message || 'Failed to create expense category.');
+      notify('error', error.response?.data?.message || error.message || 'Failed to create expense head.');
     } finally {
       setSaving('');
     }
@@ -440,17 +444,77 @@ export function ChartOfAccountsPage({ currentUser }) {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Form Column */}
               <form onSubmit={handleExpenseSubmit} className="lg:col-span-5 space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider">Create New Expense Category</h3>
+                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider">Create New Expense Category / Head</h3>
+
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Expense Category Head Name *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Expense Name (Voucher Expense Title) *</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Electrical Repairs, Office Supplies, Generator Fuel"
+                    placeholder="e.g. Electrical Repairs, Office Supplies, Generator Maintenance"
                     value={expenseCategory.name}
                     onChange={(e) => setExpenseCategory({ ...expenseCategory, name: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-rose-600"
                   />
+                </div>
+
+                {/* Head / Property & Unit Pickers */}
+                <div className="space-y-3 p-3 bg-white border border-slate-200 rounded-lg">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Select Property Head (Optional)</label>
+                    <select
+                      value={expenseCategory.propertyId}
+                      onChange={(e) => {
+                        setExpenseCategory({ ...expenseCategory, propertyId: e.target.value, unitId: '' });
+                      }}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:border-rose-600"
+                    >
+                      <option value="">-- None (General Expense Head) --</option>
+                      {safeProperties.map((p) => (
+                        <option key={p._id} value={p._id}>
+                          {p.plazaName || p.propertyName} ({p.city || 'Lahore'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {expenseCategory.propertyId && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Select Unit Head (Optional)</label>
+                      <select
+                        value={expenseCategory.unitId}
+                        onChange={(e) => setExpenseCategory({ ...expenseCategory, unitId: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:border-rose-600"
+                      >
+                        <option value="">-- None (Property Own Expense Head) --</option>
+                        {(
+                          safeProperties.find((p) => p._id === expenseCategory.propertyId)?.units || []
+                        ).map((u) => (
+                          <option key={u._id} value={u._id}>
+                            {u.unitName || u.unitNumber || u.name || 'Unit'} {u.tenantName ? `(${u.tenantName})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Derived Scope Status Badge */}
+                  <div className="pt-1 flex items-center gap-1.5 text-[11px] font-bold">
+                    <span className="text-slate-500">Head Scope:</span>
+                    {!expenseCategory.propertyId ? (
+                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300">
+                        🌐 General Expense
+                      </span>
+                    ) : !expenseCategory.unitId ? (
+                      <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-300">
+                        🏢 Property Own Expense ({safeProperties.find((p) => p._id === expenseCategory.propertyId)?.plazaName})
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-300">
+                        🚪 Unit Expense ({safeProperties.find((p) => p._id === expenseCategory.propertyId)?.plazaName})
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">
@@ -483,17 +547,41 @@ export function ChartOfAccountsPage({ currentUser }) {
                   {filteredCategories.length === 0 ? (
                     <div className="p-4 text-center text-xs text-slate-500 font-semibold">No expense heads matching filter.</div>
                   ) : (
-                    filteredCategories.map((c, i) => (
-                      <div key={c._id || i} className="p-3 flex items-center justify-between hover:bg-slate-50">
-                        <div className="flex items-center gap-2.5">
-                          <Tag size={14} className="text-rose-600" />
-                          <span className="text-xs font-bold text-slate-900">{c.name}</span>
+                    filteredCategories.map((c, i) => {
+                      const propName = c.propertyId?.plazaName || c.propertyId?.propertyName || '';
+                      const scopeLabel =
+                        c.expenseClassification === 'UNIT_EXPENSE'
+                          ? `Unit Head`
+                          : c.expenseClassification === 'PROPERTY_OWN_EXPENSE'
+                          ? `Property Head`
+                          : 'General Head';
+
+                      const scopeStyle =
+                        c.expenseClassification === 'UNIT_EXPENSE'
+                          ? 'bg-blue-50 text-blue-800 border-blue-200'
+                          : c.expenseClassification === 'PROPERTY_OWN_EXPENSE'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-slate-100 text-slate-700 border-slate-200';
+
+                      return (
+                        <div key={c._id || i} className="p-3 flex items-center justify-between hover:bg-slate-50">
+                          <div className="flex items-center gap-2.5">
+                            <Tag size={14} className="text-rose-600" />
+                            <div>
+                              <div className="text-xs font-bold text-slate-900">{c.name}</div>
+                              {propName && (
+                                <div className="text-[10px] text-slate-500 font-medium">
+                                  Property: {propName}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${scopeStyle}`}>
+                            {scopeLabel}
+                          </span>
                         </div>
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                          {c.type || 'EXPENSE'}
-                        </span>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

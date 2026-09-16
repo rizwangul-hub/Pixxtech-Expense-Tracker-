@@ -26,6 +26,13 @@ export const recordVoucher = async (req, res) => {
       rentMonth,
     } = req.body;
 
+    // 0. Role check: Executive Managers (Fahad) have supervisory oversight only
+    if (req.user.role === 'ADMIN' || req.user.role === 'ADMIN_PUBLISHER') {
+      return res.status(403).json({
+        success: false,
+        message: 'Executive Managers (Fahad) have supervisory oversight and cannot record operational expense vouchers.',
+      });
+    }
 
     // Auto-resolve drAccountId if omitted for simplified expense entry
     if (!drAccountId && categoryId && crAccountId) {

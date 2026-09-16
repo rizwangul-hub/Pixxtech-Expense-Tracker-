@@ -47,18 +47,18 @@ export const VoucherEntryForm = ({
   const [amount, setAmount] = useState('');
   const [detail, setDetail] = useState('');
   const [propertyId, setPropertyId] = useState('');
+  const [expenseScope, setExpenseScope] = useState('GENERAL');
+  const [propertyExpenseType, setPropertyExpenseType] = useState('OWN');
   const [unitId, setUnitId] = useState('');
   const [evidenceFiles, setEvidenceFiles] = useState([]);
   const [rentMonth, setRentMonth] = useState('');
 
-  const derivedClassification = !propertyId
-    ? 'GENERAL_EXPENSE'
-    : !unitId
-    ? 'PROPERTY_OWN_EXPENSE'
-    : 'UNIT_EXPENSE';
-
-  const expenseScope = !propertyId ? 'GENERAL' : 'PROPERTY';
-  const propertyExpenseType = !propertyId ? null : !unitId ? 'OWN' : 'UNIT';
+  const derivedClassification =
+    expenseScope === 'GENERAL'
+      ? 'GENERAL_EXPENSE'
+      : propertyExpenseType === 'OWN'
+      ? 'PROPERTY_OWN_EXPENSE'
+      : 'UNIT_EXPENSE';
 
   const [loading, setLoading] = useState(false);
   const [fetchingVn, setFetchingVn] = useState(false);
@@ -104,12 +104,16 @@ export const VoucherEntryForm = ({
 
     try {
       setSavingCategory(true);
-      const response = await accountsAPI.createCategory({ name });
+      const response = await accountsAPI.createCategory({
+        name,
+        propertyId: propertyId || null,
+        unitId: unitId || null,
+      });
       const category = response.data?.category || response.category;
       setCategoryId(category._id);
       setCustomCategoryName('');
       setError(null);
-      setSuccess(`Expense head '${category.name}' is ready and selected.`);
+      setSuccess(`Expense head '${category.name}' created and selected.`);
       await onMasterDataChanged?.();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create expense head.');
@@ -186,6 +190,8 @@ export const VoucherEntryForm = ({
       setDetail('');
       setPropertyId('');
       setUnitId('');
+      setExpenseScope('GENERAL');
+      setPropertyExpenseType('OWN');
       setEvidenceFiles([]);
       setRentMonth('');
       setError(null);
@@ -300,74 +306,101 @@ export const VoucherEntryForm = ({
           </div>
         </div>
 
-        {/* Row 2: Property & Unit Selection with Dynamic Classification */}
+        {/* Row 2: 2-Level Expense Classification Workflow */}
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Property Selector */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Level 1: Expense Type */}
             <div>
-              <label className="block text-xs font-bold uppercase text-slate-700 mb-1 flex items-center gap-1">
-                <Building className="w-4 h-4 text-blue-600" /> Property
+              <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                1. Expense Type <span className="text-rose-500">*</span>
               </label>
               <select
-                value={propertyId}
+                value={expenseScope}
                 onChange={(e) => {
-                  setPropertyId(e.target.value);
-                  setUnitId('');
+                  const val = e.target.value;
+                  setExpenseScope(val);
+                  if (val === 'GENERAL') {
+                    setPropertyId('');
+                    setUnitId('');
+                  }
                 }}
                 className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
               >
-                <option value="">No Property / General Expense</option>
-                {properties.map((p) => (
-                  <option key={p._id} value={p._id}>
-                    {p.plazaName} ({p.location || 'Commercial Plaza'})
-                  </option>
-                ))}
+                <option value="GENERAL">General Expense (Company Level)</option>
+                <option value="PROPERTY">Property Expense (Linked to Property)</option>
               </select>
             </div>
 
-            {/* Unit Selector (Visible only when Property is selected) */}
-            {propertyId && (
+            {/* Level 2: Property Expense Type */}
+            {expenseScope === 'PROPERTY' && (
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
-                  Unit (Belonging to {selectedProperty?.plazaName || 'Property'})
+                  2. Property Expense Type <span className="text-rose-500">*</span>
                 </label>
                 <select
-                  value={unitId}
-                  onChange={(e) => setUnitId(e.target.value)}
+                  value={propertyExpenseType}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPropertyExpenseType(val);
+                    if (val === 'OWN') setUnitId('');
+                  }}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
                 >
-                  <option value="">No Unit / Property Own Expense</option>
-                  {units.map((unit) => (
-                    <option key={unit._id} value={unit._id}>
-                      {unit.unitName || unit.unitNumber || unit.name || 'Unit'} {unit.tenantName ? `(${unit.tenantName})` : ''}
-                    </option>
-                  ))}
+                  <option value="OWN">Property Own Expense (Building Level)</option>
+                  <option value="UNIT">Unit Expense (Specific Leasable Unit)</option>
                 </select>
               </div>
             )}
           </div>
 
-          {/* Dynamic Auto-Classification Badge */}
-          <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs font-bold">
-            <span className="text-slate-500">Auto Classification:</span>
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-extrabold border shadow-2xs ${
-                derivedClassification === 'GENERAL_EXPENSE'
-                  ? 'bg-slate-100 text-slate-800 border-slate-300'
-                  : derivedClassification === 'PROPERTY_OWN_EXPENSE'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                  : 'bg-indigo-50 text-indigo-800 border-indigo-300'
-              }`}
-            >
-              Expense Classification: {
-                derivedClassification === 'GENERAL_EXPENSE'
-                  ? 'General Expense'
-                  : derivedClassification === 'PROPERTY_OWN_EXPENSE'
-                  ? 'Property Own Expense'
-                  : 'Unit Expense'
-              }
-            </span>
-          </div>
+          {/* Level 2 Fields: Property & Unit Pickers */}
+          {expenseScope === 'PROPERTY' && (
+            <div className={`grid grid-cols-1 ${propertyExpenseType === 'UNIT' ? 'md:grid-cols-2' : ''} gap-4 pt-3 border-t border-slate-200`}>
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1 flex items-center gap-1">
+                  <Building className="w-4 h-4 text-blue-600" /> Select Property <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={propertyId}
+                  onChange={(e) => {
+                    setPropertyId(e.target.value);
+                    setUnitId('');
+                  }}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
+                  required
+                >
+                  <option value="">-- Select Property --</option>
+                  {properties.map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.plazaName} ({p.location || 'Commercial Plaza'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {propertyExpenseType === 'UNIT' && (
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                    Select Unit <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={unitId}
+                    onChange={(e) => setUnitId(e.target.value)}
+                    disabled={!propertyId}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
+                    required
+                  >
+                    <option value="">-- Select Unit --</option>
+                    {units.map((unit) => (
+                      <option key={unit._id} value={unit._id}>
+                        {unit.unitName || unit.unitNumber || unit.name || 'Unit'} {unit.tenantName ? `(${unit.tenantName})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <EvidenceImageUpload files={evidenceFiles} onChange={setEvidenceFiles} disabled={loading} />
@@ -386,9 +419,47 @@ export const VoucherEntryForm = ({
               required
             >
               <option value="">-- Select Expense Head --</option>
-              <optgroup label="Expense Heads">
+              <optgroup
+                label={
+                  derivedClassification === 'GENERAL_EXPENSE'
+                    ? 'General Expense Heads'
+                    : derivedClassification === 'PROPERTY_OWN_EXPENSE'
+                    ? 'Property Own Expense Heads'
+                    : 'Specific Unit Expense Heads'
+                }
+              >
                 {categories
-                  .filter((c) => c.type === 'EXPENSE')
+                  .filter((c) => {
+                    if (c.type !== 'EXPENSE') return false;
+
+                    if (derivedClassification === 'GENERAL_EXPENSE') {
+                      return !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
+                    }
+
+                    if (derivedClassification === 'PROPERTY_OWN_EXPENSE') {
+                      if (!propertyId) {
+                        return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' || !c.expenseClassification;
+                      }
+                      const pId = c.propertyId?._id || c.propertyId;
+                      return (
+                        c.expenseClassification === 'PROPERTY_OWN_EXPENSE' &&
+                        (!pId || String(pId) === String(propertyId))
+                      );
+                    }
+
+                    if (derivedClassification === 'UNIT_EXPENSE') {
+                      if (!unitId) {
+                        return c.expenseClassification === 'UNIT_EXPENSE' || !c.expenseClassification;
+                      }
+                      const uId = c.unitId?._id || c.unitId;
+                      return (
+                        c.expenseClassification === 'UNIT_EXPENSE' &&
+                        (!uId || String(uId) === String(unitId))
+                      );
+                    }
+
+                    return true;
+                  })
                   .map((c) => (
                     <option key={c._id} value={c._id}>
                       {c.name} {c.isRentalHead ? '(Rental)' : ''}
