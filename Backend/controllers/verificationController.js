@@ -341,10 +341,8 @@ export const updatePendingEntry = async (req, res) => {
     if (entry.entryType === 'EXPENSE') {
       const classification = await validateExpenseClassification({
         expenseClassification: entry.expenseClassification,
-        attachments: entry.attachments || [],
         propertyId: entry.propertyId,
         unitId: entry.unitId,
-        attachments: entry.attachments || [],
       });
       entry.expenseClassification = classification.expenseClassification;
       entry.propertyId = classification.propertyId;
@@ -422,6 +420,7 @@ export const verifyEntry = async (req, res) => {
         propertyId: entry.propertyId,
         unitId: entry.unitId,
         expenseClassification: entry.expenseClassification,
+        attachments: entry.attachments || [],
         rentMonth: entry.rentMonth,
         status: 'VERIFIED',
         checkedBy: req.user.name,
@@ -457,6 +456,7 @@ export const verifyEntry = async (req, res) => {
         unitId: entry.unitId,
         tenantId: entry.tenantId,
         agreementId: entry.agreementId,
+        attachments: entry.attachments || [],
         rentMonth: cleanMonth,
         transactionType: 'INCOME',
         reference: entry.referenceNumber || '',
@@ -503,6 +503,7 @@ export const verifyEntry = async (req, res) => {
         description: narration,
         status: 'VERIFIED',
         transactionId: postedTransaction._id,
+        attachments: entry.attachments || [],
         checkedBy: req.user.name,
         checkedAt: new Date(),
         createdBy: entry.submittedBy,

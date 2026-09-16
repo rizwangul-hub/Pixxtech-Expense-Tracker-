@@ -392,6 +392,21 @@ export const getVoucherPrintDetail = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Sync legacy transactions into single/multi-line Vouchers
+ * @route   POST /api/vouchers/sync-legacy
+ * @access  Private (ADMIN_PUBLISHER, ADMIN)
+ */
+export const syncLegacyVouchers = async (req, res) => {
+  try {
+    const result = await syncLegacyTransactionsToVouchers();
+    return apiSuccess(res, result, 'Legacy transactions synchronized to vouchers.');
+  } catch (error) {
+    console.error('[Sync Legacy Vouchers Error]:', error);
+    return apiError(res, error.message || 'Failed to sync legacy vouchers.', 500);
+  }
+};
+
 export default {
   getAllTransactions,
   getVoucherById,

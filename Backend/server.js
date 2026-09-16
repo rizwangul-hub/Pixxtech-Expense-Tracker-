@@ -30,38 +30,68 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Connect to Database
-connectDB();
-
 // Security: Hide Express header
 app.disable('x-powered-by');
 
-// Global Middleware & CORS Configuration
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
-  : ['http://localhost:5173', 'http://localhost:3000'];
+// 1. Explicit CORS Preflight & Access-Control-Allow-Origin Middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const configuredOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+    : [];
 
+  const isAllowed =
+    !origin ||
+    configuredOrigins.includes(origin) ||
+    origin.endsWith('.vercel.app') ||
+    origin.startsWith('http://localhost') ||
+    process.env.NODE_ENV !== 'production';
+
+  if (origin && isAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (!origin) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
+
+// Standard cors package fallback
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
-      if (!origin) return callback(null, true);
-      // Check if origin is explicitly allowed or matches a Vercel preview/prod deployment
-      const isAllowed =
-        allowedOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app') ||
-        process.env.NODE_ENV !== 'production';
-
-      if (isAllowed) {
-        return callback(null, true);
-      }
-      return callback(new Error(`Origin ${origin} not permitted by CORS policy.`));
-    },
+    origin: (origin, callback) => callback(null, true),
     credentials: true,
   })
 );
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// 2. Serverless DB Connection Middleware
+app.use(async (req, res, next) => {
+  // Skip DB connection check for health check or favicon
+  if (req.path === '/' || req.path === '/api/health' || req.path === '/favicon.ico') {
+    return next();
+  }
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error('[Serverless DB Middleware Error]:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Database connection failed. Please ensure MONGO_URI is configured correctly in Vercel settings and network access allows connections.',
+      error: error.message,
+    });
+  }
+});
 
 // Health Check Endpoint
 app.get('/', (req, res) => {
@@ -123,12 +153,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`\n======================================================`);
-  console.log(`  PIXX TECHNOLOGIES EXPENSE TRACKER API READY`);
-  console.log(`  Server running on http://localhost:${PORT}`);
-  console.log(`======================================================\n`);
-});
+// Start Server locally if not running as a Vercel Serverless Function
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`\n======================================================`);
+    console.log(`  PIXX TECHNOLOGIES EXPENSE TRACKER API READY`);
+    console.log(`  Server running on http://localhost:${PORT}`);
+    console.log(`======================================================\n`);
+  });
+}
 
 export default app;
