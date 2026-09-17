@@ -95,9 +95,13 @@ export const VoucherEntryForm = ({
   }, []);
 
   useEffect(() => {
-    if (!propertyId && !unitId) return;
+    const targetClassification = unitId
+      ? 'UNIT_EXPENSE'
+      : propertyId
+      ? 'PROPERTY_OWN_EXPENSE'
+      : 'GENERAL_EXPENSE';
 
-    const matchingCategories = categories.filter((c) => {
+    const matchingCategory = categories.find((c) => {
       if (c.type !== 'EXPENSE') return false;
       if (unitId) {
         const uId = c.unitId?._id || c.unitId;
@@ -107,13 +111,30 @@ export const VoucherEntryForm = ({
         const pId = c.propertyId?._id || c.propertyId;
         return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && String(pId) === String(propertyId);
       }
-      return false;
+      return !c.propertyId && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
     });
 
-    if (matchingCategories.length > 0) {
-      if (!categoryId || !matchingCategories.some((c) => c._id === categoryId)) {
-        setCategoryId(matchingCategories[0]._id);
+    if (matchingCategory) {
+      if (categoryId !== matchingCategory._id) {
+        setCategoryId(matchingCategory._id);
       }
+    } else if (categories.length > 0) {
+      accountsAPI
+        .createCategory({
+          propertyId: propertyId || null,
+          unitId: unitId || null,
+          expenseClassification: targetClassification,
+        })
+        .then((res) => {
+          const cat = res.data?.category || res.category || res.data;
+          if (cat && cat._id) {
+            setCategoryId(cat._id);
+            onMasterDataChanged?.();
+          }
+        })
+        .catch((err) => {
+          console.warn('Auto-resolving canonical head failed:', err);
+        });
     }
   }, [propertyId, unitId, categories]);
 

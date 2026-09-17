@@ -735,84 +735,40 @@ export const getCategories = async (req, res) => {
 };
 
 /**
- * Create or retrieve an expense account head for voucher entry with optional property/unit scoping.
- * Preserves custom expense titles (e.g., Property Tax, Property Entertainment) while scoping to Property/Unit.
+ * Create or retrieve the single canonical expense account head for voucher entry with optional property/unit scoping.
+ * - General: Name 'General' (propertyId = null, unitId = null)
+ * - Property: Name = Property Name (propertyId = propId, unitId = null)
+ * - Unit: Name = Property Name - Unit Name (propertyId = propId, unitId = unitId)
  */
 export const createCategory = async (req, res) => {
   try {
-    const inputName = typeof req.body.name === 'string' ? req.body.name.trim() : '';
     const propertyId = req.body.propertyId && mongoose.Types.ObjectId.isValid(req.body.propertyId) ? req.body.propertyId : null;
     const unitId = req.body.unitId && mongoose.Types.ObjectId.isValid(req.body.unitId) ? req.body.unitId : null;
-    const isRentalHead = Boolean(req.body.isRentalHead);
+    let expenseClassification = req.body.expenseClassification;
 
-    let expenseClassification = 'GENERAL_EXPENSE';
-    let headName = 'General Expense';
-    let propertyDoc = null;
-
-    if (unitId || propertyId) {
-      propertyDoc = propertyId ? await Property.findById(propertyId).lean() : null;
-      if (!propertyDoc) {
-        return apiError(res, 'Selected property was not found.', 404);
-      }
-      const plazaName = (propertyDoc.plazaName || propertyDoc.propertyName || '').trim();
-
-      if (unitId) {
-        expenseClassification = 'UNIT_EXPENSE';
-        const unitObj = propertyDoc?.units?.find((u) => u._id.toString() === unitId.toString());
-        if (!unitObj) {
-          return apiError(res, 'Selected unit was not found in the selected property.', 400);
-        }
-        const unitLabel = (unitObj.unitName || unitObj.unitNumber || unitObj.name || 'Unit').trim();
-        headName = plazaName ? `${plazaName} - ${unitLabel}` : unitLabel;
-      } else if (propertyId) {
-        expenseClassification = 'PROPERTY_OWN_EXPENSE';
-        headName = plazaName || 'Property Expense';
-      }
+    if (unitId) {
+      expenseClassification = 'UNIT_EXPENSE';
+    } else if (propertyId) {
+      expenseClassification = 'PROPERTY_OWN_EXPENSE';
+    } else {
+      expenseClassification = 'GENERAL_EXPENSE';
     }
 
-    // A scope has exactly one head. The caller's optional name is deliberately
-    // ignored so repeated property/unit expenses reuse the same category.
-    const scopeFilter = {
+    const category = await getOrCreateCanonicalHead({
       expenseClassification,
       propertyId,
       unitId,
-    };
-
-    let duplicate = await Category.findOne(scopeFilter).sort({ createdAt: 1 }).lean();
-    if (duplicate) {
-      if (propertyId) {
-        duplicate = await Category.findById(duplicate._id).populate('propertyId', 'plazaName propertyName').lean();
-      }
-      return apiSuccess(res, { category: duplicate }, `Expense head '${duplicate.name}' selected.`, 200);
-    }
-
-    let category = await Category.create({
-      name: headName,
-      type: 'EXPENSE',
-      expenseClassification,
-      propertyId,
-      unitId,
-      isRentalHead,
     });
 
+    let populatedCat = category;
     if (propertyId) {
-      category = await Category.findById(category._id).populate('propertyId', 'plazaName propertyName').lean();
+      populatedCat = await Category.findById(category._id).populate('propertyId', 'plazaName propertyName').lean();
     }
 
-    return apiSuccess(res, { category }, `Expense head '${headName}' created successfully.`, 201);
+    return apiSuccess(res, { category: populatedCat || category }, `Expense head '${category.name}' ready.`, 200);
   } catch (error) {
     console.error('[Create Category Error]:', error);
-    if (error.code === 11000) {
-      const existing = await Category.findOne({
-        expenseClassification: req.body.unitId ? 'UNIT_EXPENSE' : req.body.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE',
-        propertyId: req.body.propertyId || null,
-        unitId: req.body.unitId || null,
-      }).lean();
-      if (existing) {
-        return apiSuccess(res, { category: existing }, `Expense head '${existing.name}' selected.`, 200);
-      }
-    }
-    return apiError(res, 'Failed to create expense head.', 500);
+    return apiError(res, error.message || 'Failed to resolve expense head.', 500);
   }
 };
 

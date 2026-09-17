@@ -13,8 +13,14 @@ import {
   Search,
   Wallet,
   Trash2,
+  X,
+  Printer,
+  Download,
+  FileText,
+  ChevronRight,
+  Eye,
 } from 'lucide-react';
-import { accountsAPI, otherIncomeAPI, propertiesAPI } from '../services/api.js';
+import { accountsAPI, otherIncomeAPI, propertiesAPI, vouchersAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
 
 const initialProperty = {
@@ -76,6 +82,27 @@ export function ChartOfAccountsPage({ currentUser }) {
   const [saving, setSaving] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Head drill-down details modal state
+  const [selectedHeadForDetails, setSelectedHeadForDetails] = useState(null);
+  const [headTransactions, setHeadTransactions] = useState([]);
+  const [loadingHeadDetails, setLoadingHeadDetails] = useState(false);
+
+  const handleViewHeadDetails = async (category) => {
+    setSelectedHeadForDetails(category);
+    setLoadingHeadDetails(true);
+    try {
+      const res = await vouchersAPI.getAllTransactions({ categoryId: category._id, limit: 200 });
+      const txs = res.transactions || res.data?.transactions || [];
+      setHeadTransactions(txs);
+    } catch (err) {
+      console.error('Failed to load transactions for head:', err);
+      notify('error', 'Failed to load itemized transactions for this head.');
+      setHeadTransactions([]);
+    } finally {
+      setLoadingHeadDetails(false);
+    }
+  };
 
   const notify = (type, text) => {
     setMessage({ type, text });
@@ -550,57 +577,114 @@ export function ChartOfAccountsPage({ currentUser }) {
 
               {/* Directory List Column */}
               <div className="lg:col-span-7">
-                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider mb-3">Active Expense Heads Directory</h3>
-                <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-200 bg-white">
+                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider mb-3">Active Expense Heads Directory (Click head to view expenses)</h3>
+                <div className="max-h-[420px] overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-200 bg-white p-3 space-y-4">
                   {filteredCategories.length === 0 ? (
                     <div className="p-4 text-center text-xs text-slate-500 font-semibold">No expense heads matching filter.</div>
                   ) : (
-                    filteredCategories.map((c, i) => {
-                      const propName = c.propertyId?.plazaName || c.propertyId?.propertyName || '';
-                      const scopeLabel =
-                        c.expenseClassification === 'UNIT_EXPENSE'
-                          ? `Unit Head`
-                          : c.expenseClassification === 'PROPERTY_OWN_EXPENSE'
-                          ? `Property Head`
-                          : 'General Head';
+                    (() => {
+                      const generalGroup = filteredCategories.filter(
+                        (c) => !c.propertyId && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE')
+                      );
+                      const propertyGroup = filteredCategories.filter(
+                        (c) => c.expenseClassification === 'PROPERTY_OWN_EXPENSE'
+                      );
+                      const unitGroup = filteredCategories.filter(
+                        (c) => c.expenseClassification === 'UNIT_EXPENSE'
+                      );
 
-                      const scopeStyle =
-                        c.expenseClassification === 'UNIT_EXPENSE'
-                          ? 'bg-blue-50 text-blue-800 border-blue-200'
-                          : c.expenseClassification === 'PROPERTY_OWN_EXPENSE'
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                          : 'bg-slate-100 text-slate-700 border-slate-200';
-
-                      return (
-                        <div key={c._id || i} className="p-3 flex items-center justify-between hover:bg-slate-50">
+                      const renderHeadItem = (c) => (
+                        <div
+                          key={c._id}
+                          className="p-2.5 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition shadow-2xs"
+                          onClick={() => handleViewHeadDetails(c)}
+                        >
                           <div className="flex items-center gap-2.5">
-                            <Tag size={14} className="text-rose-600" />
+                            <Tag size={14} className="text-rose-600 shrink-0" />
                             <div>
-                              <div className="text-xs font-bold text-slate-900">{c.name}</div>
-                              {propName && (
+                              <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                <span>{c.name}</span>
+                                <Eye size={12} className="text-blue-600 opacity-60" />
+                              </div>
+                              {c.propertyId && (
                                 <div className="text-[10px] text-slate-500 font-medium">
-                                  Property: {propName}
+                                  Property: {c.propertyId.plazaName || c.propertyId.propertyName}
                                 </div>
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${scopeStyle}`}>
-                              {scopeLabel}
-                            </span>
+                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => handleViewHeadDetails(c)}
+                              className="px-2 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100"
+                            >
+                              View Expenses
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleDeleteCategory(c._id, c.name)}
                               disabled={deletingCatId === c._id}
                               className="p-1.5 text-rose-600 hover:text-rose-900 hover:bg-rose-50 rounded-md transition border border-rose-200 disabled:opacity-50"
-                              title={`Delete single expense head '${c.name}'`}
+                              title={`Delete expense head '${c.name}'`}
                             >
                               <Trash2 size={13} />
                             </button>
                           </div>
                         </div>
                       );
-                    })
+
+                      return (
+                        <div className="space-y-4">
+                          {/* Section 1: General Expense Head */}
+                          <div>
+                            <div className="text-[11px] font-extrabold uppercase text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md mb-2 flex items-center gap-1.5">
+                              <span>🌐 General Expense</span>
+                              <span className="text-[10px] font-normal text-slate-600">({generalGroup.length})</span>
+                            </div>
+                            <div className="space-y-1.5 pl-1">
+                              {generalGroup.length > 0 ? (
+                                generalGroup.map(renderHeadItem)
+                              ) : (
+                                <div className="text-xs text-slate-400 italic pl-2 py-1">No General Head found</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Section 2: Property Expense Heads */}
+                          <div>
+                            <div className="text-[11px] font-extrabold uppercase text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 mb-2 flex items-center gap-1.5">
+                              <Building2 size={14} />
+                              <span>🏢 Properties</span>
+                              <span className="text-[10px] font-normal text-emerald-700">({propertyGroup.length})</span>
+                            </div>
+                            <div className="space-y-1.5 pl-1">
+                              {propertyGroup.length > 0 ? (
+                                propertyGroup.map(renderHeadItem)
+                              ) : (
+                                <div className="text-xs text-slate-400 italic pl-2 py-1">No Property Heads found</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Section 3: Unit Expense Heads */}
+                          <div>
+                            <div className="text-[11px] font-extrabold uppercase text-blue-800 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200 mb-2 flex items-center gap-1.5">
+                              <Layers size={14} />
+                              <span>🚪 Units</span>
+                              <span className="text-[10px] font-normal text-blue-700">({unitGroup.length})</span>
+                            </div>
+                            <div className="space-y-1.5 pl-1">
+                              {unitGroup.length > 0 ? (
+                                unitGroup.map(renderHeadItem)
+                              ) : (
+                                <div className="text-xs text-slate-400 italic pl-2 py-1">No Unit Heads found</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()
                   )}
                 </div>
               </div>
@@ -946,6 +1030,107 @@ export function ChartOfAccountsPage({ currentUser }) {
           </div>
         )}
       </div>
+
+      {/* Head Details Modal */}
+      {selectedHeadForDetails && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-start justify-between border-b border-slate-200 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Tag size={20} className="text-rose-600" />
+                  <h2 className="text-lg font-black text-slate-900">
+                    Expense Head: {selectedHeadForDetails.name}
+                  </h2>
+                </div>
+                <p className="text-xs font-semibold text-slate-500 mt-1">
+                  Scope:{' '}
+                  {selectedHeadForDetails.expenseClassification === 'UNIT_EXPENSE'
+                    ? 'Unit Expense'
+                    : selectedHeadForDetails.expenseClassification === 'PROPERTY_OWN_EXPENSE'
+                    ? `Property Own Expense (${selectedHeadForDetails.propertyId?.plazaName || 'Property'})`
+                    : 'General Expense'}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedHeadForDetails(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Total Aggregate Summary */}
+            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <div>
+                <span className="text-[11px] font-bold uppercase text-slate-500">Total Recorded Transactions</span>
+                <div className="text-xl font-black text-slate-900 font-mono mt-0.5">
+                  {headTransactions.length}
+                </div>
+              </div>
+              <div>
+                <span className="text-[11px] font-bold uppercase text-slate-500">Total Aggregate Amount</span>
+                <div className="text-xl font-black text-rose-700 font-mono mt-0.5">
+                  {formatPKR(headTransactions.reduce((sum, t) => sum + (t.amount || 0), 0))}
+                </div>
+              </div>
+            </div>
+
+            {/* Itemized Transactions Table */}
+            <div className="flex-1 overflow-y-auto border border-slate-200 rounded-xl bg-white">
+              {loadingHeadDetails ? (
+                <div className="p-8 text-center text-xs font-bold text-slate-500">Loading itemized transactions...</div>
+              ) : headTransactions.length === 0 ? (
+                <div className="p-8 text-center text-xs font-bold text-slate-500">No expense transactions recorded under this head yet.</div>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-extrabold uppercase text-[10px]">
+                    <tr>
+                      <th className="p-3">Date</th>
+                      <th className="p-3">V.N</th>
+                      <th className="p-3">Expense Category / Narration</th>
+                      <th className="p-3">Paid From (Cr)</th>
+                      <th className="p-3 text-right">Amount (PKR)</th>
+                      <th className="p-3 text-center">Voucher</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 font-semibold text-slate-900">
+                    {headTransactions.map((tx) => (
+                      <tr key={tx._id} className="hover:bg-slate-50">
+                        <td className="p-3 whitespace-nowrap">{tx.date ? tx.date.split('T')[0] : ''}</td>
+                        <td className="p-3 font-mono font-bold text-blue-700">{tx.voucherNo}</td>
+                        <td className="p-3 max-w-xs truncate">{tx.detail}</td>
+                        <td className="p-3">{tx.crAccountId?.name || 'Cash/Bank'}</td>
+                        <td className="p-3 text-right font-mono font-bold text-rose-700">
+                          {formatPKR(tx.amount)}
+                        </td>
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => vouchersAPI.downloadSingleVoucherPDF(tx._id, tx.voucherNo)}
+                            className="p-1.5 text-blue-700 hover:bg-blue-50 border border-blue-200 rounded-lg transition inline-flex items-center gap-1 text-[11px] font-bold"
+                            title="Download Voucher PDF"
+                          >
+                            <Printer size={13} /> PDF
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setSelectedHeadForDetails(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-white font-bold text-xs hover:bg-slate-900 transition"
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

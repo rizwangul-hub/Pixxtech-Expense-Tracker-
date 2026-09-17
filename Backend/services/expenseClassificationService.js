@@ -156,9 +156,89 @@ export const getExpenseClassificationLabel = (classification) =>
     [EXPENSE_CLASSIFICATIONS.UNIT]: 'Unit Expense',
   }[classification] || 'General Expense');
 
+/**
+ * Get or create the single canonical expense head for a scope.
+ * - General: Name 'General' (propertyId = null, unitId = null)
+ * - Property: Name = Property Name (propertyId = propId, unitId = null)
+ * - Unit: Name = Property Name - Unit Name (propertyId = propId, unitId = unitId)
+ */
+export const getOrCreateCanonicalHead = async ({
+  expenseClassification,
+  propertyId,
+  unitId,
+  session = null,
+}) => {
+  let classification = expenseClassification;
+  const propId = cleanId(propertyId);
+  const uId = cleanId(unitId);
+
+  if (uId) {
+    classification = EXPENSE_CLASSIFICATIONS.UNIT;
+  } else if (propId) {
+    classification = EXPENSE_CLASSIFICATIONS.PROPERTY_OWN;
+  } else {
+    classification = EXPENSE_CLASSIFICATIONS.GENERAL;
+  }
+
+  const queryFilter = {
+    type: 'EXPENSE',
+    expenseClassification: classification,
+    propertyId: propId,
+    unitId: uId,
+  };
+
+  let query = Category.findOne(queryFilter).sort({ createdAt: 1 });
+  if (session) query = query.session(session);
+  let head = await query;
+
+  let expectedName = 'General';
+
+  if (classification === EXPENSE_CLASSIFICATIONS.PROPERTY_OWN || classification === EXPENSE_CLASSIFICATIONS.UNIT) {
+    let propQuery = Property.findById(propId);
+    if (session) propQuery = propQuery.session(session);
+    const property = await propQuery.lean();
+    if (!property) throw new Error('Property not found for expense head.');
+
+    const plazaName = (property.plazaName || property.propertyName || 'Property').trim();
+
+    if (classification === EXPENSE_CLASSIFICATIONS.UNIT) {
+      const unitObj = (property.units || []).find((u) => u._id.toString() === uId);
+      const unitName = unitObj ? (unitObj.unitName || unitObj.unitNumber || 'Unit').trim() : 'Unit';
+      expectedName = `${plazaName} - ${unitName}`;
+    } else {
+      expectedName = plazaName;
+    }
+  }
+
+  if (head) {
+    if (head.name !== expectedName) {
+      head.name = expectedName;
+      await head.save();
+    }
+    return head;
+  }
+
+  const [newHead] = await Category.create(
+    [
+      {
+        name: expectedName,
+        type: 'EXPENSE',
+        expenseClassification: classification,
+        propertyId: propId,
+        unitId: uId,
+        isRentalHead: false,
+      },
+    ],
+    session ? { session } : {}
+  );
+
+  return newHead;
+};
+
 export default {
   validateExpenseClassification,
   validateExpenseCategory,
+  getOrCreateCanonicalHead,
   deriveExpenseClassification,
   getExpenseScope,
   getPropertyExpenseType,
