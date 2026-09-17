@@ -286,6 +286,9 @@ export const updateAccount = async (req, res) => {
       accountNumber,
       iban,
       branch,
+      openingBalance,
+      currentBalance,
+      openingBalanceDate,
       notes,
     } = req.body;
 
@@ -327,6 +330,32 @@ export const updateAccount = async (req, res) => {
     if (iban !== undefined) account.iban = iban.trim();
     if (branch !== undefined) account.branch = branch.trim();
     if (notes !== undefined) account.notes = notes.trim();
+    if (openingBalanceDate) account.openingBalanceDate = new Date(openingBalanceDate);
+
+    // Update Opening Balance & Current Balance
+    if (openingBalance !== undefined && openingBalance !== null && !isNaN(Number(openingBalance))) {
+      const newOpening = round2(Number(openingBalance));
+      account.openingBalance = newOpening;
+
+      if (currentBalance !== undefined && currentBalance !== null && !isNaN(Number(currentBalance))) {
+        account.currentBalance = round2(Number(currentBalance));
+      } else {
+        const txs = await Transaction.find({
+          $or: [{ drAccountId: account._id }, { crAccountId: account._id }],
+          status: { $ne: 'REVERSED' },
+        }).select('drAccountId crAccountId amount').lean();
+
+        let netMovement = 0;
+        for (const tx of txs) {
+          if (tx.drAccountId?.toString() === account._id.toString()) netMovement += tx.amount;
+          if (tx.crAccountId?.toString() === account._id.toString()) netMovement -= tx.amount;
+        }
+        account.currentBalance = round2(newOpening + netMovement);
+      }
+    } else if (currentBalance !== undefined && currentBalance !== null && !isNaN(Number(currentBalance))) {
+      account.currentBalance = round2(Number(currentBalance));
+    }
+
     account.updatedBy = req.user._id;
 
     await account.save();

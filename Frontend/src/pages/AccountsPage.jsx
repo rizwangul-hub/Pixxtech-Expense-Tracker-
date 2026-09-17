@@ -115,6 +115,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
       accountNumber: acc.accountNumber || '',
       ownerName: acc.ownerName || '',
       openingBalance: String(acc.openingBalance ?? 0),
+      currentBalance: String(acc.currentBalance ?? 0),
       openingBalanceDate: acc.openingBalanceDate
         ? new Date(acc.openingBalanceDate).toISOString().split('T')[0]
         : '2026-07-31',
@@ -141,6 +142,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
         accountNumber: formData.accountNumber.trim(),
         ownerName: formData.ownerName.trim(),
         openingBalance: Number(formData.openingBalance) || 0,
+        currentBalance: Number(formData.currentBalance) || 0,
         openingBalanceDate: formData.openingBalanceDate,
         currency: formData.currency,
         notes: formData.notes.trim(),
@@ -678,7 +680,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
                 />
               </div>
 
-              {/* Opening Balance & Date */}
+              {/* Opening & Current Balance */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-400 mb-1 font-semibold">
@@ -695,13 +697,15 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
                 </div>
                 <div>
                   <label className="block text-slate-400 mb-1 font-semibold">
-                    Opening Balance Date
+                    Closing / Current Balance (PKR)
                   </label>
                   <input
-                    type="date"
-                    value={formData.openingBalanceDate}
-                    onChange={(e) => setFormData({ ...formData, openingBalanceDate: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={formData.currentBalance}
+                    onChange={(e) => setFormData({ ...formData, currentBalance: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono font-bold text-emerald-400"
                   />
                 </div>
               </div>
