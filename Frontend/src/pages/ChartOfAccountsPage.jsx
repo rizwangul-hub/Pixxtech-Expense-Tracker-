@@ -517,19 +517,6 @@ export function ChartOfAccountsPage({ currentUser }) {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="isRentalHead"
-                    checked={expenseCategory.isRentalHead}
-                    onChange={(e) => setExpenseCategory({ ...expenseCategory, isRentalHead: e.target.checked })}
-                    className="w-4 h-4 text-rose-600 rounded border-slate-300"
-                  />
-                  <label htmlFor="isRentalHead" className="text-xs font-semibold text-slate-700">
-                    Flag as Property Maintenance Head
-                  </label>
-                </div>
-
                 <button
                   type="submit"
                   disabled={saving === 'expense'}
