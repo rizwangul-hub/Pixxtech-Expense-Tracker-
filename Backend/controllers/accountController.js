@@ -786,6 +786,58 @@ export const createCategory = async (req, res) => {
 
     return apiSuccess(res, { category: populatedCat || category }, `Expense head '${category.name}' ready.`, 200);
   } catch (error) {
+    if (error.code === 11000 || (error.message && error.message.includes('E11000'))) {
+      try {
+        await Category.collection.dropIndex('name_1');
+      } catch (dropErr) {
+        // ignore drop error if already dropped
+      }
+
+      try {
+        const rawName = (req.body.name || '').trim();
+        const propertyId = req.body.propertyId && mongoose.Types.ObjectId.isValid(req.body.propertyId) ? req.body.propertyId : null;
+        const unitId = req.body.unitId && mongoose.Types.ObjectId.isValid(req.body.unitId) ? req.body.unitId : null;
+        let expenseClassification = req.body.expenseClassification;
+
+        if (unitId) {
+          expenseClassification = 'UNIT_EXPENSE';
+        } else if (propertyId) {
+          expenseClassification = 'PROPERTY_OWN_EXPENSE';
+        } else {
+          expenseClassification = 'GENERAL_EXPENSE';
+        }
+
+        let existing = await Category.findOne({
+          type: 'EXPENSE',
+          name: { $regex: `^${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+          expenseClassification,
+          propertyId,
+          unitId,
+        });
+
+        if (!existing) {
+          existing = await Category.create({
+            name: rawName,
+            type: 'EXPENSE',
+            expenseClassification,
+            propertyId,
+            unitId,
+            isRentalHead: !!req.body.isRentalHead,
+          });
+        }
+
+        let populatedCat = existing;
+        if (propertyId) {
+          populatedCat = await Category.findById(existing._id).populate('propertyId', 'plazaName propertyName').lean();
+        }
+
+        return apiSuccess(res, { category: populatedCat || existing }, `Expense head '${existing.name}' ready.`, 200);
+      } catch (retryErr) {
+        console.error('[Create Category Retry Error]:', retryErr);
+        return apiError(res, retryErr.message || 'Failed to resolve expense head.', 500);
+      }
+    }
+
     console.error('[Create Category Error]:', error);
     return apiError(res, error.message || 'Failed to resolve expense head.', 500);
   }

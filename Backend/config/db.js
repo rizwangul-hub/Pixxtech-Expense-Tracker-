@@ -44,6 +44,26 @@ export const connectDB = async () => {
 
   try {
     cached.conn = await cached.promise;
+    // Auto-clean legacy name_1 unique index on categories collection if present
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      const collection = mongoose.connection.collection('categories');
+      if (collection) {
+        collection
+          .indexes()
+          .then((indexes) => {
+            const nameIndex = indexes.find((idx) => idx.name === 'name_1');
+            if (nameIndex) {
+              collection
+                .dropIndex('name_1')
+                .then(() => {
+                  console.log('[MongoDB Index Cleanup]: Legacy name_1 unique index dropped from categories.');
+                })
+                .catch(() => {});
+            }
+          })
+          .catch(() => {});
+      }
+    }
   } catch (e) {
     cached.promise = null;
     throw e;

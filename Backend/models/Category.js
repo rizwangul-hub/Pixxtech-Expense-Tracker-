@@ -10,7 +10,6 @@ const categorySchema = new mongoose.Schema(
       type: String,
       required: [true, 'Category head name is required'],
       trim: true,
-      index: true,
     },
     type: {
       type: String,
