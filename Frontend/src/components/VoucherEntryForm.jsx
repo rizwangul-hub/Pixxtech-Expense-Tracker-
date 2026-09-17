@@ -438,82 +438,69 @@ export const VoucherEntryForm = ({
               required
             >
               <option value="">-- Select Expense Head --</option>
-              {categories
-                .filter((c) => {
-                  if (c.type !== 'EXPENSE') return false;
+              {(() => {
+                const generalHeads = categories.filter(
+                  (c) => c.type === 'EXPENSE' && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE')
+                );
 
-                  if (derivedClassification === 'GENERAL_EXPENSE') {
-                    return !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
-                  }
+                const propertyHeads = propertyId
+                  ? categories.filter(
+                      (c) =>
+                        c.type === 'EXPENSE' &&
+                        c.expenseClassification === 'PROPERTY_OWN_EXPENSE' &&
+                        String(c.propertyId?._id || c.propertyId) === String(propertyId)
+                    )
+                  : [];
 
-                  if (derivedClassification === 'PROPERTY_OWN_EXPENSE') {
-                    const pId = c.propertyId?._id || c.propertyId;
-                    return (
-                      c.expenseClassification === 'PROPERTY_OWN_EXPENSE' &&
-                      pId &&
-                      String(pId) === String(propertyId)
-                    );
-                  }
+                const unitHeads = unitId
+                  ? categories.filter(
+                      (c) =>
+                        c.type === 'EXPENSE' &&
+                        c.expenseClassification === 'UNIT_EXPENSE' &&
+                        String(c.unitId?._id || c.unitId) === String(unitId)
+                    )
+                  : [];
 
-                  if (derivedClassification === 'UNIT_EXPENSE') {
-                    const uId = c.unitId?._id || c.unitId;
-                    return (
-                      c.expenseClassification === 'UNIT_EXPENSE' &&
-                      uId &&
-                      String(uId) === String(unitId)
-                    );
-                  }
+                return (
+                  <>
+                    {unitHeads.length > 0 && (
+                      <optgroup label={`Unit Expense Heads (${selectedProperty?.plazaName || 'Property'})`}>
+                        {unitHeads.map((c) => (
+                          <option key={c._id} value={c._id}>
+                            {c.name} {c.isRentalHead ? '(Rental)' : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
 
-                  return false;
-                }).length > 0 ? (
-                <optgroup
-                  label={
-                    derivedClassification === 'GENERAL_EXPENSE'
-                      ? 'General Expense Heads'
-                      : derivedClassification === 'PROPERTY_OWN_EXPENSE'
-                      ? `Property Own Expense Heads (${selectedProperty?.plazaName || selectedProperty?.propertyName || 'Property'})`
-                      : 'Specific Unit Expense Heads'
-                  }
-                >
-                  {categories
-                    .filter((c) => {
-                      if (c.type !== 'EXPENSE') return false;
+                    {propertyHeads.length > 0 && (
+                      <optgroup label={`Property Expense Heads (${selectedProperty?.plazaName || 'Property'})`}>
+                        {propertyHeads.map((c) => (
+                          <option key={c._id} value={c._id}>
+                            {c.name} {c.isRentalHead ? '(Rental)' : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
 
-                      if (derivedClassification === 'GENERAL_EXPENSE') {
-                        return !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
-                      }
+                    {generalHeads.length > 0 && (
+                      <optgroup label="General & Standard Expense Heads">
+                        {generalHeads.map((c) => (
+                          <option key={c._id} value={c._id}>
+                            {c.name} {c.isRentalHead ? '(Rental)' : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
 
-                      if (derivedClassification === 'PROPERTY_OWN_EXPENSE') {
-                        const pId = c.propertyId?._id || c.propertyId;
-                        return (
-                          c.expenseClassification === 'PROPERTY_OWN_EXPENSE' &&
-                          pId &&
-                          String(pId) === String(propertyId)
-                        );
-                      }
-
-                      if (derivedClassification === 'UNIT_EXPENSE') {
-                        const uId = c.unitId?._id || c.unitId;
-                        return (
-                          c.expenseClassification === 'UNIT_EXPENSE' &&
-                          uId &&
-                          String(uId) === String(unitId)
-                        );
-                      }
-
-                      return false;
-                    })
-                    .map((c) => (
-                      <option key={c._id} value={c._id}>
-                        {c.name} {c.isRentalHead ? '(Rental)' : ''}
+                    {unitHeads.length === 0 && propertyHeads.length === 0 && generalHeads.length === 0 && (
+                      <option value="" disabled>
+                        -- No Expense Heads found --
                       </option>
-                    ))}
-                </optgroup>
-              ) : (
-                <option value="" disabled>
-                  -- No {derivedClassification === 'UNIT_EXPENSE' ? 'Unit' : derivedClassification === 'PROPERTY_OWN_EXPENSE' ? 'Property' : 'General'} Expense Heads found --
-                </option>
-              )}
+                    )}
+                  </>
+                );
+              })()}
             </select>
             {canManageMasterData && (
               <div className="mt-2 flex flex-col sm:flex-row gap-2">

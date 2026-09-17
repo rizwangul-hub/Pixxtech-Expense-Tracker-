@@ -4,6 +4,7 @@ import Transaction from '../models/Transaction.js';
 import Category from '../models/Category.js';
 import Property from '../models/Property.js';
 import PendingEntry from '../models/PendingEntry.js';
+import MonthlyReport from '../models/MonthlyReport.js';
 import { round2 } from '../services/ledgerService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
@@ -734,9 +735,8 @@ export const getCategories = async (req, res) => {
 };
 
 /**
- * Create or retrieve a persistent expense account head for voucher entry with optional property/unit scoping.
- * When property/unit is selected, head name is STRICTLY the Property Name or Property - Unit Name.
- * All subsequent expenses for that property/unit reuse the existing single head.
+ * Create or retrieve an expense account head for voucher entry with optional property/unit scoping.
+ * Preserves custom expense titles (e.g., Property Tax, Property Entertainment) while scoping to Property/Unit.
  */
 export const createCategory = async (req, res) => {
   try {
@@ -757,43 +757,25 @@ export const createCategory = async (req, res) => {
         const unitObj = propertyDoc?.units?.find((u) => u._id.toString() === unitId.toString());
         const unitLabel = unitObj ? (unitObj.unitName || unitObj.unitNumber || unitObj.name || 'Unit').trim() : 'Unit';
 
-        headName = plazaName ? `${plazaName} - ${unitLabel}` : unitLabel;
+        const baseHead = plazaName ? `${plazaName} - ${unitLabel}` : unitLabel;
 
-        // Check if ANY head already exists for this unit. If so, REUSE IT!
-        let existingUnitHead = await Category.findOne({
-          expenseClassification: 'UNIT_EXPENSE',
-          propertyId,
-          unitId,
-        });
-
-        if (existingUnitHead) {
-          if (existingUnitHead.name !== headName) {
-            existingUnitHead.name = headName;
-            await existingUnitHead.save();
-          }
-          if (propertyId) {
-            existingUnitHead = await Category.findById(existingUnitHead._id).populate('propertyId', 'plazaName propertyName').lean();
-          }
-          return apiSuccess(res, { category: existingUnitHead }, `Expense head '${existingUnitHead.name}' selected.`, 200);
+        if (!inputName || inputName.toLowerCase() === baseHead.toLowerCase() || inputName.toLowerCase() === unitLabel.toLowerCase()) {
+          headName = baseHead;
+        } else if (inputName.toLowerCase().startsWith(baseHead.toLowerCase())) {
+          headName = inputName;
+        } else {
+          headName = `${baseHead} - ${inputName}`;
         }
       } else if (propertyId) {
         expenseClassification = 'PROPERTY_OWN_EXPENSE';
-        headName = plazaName || 'Property';
+        const baseHead = plazaName || 'Property';
 
-        // Check if ANY head already exists for this property (without unit). If so, REUSE IT!
-        let existingPropHead = await Category.findOne({
-          expenseClassification: 'PROPERTY_OWN_EXPENSE',
-          propertyId,
-          $or: [{ unitId: null }, { unitId: { $exists: false } }],
-        });
-
-        if (existingPropHead) {
-          if (existingPropHead.name !== headName) {
-            existingPropHead.name = headName;
-            await existingPropHead.save();
-          }
-          existingPropHead = await Category.findById(existingPropHead._id).populate('propertyId', 'plazaName propertyName').lean();
-          return apiSuccess(res, { category: existingPropHead }, `Expense head '${existingPropHead.name}' selected.`, 200);
+        if (!inputName || inputName.toLowerCase() === baseHead.toLowerCase()) {
+          headName = baseHead;
+        } else if (inputName.toLowerCase().startsWith(baseHead.toLowerCase())) {
+          headName = inputName;
+        } else {
+          headName = `${baseHead} - ${inputName}`;
         }
       }
     }
@@ -868,7 +850,8 @@ export const getProperties = async (req, res) => {
 };
 
 /**
- * Delete a single expense head (category) by ID
+ * Delete a single expense head (category) by ID, along with any linked transactions
+ * and pending entries, reversing account balance effects to ensure double-entry precision.
  */
 export const deleteCategory = async (req, res) => {
   try {
@@ -882,22 +865,52 @@ export const deleteCategory = async (req, res) => {
       return apiError(res, 'Expense head not found.', 404);
     }
 
-    const [txCount, pendingCount] = await Promise.all([
-      Transaction.countDocuments({ categoryId: id }),
-      PendingEntry.countDocuments({ categoryId: id }),
+    // Fetch all linked posted transactions and pending entries
+    const [transactions, pendingEntries] = await Promise.all([
+      Transaction.find({ categoryId: id }),
+      PendingEntry.find({ categoryId: id }),
     ]);
 
-    if (txCount > 0 || pendingCount > 0) {
-      return apiError(
-        res,
-        `Cannot delete expense head '${category.name}' because it is linked to ${txCount + pendingCount} transaction(s).`,
-        400
-      );
+    // Check if any transaction is in a published/locked month
+    for (const tx of transactions) {
+      const txDate = tx.date ? new Date(tx.date) : new Date();
+      const txMonth = `${txDate.getUTCFullYear()}-${String(txDate.getUTCMonth() + 1).padStart(2, '0')}`;
+      const isLocked = await MonthlyReport.findOne({ month: txMonth, status: 'PUBLISHED' }).lean();
+      if (isLocked) {
+        return apiError(
+          res,
+          `Financial period ${txMonth} is officially PUBLISHED and locked. Linked voucher #${tx.voucherNo} cannot be deleted.`,
+          403
+        );
+      }
     }
 
+    // Reverse financial effects for all posted transactions
+    for (const tx of transactions) {
+      const amt = round2(tx.amount || 0);
+      if (tx.drAccountId && tx.crAccountId && amt > 0) {
+        await Promise.all([
+          Account.findByIdAndUpdate(tx.drAccountId, { $inc: { currentBalance: -amt } }),
+          Account.findByIdAndUpdate(tx.crAccountId, { $inc: { currentBalance: amt } }),
+        ]);
+      }
+    }
+
+    // Delete all linked transactions & pending entries
+    const [deletedTxRes, deletedPendingRes] = await Promise.all([
+      Transaction.deleteMany({ categoryId: id }),
+      PendingEntry.deleteMany({ categoryId: id }),
+    ]);
+
+    // Delete the Category itself
     await Category.findByIdAndDelete(id);
 
-    return apiSuccess(res, { id }, `Expense head '${category.name}' deleted successfully.`);
+    const totalCleaned = (deletedTxRes.deletedCount || 0) + (deletedPendingRes.deletedCount || 0);
+    const detailMsg = totalCleaned > 0
+      ? `Expense head '${category.name}' and ${totalCleaned} linked transaction(s) deleted. Account balances updated.`
+      : `Expense head '${category.name}' deleted successfully.`;
+
+    return apiSuccess(res, { id, totalCleaned }, detailMsg);
   } catch (error) {
     console.error('[Delete Category Error]:', error);
     return apiError(res, 'Failed to delete expense head.', 500);
