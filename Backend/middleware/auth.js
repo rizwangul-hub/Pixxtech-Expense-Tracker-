@@ -135,6 +135,7 @@ export const hasPermission = (user, permission) => {
  * Middleware alias for protect
  */
 export const requireAuth = protect;
+export const authenticate = protect;
 
 /**
  * Normalize role comparison (treats ADMIN and ADMIN_PUBLISHER equivalently; VERIFIER and VERIFICATION_MANAGER equivalently)

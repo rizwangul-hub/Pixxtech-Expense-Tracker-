@@ -696,6 +696,54 @@ export const staffAPI = {
     const res = await api.post(`/staff/employees/${id}/loan`, data);
     return res.data;
   },
+  getDashboardStats: async () => {
+    const res = await api.get('/staff/dashboard');
+    return res.data;
+  },
+  getLocations: async () => {
+    const res = await api.get('/staff/locations');
+    return res.data;
+  },
+  createLocation: async (data) => {
+    const res = await api.post('/staff/locations', data);
+    return res.data;
+  },
+  getDesignations: async () => {
+    const res = await api.get('/staff/designations');
+    return res.data;
+  },
+  createDesignation: async (data) => {
+    const res = await api.post('/staff/designations', data);
+    return res.data;
+  },
+  getSettings: async () => {
+    const res = await api.get('/staff/settings');
+    return res.data;
+  },
+  updateSettings: async (data) => {
+    const res = await api.put('/staff/settings', data);
+    return res.data;
+  },
+  getAuditLogs: async () => {
+    const res = await api.get('/staff/audit-logs');
+    return res.data;
+  },
+  getLoans: async (params = {}) => {
+    const res = await api.get('/staff/loans', { params });
+    return res.data;
+  },
+  getLeaves: async (params = {}) => {
+    const res = await api.get('/staff/leaves', { params });
+    return res.data;
+  },
+  createLeave: async (data) => {
+    const res = await api.post('/staff/leaves', data);
+    return res.data;
+  },
+  updateLeaveStatus: async (id, data) => {
+    const res = await api.put(`/staff/leaves/${id}/status`, data);
+    return res.data;
+  },
 };
 
 // Attendance API

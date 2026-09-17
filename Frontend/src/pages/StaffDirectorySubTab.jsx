@@ -356,7 +356,7 @@ export const StaffDirectorySubTab = ({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Faiz Mujahid"
+                    placeholder="e.g. Rizwan"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-purple-500 font-semibold"
@@ -367,7 +367,7 @@ export const StaffDirectorySubTab = ({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Graphic Designer"
+                    placeholder="e.g. Software Developer"
                     value={formData.designation}
                     onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-purple-500 font-semibold"

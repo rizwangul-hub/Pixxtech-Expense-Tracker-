@@ -1,5 +1,14 @@
 import mongoose from 'mongoose';
 
+const allowanceSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    amount: { type: Number, default: 0, min: 0 },
+    isActive: { type: Boolean, default: true },
+  },
+  { _id: false }
+);
+
 const employeeSchema = new mongoose.Schema(
   {
     name: {
@@ -8,12 +17,42 @@ const employeeSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    fatherOrHusbandName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     employeeCode: {
       type: String,
       trim: true,
       uppercase: true,
       unique: true,
       sparse: true,
+    },
+    cnic: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    mobileNumber: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: '',
+    },
+    address: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    dateOfBirth: {
+      type: Date,
+      default: null,
     },
     designation: {
       type: String,
@@ -24,30 +63,46 @@ const employeeSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Department / Workplace location is required'],
       trim: true,
-      enum: {
-        values: [
-          'Bahria Town Office',
-          'IT Office',
-          'Security Guard',
-          '4A Home',
-          'Admin Rider',
-          'Family',
-          'Other',
-        ],
-        message: 'Invalid department or workplace location',
-      },
       default: 'IT Office',
       index: true,
+    },
+    staffLocation: {
+      type: String,
+      trim: true,
+      default: 'IT Office',
+    },
+    employmentType: {
+      type: String,
+      enum: ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN'],
+      default: 'FULL_TIME',
     },
     joiningDate: {
       type: Date,
       default: () => new Date(),
     },
+    employmentStatus: {
+      type: String,
+      enum: ['ACTIVE', 'INACTIVE', 'PROBATION', 'TERMINATED'],
+      default: 'ACTIVE',
+    },
+    profilePhotoUrl: {
+      type: String,
+      default: '',
+    },
+    reportingManager: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     basicSalary: {
       type: Number,
-      required: [true, 'Basic salary is required'],
+      required: [true, 'Base/Basic salary is required'],
       default: 0,
       min: 0,
+    },
+    fuelAllowanceEnabled: {
+      type: Boolean,
+      default: false,
     },
     fuelAllowance: {
       type: Number,
@@ -64,6 +119,11 @@ const employeeSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    transportAllowance: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     performanceAllowance: {
       type: Number,
       default: 0,
@@ -73,6 +133,11 @@ const employeeSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    allowancesList: [allowanceSchema],
+    allowedMonthlyLeaves: {
+      type: Number,
+      default: 2,
     },
     accountTitle: {
       type: String,
@@ -88,6 +153,21 @@ const employeeSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: '',
+    },
+    branchName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    accountNumber: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    paymentMethod: {
+      type: String,
+      enum: ['BANK_TRANSFER', 'CASH', 'CHEQUE'],
+      default: 'BANK_TRANSFER',
     },
     loanBalance: {
       type: Number,
@@ -122,9 +202,18 @@ employeeSchema.virtual('grossSalary').get(function () {
   const fuel = this.fuelAllowance || 0;
   const food = this.foodAllowance || 0;
   const mobile = this.mobileAllowance || 0;
+  const transport = this.transportAllowance || 0;
   const perf = this.performanceAllowance || 0;
   const other = this.otherAllowances || 0;
-  return basic + fuel + food + mobile + perf + other;
+
+  let listSum = 0;
+  if (Array.isArray(this.allowancesList)) {
+    this.allowancesList.forEach((a) => {
+      if (a.isActive) listSum += a.amount || 0;
+    });
+  }
+
+  return basic + fuel + food + mobile + transport + perf + other + listSum;
 });
 
 // Auto-generate employeeCode before validation if missing
