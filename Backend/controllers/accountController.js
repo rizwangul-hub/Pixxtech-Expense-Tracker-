@@ -734,7 +734,9 @@ export const getCategories = async (req, res) => {
 };
 
 /**
- * Create a persistent expense account head for voucher entry with optional property/unit scoping.
+ * Create or retrieve a persistent expense account head for voucher entry with optional property/unit scoping.
+ * When property/unit is selected, head name is STRICTLY the Property Name or Property - Unit Name.
+ * All subsequent expenses for that property/unit reuse the existing single head.
  */
 export const createCategory = async (req, res) => {
   try {
@@ -755,21 +757,43 @@ export const createCategory = async (req, res) => {
         const unitObj = propertyDoc?.units?.find((u) => u._id.toString() === unitId.toString());
         const unitLabel = unitObj ? (unitObj.unitName || unitObj.unitNumber || unitObj.name || 'Unit').trim() : 'Unit';
 
-        const baseHead = plazaName ? `${plazaName} - ${unitLabel}` : unitLabel;
+        headName = plazaName ? `${plazaName} - ${unitLabel}` : unitLabel;
 
-        if (!inputName || inputName.toLowerCase() === baseHead.toLowerCase() || inputName.toLowerCase() === unitLabel.toLowerCase()) {
-          headName = baseHead;
-        } else {
-          headName = `${baseHead} - ${inputName}`;
+        // Check if ANY head already exists for this unit. If so, REUSE IT!
+        let existingUnitHead = await Category.findOne({
+          expenseClassification: 'UNIT_EXPENSE',
+          propertyId,
+          unitId,
+        });
+
+        if (existingUnitHead) {
+          if (existingUnitHead.name !== headName) {
+            existingUnitHead.name = headName;
+            await existingUnitHead.save();
+          }
+          if (propertyId) {
+            existingUnitHead = await Category.findById(existingUnitHead._id).populate('propertyId', 'plazaName propertyName').lean();
+          }
+          return apiSuccess(res, { category: existingUnitHead }, `Expense head '${existingUnitHead.name}' selected.`, 200);
         }
       } else if (propertyId) {
         expenseClassification = 'PROPERTY_OWN_EXPENSE';
-        const baseHead = plazaName || 'Property';
+        headName = plazaName || 'Property';
 
-        if (!inputName || inputName.toLowerCase() === baseHead.toLowerCase()) {
-          headName = baseHead;
-        } else {
-          headName = `${baseHead} - ${inputName}`;
+        // Check if ANY head already exists for this property (without unit). If so, REUSE IT!
+        let existingPropHead = await Category.findOne({
+          expenseClassification: 'PROPERTY_OWN_EXPENSE',
+          propertyId,
+          $or: [{ unitId: null }, { unitId: { $exists: false } }],
+        });
+
+        if (existingPropHead) {
+          if (existingPropHead.name !== headName) {
+            existingPropHead.name = headName;
+            await existingPropHead.save();
+          }
+          existingPropHead = await Category.findById(existingPropHead._id).populate('propertyId', 'plazaName propertyName').lean();
+          return apiSuccess(res, { category: existingPropHead }, `Expense head '${existingPropHead.name}' selected.`, 200);
         }
       }
     }
