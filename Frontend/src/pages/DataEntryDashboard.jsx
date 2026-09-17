@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { CashCustodianBar } from '../components/CashCustodianBar.jsx';
 import { RentCollectionModal } from '../components/RentCollectionModal.jsx';
+import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 import { RecentEntriesTable } from '../components/RecentEntriesTable.jsx';
 import { accountsAPI, transactionsAPI, otherIncomeAPI, transfersAPI, uploadAPI } from '../services/api.js';
 import { EvidenceImageUpload } from '../components/EvidenceImageUpload.jsx';
@@ -21,7 +22,7 @@ import { formatPKR } from '../utils/formatters.js';
 import { isAdmin, isVerifier } from '../utils/permissions.js';
 
 export const DataEntryDashboard = ({ user }) => {
-  const [activeTab, setActiveTab] = useState('rent'); // 'rent' | 'other' | 'transfer'
+  const [activeTab, setActiveTab] = useState('expense'); // 'expense' | 'rent' | 'other' | 'transfer'
 
   // Master data state
   const [accounts, setAccounts] = useState([]);
@@ -268,6 +269,18 @@ export const DataEntryDashboard = ({ user }) => {
         {/* Part 23: Tab Navigation Controls */}
         <div className="flex items-center gap-2 overflow-x-auto border-b border-slate-200 pb-2">
           <button
+            onClick={() => { setActiveTab('expense'); setActionMessage({ text: '', type: '' }); }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+              activeTab === 'expense'
+                ? 'bg-rose-700 text-white shadow-sm'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            Tab A: Expense Voucher Entry
+          </button>
+
+          <button
             onClick={() => { setActiveTab('rent'); setActionMessage({ text: '', type: '' }); }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'rent'
@@ -306,6 +319,17 @@ export const DataEntryDashboard = ({ user }) => {
 
         {/* Active Work Tab Content */}
         <div className="mb-8">
+          {activeTab === 'expense' && (
+            <VoucherEntryForm
+              accounts={accounts}
+              categories={categories}
+              properties={properties}
+              onVoucherCreated={refreshEntries}
+              canManageMasterData={user?.role === 'ADMIN' || user?.role === 'ADMIN_PUBLISHER' || user?.role === 'DATA_ENTRY'}
+              onMasterDataChanged={loadMasterData}
+            />
+          )}
+
           {activeTab === 'rent' && (
             <RentCollectionModal
               properties={properties}
