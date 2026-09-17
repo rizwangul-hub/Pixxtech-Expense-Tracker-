@@ -415,128 +415,245 @@ export const generateSalarySlipPDF = async (req, res) => {
     const food = savedPayroll ? savedPayroll.foodAllowance : employee.foodAllowance || 0;
     const mobile = savedPayroll ? savedPayroll.mobileAllowance : employee.mobileAllowance || 0;
     const perf = savedPayroll ? savedPayroll.performanceAllowance : employee.performanceAllowance || 0;
-    const other = savedPayroll ? savedPayroll.otherAllowances : employee.otherAllowances || 0;
+    const otherAllow = savedPayroll ? savedPayroll.otherAllowances : employee.otherAllowances || 0;
 
-    const gross = basic + fuel + food + mobile + perf + other;
+    const overtime = savedPayroll ? savedPayroll.overtimeAmount || 0 : 0;
+    const bonus = savedPayroll ? savedPayroll.bonusAmount || 0 : 0;
+    const leaveEncashment = savedPayroll ? savedPayroll.leaveEncashmentAmount || 0 : 0;
+    const otherReceipts = savedPayroll ? savedPayroll.otherReceiptsAmount || 0 : 0;
+
+    const gross = savedPayroll
+      ? savedPayroll.grossSalary
+      : basic + fuel + food + mobile + perf + otherAllow + overtime + bonus + leaveEncashment + otherReceipts;
+
     const loanDed = savedPayroll ? savedPayroll.loanDeduction : 0;
     const lopDed = savedPayroll ? savedPayroll.lopDeduction : 0;
     const othDed = savedPayroll ? savedPayroll.otherDeduction : 0;
-    const totDed = loanDed + lopDed + othDed;
+    const whtDed = savedPayroll ? savedPayroll.whtDeduction || 0 : 0;
+    const totDed = loanDed + lopDed + othDed + whtDed;
     const netPayable = Math.max(0, gross - totDed);
 
-    // Render HTML template matching the official Salary Slip layout
+    // Attendance metrics
+    const presentDays = savedPayroll ? savedPayroll.presentDays : 30;
+    const leaveDays = savedPayroll ? savedPayroll.leaveDays : 0;
+    const allowedLeaves = savedPayroll ? savedPayroll.allowedLeaves : employee.allowedMonthlyLeaves || 2;
+    const lopDays = savedPayroll ? savedPayroll.lopDays : 0;
+    const totalSalaryDays = savedPayroll ? savedPayroll.totalSalaryDays || (30 - lopDays) : 30;
+
+    // Convert month to string e.g. "August 2026"
+    const [y, m] = month.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, 1);
+    const monthName = dateObj.toLocaleString('en-US', { month: 'long' });
+    const formattedTitleDate = `${monthName} ${y}`;
+
+    // Convert Net Payable to Words
+    const { numberToWords } = await import('../services/staffPayrollService.js');
+    const amountInWords = numberToWords(netPayable);
+
+    // Render HTML template matching the official Salary Slip.pdf layout
     const htmlContent = `
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="UTF-8">
-      <title>Salary Slip - ${employee.name}</title>
+      <title>Salary Pay Slip - ${employee.name}</title>
       <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; margin: 0; padding: 24px; background: #fff; }
-        .slip-card { border: 2px solid #0f172a; border-radius: 12px; padding: 28px; max-width: 750px; margin: 0 auto; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .header { text-align: center; border-b: 2px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 20px; }
-        .company-name { font-size: 24px; font-weight: 900; color: #0f172a; letter-spacing: 0.5px; text-transform: uppercase; margin: 0; }
-        .sub-heading { font-size: 13px; color: #64748b; font-weight: 600; margin-top: 4px; }
-        .slip-title { font-size: 16px; font-weight: 800; color: #0284c7; text-transform: uppercase; background: #f0f9ff; display: inline-block; padding: 4px 16px; rounded: 6px; margin-top: 10px; border: 1px solid #bae6fd; }
-        .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px; margin-bottom: 20px; background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid #e2e8f0; }
-        .meta-item { display: flex; justify-content: space-between; padding: 2px 0; }
-        .label { color: #64748b; font-weight: 600; }
-        .val { font-weight: 700; color: #0f172a; }
-        .table-container { margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { background: #0f172a; color: #fff; font-weight: 700; text-transform: uppercase; font-size: 11px; padding: 10px 12px; text-align: left; }
-        td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-weight: 600; }
-        .amount-col { text-align: right; font-family: monospace; font-size: 13px; font-weight: 700; }
-        .net-row { background: #ecfdf5; border-top: 2px solid #10b981; }
-        .net-row td { font-size: 15px; font-weight: 800; color: #047857; }
-        .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 40px; pt-20; }
-        .sig-box { text-align: center; border-top: 1px solid #94a3b8; width: 180px; padding-top: 6px; font-size: 12px; font-weight: 700; color: #475569; }
+        body {
+          font-family: 'Times New Roman', Times, serif;
+          color: #000;
+          margin: 0;
+          padding: 20px;
+          background: #fff;
+        }
+        .slip-container {
+          width: 100%;
+          max-width: 820px;
+          margin: 0 auto;
+          box-sizing: border-box;
+        }
+        table.outer-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
+        }
+        table.outer-table td, table.outer-table th {
+          border: 1px solid #000;
+          padding: 5px 8px;
+        }
+        .header-title {
+          text-align: center;
+          font-size: 26px;
+          font-weight: bold;
+          padding: 8px 0;
+          letter-spacing: 1px;
+        }
+        .sub-title {
+          text-align: center;
+          font-size: 16px;
+          font-weight: bold;
+          padding: 6px 0;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .font-bold { font-weight: bold; }
+        .inner-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
+        }
+        .inner-table td {
+          border: 1px solid #000;
+          padding: 4px 6px;
+        }
+        .big-payout {
+          font-size: 24px;
+          font-weight: bold;
+          text-align: center;
+          padding: 35px 10px;
+        }
+        .words-box {
+          text-align: center;
+          font-size: 13px;
+          padding: 8px 5px;
+        }
       </style>
     </head>
     <body>
-      <div class="slip-card">
-        <div class="header">
-          <h1 class="company-name">Pixx Technologies Pakistan</h1>
-          <div class="sub-heading">Finance & Human Resource Management System</div>
-          <div class="slip-title">PAYSLIP FOR THE MONTH OF ${month}</div>
-        </div>
+      <div class="slip-container">
+        <table class="outer-table">
+          <tr>
+            <td colspan="6" class="header-title">PIXX TECHNOLOGIES</td>
+          </tr>
+          <tr>
+            <td colspan="6" class="sub-title">Salary Pay Slip For The Month Of ${formattedTitleDate}</td>
+          </tr>
+          <tr>
+            <td class="font-bold" style="width: 10%;">Name:</td>
+            <td class="font-bold" style="width: 35%;">${employee.name}</td>
+            <td class="font-bold" style="width: 15%;">Designation</td>
+            <td colspan="3" class="font-bold">${employee.designation}</td>
+          </tr>
+          <tr>
+            <!-- LEFT COLUMN: FINANCIAL ITEMIZED BREAKDOWN -->
+            <td colspan="3" style="vertical-align: top; padding: 0;">
+              <table class="inner-table">
+                <tr>
+                  <td style="width: 6%;">I</td>
+                  <td>Net Salary</td>
+                  <td style="width: 12%;">PKR</td>
+                  <td class="text-right font-bold" style="width: 25%;">${formatPKR(basic)}</td>
+                </tr>
+                <tr>
+                  <td>II</td>
+                  <td>OT</td>
+                  <td>PKR</td>
+                  <td class="text-right">${overtime ? formatPKR(overtime) : '0'}</td>
+                </tr>
+                <tr>
+                  <td>III</td>
+                  <td>Bonus</td>
+                  <td>PKR</td>
+                  <td class="text-right">${bonus ? formatPKR(bonus) : ''}</td>
+                </tr>
+                <tr>
+                  <td>IV</td>
+                  <td>Leave Encashment</td>
+                  <td>PKR</td>
+                  <td class="text-right">${leaveEncashment ? formatPKR(leaveEncashment) : '0'}</td>
+                </tr>
+                <tr>
+                  <td colspan="3">Total Other Receipts</td>
+                  <td class="text-right font-bold">${otherReceipts ? formatPKR(otherReceipts) : '0'}</td>
+                </tr>
+                <tr>
+                  <td colspan="2" class="text-right font-bold">Sub Total</td>
+                  <td class="font-bold">PKR</td>
+                  <td class="text-right font-bold">${formatPKR(gross)}</td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="font-bold">Total Gross Salary</td>
+                  <td class="text-right font-bold">${formatPKR(gross)}</td>
+                </tr>
+                <tr>
+                  <td colspan="4" class="font-bold">Deductions</td>
+                </tr>
+                <tr>
+                  <td colspan="2">a.Advance Salary</td>
+                  <td>PKR</td>
+                  <td class="text-right">${formatPKR(loanDed)}</td>
+                </tr>
+                <tr>
+                  <td colspan="2">b.Deductions</td>
+                  <td>PKR</td>
+                  <td class="text-right">${formatPKR(lopDed + othDed)}</td>
+                </tr>
+                <tr>
+                  <td colspan="2">c. WHT</td>
+                  <td>PKR</td>
+                  <td class="text-right">${formatPKR(whtDed)}</td>
+                </tr>
+                <tr>
+                  <td colspan="3">Total Deductions</td>
+                  <td class="text-right font-bold">${formatPKR(totDed)}</td>
+                </tr>
+                <tr>
+                  <td colspan="2"></td>
+                  <td class="font-bold">PKR</td>
+                  <td class="text-right font-bold"></td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="font-bold">SALARY AFTER DEDUCTIONS</td>
+                  <td class="text-right font-bold">${formatPKR(netPayable)}</td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="font-bold">NET TAKE HOME</td>
+                  <td class="text-right font-bold">${formatPKR(netPayable)}</td>
+                </tr>
+              </table>
+            </td>
 
-        <div class="meta-grid">
-          <div>
-            <div class="meta-item"><span class="label">Employee Name:</span> <span class="val">${employee.name}</span></div>
-            <div class="meta-item"><span class="label">Designation:</span> <span class="val">${employee.designation}</span></div>
-            <div class="meta-item"><span class="label">Workplace / Dept:</span> <span class="val">${employee.department}</span></div>
-          </div>
-          <div>
-            <div class="meta-item"><span class="label">Account Title:</span> <span class="val">${employee.accountTitle || employee.name}</span></div>
-            <div class="meta-item"><span class="label">Bank Name:</span> <span class="val">${employee.bankName || 'Cash / Bank'}</span></div>
-            <div class="meta-item"><span class="label">IBAN No:</span> <span class="val">${employee.ibanNumber || 'N/A'}</span></div>
-          </div>
-        </div>
-
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Earnings & Allowances</th>
-                <th class="amount-col">Amount (PKR)</th>
-                <th>Deductions & Advances</th>
-                <th class="amount-col">Amount (PKR)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Basic Salary</td>
-                <td class="amount-col">${formatPKR(basic)}</td>
-                <td>Loan / Advance Salary Deduction</td>
-                <td class="amount-col" style="color: #e11d48;">${formatPKR(loanDed)}</td>
-              </tr>
-              <tr>
-                <td>Fuel Allowance</td>
-                <td class="amount-col">${formatPKR(fuel)}</td>
-                <td>Loss of Pay (LOP) Deduction</td>
-                <td class="amount-col" style="color: #e11d48;">${formatPKR(lopDed)}</td>
-              </tr>
-              <tr>
-                <td>Food & Refreshment Allowance</td>
-                <td class="amount-col">${formatPKR(food)}</td>
-                <td>Other Deductions</td>
-                <td class="amount-col" style="color: #e11d48;">${formatPKR(othDed)}</td>
-              </tr>
-              <tr>
-                <td>Mobile / Phone Allowance</td>
-                <td class="amount-col">${formatPKR(mobile)}</td>
-                <td style="color: #64748b;">Total Deductions</td>
-                <td class="amount-col" style="color: #e11d48;">${formatPKR(totDed)}</td>
-              </tr>
-              <tr>
-                <td>Performance Allowance</td>
-                <td class="amount-col">${formatPKR(perf)}</td>
-                <td style="color: #64748b;">Remaining Loan Balance</td>
-                <td class="amount-col" style="color: #d97706;">${formatPKR(employee.loanBalance || 0)}</td>
-              </tr>
-              <tr style="background: #f1f5f9;">
-                <td style="font-weight: 800;">TOTAL GROSS SALARY</td>
-                <td class="amount-col" style="font-weight: 800; color: #1e293b;">${formatPKR(gross)}</td>
-                <td colspan="2"></td>
-              </tr>
-              <tr class="net-row">
-                <td colspan="2" style="font-weight: 800; font-size: 15px;">NET SALARY PAYABLE</td>
-                <td colspan="2" class="amount-col" style="font-size: 16px; font-weight: 900;">Rs. ${formatPKR(netPayable)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div style="font-size: 11px; color: #64748b; line-height: 1.5; margin-top: 15px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
-          * This is a computer-generated salary document issued by Pixx Technologies Pakistan HR System.
-        </div>
-
-        <div class="footer" style="margin-top: 50px;">
-          <div class="sig-box">Employee Signature</div>
-          <div class="sig-box">HR / Finance Manager</div>
-          <div class="sig-box">Authorized Signature</div>
-        </div>
+            <!-- RIGHT COLUMN: ATTENDANCE & PAYOUT DISPLAY -->
+            <td colspan="3" style="vertical-align: top; padding: 0;">
+              <table class="inner-table">
+                <tr>
+                  <td style="width: 8%; font-weight: bold;">A</td>
+                  <td style="font-weight: bold;">Total Attendance</td>
+                  <td class="text-right font-bold" style="width: 20%;">${presentDays}</td>
+                </tr>
+                <tr>
+                  <td style="font-weight: bold;">B</td>
+                  <td style="font-weight: bold;">Total Leaves</td>
+                  <td class="text-right font-bold">${leaveDays}</td>
+                </tr>
+                <tr>
+                  <td></td>
+                  <td>Allowed Leaves</td>
+                  <td class="text-right font-bold">${allowedLeaves}</td>
+                </tr>
+                <tr>
+                  <td></td>
+                  <td>Loss of Pay days</td>
+                  <td class="text-right font-bold">${lopDays}</td>
+                </tr>
+                <tr>
+                  <td style="font-weight: bold;">C</td>
+                  <td style="font-weight: bold;">Total Salary Days</td>
+                  <td class="text-right font-bold">${totalSalaryDays}</td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="big-payout">
+                    PKR ${formatPKR(netPayable)}
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="words-box">
+                    ${amountInWords}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
       </div>
     </body>
     </html>
@@ -578,3 +695,4 @@ export const generateSalarySlipPDF = async (req, res) => {
     return apiError(res, 'Failed to generate Salary Slip PDF.', 500);
   }
 };
+
