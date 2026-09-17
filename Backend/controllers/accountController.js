@@ -737,9 +737,8 @@ export const getCategories = async (req, res) => {
 
 /**
  * Create or retrieve the single canonical expense account head for voucher entry with optional property/unit scoping.
- * - General: Name 'General' (propertyId = null, unitId = null)
- * - Property: Name = Property Name (propertyId = propId, unitId = null)
- * - Unit: Name = Property Name - Unit Name (propertyId = propId, unitId = unitId)
+ * The typed name is the expense head (for example, Electricity Bill).
+ * Property/unit selections only define the scope of that head.
  */
 export const createCategory = async (req, res) => {
   try {
@@ -756,34 +755,27 @@ export const createCategory = async (req, res) => {
       expenseClassification = 'GENERAL_EXPENSE';
     }
 
-    let category = null;
+    if (!rawName) {
+      return apiError(res, 'Expense name is required (for example, Electricity Bill or Maintenance).', 400);
+    }
 
-    if (rawName) {
-      const queryFilter = {
+    const queryFilter = {
+      type: 'EXPENSE',
+      name: { $regex: `^${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+      expenseClassification,
+      propertyId,
+      unitId,
+    };
+
+    let category = await Category.findOne(queryFilter);
+    if (!category) {
+      category = await Category.create({
+        name: rawName,
         type: 'EXPENSE',
-        name: { $regex: `^${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
         expenseClassification,
         propertyId,
         unitId,
-      };
-
-      category = await Category.findOne(queryFilter);
-
-      if (!category) {
-        category = await Category.create({
-          name: rawName,
-          type: 'EXPENSE',
-          expenseClassification,
-          propertyId,
-          unitId,
-          isRentalHead: !!req.body.isRentalHead,
-        });
-      }
-    } else {
-      category = await getOrCreateCanonicalHead({
-        expenseClassification,
-        propertyId,
-        unitId,
+        isRentalHead: !!req.body.isRentalHead,
       });
     }
 

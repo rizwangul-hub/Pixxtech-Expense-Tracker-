@@ -130,19 +130,24 @@ export const validateExpenseCategory = async ({
     throw new Error('Selected head is not an expense head.');
   }
 
+  const categoryClassification = category.expenseClassification || 'GENERAL_EXPENSE';
   const categoryPropertyId = cleanId(category.propertyId);
   const categoryUnitId = cleanId(category.unitId);
   const normalizedPropertyId = cleanId(propertyId);
   const normalizedUnitId = cleanId(unitId);
 
-  // If category is tied to a specific property, ensure it matches
-  if (categoryPropertyId && normalizedPropertyId && categoryPropertyId !== normalizedPropertyId) {
-    throw new Error('Selected expense category belongs to a different property.');
-  }
-
-  // If category is tied to a specific unit, ensure it matches
-  if (categoryUnitId && normalizedUnitId && categoryUnitId !== normalizedUnitId) {
-    throw new Error('Selected expense category belongs to a different unit.');
+  if (normalizedUnitId) {
+    if (categoryClassification !== 'UNIT_EXPENSE' || categoryUnitId !== normalizedUnitId) {
+      throw new Error('Selected category is not an expense category for the selected unit.');
+    }
+  } else if (normalizedPropertyId) {
+    if (categoryClassification !== 'PROPERTY_OWN_EXPENSE' || categoryPropertyId !== normalizedPropertyId) {
+      throw new Error('Selected category is not an expense category for the selected property.');
+    }
+  } else {
+    if (categoryClassification !== 'GENERAL_EXPENSE' || categoryPropertyId || categoryUnitId) {
+      throw new Error('Selected category is not a general expense category.');
+    }
   }
 
   return category;
