@@ -130,6 +130,11 @@ const accountSchema = new mongoose.Schema(
   }
 );
 
+// Virtual property for closingBalance mapping to currentBalance
+accountSchema.virtual('closingBalance').get(function () {
+  return this.currentBalance;
+});
+
 // Pre-validate hook to keep name <-> accountName and type <-> accountType dual-synchronized
 accountSchema.pre('validate', function () {
   if (this.accountName && !this.name) {

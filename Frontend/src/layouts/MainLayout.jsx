@@ -203,6 +203,14 @@ export function MainLayout({
       badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     },
     {
+      id: 'staff',
+      label: 'Staff HR',
+      icon: Users,
+      status: 'active',
+      badge: 'HR / Payroll',
+      badgeColor: 'bg-purple-100 text-purple-800 border-purple-200',
+    },
+    {
       id: 'users',
       label: 'Users',
       icon: ShieldCheck,

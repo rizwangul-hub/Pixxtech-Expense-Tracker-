@@ -674,4 +674,68 @@ export const ledgersAPI = {
   },
 };
 
+// Staff Management API
+export const staffAPI = {
+  getEmployees: async (params = {}) => {
+    const res = await api.get('/staff/employees', { params });
+    return res.data;
+  },
+  getEmployeeById: async (id) => {
+    const res = await api.get(`/staff/employees/${id}`);
+    return res.data;
+  },
+  createEmployee: async (data) => {
+    const res = await api.post('/staff/employees', data);
+    return res.data;
+  },
+  updateEmployee: async (id, data) => {
+    const res = await api.put(`/staff/employees/${id}`, data);
+    return res.data;
+  },
+  recordLoan: async (id, data) => {
+    const res = await api.post(`/staff/employees/${id}/loan`, data);
+    return res.data;
+  },
+};
+
+// Attendance API
+export const attendanceAPI = {
+  getDailyAttendance: async (params = {}) => {
+    const res = await api.get('/staff/attendance/daily', { params });
+    return res.data;
+  },
+  markAttendance: async (data) => {
+    const res = await api.post('/staff/attendance/mark', data);
+    return res.data;
+  },
+  bulkMarkAttendance: async (data) => {
+    const res = await api.post('/staff/attendance/bulk-mark', data);
+    return res.data;
+  },
+  getMonthlyAttendanceSummary: async (params = {}) => {
+    const res = await api.get('/staff/attendance/monthly-summary', { params });
+    return res.data;
+  },
+};
+
+// Payroll API
+export const payrollAPI = {
+  getMonthlyPayroll: async (params = {}) => {
+    const res = await api.get('/staff/payroll', { params });
+    return res.data;
+  },
+  savePayroll: async (data) => {
+    const res = await api.post('/staff/payroll/save', data);
+    return res.data;
+  },
+  downloadSalarySheetExcelUrl: (month) => {
+    const token = localStorage.getItem('token');
+    return `/api/staff/payroll/excel?month=${encodeURIComponent(month)}&token=${encodeURIComponent(token || '')}`;
+  },
+  downloadSalarySlipPDFUrl: (employeeId, month) => {
+    const token = localStorage.getItem('token');
+    return `/api/staff/payroll/slip/${employeeId}/pdf?month=${encodeURIComponent(month)}&token=${encodeURIComponent(token || '')}`;
+  },
+};
+
 export default api;

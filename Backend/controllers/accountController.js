@@ -63,8 +63,8 @@ export const getAccounts = async (req, res) => {
       .limit(limitNum)
       .lean();
 
-    // Calculate portfolio liquidity totals from all active accounts
-    const activeAccounts = await Account.find({ isActive: true }).lean();
+    // Calculate portfolio liquidity totals from all active bank & cash accounts
+    const activeAccounts = await Account.find({ isActive: true, isClearing: { $ne: true } }).lean();
     let totalCompanyLiquidity = 0;
     let bankTotal = 0;
     let cashTotal = 0;
@@ -91,8 +91,11 @@ export const getAccounts = async (req, res) => {
             acc.name?.toLowerCase().includes(k.toLowerCase())
           ));
 
+      const curBal = acc.currentBalance ?? 0;
       return {
         ...acc,
+        currentBalance: curBal,
+        closingBalance: round2(curBal),
         isCashCustodian: Boolean(isCustodian),
         holderName: acc.cashHolder || (acc.type === 'BANK' ? acc.ownerName : acc.name),
       };
@@ -288,6 +291,7 @@ export const updateAccount = async (req, res) => {
       branch,
       openingBalance,
       currentBalance,
+      closingBalance,
       openingBalanceDate,
       notes,
     } = req.body;
@@ -332,13 +336,26 @@ export const updateAccount = async (req, res) => {
     if (notes !== undefined) account.notes = notes.trim();
     if (openingBalanceDate) account.openingBalanceDate = new Date(openingBalanceDate);
 
+    // Determine target closing/current balance from req.body
+    const targetBalanceRaw =
+      currentBalance !== undefined && currentBalance !== null && currentBalance !== ''
+        ? currentBalance
+        : (closingBalance !== undefined && closingBalance !== null && closingBalance !== ''
+            ? closingBalance
+            : undefined);
+
+    const hasTargetBalance =
+      targetBalanceRaw !== undefined &&
+      targetBalanceRaw !== null &&
+      !isNaN(Number(targetBalanceRaw));
+
     // Update Opening Balance & Current Balance
     if (openingBalance !== undefined && openingBalance !== null && !isNaN(Number(openingBalance))) {
       const newOpening = round2(Number(openingBalance));
       account.openingBalance = newOpening;
 
-      if (currentBalance !== undefined && currentBalance !== null && !isNaN(Number(currentBalance))) {
-        account.currentBalance = round2(Number(currentBalance));
+      if (hasTargetBalance) {
+        account.currentBalance = round2(Number(targetBalanceRaw));
       } else {
         const txs = await Transaction.find({
           $or: [{ drAccountId: account._id }, { crAccountId: account._id }],
@@ -352,15 +369,18 @@ export const updateAccount = async (req, res) => {
         }
         account.currentBalance = round2(newOpening + netMovement);
       }
-    } else if (currentBalance !== undefined && currentBalance !== null && !isNaN(Number(currentBalance))) {
-      account.currentBalance = round2(Number(currentBalance));
+    } else if (hasTargetBalance) {
+      account.currentBalance = round2(Number(targetBalanceRaw));
     }
 
     account.updatedBy = req.user._id;
 
     await account.save();
 
-    return apiSuccess(res, account, `Account '${account.name}' updated successfully.`);
+    const accountObj = account.toObject();
+    accountObj.closingBalance = round2(account.currentBalance);
+
+    return apiSuccess(res, accountObj, `Account '${account.name}' updated successfully.`);
   } catch (error) {
     console.error('[Update Account Error]:', error);
     return apiError(res, error.message || 'Failed to update account.', 500);
@@ -569,7 +589,7 @@ export const getMonthlySummary = async (req, res) => {
     const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
     const monthEnd = new Date(Date.UTC(y, m - 1, days, 23, 59, 59, 999));
 
-    const accounts = await Account.find({ isActive: true })
+    const accounts = await Account.find({ isActive: true, isClearing: { $ne: true } })
       .sort({ type: 1, name: 1 })
       .lean();
 
@@ -613,7 +633,10 @@ export const getMonthlySummary = async (req, res) => {
       moneyIn = round2(moneyIn);
       moneyOut = round2(moneyOut);
 
-      const closing = round2(opening + moneyIn - moneyOut);
+      let closing = round2(opening + moneyIn - moneyOut);
+      if (monthlyTxs.length === 0 && moneyIn === 0 && moneyOut === 0 && acc.currentBalance !== undefined) {
+        closing = round2(acc.currentBalance);
+      }
 
       totalOpening += opening;
       totalMoneyIn += moneyIn;
@@ -634,6 +657,7 @@ export const getMonthlySummary = async (req, res) => {
         moneyIn,
         moneyOut,
         closingBalance: closing,
+        currentBalance: closing,
       };
     });
 
@@ -665,7 +689,7 @@ export const getMonthlySummary = async (req, res) => {
  */
 export const getActiveAccountsSummary = async (req, res) => {
   try {
-    const accounts = await Account.find({ isActive: true })
+    const accounts = await Account.find({ isActive: true, isClearing: { $ne: true } })
       .sort({ type: 1, name: 1 })
       .lean();
 
@@ -693,6 +717,7 @@ export const getActiveAccountsSummary = async (req, res) => {
         branch: acc.branch,
         openingBalance: round2(acc.openingBalance),
         currentBalance: round2(acc.currentBalance),
+        closingBalance: round2(acc.currentBalance),
         isCashCustodian: isCustodian,
         balanceStatus,
       };

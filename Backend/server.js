@@ -23,6 +23,9 @@ import otherIncomeRoutes from './routes/otherIncomeRoutes.js';
 import verificationRoutes from './routes/verificationRoutes.js';
 import ledgerRoutes from './routes/ledgerRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
+import staffRoutes from './routes/staffRoutes.js';
+import attendanceRoutes from './routes/attendanceRoutes.js';
+import payrollRoutes from './routes/payrollRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -123,6 +126,9 @@ app.use('/api/monthly-reports', monthlyReportRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/ledgers', ledgerRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/staff', staffRoutes);
+app.use('/api/staff/attendance', attendanceRoutes);
+app.use('/api/staff/payroll', payrollRoutes);
 
 // 404 Not Found Handler
 app.use((req, res, next) => {

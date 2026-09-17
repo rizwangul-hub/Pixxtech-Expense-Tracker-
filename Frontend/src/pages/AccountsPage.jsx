@@ -55,6 +55,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
     accountNumber: '',
     ownerName: '',
     openingBalance: '0',
+    currentBalance: '0',
     openingBalanceDate: '2026-07-31',
     currency: 'PKR',
     notes: '',
@@ -97,6 +98,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
       accountNumber: '',
       ownerName: '',
       openingBalance: '0',
+      currentBalance: '0',
       openingBalanceDate: '2026-07-31',
       currency: 'PKR',
       notes: '',
@@ -107,6 +109,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
 
   const handleOpenEditModal = (acc) => {
     setEditingAccount(acc);
+    const balanceVal = acc.currentBalance ?? acc.closingBalance ?? 0;
     setFormData({
       accountName: acc.accountName || acc.name || '',
       accountType: acc.accountType || acc.type || 'BANK',
@@ -115,7 +118,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
       accountNumber: acc.accountNumber || '',
       ownerName: acc.ownerName || '',
       openingBalance: String(acc.openingBalance ?? 0),
-      currentBalance: String(acc.currentBalance ?? 0),
+      currentBalance: String(balanceVal),
       openingBalanceDate: acc.openingBalanceDate
         ? new Date(acc.openingBalanceDate).toISOString().split('T')[0]
         : '2026-07-31',
@@ -132,6 +135,9 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
     setSubmitting(true);
 
     try {
+      const numOpening = isNaN(Number(formData.openingBalance)) ? 0 : Number(formData.openingBalance);
+      const numCurrent = isNaN(Number(formData.currentBalance)) ? 0 : Number(formData.currentBalance);
+
       const payload = {
         accountName: formData.accountName.trim(),
         name: formData.accountName.trim(),
@@ -141,8 +147,9 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
         cashHolder: formData.accountType === 'CASH' ? formData.cashHolder.trim() : '',
         accountNumber: formData.accountNumber.trim(),
         ownerName: formData.ownerName.trim(),
-        openingBalance: Number(formData.openingBalance) || 0,
-        currentBalance: Number(formData.currentBalance) || 0,
+        openingBalance: numOpening,
+        currentBalance: numCurrent,
+        closingBalance: numCurrent,
         openingBalanceDate: formData.openingBalanceDate,
         currency: formData.currency,
         notes: formData.notes.trim(),

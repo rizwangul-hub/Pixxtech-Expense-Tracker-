@@ -21,6 +21,7 @@ import { MonthlyReportsHistoryPage } from './pages/MonthlyReportsHistoryPage.jsx
 import { DataEntryDashboard } from './pages/DataEntryDashboard.jsx';
 import { AdminPublisherDashboard } from './pages/AdminPublisherDashboard.jsx';
 import { VerifierDashboard } from './pages/VerifierDashboard.jsx';
+import { StaffPage } from './pages/StaffPage.jsx';
 import { LoginForm } from './components/LoginForm.jsx';
 import loadingImg from './assets/image/loading.png';
 import { authAPI } from './services/api.js';
@@ -348,6 +349,10 @@ export function App() {
         />
       ) : currentSection === 'monthly-reports' ? (
         <MonthlyReportsHistoryPage
+          currentUser={user}
+        />
+      ) : currentSection === 'staff' ? (
+        <StaffPage
           currentUser={user}
         />
       ) : (
