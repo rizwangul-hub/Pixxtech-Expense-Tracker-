@@ -48,7 +48,7 @@ export const getDailyAttendance = async (req, res) => {
         designation: emp.designation,
         department: emp.department,
         dateStr,
-        shiftOpeningTime: att?.shiftOpeningTime || '12:30',
+        shiftOpeningTime: att?.shiftOpeningTime || emp.shiftOpeningTime || '12:30',
         arrivalTime: att?.arrivalTime || '',
         status: att?.status || 'PRESENT',
         lateMinutes: att?.lateMinutes || 0,

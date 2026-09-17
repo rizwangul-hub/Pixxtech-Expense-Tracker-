@@ -766,6 +766,24 @@ export const attendanceAPI = {
   },
 };
 
+export const getFullApiUrl = (endpointPath) => {
+  const token = localStorage.getItem('token');
+  const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+  let fullUrl = '';
+
+  if (apiBaseURL.startsWith('http://') || apiBaseURL.startsWith('https://')) {
+    const base = apiBaseURL.endsWith('/') ? apiBaseURL.slice(0, -1) : apiBaseURL;
+    fullUrl = `${base}${cleanPath}`;
+  } else {
+    const origin = window.location.origin;
+    const base = apiBaseURL.endsWith('/') ? apiBaseURL.slice(0, -1) : apiBaseURL;
+    fullUrl = `${origin}${base}${cleanPath}`;
+  }
+
+  const separator = fullUrl.includes('?') ? '&' : '?';
+  return `${fullUrl}${separator}token=${encodeURIComponent(token || '')}`;
+};
+
 // Payroll API
 export const payrollAPI = {
   getMonthlyPayroll: async (params = {}) => {
@@ -777,12 +795,10 @@ export const payrollAPI = {
     return res.data;
   },
   downloadSalarySheetExcelUrl: (month) => {
-    const token = localStorage.getItem('token');
-    return `/api/staff/payroll/excel?month=${encodeURIComponent(month)}&token=${encodeURIComponent(token || '')}`;
+    return getFullApiUrl(`/staff/payroll/excel?month=${encodeURIComponent(month)}`);
   },
   downloadSalarySlipPDFUrl: (employeeId, month) => {
-    const token = localStorage.getItem('token');
-    return `/api/staff/payroll/slip/${employeeId}/pdf?month=${encodeURIComponent(month)}&token=${encodeURIComponent(token || '')}`;
+    return getFullApiUrl(`/staff/payroll/slip/${employeeId}/pdf?month=${encodeURIComponent(month)}`);
   },
 };
 

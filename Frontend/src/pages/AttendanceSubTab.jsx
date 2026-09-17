@@ -9,12 +9,14 @@ import {
   CheckCheck,
   Building2,
   FileSpreadsheet,
+  Printer,
+  Download,
 } from 'lucide-react';
-import { attendanceAPI, staffAPI } from '../services/api.js';
+import { attendanceAPI } from '../services/api.js';
 
 export const AttendanceSubTab = () => {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [shiftOpeningTime, setShiftOpeningTime] = useState('12:30');
+  const [activeLocationTab, setActiveLocationTab] = useState('IT Office'); // 'IT Office' | 'Bahria Town Office'
   const [attendanceRows, setAttendanceRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -31,9 +33,6 @@ export const AttendanceSubTab = () => {
       const res = await attendanceAPI.getDailyAttendance({ date: selectedDate });
       if (res?.success && res.data) {
         setAttendanceRows(res.data.attendance || []);
-        if (res.data.attendance?.length > 0 && res.data.attendance[0].shiftOpeningTime) {
-          setShiftOpeningTime(res.data.attendance[0].shiftOpeningTime);
-        }
       }
     } catch (err) {
       console.error('Failed to load daily attendance:', err);
@@ -64,21 +63,42 @@ export const AttendanceSubTab = () => {
     fetchMonthlySummary();
   }, [selectedMonth]);
 
+  // Filter attendance rows by selected active location tab
+  // Excludes Security Guard, 4A Home, and non-attendance locations
+  const filteredRows = attendanceRows.filter((r) => {
+    const dept = r.department || '';
+    const desig = r.designation || '';
+
+    if (activeLocationTab === 'IT Office') {
+      return dept === 'IT Office';
+    }
+    if (activeLocationTab === 'Bahria Town Office') {
+      return dept === 'Bahria Town Office' || dept === 'Admin Rider' || desig === 'Admin Rider';
+    }
+    return false;
+  });
+
   const handleRowChange = (empId, field, val) => {
     setAttendanceRows((prev) =>
       prev.map((r) => {
         if (r.employeeId === empId) {
           const updated = { ...r, [field]: val };
-          // If shift opening time or arrival time changed, re-check status/late
+
+          // Re-calculate late minutes if arrivalTime or shiftOpeningTime changes
           if (field === 'arrivalTime' || field === 'shiftOpeningTime') {
             const arr = field === 'arrivalTime' ? val : r.arrivalTime;
-            const open = field === 'shiftOpeningTime' ? val : shiftOpeningTime;
+            const open = field === 'shiftOpeningTime' ? val : r.shiftOpeningTime;
+
             if (arr && open) {
               const [openH, openM] = open.split(':').map(Number);
               const [arrH, arrM] = arr.split(':').map(Number);
-              const diff = arrH * 60 + arrM - (openH * 60 + openM);
-              if (diff > 0) {
-                updated.lateMinutes = diff;
+              const openMins = openH * 60 + openM;
+              const arrMins = arrH * 60 + arrM;
+
+              // Grace period: 15 mins
+              const graceLimit = openMins + 15;
+              if (arrMins > graceLimit) {
+                updated.lateMinutes = arrMins - openMins;
                 updated.status = 'LATE';
               } else {
                 updated.lateMinutes = 0;
@@ -95,12 +115,25 @@ export const AttendanceSubTab = () => {
 
   const handleMarkAllPresent = () => {
     setAttendanceRows((prev) =>
-      prev.map((r) => ({
-        ...r,
-        status: 'PRESENT',
-        arrivalTime: r.arrivalTime || shiftOpeningTime,
-        lateMinutes: 0,
-      }))
+      prev.map((r) => {
+        // Only update rows belonging to active tab
+        const dept = r.department || '';
+        const desig = r.designation || '';
+        const isMatch =
+          activeLocationTab === 'IT Office'
+            ? dept === 'IT Office'
+            : dept === 'Bahria Town Office' || dept === 'Admin Rider' || desig === 'Admin Rider';
+
+        if (isMatch) {
+          return {
+            ...r,
+            status: 'PRESENT',
+            arrivalTime: r.arrivalTime || r.shiftOpeningTime || '12:30',
+            lateMinutes: 0,
+          };
+        }
+        return r;
+      })
     );
   };
 
@@ -111,7 +144,7 @@ export const AttendanceSubTab = () => {
 
       const records = attendanceRows.map((r) => ({
         employeeId: r.employeeId,
-        shiftOpeningTime: shiftOpeningTime,
+        shiftOpeningTime: r.shiftOpeningTime || '12:30',
         arrivalTime: r.arrivalTime || '',
         status: r.status,
         remarks: r.remarks || '',
@@ -133,41 +166,117 @@ export const AttendanceSubTab = () => {
     }
   };
 
+  const handlePrintDailySheet = () => {
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) {
+      alert('Please allow pop-ups to print attendance sheet.');
+      return;
+    }
+
+    const rowsHtml = filteredRows
+      .map(
+        (r, idx) => `
+      <tr>
+        <td style="text-align: center;">${idx + 1}</td>
+        <td style="font-weight: bold;">${r.name}</td>
+        <td>${r.designation}</td>
+        <td style="text-align: center; font-family: monospace;">${r.shiftOpeningTime || '12:30'}</td>
+        <td style="text-align: center; font-family: monospace;">${r.arrivalTime || '—'}</td>
+        <td style="text-align: center; font-weight: bold; color: ${r.lateMinutes > 0 ? '#dc2626' : '#16a34a'};">
+          ${r.lateMinutes > 0 ? `+${r.lateMinutes} mins` : '—'}
+        </td>
+        <td style="text-align: center; font-weight: bold;">${r.status}</td>
+        <td>${r.remarks || ''}</td>
+      </tr>
+    `
+      )
+      .join('');
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Daily Attendance Sheet - ${activeLocationTab} (${selectedDate})</title>
+      <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #000; }
+        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+        .company { font-size: 22px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+        .subtitle { font-size: 14px; font-weight: 700; margin-top: 4px; text-transform: uppercase; }
+        .meta { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 12px; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid #000; padding: 6px 8px; text-align: left; }
+        th { background: #f1f5f9; text-transform: uppercase; font-size: 11px; }
+        .footer { margin-top: 50px; display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; }
+        .sig { border-top: 1px solid #000; width: 200px; text-align: center; padding-top: 4px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="company">PIXX TECHNOLOGIES PAKISTAN</div>
+        <div class="subtitle">DAILY STAFF ATTENDANCE SHEET — ${activeLocationTab.toUpperCase()}</div>
+      </div>
+      <div class="meta">
+        <span>WORKPLACE: ${activeLocationTab}</span>
+        <span>DATE: ${selectedDate}</span>
+        <span>TOTAL STAFF: ${filteredRows.length}</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 5%;">Sr.</th>
+            <th>Employee Name</th>
+            <th>Designation</th>
+            <th style="text-align: center;">Shift Start</th>
+            <th style="text-align: center;">Arrival Time</th>
+            <th style="text-align: center;">Late Mins</th>
+            <th style="text-align: center;">Status</th>
+            <th>Remarks / Signature</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+      <div class="footer">
+        <div class="sig">Recorded By (HR)</div>
+        <div class="sig">Verified By (Manager)</div>
+      </div>
+      <script>
+        window.onload = function() { window.print(); }
+      </script>
+    </body>
+    </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   return (
     <div className="space-y-6">
       {/* Daily Attendance Card */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+        {/* Header Bar */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
           <div>
             <div className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock size={14} /> Daily Time Entry & Attendance
+              <Clock size={14} /> Daily Staff Attendance
             </div>
             <h2 className="text-xl font-black text-white tracking-tight mt-0.5">
               Daily Employee Arrival & Shift Matrix
             </h2>
           </div>
 
-          {/* Date Picker & Global Shift Opening Time Selector */}
-          <div className="flex flex-wrap items-center gap-3 text-xs">
+          {/* Date Picker & Controls */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
               <Calendar size={14} className="text-blue-400" />
-              <span className="text-slate-400 font-semibold">Attendance Date:</span>
+              <span className="text-slate-400 font-semibold">Date:</span>
               <input
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="bg-transparent text-white font-bold font-mono focus:outline-none"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
-              <Clock size={14} className="text-amber-400" />
-              <span className="text-slate-400 font-semibold">Office Opening Time:</span>
-              <input
-                type="time"
-                value={shiftOpeningTime}
-                onChange={(e) => setShiftOpeningTime(e.target.value)}
-                className="bg-transparent text-amber-300 font-mono font-bold focus:outline-none"
               />
             </div>
 
@@ -179,13 +288,46 @@ export const AttendanceSubTab = () => {
             </button>
 
             <button
+              onClick={handlePrintDailySheet}
+              className="bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/60 px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5"
+              title="Print / Export Daily Attendance Sheet PDF"
+            >
+              <Printer size={14} /> Print Sheet (PDF)
+            </button>
+
+            <button
               onClick={handleSaveDaily}
               disabled={saving}
               className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
             >
-              <Save size={14} /> {saving ? 'Saving...' : 'Save Daily Sheet'}
+              <Save size={14} /> {saving ? 'Saving...' : 'Save Attendance'}
             </button>
           </div>
+        </div>
+
+        {/* Location Workplace Tabs (IT Office vs Bahria Town Office) */}
+        <div className="flex items-center gap-2 pt-1 border-b border-slate-800/80 pb-3">
+          <button
+            onClick={() => setActiveLocationTab('IT Office')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+              activeLocationTab === 'IT Office'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Building2 size={15} /> IT Office Attendance ({attendanceRows.filter((r) => r.department === 'IT Office').length})
+          </button>
+
+          <button
+            onClick={() => setActiveLocationTab('Bahria Town Office')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+              activeLocationTab === 'Bahria Town Office'
+                ? 'bg-purple-600 text-white shadow-md'
+                : 'bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Building2 size={15} /> Bahria Town Office & Admin Rider ({attendanceRows.filter((r) => r.department === 'Bahria Town Office' || r.department === 'Admin Rider' || r.designation === 'Admin Rider').length})
+          </button>
         </div>
 
         {msg.text && (
@@ -206,12 +348,12 @@ export const AttendanceSubTab = () => {
             <thead className="bg-slate-900 text-slate-400 uppercase font-extrabold text-[10px] tracking-wider border-b border-slate-800">
               <tr>
                 <th className="py-3 px-4">Employee Name</th>
-                <th className="py-3 px-4">Designation & Location</th>
-                <th className="py-3 px-4">Shift Start</th>
-                <th className="py-3 px-4">Time Reached (Arrival)</th>
+                <th className="py-3 px-4">Designation</th>
+                <th className="py-3 px-4 text-center">Shift Start (Editable)</th>
+                <th className="py-3 px-4 text-center">Time Reached (Arrival)</th>
                 <th className="py-3 px-4 text-center">Late Mins</th>
                 <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Remarks / Leave Reason</th>
+                <th className="py-3 px-4">Remarks / Notes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
@@ -221,17 +363,14 @@ export const AttendanceSubTab = () => {
                     Loading daily attendance sheet...
                   </td>
                 </tr>
-              ) : attendanceRows.length === 0 ? (
+              ) : filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="py-8 text-center text-slate-500 font-semibold">
-                    No active employees registered.
+                    No staff assigned to {activeLocationTab}.
                   </td>
                 </tr>
               ) : (
-                attendanceRows.map((row) => {
-                  const isLate = row.status === 'LATE' || row.lateMinutes > 0;
-                  const isAbsent = row.status === 'ABSENT';
-
+                filteredRows.map((row) => {
                   return (
                     <tr key={row.employeeId} className="hover:bg-slate-900/60 transition">
                       <td className="py-3 px-4 font-bold text-white text-sm">
@@ -241,15 +380,20 @@ export const AttendanceSubTab = () => {
                         <div className="font-semibold text-slate-300">{row.designation}</div>
                         <div className="text-[10px] text-purple-400 font-bold">{row.department}</div>
                       </td>
-                      <td className="py-3 px-4 font-mono text-slate-400">
-                        {shiftOpeningTime}
+                      <td className="py-3 px-4 text-center">
+                        <input
+                          type="time"
+                          value={row.shiftOpeningTime || '12:30'}
+                          onChange={(e) => handleRowChange(row.employeeId, 'shiftOpeningTime', e.target.value)}
+                          className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-amber-300 font-mono font-bold text-center focus:outline-none focus:border-amber-500"
+                        />
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 text-center">
                         <input
                           type="time"
                           value={row.arrivalTime}
                           onChange={(e) => handleRowChange(row.employeeId, 'arrivalTime', e.target.value)}
-                          className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                          className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-white font-mono font-bold text-center focus:outline-none focus:border-blue-500"
                         />
                       </td>
                       <td className="py-3 px-4 text-center">
@@ -287,7 +431,7 @@ export const AttendanceSubTab = () => {
                       <td className="py-3 px-4">
                         <input
                           type="text"
-                          placeholder="e.g. Approved leave, Traffic delay"
+                          placeholder="Remarks..."
                           value={row.remarks}
                           onChange={(e) => handleRowChange(row.employeeId, 'remarks', e.target.value)}
                           className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-slate-300 text-xs focus:outline-none focus:border-blue-500"

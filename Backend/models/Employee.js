@@ -71,6 +71,11 @@ const employeeSchema = new mongoose.Schema(
       trim: true,
       default: 'IT Office',
     },
+    shiftOpeningTime: {
+      type: String, // e.g. "12:30", "09:00", "12:00", "13:00", "14:00", "15:00", "16:00"
+      default: '12:30',
+      trim: true,
+    },
     employmentType: {
       type: String,
       enum: ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN'],
