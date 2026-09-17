@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Property from '../models/Property.js';
+import Category from '../models/Category.js';
 import {
   EXPENSE_CLASSIFICATIONS,
   EXPENSE_CLASSIFICATION_LIST,
@@ -111,6 +112,41 @@ export const validateExpenseClassification = async ({
     propertyId: normalizedPropertyId,
     unitId: normalizedUnitId,
   };
+
+  export const validateExpenseCategory = async ({
+    categoryId,
+    expenseClassification,
+    propertyId,
+    unitId,
+  }) => {
+    if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
+      throw new Error('A valid expense head is required.');
+    }
+
+    const category = await Category.findById(categoryId).lean();
+    if (!category) throw new Error('Selected expense head was not found.');
+    if (category.type !== 'EXPENSE') {
+      throw new Error('Selected head is not an expense head.');
+    }
+
+    const categoryClassification = category.expenseClassification || 'GENERAL_EXPENSE';
+    const categoryPropertyId = category.propertyId?.toString() || null;
+    const categoryUnitId = category.unitId?.toString() || null;
+    const normalizedPropertyId = cleanId(propertyId);
+    const normalizedUnitId = cleanId(unitId);
+
+    if (
+      categoryClassification !== expenseClassification ||
+      categoryPropertyId !== normalizedPropertyId ||
+      categoryUnitId !== normalizedUnitId
+    ) {
+      throw new Error(
+        'The selected expense head does not match the selected general, property, or unit expense scope.'
+      );
+    }
+
+    return category;
+  };
 };
 
 export const getExpenseClassificationLabel = (classification) =>
@@ -122,6 +158,7 @@ export const getExpenseClassificationLabel = (classification) =>
 
 export default {
   validateExpenseClassification,
+  validateExpenseCategory,
   deriveExpenseClassification,
   getExpenseScope,
   getPropertyExpenseType,

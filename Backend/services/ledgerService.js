@@ -5,7 +5,10 @@ import Category from '../models/Category.js';
 import Property from '../models/Property.js';
 import Voucher from '../models/Voucher.js';
 import MonthlyReport from '../models/MonthlyReport.js';
-import { validateExpenseClassification } from './expenseClassificationService.js';
+import {
+  validateExpenseClassification,
+  validateExpenseCategory,
+} from './expenseClassificationService.js';
 
 /**
  * Helper to round numbers to 2 decimal places (standard financial precision)
@@ -70,6 +73,14 @@ export const createTransaction = async (data, externalSession = null) => {
           propertyId: data.propertyId || null,
           unitId: data.unitId || null,
         };
+    if (data.transactionType === 'EXPENSE') {
+        await validateExpenseCategory({
+          categoryId: data.categoryId,
+          expenseClassification: classification.expenseClassification,
+          propertyId: classification.propertyId,
+          unitId: classification.unitId,
+        });
+    }
     // 1. Validate existence and active status of both accounts
     const [drAccount, crAccount] = await Promise.all([
       Account.findById(drAccountId).session(session || null),

@@ -153,10 +153,6 @@ export function ChartOfAccountsPage({ currentUser }) {
   // 1. Submit New Expense Category / Head
   const handleExpenseSubmit = async (e) => {
     e.preventDefault();
-    if (!expenseCategory.propertyId && !expenseCategory.name.trim()) {
-      notify('error', 'Expense category head name is required for general expenses.');
-      return;
-    }
     setSaving('expense');
     try {
       const res = await accountsAPI.createCategory({
@@ -466,11 +462,10 @@ export function ChartOfAccountsPage({ currentUser }) {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Expense Head Name {expenseCategory.propertyId ? '(Optional - defaults to Property/Unit Name)' : '*'}
+                    Expense Head Name (optional; the system uses the selected scope name)
                   </label>
                   <input
                     type="text"
-                    required={!expenseCategory.propertyId}
                     placeholder={
                       expenseCategory.unitId
                         ? "e.g. Paint Work (Optional - defaults to Unit Name)"

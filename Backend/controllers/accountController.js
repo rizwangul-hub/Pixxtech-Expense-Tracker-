@@ -746,52 +746,39 @@ export const createCategory = async (req, res) => {
     const isRentalHead = Boolean(req.body.isRentalHead);
 
     let expenseClassification = 'GENERAL_EXPENSE';
-    let headName = inputName;
+    let headName = 'General Expense';
+    let propertyDoc = null;
 
     if (unitId || propertyId) {
-      const propertyDoc = propertyId ? await Property.findById(propertyId).lean() : null;
-      const plazaName = propertyDoc ? (propertyDoc.plazaName || propertyDoc.propertyName || '').trim() : '';
+      propertyDoc = propertyId ? await Property.findById(propertyId).lean() : null;
+      if (!propertyDoc) {
+        return apiError(res, 'Selected property was not found.', 404);
+      }
+      const plazaName = (propertyDoc.plazaName || propertyDoc.propertyName || '').trim();
 
       if (unitId) {
         expenseClassification = 'UNIT_EXPENSE';
         const unitObj = propertyDoc?.units?.find((u) => u._id.toString() === unitId.toString());
-        const unitLabel = unitObj ? (unitObj.unitName || unitObj.unitNumber || unitObj.name || 'Unit').trim() : 'Unit';
-
-        const baseHead = plazaName ? `${plazaName} - ${unitLabel}` : unitLabel;
-
-        if (!inputName || inputName.toLowerCase() === baseHead.toLowerCase() || inputName.toLowerCase() === unitLabel.toLowerCase()) {
-          headName = baseHead;
-        } else if (inputName.toLowerCase().startsWith(baseHead.toLowerCase())) {
-          headName = inputName;
-        } else {
-          headName = `${baseHead} - ${inputName}`;
+        if (!unitObj) {
+          return apiError(res, 'Selected unit was not found in the selected property.', 400);
         }
+        const unitLabel = (unitObj.unitName || unitObj.unitNumber || unitObj.name || 'Unit').trim();
+        headName = plazaName ? `${plazaName} - ${unitLabel}` : unitLabel;
       } else if (propertyId) {
         expenseClassification = 'PROPERTY_OWN_EXPENSE';
-        const baseHead = plazaName || 'Property';
-
-        if (!inputName || inputName.toLowerCase() === baseHead.toLowerCase()) {
-          headName = baseHead;
-        } else if (inputName.toLowerCase().startsWith(baseHead.toLowerCase())) {
-          headName = inputName;
-        } else {
-          headName = `${baseHead} - ${inputName}`;
-        }
+        headName = plazaName || 'Property Expense';
       }
     }
 
-    if (!headName || headName.length < 2) {
-      return apiError(res, 'Expense head name must be at least 2 characters long.', 400);
-    }
-
-    const duplicateFilter = {
-      name: { $regex: new RegExp(`^${headName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+    // A scope has exactly one head. The caller's optional name is deliberately
+    // ignored so repeated property/unit expenses reuse the same category.
+    const scopeFilter = {
       expenseClassification,
       propertyId,
       unitId,
     };
 
-    let duplicate = await Category.findOne(duplicateFilter).lean();
+    let duplicate = await Category.findOne(scopeFilter).sort({ createdAt: 1 }).lean();
     if (duplicate) {
       if (propertyId) {
         duplicate = await Category.findById(duplicate._id).populate('propertyId', 'plazaName propertyName').lean();

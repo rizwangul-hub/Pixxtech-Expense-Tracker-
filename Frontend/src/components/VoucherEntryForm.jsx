@@ -120,10 +120,6 @@ export const VoucherEntryForm = ({
   const handleCreateCategory = async (e) => {
     e?.preventDefault();
     const name = customCategoryName.trim();
-    if (!propertyId && !name) {
-      setError('Enter an expense head name before saving.');
-      return;
-    }
 
     if (name) {
       const existing = categories.find((c) => {
@@ -463,7 +459,7 @@ export const VoucherEntryForm = ({
 
                 return (
                   <>
-                    {unitHeads.length > 0 && (
+                    {unitId && unitHeads.length > 0 && (
                       <optgroup label={`Unit Expense Heads (${selectedProperty?.plazaName || 'Property'})`}>
                         {unitHeads.map((c) => (
                           <option key={c._id} value={c._id}>
@@ -473,7 +469,7 @@ export const VoucherEntryForm = ({
                       </optgroup>
                     )}
 
-                    {propertyHeads.length > 0 && (
+                    {!unitId && propertyId && propertyHeads.length > 0 && (
                       <optgroup label={`Property Expense Heads (${selectedProperty?.plazaName || 'Property'})`}>
                         {propertyHeads.map((c) => (
                           <option key={c._id} value={c._id}>
@@ -483,7 +479,7 @@ export const VoucherEntryForm = ({
                       </optgroup>
                     )}
 
-                    {generalHeads.length > 0 && (
+                    {!propertyId && generalHeads.length > 0 && (
                       <optgroup label="General & Standard Expense Heads">
                         {generalHeads.map((c) => (
                           <option key={c._id} value={c._id}>
@@ -493,7 +489,11 @@ export const VoucherEntryForm = ({
                       </optgroup>
                     )}
 
-                    {unitHeads.length === 0 && propertyHeads.length === 0 && generalHeads.length === 0 && (
+                    {(
+                      (unitId && unitHeads.length === 0) ||
+                      (!unitId && propertyId && propertyHeads.length === 0) ||
+                      (!propertyId && generalHeads.length === 0)
+                    ) && (
                       <option value="" disabled>
                         -- No Expense Heads found --
                       </option>
