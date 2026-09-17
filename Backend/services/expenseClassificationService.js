@@ -239,10 +239,90 @@ export const getOrCreateCanonicalHead = async ({
   return newHead;
 };
 
+/**
+ * Automatically provision standard property and unit expense categories
+ * for all properties and units in the system if they don't already exist.
+ * - Standard Property Expenses: 'Property tax', 'Entertainment'
+ * - Standard Unit Expenses: 'Maintenance', 'Electricity', 'Repair Maintenance', 'Commission'
+ */
+export const provisionStandardCategories = async () => {
+  try {
+    const properties = await Property.find({}).lean();
+    if (!properties || properties.length === 0) return { createdCount: 0 };
+
+    const STANDARD_PROPERTY_EXPENSES = ['Property tax', 'Entertainment'];
+    const STANDARD_UNIT_EXPENSES = ['Maintenance', 'Electricity', 'Repair Maintenance', 'Commission'];
+
+    let createdCount = 0;
+
+    for (const prop of properties) {
+      const pId = prop._id.toString();
+
+      // 1. Provision Property Own Expenses
+      for (const expName of STANDARD_PROPERTY_EXPENSES) {
+        const existing = await Category.findOne({
+          type: 'EXPENSE',
+          expenseClassification: 'PROPERTY_OWN_EXPENSE',
+          propertyId: pId,
+          unitId: null,
+          name: { $regex: `^${expName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+        });
+
+        if (!existing) {
+          await Category.create({
+            name: expName,
+            type: 'EXPENSE',
+            expenseClassification: 'PROPERTY_OWN_EXPENSE',
+            propertyId: pId,
+            unitId: null,
+            isRentalHead: false,
+          });
+          createdCount++;
+        }
+      }
+
+      // 2. Provision Unit Expenses
+      if (prop.units && Array.isArray(prop.units)) {
+        for (const unit of prop.units) {
+          const uId = unit._id.toString();
+
+          for (const expName of STANDARD_UNIT_EXPENSES) {
+            const existing = await Category.findOne({
+              type: 'EXPENSE',
+              expenseClassification: 'UNIT_EXPENSE',
+              propertyId: pId,
+              unitId: uId,
+              name: { $regex: `^${expName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+            });
+
+            if (!existing) {
+              await Category.create({
+                name: expName,
+                type: 'EXPENSE',
+                expenseClassification: 'UNIT_EXPENSE',
+                propertyId: pId,
+                unitId: uId,
+                isRentalHead: false,
+              });
+              createdCount++;
+            }
+          }
+        }
+      }
+    }
+
+    return { createdCount };
+  } catch (err) {
+    console.error('[Provision Standard Categories Error]:', err.message);
+    return { createdCount: 0, error: err.message };
+  }
+};
+
 export default {
   validateExpenseClassification,
   validateExpenseCategory,
   getOrCreateCanonicalHead,
+  provisionStandardCategories,
   deriveExpenseClassification,
   getExpenseScope,
   getPropertyExpenseType,

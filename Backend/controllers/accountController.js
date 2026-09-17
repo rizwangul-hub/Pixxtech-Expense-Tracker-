@@ -6,7 +6,7 @@ import Property from '../models/Property.js';
 import PendingEntry from '../models/PendingEntry.js';
 import MonthlyReport from '../models/MonthlyReport.js';
 import { round2 } from '../services/ledgerService.js';
-import { getOrCreateCanonicalHead } from '../services/expenseClassificationService.js';
+import { getOrCreateCanonicalHead, provisionStandardCategories } from '../services/expenseClassificationService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
 /**
@@ -701,6 +701,10 @@ export const getActiveAccountsSummary = async (req, res) => {
 export const getCategories = async (req, res) => {
   try {
     const { type, expenseClassification, propertyId, unitId } = req.query;
+    
+    // Auto-provision standard categories if any are missing
+    await provisionStandardCategories();
+
     const filter = {};
 
     if (type) {
