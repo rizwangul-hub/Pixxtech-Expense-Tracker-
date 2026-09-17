@@ -19,6 +19,7 @@ import {
   FileText,
   Coins,
   BookOpen,
+  Sparkles,
 } from 'lucide-react';
 import { hasPermission, isAdmin, isVerifier, isDataEntry, PERMISSIONS } from '../utils/permissions.js';
 import logo from '../assets/image/logo.png';
@@ -228,30 +229,50 @@ export function MainLayout({
   return (
     <div className="h-screen overflow-hidden bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Top Header */}
-      <header className="shrink-0 sticky top-0 z-40 h-20 bg-white border-b border-slate-200 px-4 lg:px-6 py-0 flex items-center justify-between shadow-xs">
+      <header className="shrink-0 sticky top-0 z-40 h-20 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-0 flex items-center justify-between shadow-2xs">
         {/* Left Branding */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3.5">
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200 transition"
+            className="md:hidden p-2 rounded-xl bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 transition"
             aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
 
-          <img
-            src={logo}
-            alt="Pixx Technologies logo"
-            className="pixx-logo-spin h-16 w-16 rounded-lg object-contain"
-          />
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl p-1 bg-gradient-to-b from-slate-50 to-slate-100 border border-slate-200/80 shadow-2xs flex items-center justify-center shrink-0">
+              <img
+                src={logo}
+                alt="Pixx Technologies logo"
+                className="pixx-logo-spin h-full w-full object-contain"
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-none">
+                  PIXX TECHNOLOGIES
+                </h1>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200/80 hidden xl:inline-block">
+                  ERP
+                </span>
+              </div>
+              <p className="text-[11px] font-medium text-slate-500 mt-1 hidden sm:block">
+                Corporate Expense Tracker & Enterprise Ledger System
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Right User & Actions */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3.5">
           {/* Status Indicator */}
-          <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-xs font-bold text-emerald-800 shadow-2xs">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
             <span>API Online</span>
           </div>
 
@@ -259,10 +280,10 @@ export function MainLayout({
           {onOpenTerminal && (
             <button
               onClick={onOpenTerminal}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition shadow-2xs"
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white shadow-sm hover:shadow transition transform active:scale-95 text-white-keep"
               title="Open operational voucher entry & reporting terminal"
             >
-              <FileText size={15} className="text-blue-600" />
+              <Sparkles size={14} className="text-amber-300" />
               <span className="hidden md:inline">
                 {userIsAdmin ? 'Publisher Control Center' : 'Voucher Entry Terminal'}
               </span>
@@ -271,23 +292,25 @@ export function MainLayout({
           )}
 
           {/* User Profile Pill */}
-          <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg">
-            <div className="h-7 w-7 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
-              <UserIcon size={14} className="text-white-keep" />
+          <div className="flex items-center gap-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 px-3 py-1.5 rounded-xl transition shadow-2xs">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-slate-900 via-slate-800 to-blue-900 text-white font-black text-xs shadow-2xs flex items-center justify-center border border-slate-300/40 shrink-0">
+              <UserIcon size={15} className="text-white-keep" />
             </div>
             <div className="text-left hidden sm:block">
-              <div className="text-xs font-bold text-slate-900 leading-tight">
+              <div className="text-xs font-black text-slate-900 leading-tight">
                 {user?.name || 'Authorized User'}
               </div>
               <div className="flex items-center gap-1 mt-0.5">
                 <span
-                  className={`text-[10px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded border ${
+                  className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
                     userIsAdmin
-                      ? 'bg-blue-100 text-blue-900 border-blue-300'
-                      : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                      ? 'bg-indigo-50 text-indigo-800 border-indigo-200/90'
+                      : userIsVerifier
+                      ? 'bg-amber-50 text-amber-800 border-amber-200/90'
+                      : 'bg-emerald-50 text-emerald-800 border-emerald-200/90'
                   }`}
                 >
-                  {userIsAdmin ? 'ADMIN' : 'DATA ENTRY'}
+                  {userIsAdmin ? 'ADMINISTRATOR' : userIsVerifier ? 'VERIFIER' : 'DATA ENTRY'}
                 </span>
               </div>
             </div>
@@ -297,10 +320,10 @@ export function MainLayout({
           <button
             type="button"
             onClick={onLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition shadow-2xs"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100/90 text-rose-700 border border-rose-200/80 text-xs font-bold transition shadow-2xs hover:shadow-xs active:scale-95"
             title="Sign out of system"
           >
-            <LogOut size={14} />
+            <LogOut size={15} />
             <span className="hidden md:inline">Logout</span>
           </button>
         </div>

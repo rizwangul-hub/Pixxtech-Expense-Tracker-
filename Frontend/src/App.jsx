@@ -22,6 +22,7 @@ import { DataEntryDashboard } from './pages/DataEntryDashboard.jsx';
 import { AdminPublisherDashboard } from './pages/AdminPublisherDashboard.jsx';
 import { VerifierDashboard } from './pages/VerifierDashboard.jsx';
 import { LoginForm } from './components/LoginForm.jsx';
+import loadingImg from './assets/image/loading.png';
 import { authAPI } from './services/api.js';
 import { hasPermission, isAdmin, isVerifier, isDataEntry, PERMISSIONS } from './utils/permissions.js';
 
@@ -166,11 +167,27 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 text-sm">
-        <div className="h-10 w-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black text-lg mb-3 animate-pulse">
-          PX
+      <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-slate-300 select-none overflow-hidden font-sans">
+        {/* Subtle Ambient Radial Glow */}
+        <div className="absolute inset-0 bg-radial from-blue-900/20 via-slate-950 to-slate-950 pointer-events-none" />
+
+        {/* PIXX TECHNOLOGIES Splash / Loading Image */}
+        <div className="relative z-10 flex flex-col items-center max-w-lg w-full">
+          <img
+            src={loadingImg}
+            alt="PIXX TECHNOLOGIES Loading..."
+            className="max-h-[60vh] max-w-[85vw] sm:max-w-md md:max-w-lg object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
+          />
+
+          {/* Sleek Animated Progress Bar */}
+          <div className="w-48 sm:w-64 h-1.5 bg-slate-800/80 rounded-full overflow-hidden mt-8 border border-slate-700/50 shadow-inner">
+            <div className="h-full bg-gradient-to-r from-teal-500 via-blue-500 to-indigo-500 rounded-full animate-pulse w-full" />
+          </div>
+
+          <p className="mt-3 text-xs font-bold text-slate-400 tracking-wider uppercase">
+            Initializing Financial Management System...
+          </p>
         </div>
-        <p>Loading Pixx Technologies Financial Management System...</p>
       </div>
     );
   }
