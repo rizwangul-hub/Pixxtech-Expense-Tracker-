@@ -72,11 +72,11 @@ export const DataEntryDashboard = ({ user }) => {
         otherIncomeAPI.getHeads().catch(() => ({ data: { heads: [] } })),
       ]);
 
-      setAccounts(accRes.accounts || []);
+      setAccounts(accRes.accounts || accRes.data?.accounts || []);
       setCustodians(accRes.grouped?.custodians || []);
-      setCategories(catRes.categories || []);
-      setProperties(propRes.properties || []);
-      setRecentEntries(entriesRes.transactions || []);
+      setCategories(catRes.categories || catRes.data?.categories || []);
+      setProperties(propRes.properties || propRes.data?.properties || []);
+      setRecentEntries(entriesRes.transactions || entriesRes.data?.transactions || []);
       const heads = headsRes?.data?.heads || headsRes?.heads || [];
       setOtherHeads(heads);
     } catch (err) {
@@ -95,7 +95,7 @@ export const DataEntryDashboard = ({ user }) => {
         accountsAPI.getActiveSummary(),
       ]);
       setRecentEntries(entriesRes.transactions || []);
-      setAccounts(accRes.accounts || []);
+      setAccounts(accRes.accounts || accRes.data?.accounts || []);
       setCustodians(accRes.grouped?.custodians || []);
     } catch (err) {
       console.error('Failed to refresh entries:', err);
