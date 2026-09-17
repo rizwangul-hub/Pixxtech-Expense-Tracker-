@@ -743,6 +743,7 @@ export const getCategories = async (req, res) => {
  */
 export const createCategory = async (req, res) => {
   try {
+    const rawName = (req.body.name || '').trim();
     const propertyId = req.body.propertyId && mongoose.Types.ObjectId.isValid(req.body.propertyId) ? req.body.propertyId : null;
     const unitId = req.body.unitId && mongoose.Types.ObjectId.isValid(req.body.unitId) ? req.body.unitId : null;
     let expenseClassification = req.body.expenseClassification;
@@ -755,11 +756,36 @@ export const createCategory = async (req, res) => {
       expenseClassification = 'GENERAL_EXPENSE';
     }
 
-    const category = await getOrCreateCanonicalHead({
-      expenseClassification,
-      propertyId,
-      unitId,
-    });
+    let category = null;
+
+    if (rawName) {
+      const queryFilter = {
+        type: 'EXPENSE',
+        name: { $regex: `^${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+        expenseClassification,
+        propertyId,
+        unitId,
+      };
+
+      category = await Category.findOne(queryFilter);
+
+      if (!category) {
+        category = await Category.create({
+          name: rawName,
+          type: 'EXPENSE',
+          expenseClassification,
+          propertyId,
+          unitId,
+          isRentalHead: !!req.body.isRentalHead,
+        });
+      }
+    } else {
+      category = await getOrCreateCanonicalHead({
+        expenseClassification,
+        propertyId,
+        unitId,
+      });
+    }
 
     let populatedCat = category;
     if (propertyId) {

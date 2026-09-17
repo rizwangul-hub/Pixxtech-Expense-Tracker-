@@ -95,46 +95,34 @@ export const VoucherEntryForm = ({
   }, []);
 
   useEffect(() => {
-    const targetClassification = unitId
-      ? 'UNIT_EXPENSE'
-      : propertyId
-      ? 'PROPERTY_OWN_EXPENSE'
-      : 'GENERAL_EXPENSE';
+    const generalHeads = categories.filter(
+      (c) => c.type === 'EXPENSE' && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE')
+    );
 
-    const matchingCategory = categories.find((c) => {
-      if (c.type !== 'EXPENSE') return false;
-      if (unitId) {
-        const uId = c.unitId?._id || c.unitId;
-        return c.expenseClassification === 'UNIT_EXPENSE' && String(uId) === String(unitId);
-      }
-      if (propertyId) {
-        const pId = c.propertyId?._id || c.propertyId;
-        return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && String(pId) === String(propertyId);
-      }
-      return !c.propertyId && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
-    });
+    const propertyHeads = propertyId
+      ? categories.filter(
+          (c) =>
+            c.type === 'EXPENSE' &&
+            c.expenseClassification === 'PROPERTY_OWN_EXPENSE' &&
+            String(c.propertyId?._id || c.propertyId) === String(propertyId)
+        )
+      : [];
 
-    if (matchingCategory) {
-      if (categoryId !== matchingCategory._id) {
-        setCategoryId(matchingCategory._id);
+    const unitHeads = unitId
+      ? categories.filter(
+          (c) =>
+            c.type === 'EXPENSE' &&
+            c.expenseClassification === 'UNIT_EXPENSE' &&
+            String(c.unitId?._id || c.unitId) === String(unitId)
+        )
+      : [];
+
+    const availableHeads = [...unitHeads, ...propertyHeads, ...generalHeads];
+
+    if (availableHeads.length > 0) {
+      if (!categoryId || !availableHeads.some((c) => c._id === categoryId)) {
+        setCategoryId(availableHeads[0]._id);
       }
-    } else if (categories.length > 0) {
-      accountsAPI
-        .createCategory({
-          propertyId: propertyId || null,
-          unitId: unitId || null,
-          expenseClassification: targetClassification,
-        })
-        .then((res) => {
-          const cat = res.data?.category || res.category || res.data;
-          if (cat && cat._id) {
-            setCategoryId(cat._id);
-            onMasterDataChanged?.();
-          }
-        })
-        .catch((err) => {
-          console.warn('Auto-resolving canonical head failed:', err);
-        });
     }
   }, [propertyId, unitId, categories]);
 
@@ -481,7 +469,7 @@ export const VoucherEntryForm = ({
                 return (
                   <>
                     {unitId && unitHeads.length > 0 && (
-                      <optgroup label={`Unit Expense Heads (${selectedProperty?.plazaName || 'Property'})`}>
+                      <optgroup label={`Unit Expense Categories (${selectedProperty?.plazaName || 'Property'})`}>
                         {unitHeads.map((c) => (
                           <option key={c._id} value={c._id}>
                             {c.name} {c.isRentalHead ? '(Rental)' : ''}
@@ -490,8 +478,8 @@ export const VoucherEntryForm = ({
                       </optgroup>
                     )}
 
-                    {!unitId && propertyId && propertyHeads.length > 0 && (
-                      <optgroup label={`Property Expense Heads (${selectedProperty?.plazaName || 'Property'})`}>
+                    {propertyId && propertyHeads.length > 0 && (
+                      <optgroup label={`Property Expense Categories (${selectedProperty?.plazaName || 'Property'})`}>
                         {propertyHeads.map((c) => (
                           <option key={c._id} value={c._id}>
                             {c.name} {c.isRentalHead ? '(Rental)' : ''}
@@ -500,8 +488,8 @@ export const VoucherEntryForm = ({
                       </optgroup>
                     )}
 
-                    {!propertyId && generalHeads.length > 0 && (
-                      <optgroup label="General & Standard Expense Heads">
+                    {generalHeads.length > 0 && (
+                      <optgroup label="General Expense Categories">
                         {generalHeads.map((c) => (
                           <option key={c._id} value={c._id}>
                             {c.name} {c.isRentalHead ? '(Rental)' : ''}
@@ -510,13 +498,9 @@ export const VoucherEntryForm = ({
                       </optgroup>
                     )}
 
-                    {(
-                      (unitId && unitHeads.length === 0) ||
-                      (!unitId && propertyId && propertyHeads.length === 0) ||
-                      (!propertyId && generalHeads.length === 0)
-                    ) && (
+                    {unitHeads.length === 0 && propertyHeads.length === 0 && generalHeads.length === 0 && (
                       <option value="" disabled>
-                        -- No Expense Heads found --
+                        -- No Expense Categories found --
                       </option>
                     )}
                   </>

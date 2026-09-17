@@ -489,17 +489,12 @@ export function ChartOfAccountsPage({ currentUser }) {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Expense Head Name (optional; the system uses the selected scope name)
+                    Expense Name / Category Title * (e.g. Electricity Bill, Property Tax, Maintenance)
                   </label>
                   <input
                     type="text"
-                    placeholder={
-                      expenseCategory.unitId
-                        ? "e.g. Paint Work (Optional - defaults to Unit Name)"
-                        : expenseCategory.propertyId
-                        ? "e.g. Generator Maintenance (Optional - defaults to Property Name)"
-                        : "e.g. Electrical Repairs, Office Supplies, Generator Maintenance"
-                    }
+                    required
+                    placeholder="e.g. Electricity Bill, Property Tax, Property Commission, Maintenance, Office Supplies"
                     value={expenseCategory.name}
                     onChange={(e) => setExpenseCategory({ ...expenseCategory, name: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-rose-600"

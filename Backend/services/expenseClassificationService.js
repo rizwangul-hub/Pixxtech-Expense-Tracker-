@@ -130,20 +130,19 @@ export const validateExpenseCategory = async ({
     throw new Error('Selected head is not an expense head.');
   }
 
-  const categoryClassification = category.expenseClassification || 'GENERAL_EXPENSE';
-  const categoryPropertyId = category.propertyId?.toString() || null;
-  const categoryUnitId = category.unitId?.toString() || null;
+  const categoryPropertyId = cleanId(category.propertyId);
+  const categoryUnitId = cleanId(category.unitId);
   const normalizedPropertyId = cleanId(propertyId);
   const normalizedUnitId = cleanId(unitId);
 
-  if (
-    categoryClassification !== expenseClassification ||
-    categoryPropertyId !== normalizedPropertyId ||
-    categoryUnitId !== normalizedUnitId
-  ) {
-    throw new Error(
-      'The selected expense head does not match the selected general, property, or unit expense scope.'
-    );
+  // If category is tied to a specific property, ensure it matches
+  if (categoryPropertyId && normalizedPropertyId && categoryPropertyId !== normalizedPropertyId) {
+    throw new Error('Selected expense category belongs to a different property.');
+  }
+
+  // If category is tied to a specific unit, ensure it matches
+  if (categoryUnitId && normalizedUnitId && categoryUnitId !== normalizedUnitId) {
+    throw new Error('Selected expense category belongs to a different unit.');
   }
 
   return category;
