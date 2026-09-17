@@ -6,6 +6,7 @@ import Property from '../models/Property.js';
 import PendingEntry from '../models/PendingEntry.js';
 import MonthlyReport from '../models/MonthlyReport.js';
 import { round2 } from '../services/ledgerService.js';
+import { getOrCreateCanonicalHead } from '../services/expenseClassificationService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
 /**
