@@ -47,18 +47,18 @@ export const VoucherEntryForm = ({
   const [amount, setAmount] = useState('');
   const [detail, setDetail] = useState('');
   const [propertyId, setPropertyId] = useState('');
-  const [expenseScope, setExpenseScope] = useState('GENERAL');
-  const [propertyExpenseType, setPropertyExpenseType] = useState('OWN');
   const [unitId, setUnitId] = useState('');
   const [evidenceFiles, setEvidenceFiles] = useState([]);
   const [rentMonth, setRentMonth] = useState('');
 
-  const derivedClassification =
-    expenseScope === 'GENERAL'
-      ? 'GENERAL_EXPENSE'
-      : propertyExpenseType === 'OWN'
-      ? 'PROPERTY_OWN_EXPENSE'
-      : 'UNIT_EXPENSE';
+  const derivedClassification = unitId
+    ? 'UNIT_EXPENSE'
+    : propertyId
+    ? 'PROPERTY_OWN_EXPENSE'
+    : 'GENERAL_EXPENSE';
+
+  const expenseScope = propertyId ? 'PROPERTY' : 'GENERAL';
+  const propertyExpenseType = unitId ? 'UNIT' : propertyId ? 'OWN' : 'OWN';
 
   const [loading, setLoading] = useState(false);
   const [fetchingVn, setFetchingVn] = useState(false);
@@ -146,14 +146,6 @@ export const VoucherEntryForm = ({
       setError('Please select a Credit Account (Cr.) - Disbursing / Paid From Account.');
       return;
     }
-    if (derivedClassification === 'PROPERTY_OWN_EXPENSE' && !propertyId) {
-      setError('Please select a property for Property Own Expense.');
-      return;
-    }
-    if (derivedClassification === 'UNIT_EXPENSE' && (!propertyId || !unitId)) {
-      setError('Please select both a property and a unit for Unit Expense.');
-      return;
-    }
 
     const numAmount = Number(amount);
     if (!amount || isNaN(numAmount) || numAmount <= 0) {
@@ -190,8 +182,6 @@ export const VoucherEntryForm = ({
       setDetail('');
       setPropertyId('');
       setUnitId('');
-      setExpenseScope('GENERAL');
-      setPropertyExpenseType('OWN');
       setEvidenceFiles([]);
       setRentMonth('');
       setError(null);
@@ -306,101 +296,79 @@ export const VoucherEntryForm = ({
           </div>
         </div>
 
-        {/* Row 2: 2-Level Expense Classification Workflow */}
+        {/* Row 2: Property & Unit Pickers (Derives Scope automatically) */}
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Level 1: Expense Type */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Property Picker */}
             <div>
-              <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
-                1. Expense Type <span className="text-rose-500">*</span>
+              <label className="block text-xs font-bold uppercase text-slate-700 mb-1 flex items-center gap-1">
+                <Building className="w-4 h-4 text-blue-600" /> Select Property (Optional / Leave empty for General Expense)
               </label>
               <select
-                value={expenseScope}
+                value={propertyId}
                 onChange={(e) => {
                   const val = e.target.value;
-                  setExpenseScope(val);
-                  if (val === 'GENERAL') {
-                    setPropertyId('');
-                    setUnitId('');
-                  }
+                  setPropertyId(val);
+                  setUnitId('');
+                  setCategoryId(''); // Reset head selection on scope change
                 }}
                 className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
               >
-                <option value="GENERAL">General Expense (Company Level)</option>
-                <option value="PROPERTY">Property Expense (Linked to Property)</option>
+                <option value="">-- None (General Company Expense) --</option>
+                {properties.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.plazaName || p.propertyName} ({p.location || p.city || 'Commercial Plaza'})
+                  </option>
+                ))}
               </select>
             </div>
 
-            {/* Level 2: Property Expense Type */}
-            {expenseScope === 'PROPERTY' && (
+            {/* Unit Picker (Shown only if property is selected) */}
+            {propertyId ? (
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
-                  2. Property Expense Type <span className="text-rose-500">*</span>
+                  Select Unit (Optional / Leave empty for Property Own Expense)
                 </label>
                 <select
-                  value={propertyExpenseType}
+                  value={unitId}
                   onChange={(e) => {
-                    const val = e.target.value;
-                    setPropertyExpenseType(val);
-                    if (val === 'OWN') setUnitId('');
+                    setUnitId(e.target.value);
+                    setCategoryId(''); // Reset head selection on scope change
                   }}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
                 >
-                  <option value="OWN">Property Own Expense (Building Level)</option>
-                  <option value="UNIT">Unit Expense (Specific Leasable Unit)</option>
-                </select>
-              </div>
-            )}
-          </div>
-
-          {/* Level 2 Fields: Property & Unit Pickers */}
-          {expenseScope === 'PROPERTY' && (
-            <div className={`grid grid-cols-1 ${propertyExpenseType === 'UNIT' ? 'md:grid-cols-2' : ''} gap-4 pt-3 border-t border-slate-200`}>
-              <div>
-                <label className="block text-xs font-bold uppercase text-slate-700 mb-1 flex items-center gap-1">
-                  <Building className="w-4 h-4 text-blue-600" /> Select Property <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={propertyId}
-                  onChange={(e) => {
-                    setPropertyId(e.target.value);
-                    setUnitId('');
-                  }}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
-                  required
-                >
-                  <option value="">-- Select Property --</option>
-                  {properties.map((p) => (
-                    <option key={p._id} value={p._id}>
-                      {p.plazaName} ({p.location || 'Commercial Plaza'})
+                  <option value="">-- None (Property Own Expense) --</option>
+                  {units.map((unit) => (
+                    <option key={unit._id} value={unit._id}>
+                      {unit.unitName || unit.unitNumber || unit.name || 'Unit'} {unit.tenantName ? `(${unit.tenantName})` : ''}
                     </option>
                   ))}
                 </select>
               </div>
+            ) : (
+              <div className="hidden md:flex items-center text-xs font-bold text-slate-500 pt-5">
+                <span>🌐 General Company Expense (No Property Selected)</span>
+              </div>
+            )}
+          </div>
 
-              {propertyExpenseType === 'UNIT' && (
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
-                    Select Unit <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={unitId}
-                    onChange={(e) => setUnitId(e.target.value)}
-                    disabled={!propertyId}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
-                    required
-                  >
-                    <option value="">-- Select Unit --</option>
-                    {units.map((unit) => (
-                      <option key={unit._id} value={unit._id}>
-                        {unit.unitName || unit.unitNumber || unit.name || 'Unit'} {unit.tenantName ? `(${unit.tenantName})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Scope Indicator Badge */}
+          <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs font-bold">
+            <span className="text-slate-600">Active Expense Head Scope:</span>
+            {!propertyId ? (
+              <span className="px-2.5 py-1 rounded-md bg-slate-200 text-slate-800 border border-slate-300">
+                🌐 General Expense (Showing General Heads)
+              </span>
+            ) : !unitId ? (
+              <span className="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-300">
+                🏢 Property Own Expense (Showing Property Heads for {selectedProperty?.plazaName || selectedProperty?.propertyName})
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 rounded-md bg-blue-100 text-blue-900 border border-blue-300">
+                🚪 Unit Expense (Showing Unit Heads)
+              </span>
+            )}
+          </div>
         </div>
 
         <EvidenceImageUpload files={evidenceFiles} onChange={setEvidenceFiles} disabled={loading} />

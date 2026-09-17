@@ -767,112 +767,52 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
                   <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                     <Building2 size={14} className="text-amber-400" />
-                    Expense Classification & Scoping
-                  </div>
-                  
-                  {/* Level 1: Scope */}
-                  <div>
-                    <label className="block text-[11px] text-slate-400 font-semibold mb-1">Expense Scope</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditForm({ ...editForm, expenseClassification: 'GENERAL_EXPENSE', propertyId: '', unitId: '' })}
-                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition ${
-                          editForm.expenseClassification === 'GENERAL_EXPENSE'
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
-                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
-                        }`}
-                      >
-                        General Expense
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (editForm.expenseClassification === 'GENERAL_EXPENSE') {
-                            setEditForm({ ...editForm, expenseClassification: 'PROPERTY_OWN_EXPENSE' });
-                          }
-                        }}
-                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition ${
-                          editForm.expenseClassification !== 'GENERAL_EXPENSE'
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
-                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
-                        }`}
-                      >
-                        Property-Linked
-                      </button>
-                    </div>
+                    Property & Unit Allocation (Derives Scope)
                   </div>
 
-                  {/* Level 2: Property & Unit details if Property-Linked */}
-                  {editForm.expenseClassification !== 'GENERAL_EXPENSE' && (
-                    <div className="space-y-3 pt-2 border-t border-slate-800/80">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">Select Property (Optional)</label>
+                      <select
+                        value={editForm.propertyId}
+                        onChange={(e) => {
+                          const pId = e.target.value;
+                          const classification = pId ? (editForm.unitId ? 'UNIT_EXPENSE' : 'PROPERTY_OWN_EXPENSE') : 'GENERAL_EXPENSE';
+                          setEditForm({ ...editForm, propertyId: pId, unitId: pId ? editForm.unitId : '', expenseClassification: classification });
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      >
+                        <option value="">-- None (General Expense) --</option>
+                        {properties.map((p) => (
+                          <option key={p._id} value={p._id}>
+                            {p.plazaName || p.propertyName || p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {editForm.propertyId && (
                       <div>
-                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Property *</label>
+                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Select Unit (Optional)</label>
                         <select
-                          value={editForm.propertyId}
-                          onChange={(e) => setEditForm({ ...editForm, propertyId: e.target.value, unitId: '' })}
-                          required
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                          value={editForm.unitId}
+                          onChange={(e) => {
+                            const uId = e.target.value;
+                            const classification = uId ? 'UNIT_EXPENSE' : 'PROPERTY_OWN_EXPENSE';
+                            setEditForm({ ...editForm, unitId: uId, expenseClassification: classification });
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
                         >
-                          <option value="">Select Property...</option>
-                          {properties.map((p) => (
-                            <option key={p._id} value={p._id}>
-                              {p.propertyName || p.name}
+                          <option value="">-- None (Property Own Expense) --</option>
+                          {(properties.find((p) => p._id === editForm.propertyId)?.units || []).map((u) => (
+                            <option key={u._id || u.unitName || u} value={u._id || u.unitName || u}>
+                              {u.unitName || u.unitNumber || u.name || u} {u.tenantName ? `(${u.tenantName})` : ''}
                             </option>
                           ))}
                         </select>
                       </div>
-
-                      {editForm.propertyId && (
-                        <div>
-                          <label className="block text-[11px] text-slate-400 font-semibold mb-1">Property Target</label>
-                          <div className="grid grid-cols-2 gap-2 mb-2">
-                            <button
-                              type="button"
-                              onClick={() => setEditForm({ ...editForm, expenseClassification: 'PROPERTY_OWN_EXPENSE', unitId: '' })}
-                              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition ${
-                                editForm.expenseClassification === 'PROPERTY_OWN_EXPENSE'
-                                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/50'
-                                  : 'bg-slate-900 text-slate-400 border-slate-800'
-                              }`}
-                            >
-                              Property Own
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditForm({ ...editForm, expenseClassification: 'UNIT_EXPENSE' })}
-                              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition ${
-                                editForm.expenseClassification === 'UNIT_EXPENSE'
-                                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/50'
-                                  : 'bg-slate-900 text-slate-400 border-slate-800'
-                              }`}
-                            >
-                              Specific Unit
-                            </button>
-                          </div>
-
-                          {editForm.expenseClassification === 'UNIT_EXPENSE' && (
-                            <div>
-                              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Select Unit *</label>
-                              <select
-                                value={editForm.unitId}
-                                onChange={(e) => setEditForm({ ...editForm, unitId: e.target.value })}
-                                required
-                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
-                              >
-                                <option value="">Select Unit...</option>
-                                {(properties.find((p) => p._id === editForm.propertyId)?.units || []).map((u) => (
-                                  <option key={u.unitName || u._id || u} value={u.unitName || u._id || u}>
-                                    {u.unitName || u} {u.tenantName ? `(${u.tenantName})` : ''}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               )}
 
