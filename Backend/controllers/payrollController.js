@@ -450,7 +450,7 @@ export const generateSalarySlipPDF = async (req, res) => {
     const { numberToWords } = await import('../services/staffPayrollService.js');
     const amountInWords = numberToWords(netPayable);
 
-    // Render HTML template matching the official Salary Slip.pdf layout
+    // Render HTML template matching the official Salary Slip.pdf layout (Image 2)
     const htmlContent = `
     <!DOCTYPE html>
     <html lang="en">
@@ -458,16 +458,20 @@ export const generateSalarySlipPDF = async (req, res) => {
       <meta charset="UTF-8">
       <title>Salary Pay Slip - ${employee.name}</title>
       <style>
+        @page {
+          size: A4 portrait;
+          margin: 10mm;
+        }
         body {
           font-family: 'Times New Roman', Times, serif;
           color: #000;
           margin: 0;
-          padding: 20px;
+          padding: 15px;
           background: #fff;
         }
         .slip-container {
           width: 100%;
-          max-width: 820px;
+          max-width: 850px;
           margin: 0 auto;
           box-sizing: border-box;
         }
@@ -478,18 +482,18 @@ export const generateSalarySlipPDF = async (req, res) => {
         }
         table.outer-table td, table.outer-table th {
           border: 1px solid #000;
-          padding: 5px 8px;
+          padding: 4px 6px;
         }
         .header-title {
           text-align: center;
-          font-size: 26px;
+          font-size: 34px;
           font-weight: bold;
-          padding: 8px 0;
+          padding: 10px 0;
           letter-spacing: 1px;
         }
         .sub-title {
           text-align: center;
-          font-size: 16px;
+          font-size: 18px;
           font-weight: bold;
           padding: 6px 0;
         }
@@ -498,6 +502,7 @@ export const generateSalarySlipPDF = async (req, res) => {
         .font-bold { font-weight: bold; }
         .inner-table {
           width: 100%;
+          height: 100%;
           border-collapse: collapse;
           font-size: 13px;
         }
@@ -506,14 +511,16 @@ export const generateSalarySlipPDF = async (req, res) => {
           padding: 4px 6px;
         }
         .big-payout {
-          font-size: 24px;
+          font-size: 44px;
           font-weight: bold;
           text-align: center;
-          padding: 35px 10px;
+          padding: 60px 10px;
+          letter-spacing: 1.5px;
+          font-family: 'Times New Roman', Times, serif;
         }
         .words-box {
           text-align: center;
-          font-size: 13px;
+          font-size: 14px;
           padding: 8px 5px;
         }
       </style>
@@ -528,14 +535,14 @@ export const generateSalarySlipPDF = async (req, res) => {
             <td colspan="6" class="sub-title">Salary Pay Slip For The Month Of ${formattedTitleDate}</td>
           </tr>
           <tr>
-            <td class="font-bold" style="width: 10%;">Name:</td>
-            <td class="font-bold" style="width: 35%;">${employee.name}</td>
+            <td class="font-bold" style="width: 8%;">Name:</td>
+            <td class="font-bold" style="width: 37%; font-size: 15px;">${employee.name}</td>
             <td class="font-bold" style="width: 15%;">Designation</td>
-            <td colspan="3" class="font-bold">${employee.designation}</td>
+            <td colspan="3" class="font-bold" style="font-size: 15%;">${employee.designation}</td>
           </tr>
           <tr>
             <!-- LEFT COLUMN: FINANCIAL ITEMIZED BREAKDOWN -->
-            <td colspan="3" style="vertical-align: top; padding: 0;">
+            <td colspan="3" style="vertical-align: top; padding: 0; width: 50%;">
               <table class="inner-table">
                 <tr>
                   <td style="width: 6%;">I</td>
@@ -560,6 +567,14 @@ export const generateSalarySlipPDF = async (req, res) => {
                   <td>Leave Encashment</td>
                   <td>PKR</td>
                   <td class="text-right">${leaveEncashment ? formatPKR(leaveEncashment) : '0'}</td>
+                </tr>
+                <tr>
+                  <td colspan="3">&nbsp;</td>
+                  <td>&nbsp;</td>
+                </tr>
+                <tr>
+                  <td colspan="3">&nbsp;</td>
+                  <td>&nbsp;</td>
                 </tr>
                 <tr>
                   <td colspan="3">Total Other Receipts</td>
@@ -597,9 +612,9 @@ export const generateSalarySlipPDF = async (req, res) => {
                   <td class="text-right font-bold">${formatPKR(totDed)}</td>
                 </tr>
                 <tr>
-                  <td colspan="2"></td>
+                  <td colspan="2">&nbsp;</td>
                   <td class="font-bold">PKR</td>
-                  <td class="text-right font-bold"></td>
+                  <td class="text-right font-bold">&nbsp;</td>
                 </tr>
                 <tr>
                   <td colspan="3" class="font-bold">SALARY AFTER DEDUCTIONS</td>
@@ -612,9 +627,9 @@ export const generateSalarySlipPDF = async (req, res) => {
               </table>
             </td>
 
-            <!-- RIGHT COLUMN: ATTENDANCE & PAYOUT DISPLAY -->
-            <td colspan="3" style="vertical-align: top; padding: 0;">
-              <table class="inner-table">
+            <!-- RIGHT COLUMN: ATTENDANCE & HUGE BOLD PAYOUT DISPLAY -->
+            <td colspan="3" style="vertical-align: top; padding: 0; width: 50%;">
+              <table class="inner-table" style="height: 100%;">
                 <tr>
                   <td style="width: 8%; font-weight: bold;">A</td>
                   <td style="font-weight: bold;">Total Attendance</td>
