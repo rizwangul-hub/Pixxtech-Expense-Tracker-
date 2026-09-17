@@ -208,6 +208,10 @@ export const transactionsAPI = {
     const res = await api.put(`/transactions/${id}`, data);
     return res.data;
   },
+  deleteTransaction: async (id) => {
+    const res = await api.delete(`/transactions/${id}`);
+    return res.data;
+  },
 };
 
 export const rentAPI = {
@@ -386,6 +390,10 @@ export const accountsAPI = {
   },
   createCategory: async (data) => {
     const res = await api.post('/accounts/categories', data);
+    return res.data;
+  },
+  deleteCategory: async (id) => {
+    const res = await api.delete(`/accounts/categories/${id}`);
     return res.data;
   },
   getProperties: async () => {

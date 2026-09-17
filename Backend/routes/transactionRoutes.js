@@ -4,6 +4,7 @@ import {
   getMyEntries,
   suggestVoucherNumber,
   updatePendingVoucher,
+  deleteTransaction,
 } from '../controllers/transactionController.js';
 import { getAllTransactions } from '../controllers/voucherController.js';
 import { protect } from '../middleware/auth.js';
@@ -18,5 +19,6 @@ router.post('/voucher', recordVoucher);
 router.get('/my-entries', getMyEntries);
 router.get('/suggest-vn', suggestVoucherNumber);
 router.put('/:id', updatePendingVoucher);
+router.delete('/:id', deleteTransaction);
 
 export default router;

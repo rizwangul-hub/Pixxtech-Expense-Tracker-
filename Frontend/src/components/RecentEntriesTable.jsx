@@ -10,6 +10,7 @@ import {
   Save,
   Printer,
   Download,
+  Trash2,
 } from 'lucide-react';
 import { transactionsAPI, vouchersAPI } from '../services/api.js';
 import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
@@ -32,6 +33,23 @@ export const RecentEntriesTable = ({
   const [editCheckedBy, setEditCheckedBy] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState(null);
+  const [deletingTxId, setDeletingTxId] = useState(null);
+
+  const handleDeleteTx = async (tx) => {
+    if (!window.confirm(`Are you sure you want to delete Voucher #${tx.voucherNo} (${tx.detail})?`)) return;
+
+    try {
+      setDeletingTxId(tx._id);
+      await transactionsAPI.deleteTransaction(tx._id);
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to delete transaction.');
+    } finally {
+      setDeletingTxId(null);
+    }
+  };
 
   const handleDownloadPdf = async (tx) => {
     try {
@@ -246,6 +264,18 @@ export const RecentEntriesTable = ({
                             <Edit3 className="w-4 h-4" />
                           </button>
                         )}
+                        <button
+                          onClick={() => handleDeleteTx(tx)}
+                          disabled={deletingTxId === tx._id}
+                          className="p-1.5 text-rose-600 hover:text-rose-900 hover:bg-rose-50 rounded-lg transition border border-rose-200 disabled:opacity-50"
+                          title={`Delete voucher #${tx.voucherNo}`}
+                        >
+                          {deletingTxId === tx._id ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
                       </div>
                     </td>
                   </tr>

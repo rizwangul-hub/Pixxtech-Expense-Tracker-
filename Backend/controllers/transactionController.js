@@ -1,5 +1,7 @@
 import Transaction from '../models/Transaction.js';
 import PendingEntry from '../models/PendingEntry.js';
+import Account from '../models/Account.js';
+import MonthlyReport from '../models/MonthlyReport.js';
 import { createTransaction, round2 } from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
 import { validateExpenseClassification } from '../services/expenseClassificationService.js';
@@ -295,9 +297,70 @@ export const updatePendingVoucher = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Delete a single transaction/voucher and reverse account balance effects
+ * @route   DELETE /api/transactions/:id
+ * @access  Private
+ */
+export const deleteTransaction = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Check if pending entry
+    const pending = await PendingEntry.findById(id);
+    if (pending) {
+      await PendingEntry.findByIdAndDelete(id);
+      return res.status(200).json({
+        success: true,
+        message: `Pending voucher #${pending.voucherNo} deleted successfully.`,
+      });
+    }
+
+    // 2. Check recorded Transaction
+    const tx = await Transaction.findById(id);
+    if (!tx) {
+      return res.status(404).json({ success: false, message: 'Transaction not found.' });
+    }
+
+    // Locked period check
+    const txDate = tx.date ? new Date(tx.date) : new Date();
+    const txMonth = `${txDate.getUTCFullYear()}-${String(txDate.getUTCMonth() + 1).padStart(2, '0')}`;
+    const isLocked = await MonthlyReport.findOne({ month: txMonth, status: 'PUBLISHED' }).lean();
+    if (isLocked) {
+      return res.status(403).json({
+        success: false,
+        message: `Financial period ${txMonth} is officially PUBLISHED and locked. Transactions cannot be deleted.`,
+      });
+    }
+
+    const amt = round2(tx.amount);
+    // Reverse balances
+    if (tx.drAccountId && tx.crAccountId) {
+      await Promise.all([
+        Account.findByIdAndUpdate(tx.drAccountId, { $inc: { currentBalance: -amt } }),
+        Account.findByIdAndUpdate(tx.crAccountId, { $inc: { currentBalance: amt } }),
+      ]);
+    }
+
+    await Transaction.findByIdAndDelete(id);
+
+    return res.status(200).json({
+      success: true,
+      message: `Expense voucher #${tx.voucherNo} deleted and account balances reversed successfully.`,
+    });
+  } catch (error) {
+    console.error('[Delete Transaction Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to delete transaction.',
+    });
+  }
+};
+
 export default {
   recordVoucher,
   getMyEntries,
   suggestVoucherNumber,
   updatePendingVoucher,
+  deleteTransaction,
 };

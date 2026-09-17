@@ -12,6 +12,7 @@ import {
   Landmark,
   Search,
   Wallet,
+  Trash2,
 } from 'lucide-react';
 import { accountsAPI, otherIncomeAPI, propertiesAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
@@ -173,6 +174,22 @@ export function ChartOfAccountsPage({ currentUser }) {
       notify('error', error.response?.data?.message || error.message || 'Failed to create expense head.');
     } finally {
       setSaving('');
+    }
+  };
+
+  const [deletingCatId, setDeletingCatId] = useState(null);
+
+  const handleDeleteCategory = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete the expense head "${name}"?`)) return;
+    try {
+      setDeletingCatId(id);
+      await accountsAPI.deleteCategory(id);
+      notify('success', `Expense head "${name}" deleted successfully.`);
+      await loadChartData();
+    } catch (err) {
+      notify('error', err.response?.data?.message || err.message || 'Failed to delete expense head.');
+    } finally {
+      setDeletingCatId(null);
     }
   };
 
@@ -572,9 +589,20 @@ export function ChartOfAccountsPage({ currentUser }) {
                               )}
                             </div>
                           </div>
-                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${scopeStyle}`}>
-                            {scopeLabel}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${scopeStyle}`}>
+                              {scopeLabel}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCategory(c._id, c.name)}
+                              disabled={deletingCatId === c._id}
+                              className="p-1.5 text-rose-600 hover:text-rose-900 hover:bg-rose-50 rounded-md transition border border-rose-200 disabled:opacity-50"
+                              title={`Delete single expense head '${c.name}'`}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                       );
                     })

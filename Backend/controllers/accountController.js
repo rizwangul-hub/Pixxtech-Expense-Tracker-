@@ -3,6 +3,7 @@ import Account from '../models/Account.js';
 import Transaction from '../models/Transaction.js';
 import Category from '../models/Category.js';
 import Property from '../models/Property.js';
+import PendingEntry from '../models/PendingEntry.js';
 import { round2 } from '../services/ledgerService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
@@ -842,6 +843,43 @@ export const getProperties = async (req, res) => {
   }
 };
 
+/**
+ * Delete a single expense head (category) by ID
+ */
+export const deleteCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return apiError(res, 'Invalid expense head ID.', 400);
+    }
+
+    const category = await Category.findById(id);
+    if (!category) {
+      return apiError(res, 'Expense head not found.', 404);
+    }
+
+    const [txCount, pendingCount] = await Promise.all([
+      Transaction.countDocuments({ categoryId: id }),
+      PendingEntry.countDocuments({ categoryId: id }),
+    ]);
+
+    if (txCount > 0 || pendingCount > 0) {
+      return apiError(
+        res,
+        `Cannot delete expense head '${category.name}' because it is linked to ${txCount + pendingCount} transaction(s).`,
+        400
+      );
+    }
+
+    await Category.findByIdAndDelete(id);
+
+    return apiSuccess(res, { id }, `Expense head '${category.name}' deleted successfully.`);
+  } catch (error) {
+    console.error('[Delete Category Error]:', error);
+    return apiError(res, 'Failed to delete expense head.', 500);
+  }
+};
+
 export default {
   getAccounts,
   getAccountById,
@@ -853,5 +891,6 @@ export default {
   getActiveAccountsSummary,
   getCategories,
   createCategory,
+  deleteCategory,
   getProperties,
 };

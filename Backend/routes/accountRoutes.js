@@ -10,6 +10,7 @@ import {
   getActiveAccountsSummary,
   getCategories,
   createCategory,
+  deleteCategory,
   getProperties,
 } from '../controllers/accountController.js';
 import { protect, authorize } from '../middleware/auth.js';
@@ -25,8 +26,9 @@ router.get('/monthly-summary', getMonthlySummary);
 router.get('/active-summary', getActiveAccountsSummary);
 router.get('/categories-list', getCategories);
 router.get('/properties-list', getProperties);
-// Data-entry users may add expense heads while recording vouchers.
-router.post('/categories', authorize('ADMIN', 'ADMIN_PUBLISHER', 'DATA_ENTRY'), createCategory);
+// Data-entry & Admin users may add or delete expense heads
+router.post('/categories', authorize('ADMIN', 'ADMIN_PUBLISHER', 'DATA_ENTRY', 'VERIFIER'), createCategory);
+router.delete('/categories/:id', authorize('ADMIN', 'ADMIN_PUBLISHER', 'DATA_ENTRY', 'VERIFIER'), deleteCategory);
 
 // Specific Account Ledger & Detail
 router.get('/:id/ledger', getAccountLedger);
