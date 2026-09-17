@@ -2,8 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import handlebars from 'handlebars';
-import chromium from '@sparticuz/chromium';
-import puppeteer from 'puppeteer-core';
 
 import Transaction from '../models/Transaction.js';
 import Property from '../models/Property.js';
@@ -442,6 +440,9 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   });
 
   // 8. Launch Puppeteer with fallback
+  const chromium = (await import('@sparticuz/chromium')).default;
+  const puppeteer = (await import('puppeteer-core')).default;
+
   const localExecutablePath = getBrowserExecutablePath();
   const executablePath = localExecutablePath || await chromium.executablePath();
   const launchOptions = {
@@ -539,6 +540,9 @@ export const generateSingleVoucherPDF = async (printDetail) => {
     khurshidSignBase64,
     generatedDate: new Date().toLocaleString('en-GB'),
   });
+
+  const chromium = (await import('@sparticuz/chromium')).default;
+  const puppeteer = (await import('puppeteer-core')).default;
 
   const localExecutablePath = getBrowserExecutablePath();
   const executablePath = localExecutablePath || (await chromium.executablePath());

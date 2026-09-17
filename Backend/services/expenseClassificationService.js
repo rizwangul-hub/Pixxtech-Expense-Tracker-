@@ -112,41 +112,41 @@ export const validateExpenseClassification = async ({
     propertyId: normalizedPropertyId,
     unitId: normalizedUnitId,
   };
+};
 
-  export const validateExpenseCategory = async ({
-    categoryId,
-    expenseClassification,
-    propertyId,
-    unitId,
-  }) => {
-    if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
-      throw new Error('A valid expense head is required.');
-    }
+export const validateExpenseCategory = async ({
+  categoryId,
+  expenseClassification,
+  propertyId,
+  unitId,
+}) => {
+  if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
+    throw new Error('A valid expense head is required.');
+  }
 
-    const category = await Category.findById(categoryId).lean();
-    if (!category) throw new Error('Selected expense head was not found.');
-    if (category.type !== 'EXPENSE') {
-      throw new Error('Selected head is not an expense head.');
-    }
+  const category = await Category.findById(categoryId).lean();
+  if (!category) throw new Error('Selected expense head was not found.');
+  if (category.type !== 'EXPENSE') {
+    throw new Error('Selected head is not an expense head.');
+  }
 
-    const categoryClassification = category.expenseClassification || 'GENERAL_EXPENSE';
-    const categoryPropertyId = category.propertyId?.toString() || null;
-    const categoryUnitId = category.unitId?.toString() || null;
-    const normalizedPropertyId = cleanId(propertyId);
-    const normalizedUnitId = cleanId(unitId);
+  const categoryClassification = category.expenseClassification || 'GENERAL_EXPENSE';
+  const categoryPropertyId = category.propertyId?.toString() || null;
+  const categoryUnitId = category.unitId?.toString() || null;
+  const normalizedPropertyId = cleanId(propertyId);
+  const normalizedUnitId = cleanId(unitId);
 
-    if (
-      categoryClassification !== expenseClassification ||
-      categoryPropertyId !== normalizedPropertyId ||
-      categoryUnitId !== normalizedUnitId
-    ) {
-      throw new Error(
-        'The selected expense head does not match the selected general, property, or unit expense scope.'
-      );
-    }
+  if (
+    categoryClassification !== expenseClassification ||
+    categoryPropertyId !== normalizedPropertyId ||
+    categoryUnitId !== normalizedUnitId
+  ) {
+    throw new Error(
+      'The selected expense head does not match the selected general, property, or unit expense scope.'
+    );
+  }
 
-    return category;
-  };
+  return category;
 };
 
 export const getExpenseClassificationLabel = (classification) =>

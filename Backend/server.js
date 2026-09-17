@@ -36,34 +36,23 @@ app.disable('x-powered-by');
 // 1. Explicit CORS Preflight & Access-Control-Allow-Origin Middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  const configuredOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
-    : [];
 
-  const isAllowed =
-    !origin ||
-    configuredOrigins.includes(origin) ||
-    origin.endsWith('.vercel.app') ||
-    origin.startsWith('http://localhost') ||
-    process.env.NODE_ENV !== 'production';
-
-  if (origin && isAllowed) {
+  if (origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-  } else if (!origin) {
+  } else {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
 
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, X-CSRF-Token');
 
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return res.status(200).end();
   }
   next();
 });
 
-// Standard cors package fallback
 app.use(
   cors({
     origin: (origin, callback) => callback(null, true),
