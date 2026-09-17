@@ -760,9 +760,12 @@ export const createCategory = async (req, res) => {
       unitId,
     };
 
-    const duplicate = await Category.findOne(duplicateFilter).lean();
+    let duplicate = await Category.findOne(duplicateFilter).lean();
     if (duplicate) {
-      return apiError(res, `Expense head '${name}' already exists for this scope.`, 409);
+      if (propertyId) {
+        duplicate = await Category.findById(duplicate._id).populate('propertyId', 'plazaName propertyName').lean();
+      }
+      return apiSuccess(res, { category: duplicate }, `Expense head '${duplicate.name}' selected.`, 200);
     }
 
     let category = await Category.create({
@@ -782,7 +785,10 @@ export const createCategory = async (req, res) => {
   } catch (error) {
     console.error('[Create Category Error]:', error);
     if (error.code === 11000) {
-      return apiError(res, 'An expense head with this name already exists for this scope.', 409);
+      const existing = await Category.findOne({ name: req.body.name?.trim() }).lean();
+      if (existing) {
+        return apiSuccess(res, { category: existing }, `Expense head '${existing.name}' selected.`, 200);
+      }
     }
     return apiError(res, 'Failed to create expense head.', 500);
   }

@@ -102,6 +102,31 @@ export const VoucherEntryForm = ({
       return;
     }
 
+    // Check if category with matching name already exists in current loaded categories
+    const existing = categories.find((c) => {
+      if (c.name.trim().toLowerCase() !== name.toLowerCase()) return false;
+      if (derivedClassification === 'GENERAL_EXPENSE') {
+        return !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
+      }
+      if (derivedClassification === 'PROPERTY_OWN_EXPENSE') {
+        const pId = c.propertyId?._id || c.propertyId;
+        return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && String(pId) === String(propertyId);
+      }
+      if (derivedClassification === 'UNIT_EXPENSE') {
+        const uId = c.unitId?._id || c.unitId;
+        return c.expenseClassification === 'UNIT_EXPENSE' && String(uId) === String(unitId);
+      }
+      return false;
+    });
+
+    if (existing) {
+      setCategoryId(existing._id);
+      setCustomCategoryName('');
+      setError(null);
+      setSuccess(`Expense head '${existing.name}' selected.`);
+      return;
+    }
+
     try {
       setSavingCategory(true);
       const response = await accountsAPI.createCategory({
@@ -109,14 +134,16 @@ export const VoucherEntryForm = ({
         propertyId: propertyId || null,
         unitId: unitId || null,
       });
-      const category = response.data?.category || response.category;
-      setCategoryId(category._id);
+      const category = response.data?.category || response.category || response.data;
+      if (category && category._id) {
+        setCategoryId(category._id);
+      }
       setCustomCategoryName('');
       setError(null);
-      setSuccess(`Expense head '${category.name}' created and selected.`);
+      setSuccess(`Expense head '${category?.name || name}' selected.`);
       await onMasterDataChanged?.();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create expense head.');
+      setError(err.response?.data?.message || 'Failed to select expense head.');
     } finally {
       setSavingCategory(false);
     }
