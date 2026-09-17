@@ -152,21 +152,22 @@ export function ChartOfAccountsPage({ currentUser }) {
   // 1. Submit New Expense Category / Head
   const handleExpenseSubmit = async (e) => {
     e.preventDefault();
-    if (!expenseCategory.name.trim()) {
-      notify('error', 'Expense category head name is required.');
+    if (!expenseCategory.propertyId && !expenseCategory.name.trim()) {
+      notify('error', 'Expense category head name is required for general expenses.');
       return;
     }
     setSaving('expense');
     try {
-      await accountsAPI.createCategory({
+      const res = await accountsAPI.createCategory({
         name: expenseCategory.name.trim(),
         type: 'EXPENSE',
         propertyId: expenseCategory.propertyId || null,
         unitId: expenseCategory.unitId || null,
         isRentalHead: expenseCategory.isRentalHead,
       });
+      const createdCat = res.data?.category || res.category;
       setExpenseCategory(initialExpenseCategory);
-      notify('success', `Expense head "${expenseCategory.name.trim()}" created successfully.`);
+      notify('success', `Expense head "${createdCat?.name || expenseCategory.name.trim()}" created successfully.`);
       await loadChartData();
     } catch (error) {
       notify('error', error.response?.data?.message || error.message || 'Failed to create expense head.');
@@ -447,11 +448,19 @@ export function ChartOfAccountsPage({ currentUser }) {
                 <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider">Create New Expense Category / Head</h3>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Expense Name (Voucher Expense Title) *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Expense Head Name {expenseCategory.propertyId ? '(Optional - defaults to Property/Unit Name)' : '*'}
+                  </label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. Electrical Repairs, Office Supplies, Generator Maintenance"
+                    required={!expenseCategory.propertyId}
+                    placeholder={
+                      expenseCategory.unitId
+                        ? "e.g. Paint Work (Optional - defaults to Unit Name)"
+                        : expenseCategory.propertyId
+                        ? "e.g. Generator Maintenance (Optional - defaults to Property Name)"
+                        : "e.g. Electrical Repairs, Office Supplies, Generator Maintenance"
+                    }
                     value={expenseCategory.name}
                     onChange={(e) => setExpenseCategory({ ...expenseCategory, name: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-rose-600"

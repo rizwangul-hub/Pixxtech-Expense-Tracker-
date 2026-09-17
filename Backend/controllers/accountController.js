@@ -737,24 +737,48 @@ export const getCategories = async (req, res) => {
  */
 export const createCategory = async (req, res) => {
   try {
-    const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+    const inputName = typeof req.body.name === 'string' ? req.body.name.trim() : '';
     const propertyId = req.body.propertyId && mongoose.Types.ObjectId.isValid(req.body.propertyId) ? req.body.propertyId : null;
     const unitId = req.body.unitId && mongoose.Types.ObjectId.isValid(req.body.unitId) ? req.body.unitId : null;
     const isRentalHead = Boolean(req.body.isRentalHead);
 
-    if (name.length < 2) {
+    let expenseClassification = 'GENERAL_EXPENSE';
+    let headName = inputName;
+
+    if (unitId || propertyId) {
+      const propertyDoc = propertyId ? await Property.findById(propertyId).lean() : null;
+      const plazaName = propertyDoc ? (propertyDoc.plazaName || propertyDoc.propertyName || '').trim() : '';
+
+      if (unitId) {
+        expenseClassification = 'UNIT_EXPENSE';
+        const unitObj = propertyDoc?.units?.find((u) => u._id.toString() === unitId.toString());
+        const unitLabel = unitObj ? (unitObj.unitName || unitObj.unitNumber || unitObj.name || 'Unit').trim() : 'Unit';
+
+        const baseHead = plazaName ? `${plazaName} - ${unitLabel}` : unitLabel;
+
+        if (!inputName || inputName.toLowerCase() === baseHead.toLowerCase() || inputName.toLowerCase() === unitLabel.toLowerCase()) {
+          headName = baseHead;
+        } else {
+          headName = `${baseHead} - ${inputName}`;
+        }
+      } else if (propertyId) {
+        expenseClassification = 'PROPERTY_OWN_EXPENSE';
+        const baseHead = plazaName || 'Property';
+
+        if (!inputName || inputName.toLowerCase() === baseHead.toLowerCase()) {
+          headName = baseHead;
+        } else {
+          headName = `${baseHead} - ${inputName}`;
+        }
+      }
+    }
+
+    if (!headName || headName.length < 2) {
       return apiError(res, 'Expense head name must be at least 2 characters long.', 400);
     }
 
-    let expenseClassification = 'GENERAL_EXPENSE';
-    if (unitId) {
-      expenseClassification = 'UNIT_EXPENSE';
-    } else if (propertyId) {
-      expenseClassification = 'PROPERTY_OWN_EXPENSE';
-    }
-
     const duplicateFilter = {
-      name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      name: { $regex: new RegExp(`^${headName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
       expenseClassification,
       propertyId,
       unitId,
@@ -769,7 +793,7 @@ export const createCategory = async (req, res) => {
     }
 
     let category = await Category.create({
-      name,
+      name: headName,
       type: 'EXPENSE',
       expenseClassification,
       propertyId,
@@ -781,11 +805,15 @@ export const createCategory = async (req, res) => {
       category = await Category.findById(category._id).populate('propertyId', 'plazaName propertyName').lean();
     }
 
-    return apiSuccess(res, { category }, `Expense head '${name}' created successfully.`, 201);
+    return apiSuccess(res, { category }, `Expense head '${headName}' created successfully.`, 201);
   } catch (error) {
     console.error('[Create Category Error]:', error);
     if (error.code === 11000) {
-      const existing = await Category.findOne({ name: req.body.name?.trim() }).lean();
+      const existing = await Category.findOne({
+        expenseClassification: req.body.unitId ? 'UNIT_EXPENSE' : req.body.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE',
+        propertyId: req.body.propertyId || null,
+        unitId: req.body.unitId || null,
+      }).lean();
       if (existing) {
         return apiSuccess(res, { category: existing }, `Expense head '${existing.name}' selected.`, 200);
       }

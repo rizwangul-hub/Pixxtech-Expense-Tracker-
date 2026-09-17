@@ -94,37 +94,61 @@ export const VoucherEntryForm = ({
     fetchNextVn();
   }, []);
 
-  const handleCreateCategory = async (e) => {
-    e?.preventDefault();
-    const name = customCategoryName.trim();
-    if (!name) {
-      setError('Enter an expense head name before saving.');
-      return;
-    }
+  useEffect(() => {
+    if (!propertyId && !unitId) return;
 
-    // Check if category with matching name already exists in current loaded categories
-    const existing = categories.find((c) => {
-      if (c.name.trim().toLowerCase() !== name.toLowerCase()) return false;
-      if (derivedClassification === 'GENERAL_EXPENSE') {
-        return !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
-      }
-      if (derivedClassification === 'PROPERTY_OWN_EXPENSE') {
-        const pId = c.propertyId?._id || c.propertyId;
-        return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && String(pId) === String(propertyId);
-      }
-      if (derivedClassification === 'UNIT_EXPENSE') {
+    const matchingCategories = categories.filter((c) => {
+      if (c.type !== 'EXPENSE') return false;
+      if (unitId) {
         const uId = c.unitId?._id || c.unitId;
         return c.expenseClassification === 'UNIT_EXPENSE' && String(uId) === String(unitId);
+      }
+      if (propertyId) {
+        const pId = c.propertyId?._id || c.propertyId;
+        return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && String(pId) === String(propertyId);
       }
       return false;
     });
 
-    if (existing) {
-      setCategoryId(existing._id);
-      setCustomCategoryName('');
-      setError(null);
-      setSuccess(`Expense head '${existing.name}' selected.`);
+    if (matchingCategories.length > 0) {
+      if (!categoryId || !matchingCategories.some((c) => c._id === categoryId)) {
+        setCategoryId(matchingCategories[0]._id);
+      }
+    }
+  }, [propertyId, unitId, categories]);
+
+  const handleCreateCategory = async (e) => {
+    e?.preventDefault();
+    const name = customCategoryName.trim();
+    if (!propertyId && !name) {
+      setError('Enter an expense head name before saving.');
       return;
+    }
+
+    if (name) {
+      const existing = categories.find((c) => {
+        if (c.name.trim().toLowerCase() !== name.toLowerCase()) return false;
+        if (derivedClassification === 'GENERAL_EXPENSE') {
+          return !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
+        }
+        if (derivedClassification === 'PROPERTY_OWN_EXPENSE') {
+          const pId = c.propertyId?._id || c.propertyId;
+          return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && String(pId) === String(propertyId);
+        }
+        if (derivedClassification === 'UNIT_EXPENSE') {
+          const uId = c.unitId?._id || c.unitId;
+          return c.expenseClassification === 'UNIT_EXPENSE' && String(uId) === String(unitId);
+        }
+        return false;
+      });
+
+      if (existing) {
+        setCategoryId(existing._id);
+        setCustomCategoryName('');
+        setError(null);
+        setSuccess(`Expense head '${existing.name}' selected.`);
+        return;
+      }
     }
 
     try {
