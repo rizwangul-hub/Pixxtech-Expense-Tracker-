@@ -50,12 +50,13 @@ export const StaffPayrollSubTab = () => {
 
   const fetchAccounts = async () => {
     try {
-      const res = await accountsAPI.getAccounts();
-      if (res?.success && Array.isArray(res.data)) {
-        const active = res.data.filter((a) => a.isActive);
+      const res = await accountsAPI.getAccounts({ limit: 100 });
+      const accList = res?.data?.accounts || (Array.isArray(res?.data) ? res.data : []);
+      if (Array.isArray(accList)) {
+        const active = accList.filter((a) => a.isActive && !a.isClearing);
         setFinanceAccounts(active);
-        if (active.length > 0 && !selectedAccountId) {
-          setSelectedAccountId(active[0]._id);
+        if (active.length > 0) {
+          setSelectedAccountId((prev) => prev || active[0]._id);
         }
       }
     } catch (err) {
@@ -85,6 +86,40 @@ export const StaffPayrollSubTab = () => {
   useEffect(() => {
     fetchPayroll();
   }, [selectedMonth]);
+
+  const handleAllowanceChange = (empId, val) => {
+    const numAllow = isNaN(Number(val)) ? 0 : Number(val);
+    setPayrollRows((prev) =>
+      prev.map((r) => {
+        if (r.employeeId === empId) {
+          const newGross = (r.basicSalary || 0) + numAllow;
+          const totDed = (r.loanDeduction || 0) + (r.lopDeduction || 0) + (r.otherDeduction || 0);
+          const newNet = Math.max(0, newGross - totDed);
+          return {
+            ...r,
+            allowance: val,
+            grossSalary: newGross,
+            netPayable: newNet,
+          };
+        }
+        return r;
+      })
+    );
+  };
+
+  const handleAllowanceReasonChange = (empId, val) => {
+    setPayrollRows((prev) =>
+      prev.map((r) => {
+        if (r.employeeId === empId) {
+          return {
+            ...r,
+            allowanceReason: val,
+          };
+        }
+        return r;
+      })
+    );
+  };
 
   const handleLoanDeductionChange = (empId, val) => {
     const numDed = isNaN(Number(val)) ? 0 : Number(val);
@@ -346,9 +381,10 @@ export const StaffPayrollSubTab = () => {
               <tr>
                 <th className="py-3 px-3">Sr.</th>
                 <th className="py-3 px-4">Employee Name</th>
-                <th className="py-3 px-4">Location</th>
+                <th className="py-3 px-3">Location</th>
                 <th className="py-3 px-3 text-right">Basic (PKR)</th>
-                <th className="py-3 px-3 text-right">Allowances</th>
+                <th className="py-3 px-3 text-right">Allowance (PKR)</th>
+                <th className="py-3 px-4">Reason of Allowance</th>
                 <th className="py-3 px-3 text-right">Gross (PKR)</th>
                 <th className="py-3 px-3 text-center">Attendance</th>
                 <th className="py-3 px-3 text-right">Loan Bal</th>
@@ -362,25 +398,18 @@ export const StaffPayrollSubTab = () => {
             <tbody className="divide-y divide-slate-800/60 font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan="13" className="py-8 text-center text-slate-500 font-semibold">
+                  <td colSpan="14" className="py-8 text-center text-slate-500 font-semibold">
                     Calculating monthly payroll sheet...
                   </td>
                 </tr>
               ) : payrollRows.length === 0 ? (
                 <tr>
-                  <td colSpan="13" className="py-8 text-center text-slate-500 font-semibold">
+                  <td colSpan="14" className="py-8 text-center text-slate-500 font-semibold">
                     No active staff found.
                   </td>
                 </tr>
               ) : (
                 payrollRows.map((row, idx) => {
-                  const allowancesTotal =
-                    (row.fuelAllowance || 0) +
-                    (row.foodAllowance || 0) +
-                    (row.mobileAllowance || 0) +
-                    (row.performanceAllowance || 0) +
-                    (row.otherAllowances || 0);
-
                   const isPaid = row.paymentStatus === 'PAID';
 
                   return (
@@ -390,12 +419,29 @@ export const StaffPayrollSubTab = () => {
                         <div className="font-bold text-white text-sm">{row.name}</div>
                         <div className="text-[10px] text-slate-400">{row.designation}</div>
                       </td>
-                      <td className="py-3 px-4 font-bold text-purple-400">{row.department}</td>
+                      <td className="py-3 px-3 font-bold text-purple-400">{row.department}</td>
                       <td className="py-3 px-3 text-right font-mono text-slate-300">
                         {formatPKR(row.basicSalary)}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono text-emerald-400 font-bold">
-                        +{formatPKR(allowancesTotal)}
+                      <td className="py-3 px-3 text-right">
+                        <input
+                          type="number"
+                          placeholder="0"
+                          disabled={isPaid}
+                          value={row.allowance !== undefined ? row.allowance : 0}
+                          onChange={(e) => handleAllowanceChange(row.employeeId, e.target.value)}
+                          className="w-24 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-emerald-400 font-mono font-bold text-right focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                        />
+                      </td>
+                      <td className="py-3 px-4">
+                        <input
+                          type="text"
+                          placeholder="Reason (e.g. Fuel, Mobile)"
+                          disabled={isPaid}
+                          value={row.allowanceReason || ''}
+                          onChange={(e) => handleAllowanceReasonChange(row.employeeId, e.target.value)}
+                          className="w-36 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 font-medium text-xs focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                        />
                       </td>
                       <td className="py-3 px-3 text-right font-mono text-white font-bold">
                         {formatPKR(row.grossSalary)}

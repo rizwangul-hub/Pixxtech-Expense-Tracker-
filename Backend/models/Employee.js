@@ -105,6 +105,16 @@ const employeeSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    allowance: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    allowanceReason: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     fuelAllowanceEnabled: {
       type: Boolean,
       default: false,
@@ -204,12 +214,14 @@ const employeeSchema = new mongoose.Schema(
 // Virtual for Gross Salary
 employeeSchema.virtual('grossSalary').get(function () {
   const basic = this.basicSalary || 0;
-  const fuel = this.fuelAllowance || 0;
-  const food = this.foodAllowance || 0;
-  const mobile = this.mobileAllowance || 0;
-  const transport = this.transportAllowance || 0;
-  const perf = this.performanceAllowance || 0;
-  const other = this.otherAllowances || 0;
+  const allow = (this.allowance !== undefined && this.allowance !== null && this.allowance > 0)
+    ? this.allowance
+    : ((this.fuelAllowance || 0) +
+       (this.foodAllowance || 0) +
+       (this.mobileAllowance || 0) +
+       (this.transportAllowance || 0) +
+       (this.performanceAllowance || 0) +
+       (this.otherAllowances || 0));
 
   let listSum = 0;
   if (Array.isArray(this.allowancesList)) {
@@ -218,7 +230,7 @@ employeeSchema.virtual('grossSalary').get(function () {
     });
   }
 
-  return basic + fuel + food + mobile + transport + perf + other + listSum;
+  return basic + allow + listSum;
 });
 
 // Auto-generate employeeCode before validation if missing

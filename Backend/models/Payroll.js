@@ -30,6 +30,14 @@ const payrollSchema = new mongoose.Schema(
       required: true,
       default: 0,
     },
+    allowance: {
+      type: Number,
+      default: 0,
+    },
+    allowanceReason: {
+      type: String,
+      default: '',
+    },
     fuelAllowance: {
       type: Number,
       default: 0,

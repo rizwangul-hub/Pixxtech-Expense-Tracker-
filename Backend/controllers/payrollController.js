@@ -105,12 +105,19 @@ export const getMonthlyPayroll = async (req, res) => {
       const saved = existingMap.get(empIdStr);
 
       const basic = emp.basicSalary || 0;
-      const fuel = emp.fuelAllowance || 0;
-      const food = emp.foodAllowance || 0;
-      const mobile = emp.mobileAllowance || 0;
-      const perf = emp.performanceAllowance || 0;
-      const other = emp.otherAllowances || 0;
-      const gross = basic + fuel + food + mobile + perf + other;
+      const legacyAllowances =
+        (emp.fuelAllowance || 0) +
+        (emp.foodAllowance || 0) +
+        (emp.mobileAllowance || 0) +
+        (emp.performanceAllowance || 0) +
+        (emp.otherAllowances || 0);
+
+      const allowance = saved && saved.allowance !== undefined
+        ? saved.allowance
+        : (emp.allowance || legacyAllowances);
+      const allowanceReason = saved ? (saved.allowanceReason || '') : (emp.allowanceReason || '');
+
+      const gross = basic + allowance;
 
       // Attendance metrics
       const records = empAttMap.get(empIdStr) || [];
@@ -149,11 +156,8 @@ export const getMonthlyPayroll = async (req, res) => {
         designation: emp.designation,
         department: emp.department,
         basicSalary: basic,
-        fuelAllowance: fuel,
-        foodAllowance: food,
-        mobileAllowance: mobile,
-        performanceAllowance: perf,
-        otherAllowances: other,
+        allowance,
+        allowanceReason,
         grossSalary: gross,
         totalDays,
         presentDays: saved ? saved.presentDays : presentDays,
@@ -213,13 +217,9 @@ export const savePayroll = async (req, res) => {
     const savedResults = [];
 
     for (const rec of payrollRecords) {
-      const gross =
-        (Number(rec.basicSalary) || 0) +
-        (Number(rec.fuelAllowance) || 0) +
-        (Number(rec.foodAllowance) || 0) +
-        (Number(rec.mobileAllowance) || 0) +
-        (Number(rec.performanceAllowance) || 0) +
-        (Number(rec.otherAllowances) || 0);
+      const basic = Number(rec.basicSalary) || 0;
+      const allowance = Number(rec.allowance) || 0;
+      const gross = basic + allowance;
 
       const loanDed = Number(rec.loanDeduction) || 0;
       const lopDed = Number(rec.lopDeduction) || 0;
@@ -236,12 +236,9 @@ export const savePayroll = async (req, res) => {
         employeeName: rec.name,
         designation: rec.designation,
         department: rec.department,
-        basicSalary: Number(rec.basicSalary) || 0,
-        fuelAllowance: Number(rec.fuelAllowance) || 0,
-        foodAllowance: Number(rec.foodAllowance) || 0,
-        mobileAllowance: Number(rec.mobileAllowance) || 0,
-        performanceAllowance: Number(rec.performanceAllowance) || 0,
-        otherAllowances: Number(rec.otherAllowances) || 0,
+        basicSalary: basic,
+        allowance,
+        allowanceReason: rec.allowanceReason || '',
         grossSalary: gross,
         totalDays: Number(rec.totalDays) || 30,
         presentDays: Number(rec.presentDays) || 0,

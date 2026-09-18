@@ -49,11 +49,8 @@ export const StaffDirectorySubTab = ({
     designation: '',
     department: 'IT Office',
     basicSalary: '0',
-    fuelAllowance: '0',
-    foodAllowance: '0',
-    mobileAllowance: '0',
-    performanceAllowance: '0',
-    otherAllowances: '0',
+    allowance: '0',
+    allowanceReason: '',
     accountTitle: '',
     ibanNumber: '',
     bankName: '',
@@ -80,11 +77,8 @@ export const StaffDirectorySubTab = ({
       designation: '',
       department: 'IT Office',
       basicSalary: '0',
-      fuelAllowance: '0',
-      foodAllowance: '0',
-      mobileAllowance: '0',
-      performanceAllowance: '0',
-      otherAllowances: '0',
+      allowance: '0',
+      allowanceReason: '',
       accountTitle: '',
       ibanNumber: '',
       bankName: '',
@@ -97,16 +91,16 @@ export const StaffDirectorySubTab = ({
 
   const handleOpenEdit = (emp) => {
     setEditingEmp(emp);
+    const legacySum = (emp.fuelAllowance || 0) + (emp.foodAllowance || 0) + (emp.mobileAllowance || 0) + (emp.performanceAllowance || 0) + (emp.otherAllowances || 0);
+    const allowVal = emp.allowance !== undefined && emp.allowance !== null && emp.allowance > 0 ? emp.allowance : legacySum;
+
     setFormData({
       name: emp.name || '',
       designation: emp.designation || '',
       department: emp.department || 'IT Office',
       basicSalary: String(emp.basicSalary ?? 0),
-      fuelAllowance: String(emp.fuelAllowance ?? 0),
-      foodAllowance: String(emp.foodAllowance ?? 0),
-      mobileAllowance: String(emp.mobileAllowance ?? 0),
-      performanceAllowance: String(emp.performanceAllowance ?? 0),
-      otherAllowances: String(emp.otherAllowances ?? 0),
+      allowance: String(allowVal ?? 0),
+      allowanceReason: emp.allowanceReason || '',
       accountTitle: emp.accountTitle || '',
       ibanNumber: emp.ibanNumber || '',
       bankName: emp.bankName || '',
@@ -131,11 +125,8 @@ export const StaffDirectorySubTab = ({
         designation: formData.designation.trim(),
         department: formData.department,
         basicSalary: Number(formData.basicSalary) || 0,
-        fuelAllowance: Number(formData.fuelAllowance) || 0,
-        foodAllowance: Number(formData.foodAllowance) || 0,
-        mobileAllowance: Number(formData.mobileAllowance) || 0,
-        performanceAllowance: Number(formData.performanceAllowance) || 0,
-        otherAllowances: Number(formData.otherAllowances) || 0,
+        allowance: Number(formData.allowance) || 0,
+        allowanceReason: formData.allowanceReason.trim(),
         accountTitle: formData.accountTitle.trim(),
         ibanNumber: formData.ibanNumber.trim(),
         bankName: formData.bankName.trim(),
@@ -392,12 +383,12 @@ export const StaffDirectorySubTab = ({
                 </select>
               </div>
 
-              {/* Salary & Allowances */}
+              {/* Salary & Allowance */}
               <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
-                <div className="text-[11px] font-extrabold uppercase text-purple-400 tracking-wider">Salary & Allowances (PKR)</div>
+                <div className="text-[11px] font-extrabold uppercase text-purple-400 tracking-wider">Salary & Allowance (PKR)</div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-slate-400 mb-0.5">Basic Salary</label>
+                    <label className="block text-slate-400 mb-0.5">Basic Salary (PKR)</label>
                     <input
                       type="number"
                       placeholder="0"
@@ -407,35 +398,25 @@ export const StaffDirectorySubTab = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-0.5">Fuel Allowance</label>
+                    <label className="block text-slate-400 mb-0.5">Allowance (PKR)</label>
                     <input
                       type="number"
                       placeholder="0"
-                      value={formData.fuelAllowance}
-                      onChange={(e) => setFormData({ ...formData, fuelAllowance: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white font-mono"
+                      value={formData.allowance}
+                      onChange={(e) => setFormData({ ...formData, allowance: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-emerald-400 font-mono font-bold"
                     />
                   </div>
-                  <div>
-                    <label className="block text-slate-400 mb-0.5">Food Allowance</label>
-                    <input
-                      type="number"
-                      placeholder="0"
-                      value={formData.foodAllowance}
-                      onChange={(e) => setFormData({ ...formData, foodAllowance: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 mb-0.5">Performance / Other</label>
-                    <input
-                      type="number"
-                      placeholder="0"
-                      value={formData.performanceAllowance}
-                      onChange={(e) => setFormData({ ...formData, performanceAllowance: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white font-mono"
-                    />
-                  </div>
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-0.5">Reason of Allowance</label>
+                  <input
+                    type="text"
+                    placeholder="Reason (e.g. Fuel, Mobile, Food, Transport)"
+                    value={formData.allowanceReason}
+                    onChange={(e) => setFormData({ ...formData, allowanceReason: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white font-medium text-xs"
+                  />
                 </div>
               </div>
 
