@@ -50,19 +50,47 @@ const formatPKR = (val) => {
 };
 
 /**
- * Helper to locate Edge or Chrome browser executable on Windows/Server
+ * Smart Puppeteer launcher — works on Vercel (serverless) AND local Windows.
+ * - On Vercel: uses @sparticuz/chromium (bundled headless Chromium for serverless)
+ * - On local Windows: finds Edge or Chrome executable automatically
  */
-const getBrowserExecutablePath = () => {
-  const commonPaths = [
+const launchPuppeteer = async () => {
+  const puppeteer = (await import('puppeteer-core')).default;
+
+  // ── Vercel / serverless environment ──────────────────────────────────────
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.RAILWAY_ENVIRONMENT) {
+    const chromium = (await import('@sparticuz/chromium')).default;
+    chromium.setHeadlessMode = true;
+    chromium.setGraphicsMode = false;
+
+    const browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+    return browser;
+  }
+
+  // ── Local Windows development ─────────────────────────────────────────────
+  const localPaths = [
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   ];
-  for (const p of commonPaths) {
-    if (fs.existsSync(p)) return p;
+
+  let executablePath;
+  for (const p of localPaths) {
+    if (fs.existsSync(p)) { executablePath = p; break; }
   }
-  return undefined;
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
+    ...(executablePath ? { executablePath } : {}),
+  });
+  return browser;
 };
 
 /**
@@ -1038,16 +1066,7 @@ export const generateSalarySlipPDF = async (req, res) => {
 
     // Try Puppeteer PDF rendering
     try {
-      const puppeteer = (await import('puppeteer-core')).default;
-      const execPath = getBrowserExecutablePath();
-
-      const launchOpts = {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      };
-      if (execPath) launchOpts.executablePath = execPath;
-
-      const browser = await puppeteer.launch(launchOpts);
+      const browser = await launchPuppeteer();
       const page = await browser.newPage();
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
@@ -1063,9 +1082,11 @@ export const generateSalarySlipPDF = async (req, res) => {
       res.setHeader('Content-Disposition', `inline; filename=Salary_Slip_${employee.name.replace(/\s+/g, '_')}_${month}.pdf`);
       return res.status(200).send(pdfBuffer);
     } catch (pdfErr) {
-      console.warn('[Puppeteer Warning]: Falling back to raw HTML for Salary Slip:', pdfErr.message);
-      res.setHeader('Content-Type', 'text/html');
-      return res.status(200).send(htmlContent);
+      console.error('[Puppeteer Error] Salary Slip PDF failed:', pdfErr.message);
+      return res.status(500).json({
+        success: false,
+        message: `PDF generation failed: ${pdfErr.message}`,
+      });
     }
   } catch (error) {
     console.error('[Generate Salary Slip PDF Error]:', error);
@@ -1922,16 +1943,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
     `;
 
     try {
-      const puppeteer = (await import('puppeteer-core')).default;
-      const execPath = getBrowserExecutablePath();
-
-      const launchOpts = {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      };
-      if (execPath) launchOpts.executablePath = execPath;
-
-      const browser = await puppeteer.launch(launchOpts);
+      const browser = await launchPuppeteer();
       const page = await browser.newPage();
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
@@ -1949,10 +1961,9 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
       return res.status(200).send(pdfBuffer);
     } catch (pdfErr) {
       console.error('[Puppeteer Error] Monthly Salary Sheet PDF failed:', pdfErr.message);
-      // Return a proper error — do NOT send HTML as PDF blob, that causes "Failed to load PDF document"
       return res.status(500).json({
         success: false,
-        message: `PDF generation failed: ${pdfErr.message}. Please ensure the backend server has access to Chrome/Edge browser.`,
+        message: `PDF generation failed: ${pdfErr.message}`,
       });
     }
   } catch (error) {
