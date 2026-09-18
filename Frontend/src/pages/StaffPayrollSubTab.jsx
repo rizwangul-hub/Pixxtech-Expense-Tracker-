@@ -9,6 +9,7 @@ import {
   Calendar,
   AlertCircle,
   RefreshCw,
+  FileText,
 } from 'lucide-react';
 import { payrollAPI } from '../services/api.js';
 
@@ -64,6 +65,42 @@ export const StaffPayrollSubTab = () => {
     );
   };
 
+  const handleExtraAllowanceChange = (empId, val) => {
+    const numAllow = isNaN(Number(val)) ? 0 : Number(val);
+    setPayrollRows((prev) =>
+      prev.map((r) => {
+        if (r.employeeId === empId) {
+          const regAllow =
+            (r.fuelAllowance || 0) +
+            (r.foodAllowance || 0) +
+            (r.mobileAllowance || 0) +
+            (r.performanceAllowance || 0) +
+            (r.otherAllowances || 0);
+          const newGross = (r.basicSalary || 0) + regAllow + numAllow;
+          const newNet = Math.max(0, newGross - (r.totalDeduction || 0));
+          return {
+            ...r,
+            extraAllowance: val,
+            grossSalary: newGross,
+            netPayable: newNet,
+          };
+        }
+        return r;
+      })
+    );
+  };
+
+  const handleAllowanceReasonChange = (empId, val) => {
+    setPayrollRows((prev) =>
+      prev.map((r) => {
+        if (r.employeeId === empId) {
+          return { ...r, allowanceReason: val };
+        }
+        return r;
+      })
+    );
+  };
+
   const handleSavePayroll = async () => {
     try {
       setSaving(true);
@@ -86,6 +123,11 @@ export const StaffPayrollSubTab = () => {
 
   const handleDownloadExcel = () => {
     const url = payrollAPI.downloadSalarySheetExcelUrl(selectedMonth);
+    window.open(url, '_blank');
+  };
+
+  const handleDownloadPDFSheet = () => {
+    const url = payrollAPI.downloadSalarySheetPDFUrl(selectedMonth);
     window.open(url, '_blank');
   };
 
@@ -127,8 +169,16 @@ export const StaffPayrollSubTab = () => {
             </div>
 
             <button
+              onClick={handleDownloadPDFSheet}
+              className="bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/60 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              title="Download Printable PDF Monthly Salary Sheet"
+            >
+              <FileText size={14} /> Download PDF Sheet
+            </button>
+
+            <button
               onClick={handleDownloadExcel}
-              className="bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              className="bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
               title="Download Excel Salary Sheet matching official layout"
             >
               <Download size={14} /> Download Excel Sheet
@@ -194,6 +244,8 @@ export const StaffPayrollSubTab = () => {
                 <th className="py-3 px-4">Location</th>
                 <th className="py-3 px-3 text-right">Basic (PKR)</th>
                 <th className="py-3 px-3 text-right">Allowances</th>
+                <th className="py-3 px-3 text-right">Extra Allow (PKR)</th>
+                <th className="py-3 px-4">Allowance Reason</th>
                 <th className="py-3 px-3 text-right">Gross (PKR)</th>
                 <th className="py-3 px-3 text-center">Attendance</th>
                 <th className="py-3 px-3 text-right">Loan Bal</th>
@@ -206,19 +258,19 @@ export const StaffPayrollSubTab = () => {
             <tbody className="divide-y divide-slate-800/60 font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan="12" className="py-8 text-center text-slate-500 font-semibold">
+                  <td colSpan="14" className="py-8 text-center text-slate-500 font-semibold">
                     Calculating monthly payroll sheet...
                   </td>
                 </tr>
               ) : payrollRows.length === 0 ? (
                 <tr>
-                  <td colSpan="12" className="py-8 text-center text-slate-500 font-semibold">
+                  <td colSpan="14" className="py-8 text-center text-slate-500 font-semibold">
                     No active staff found.
                   </td>
                 </tr>
               ) : (
                 payrollRows.map((row, idx) => {
-                  const allowancesTotal =
+                  const regAllowances =
                     (row.fuelAllowance || 0) +
                     (row.foodAllowance || 0) +
                     (row.mobileAllowance || 0) +
@@ -237,7 +289,27 @@ export const StaffPayrollSubTab = () => {
                         {formatPKR(row.basicSalary)}
                       </td>
                       <td className="py-3 px-3 text-right font-mono text-emerald-400 font-bold">
-                        +{formatPKR(allowancesTotal)}
+                        +{formatPKR(regAllowances)}
+                      </td>
+                      {/* Extra Allowance Field */}
+                      <td className="py-3 px-3 text-right">
+                        <input
+                          type="number"
+                          placeholder="0"
+                          value={row.extraAllowance || ''}
+                          onChange={(e) => handleExtraAllowanceChange(row.employeeId, e.target.value)}
+                          className="w-24 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-emerald-300 font-mono font-bold text-right focus:outline-none focus:border-emerald-500"
+                        />
+                      </td>
+                      {/* Allowance Reason Field */}
+                      <td className="py-3 px-4">
+                        <input
+                          type="text"
+                          placeholder="e.g. Fuel / Performance"
+                          value={row.allowanceReason || ''}
+                          onChange={(e) => handleAllowanceReasonChange(row.employeeId, e.target.value)}
+                          className="w-36 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-purple-500"
+                        />
                       </td>
                       <td className="py-3 px-3 text-right font-mono text-white font-bold">
                         {formatPKR(row.grossSalary)}

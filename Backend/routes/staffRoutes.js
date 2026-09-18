@@ -18,6 +18,8 @@ import {
   createLeave,
   updateLeaveStatus,
   getStaffDashboardStats,
+  getEmployeeLoanLedger,
+  generateLoanLedgerPDF,
 } from '../controllers/staffController.js';
 
 const router = express.Router();
@@ -32,6 +34,10 @@ router.get('/employees', getEmployees);
 router.get('/employees/:id', getEmployeeById);
 router.post('/employees', createEmployee);
 router.put('/employees/:id', updateEmployee);
+
+// Employee Loan Ledgers
+router.get('/employees/:id/loan-ledger', getEmployeeLoanLedger);
+router.get('/employees/:id/loan-ledger/pdf', generateLoanLedgerPDF);
 
 // Locations & Designations
 router.get('/locations', getLocations);
@@ -55,4 +61,3 @@ router.post('/leaves', createLeave);
 router.put('/leaves/:id/status', updateLeaveStatus);
 
 export default router;
-

@@ -1,3 +1,4 @@
+import fs from 'fs';
 import Employee from '../models/Employee.js';
 import StaffLocation from '../models/StaffLocation.js';
 import StaffDesignation from '../models/StaffDesignation.js';
@@ -8,6 +9,15 @@ import StaffLeave from '../models/StaffLeave.js';
 import Attendance from '../models/Attendance.js';
 import Payroll from '../models/Payroll.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
+import { getLogoBase64 } from '../utils/logoHelper.js';
+
+const formatPKR = (val) => {
+  const num = Number(val) || 0;
+  return new Intl.NumberFormat('en-PK', {
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  }).format(num);
+};
 
 /**
  * Log action to StaffAuditLog
@@ -429,7 +439,7 @@ export const getStaffAuditLogs = async (req, res) => {
 export const recordLoan = async (req, res) => {
   try {
     const employeeId = req.params.id || req.body.employeeId;
-    const { amount, description = 'Advance Salary / Loan Disbursement' } = req.body;
+    const { type = 'DISBURSEMENT', amount, description = '' } = req.body;
 
     const numAmount = Number(amount);
     if (!employeeId || isNaN(numAmount) || numAmount <= 0) {
@@ -441,29 +451,32 @@ export const recordLoan = async (req, res) => {
       return apiError(res, 'Employee not found.', 404);
     }
 
+    const isRepayment = type === 'REPAYMENT';
     const prevBal = employee.loanBalance || 0;
-    const newBal = prevBal + numAmount;
+    const newBal = isRepayment ? Math.max(0, prevBal - numAmount) : prevBal + numAmount;
     employee.loanBalance = newBal;
     await employee.save();
 
+    const defaultDesc = isRepayment ? 'Loan Cash Repayment' : 'Advance Salary / Loan Disbursement';
+
     const loanDoc = await StaffLoan.create({
       employeeId: employee._id,
-      type: 'DISBURSEMENT',
+      type: isRepayment ? 'REPAYMENT' : 'DISBURSEMENT',
       amount: numAmount,
       previousBalance: prevBal,
       newBalance: newBal,
-      description: description.trim(),
+      description: description.trim() || defaultDesc,
       createdBy: req.user?._id || null,
     });
 
     await logStaffAudit(
       req,
-      'LOAN_DISBURSED',
-      `Disbursed loan/advance Rs. ${numAmount} to ${employee.name}. New balance: Rs. ${newBal}`,
+      isRepayment ? 'LOAN_REPAID' : 'LOAN_DISBURSED',
+      `${isRepayment ? 'Repaid' : 'Disbursed'} loan/advance Rs. ${numAmount} for ${employee.name}. New balance: Rs. ${newBal}`,
       employee._id.toString()
     );
 
-    return apiSuccess(res, { employee, loanDoc }, `Loan of Rs. ${numAmount} recorded for ${employee.name}.`, 201);
+    return apiSuccess(res, { employee, loanDoc }, `Loan transaction recorded for ${employee.name}.`, 201);
   } catch (error) {
     console.error('[Record Loan Error]:', error);
     return apiError(res, error.message || 'Failed to record loan.', 500);
@@ -597,6 +610,296 @@ export const getStaffDashboardStats = async (req, res) => {
   } catch (error) {
     console.error('[Dashboard Stats Error]:', error);
     return apiError(res, 'Failed to fetch staff dashboard stats.', 500);
+  }
+};
+
+/**
+ * @desc    Get individual employee advance loan ledger
+ * @route   GET /api/staff/employees/:id/loan-ledger
+ * @access  Private
+ */
+export const getEmployeeLoanLedger = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const employee = await Employee.findById(id).lean();
+    if (!employee) {
+      return apiError(res, 'Employee not found.', 404);
+    }
+
+    const loans = await StaffLoan.find({ employeeId: id }).sort({ createdAt: 1 }).lean();
+
+    let totalDisbursed = 0;
+    let totalRepaid = 0;
+
+    const ledgerRows = loans.map((loan) => {
+      const isDisbursement = loan.type === 'DISBURSEMENT';
+      if (isDisbursement) totalDisbursed += loan.amount;
+      else totalRepaid += loan.amount;
+
+      return {
+        id: loan._id,
+        date: loan.createdAt,
+        payrollMonth: loan.payrollMonth || '',
+        type: loan.type,
+        description: loan.description || (isDisbursement ? 'Advance Salary Disbursement' : 'Loan Repayment / Salary Deduction'),
+        debit: isDisbursement ? loan.amount : 0,
+        credit: isDisbursement ? 0 : loan.amount,
+        previousBalance: loan.previousBalance,
+        runningBalance: loan.newBalance,
+      };
+    });
+
+    return apiSuccess(
+      res,
+      {
+        employee,
+        ledgerRows,
+        summary: {
+          totalDisbursed,
+          totalRepaid,
+          currentBalance: employee.loanBalance || 0,
+        },
+      },
+      `Fetched loan ledger for ${employee.name}.`
+    );
+  } catch (error) {
+    console.error('[Get Loan Ledger Error]:', error);
+    return apiError(res, 'Failed to fetch loan ledger.', 500);
+  }
+};
+
+/**
+ * @desc    Generate Printable PDF Statement for Employee Loan Ledger
+ * @route   GET /api/staff/employees/:id/loan-ledger/pdf
+ * @access  Private
+ */
+export const generateLoanLedgerPDF = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const employee = await Employee.findById(id).lean();
+    if (!employee) {
+      return apiError(res, 'Employee not found.', 404);
+    }
+
+    const loans = await StaffLoan.find({ employeeId: id }).sort({ createdAt: 1 }).lean();
+
+    let totalDisbursed = 0;
+    let totalRepaid = 0;
+
+    const ledgerRowsHTML = loans
+      .map((loan, idx) => {
+        const isDisbursement = loan.type === 'DISBURSEMENT';
+        if (isDisbursement) totalDisbursed += loan.amount;
+        else totalRepaid += loan.amount;
+
+        const dateStr = new Date(loan.createdAt).toLocaleDateString('en-PK', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        });
+
+        const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+        const typeBadge = isDisbursement
+          ? `<span style="background: #fef2f2; color: #dc2626; padding: 2px 6px; border-radius: 4px; font-weight: 800; font-size: 10px;">DISBURSED</span>`
+          : `<span style="background: #ecfdf5; color: #047857; padding: 2px 6px; border-radius: 4px; font-weight: 800; font-size: 10px;">REPAID</span>`;
+
+        return `
+        <tr style="background: ${bg};">
+          <td style="text-align: center; font-weight: bold; color: #64748b;">${idx + 1}</td>
+          <td style="font-weight: 700; color: #334155;">${dateStr}</td>
+          <td style="text-align: center;">${typeBadge}</td>
+          <td style="color: #0f172a; font-weight: 600;">${loan.description || 'Advance / Loan Transaction'}</td>
+          <td style="text-align: right; font-family: monospace; color: #dc2626; font-weight: 700;">${isDisbursement ? 'Rs. ' + formatPKR(loan.amount) : '—'}</td>
+          <td style="text-align: right; font-family: monospace; color: #047857; font-weight: 700;">${!isDisbursement ? 'Rs. ' + formatPKR(loan.amount) : '—'}</td>
+          <td style="text-align: right; font-family: monospace; font-weight: 900; color: #0f172a;">Rs. ${formatPKR(loan.newBalance)}</td>
+        </tr>
+      `;
+      })
+      .join('');
+
+    const logoDataUri = getLogoBase64();
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Loan Ledger - ${employee.name}</title>
+      <style>
+        @page { size: A4 portrait; margin: 10mm; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #0f172a; margin: 0; padding: 10px; background: #fff; }
+        .header-banner {
+          background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+          color: #ffffff;
+          padding: 16px 20px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 12px;
+        }
+        .logo-box { display: flex; align-items: center; gap: 12px; }
+        .logo-img { max-height: 48px; background: #fff; padding: 3px; border-radius: 6px; }
+        .banner-title { font-size: 22px; font-weight: 900; color: #38bdf8; letter-spacing: 1px; }
+        .banner-sub { font-size: 12px; color: #f43f5e; font-weight: 800; text-transform: uppercase; }
+
+        .emp-card {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 12px 16px;
+          margin-bottom: 15px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 15px;
+          font-size: 12px;
+        }
+        .emp-row { display: flex; justify-content: space-between; padding: 3px 0; }
+        .emp-lbl { color: #64748b; font-weight: 600; }
+        .emp-val { color: #0f172a; font-weight: 800; }
+
+        .kpi-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 10px;
+          margin-bottom: 15px;
+        }
+        .kpi-box {
+          background: #ffffff;
+          border: 1px solid #cbd5e1;
+          padding: 10px;
+          border-radius: 6px;
+          text-align: center;
+        }
+        .kpi-lbl { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+        .kpi-num { font-size: 18px; font-weight: 900; font-family: monospace; margin-top: 2px; }
+
+        table.ledger-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        table.ledger-table th { background: #1e1b4b; color: #ffffff; padding: 8px; font-size: 10px; text-transform: uppercase; border: 1px solid #0f172a; }
+        table.ledger-table td { padding: 6px 8px; border: 1px solid #cbd5e1; }
+        
+        .summary-row { background: #fef2f2 !important; font-weight: 900; }
+        .summary-row td { border-top: 2px solid #991b1b !important; }
+      </style>
+    </head>
+    <body>
+      <div class="header-banner">
+        <div class="logo-box">
+          ${logoDataUri ? `<img src="${logoDataUri}" class="logo-img" alt="Pixx Logo" />` : ''}
+          <div>
+            <div class="banner-title">PIXX TECHNOLOGIES PAKISTAN</div>
+            <div class="banner-sub">Staff Advance Loan Statement & Ledger</div>
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 11px; color: #cbd5e1;">Statement Date:</div>
+          <div style="font-size: 12px; font-weight: 800; color: #ffffff;">${new Date().toLocaleDateString('en-PK')}</div>
+        </div>
+      </div>
+
+      <div class="emp-card">
+        <div>
+          <div class="emp-row"><span class="emp-lbl">Employee Name:</span><span class="emp-val" style="font-size: 14px; color: #0284c7;">${employee.name}</span></div>
+          <div class="emp-row"><span class="emp-lbl">Employee Code:</span><span class="emp-val">${employee.employeeCode || 'PK-EMP'}</span></div>
+          <div class="emp-row"><span class="emp-lbl">Designation:</span><span class="emp-val">${employee.designation}</span></div>
+        </div>
+        <div>
+          <div class="emp-row"><span class="emp-lbl">Department / Workplace:</span><span class="emp-val" style="color: #7c3aed;">${employee.department}</span></div>
+          <div class="emp-row"><span class="emp-lbl">Basic Salary:</span><span class="emp-val">Rs. ${formatPKR(employee.basicSalary)}</span></div>
+          <div class="emp-row"><span class="emp-lbl">Status:</span><span class="emp-val" style="color: #047857;">ACTIVE STAFF</span></div>
+        </div>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi-box">
+          <div class="kpi-lbl">Total Loans Issued</div>
+          <div class="kpi-num" style="color: #dc2626;">Rs. ${formatPKR(totalDisbursed)}</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-lbl">Total Loan Repaid</div>
+          <div class="kpi-num" style="color: #047857;">Rs. ${formatPKR(totalRepaid)}</div>
+        </div>
+        <div class="kpi-box" style="background: #fef2f2; border-color: #fca5a5;">
+          <div class="kpi-lbl" style="color: #991b1b;">Current Outstanding Balance</div>
+          <div class="kpi-num" style="color: #e11d48;">Rs. ${formatPKR(employee.loanBalance)}</div>
+        </div>
+      </div>
+
+      <table class="ledger-table">
+        <thead>
+          <tr>
+            <th style="width: 30px;">#</th>
+            <th style="width: 90px;">Date</th>
+            <th style="width: 80px;">Type</th>
+            <th>Description / Purpose</th>
+            <th style="text-align: right; width: 100px;">Debit (+)</th>
+            <th style="text-align: right; width: 100px;">Credit (-)</th>
+            <th style="text-align: right; width: 110px;">Running Bal</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            ledgerRowsHTML ||
+            `<tr><td colspan="7" style="text-align: center; padding: 20px; color: #94a3b8;">No loan or advance transactions recorded for this employee.</td></tr>`
+          }
+          <tr class="summary-row">
+            <td colspan="4" style="text-align: center; font-weight: 900;">TOTALS & CURRENT OUTSTANDING BALANCE</td>
+            <td style="text-align: right; color: #dc2626;">Rs. ${formatPKR(totalDisbursed)}</td>
+            <td style="text-align: right; color: #047857;">Rs. ${formatPKR(totalRepaid)}</td>
+            <td style="text-align: right; color: #e11d48; font-size: 13px;">Rs. ${formatPKR(employee.loanBalance)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </body>
+    </html>
+    `;
+
+    // Try Puppeteer PDF rendering
+    try {
+      const puppeteer = (await import('puppeteer-core')).default;
+      const getBrowserExecutablePath = () => {
+        const commonPaths = [
+          'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+          'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+          'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        ];
+        for (const p of commonPaths) {
+          if (fs.existsSync(p)) return p;
+        }
+        return undefined;
+      };
+
+      const execPath = getBrowserExecutablePath();
+      const launchOpts = {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      };
+      if (execPath) launchOpts.executablePath = execPath;
+
+      const browser = await puppeteer.launch(launchOpts);
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' },
+        printBackground: true,
+      });
+
+      await browser.close();
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename=Loan_Ledger_${employee.name.replace(/\s+/g, '_')}.pdf`);
+      return res.status(200).send(pdfBuffer);
+    } catch (pdfErr) {
+      console.warn('[Puppeteer Warning]: Falling back to raw HTML for Loan Ledger PDF:', pdfErr.message);
+      res.setHeader('Content-Type', 'text/html');
+      return res.status(200).send(htmlContent);
+    }
+  } catch (error) {
+    console.error('[Generate Loan Ledger PDF Error]:', error);
+    return apiError(res, 'Failed to generate Loan Ledger PDF.', 500);
   }
 };
 

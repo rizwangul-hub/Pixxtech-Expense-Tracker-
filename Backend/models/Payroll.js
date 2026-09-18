@@ -50,6 +50,14 @@ const payrollSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    extraAllowance: {
+      type: Number,
+      default: 0,
+    },
+    allowanceReason: {
+      type: String,
+      default: '',
+    },
     grossSalary: {
       type: Number,
       required: true,

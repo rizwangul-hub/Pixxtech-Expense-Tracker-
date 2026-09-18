@@ -8,6 +8,9 @@ import {
   CreditCard,
   History,
   X,
+  FileText,
+  Printer,
+  Download,
 } from 'lucide-react';
 import { staffAPI } from '../services/api.js';
 
@@ -27,6 +30,12 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
   const [errorMsg, setErrorMsg] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Individual Ledger Modal State
+  const [isLedgerOpen, setIsLedgerOpen] = useState(false);
+  const [ledgerEmp, setLedgerEmp] = useState(null);
+  const [ledgerData, setLedgerData] = useState(null);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+
   const employeesWithLoans = employees.filter((e) => (e.loanBalance || 0) > 0);
   const filteredEmployees = employees.filter((emp) => {
     const q = searchQuery.toLowerCase().trim();
@@ -42,6 +51,22 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
     setDescription(type === 'DISBURSEMENT' ? 'Advance Salary Disbursement' : 'Loan Cash Repayment');
     setErrorMsg('');
     setIsModalOpen(true);
+  };
+
+  const handleOpenLedgerModal = async (emp) => {
+    setLedgerEmp(emp);
+    setIsLedgerOpen(true);
+    setLedgerLoading(true);
+    try {
+      const res = await staffAPI.getEmployeeLoanLedger(emp._id);
+      if (res?.success && res.data) {
+        setLedgerData(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load loan ledger:', err);
+    } finally {
+      setLedgerLoading(false);
+    }
   };
 
   const handleSubmitLoan = async (e) => {
@@ -67,6 +92,11 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDownloadLedgerPDF = (empId) => {
+    const url = staffAPI.downloadLoanLedgerPDFUrl(empId);
+    window.open(url, '_blank');
   };
 
   return (
@@ -151,18 +181,26 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80">
+              <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => handleOpenModal(emp, 'DISBURSEMENT')}
+                    className="bg-rose-950/70 hover:bg-rose-900/90 text-rose-300 border border-rose-800/60 rounded-xl py-2 px-3 text-xs font-bold transition flex items-center justify-center gap-1"
+                  >
+                    <ArrowUpRight size={14} /> Issue Advance
+                  </button>
+                  <button
+                    onClick={() => handleOpenModal(emp, 'REPAYMENT')}
+                    className="bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-800/60 rounded-xl py-2 px-3 text-xs font-bold transition flex items-center justify-center gap-1"
+                  >
+                    <ArrowDownLeft size={14} /> Repay Loan
+                  </button>
+                </div>
                 <button
-                  onClick={() => handleOpenModal(emp, 'DISBURSEMENT')}
-                  className="bg-rose-950/70 hover:bg-rose-900/90 text-rose-300 border border-rose-800/60 rounded-xl py-2 px-3 text-xs font-bold transition flex items-center justify-center gap-1"
+                  onClick={() => handleOpenLedgerModal(emp)}
+                  className="w-full bg-slate-950 hover:bg-slate-800 text-purple-300 border border-slate-800 rounded-xl py-2 px-3 text-xs font-bold transition flex items-center justify-center gap-1.5"
                 >
-                  <ArrowUpRight size={14} /> Issue Advance
-                </button>
-                <button
-                  onClick={() => handleOpenModal(emp, 'REPAYMENT')}
-                  className="bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-800/60 rounded-xl py-2 px-3 text-xs font-bold transition flex items-center justify-center gap-1"
-                >
-                  <ArrowDownLeft size={14} /> Repay Loan
+                  <History size={14} /> View Employee Loan Ledger & PDF
                 </button>
               </div>
             </div>
@@ -250,6 +288,143 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Individual Employee Loan Ledger Modal */}
+      {isLedgerOpen && ledgerEmp && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-purple-950 text-purple-400 border border-purple-800">
+                  <History size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white">
+                    Employee Loan Ledger — {ledgerEmp.name}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-semibold">
+                    {ledgerEmp.designation} • {ledgerEmp.department}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadLedgerPDF(ledgerEmp._id)}
+                  className="bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                >
+                  <Printer size={14} /> Print / PDF Ledger
+                </button>
+                <button
+                  onClick={() => setIsLedgerOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* KPI Metrics */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Issued</span>
+                <span className="font-mono text-base font-black text-rose-400">
+                  Rs. {formatPKR(ledgerData?.summary?.totalDisbursed)}
+                </span>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Repaid</span>
+                <span className="font-mono text-base font-black text-emerald-400">
+                  Rs. {formatPKR(ledgerData?.summary?.totalRepaid)}
+                </span>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-[10px] font-bold uppercase text-slate-400 block">Current Balance</span>
+                <span className="font-mono text-base font-black text-purple-400">
+                  Rs. {formatPKR(ledgerData?.summary?.currentBalance)}
+                </span>
+              </div>
+            </div>
+
+            {/* Ledger Transactions Table */}
+            <div className="overflow-y-auto flex-1 border border-slate-800 rounded-xl bg-slate-950">
+              <table className="w-full text-left text-xs text-slate-300">
+                <thead className="bg-slate-900 text-slate-400 uppercase font-extrabold text-[10px] tracking-wider border-b border-slate-800 sticky top-0">
+                  <tr>
+                    <th className="py-2.5 px-3">#</th>
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Type</th>
+                    <th className="py-2.5 px-3">Description</th>
+                    <th className="py-2.5 px-3 text-right">Debit (+)</th>
+                    <th className="py-2.5 px-3 text-right">Credit (-)</th>
+                    <th className="py-2.5 px-3 text-right">Running Bal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 font-medium">
+                  {ledgerLoading ? (
+                    <tr>
+                      <td colSpan="7" className="py-8 text-center text-slate-500 font-semibold">
+                        Loading employee loan ledger...
+                      </td>
+                    </tr>
+                  ) : !ledgerData?.ledgerRows?.length ? (
+                    <tr>
+                      <td colSpan="7" className="py-8 text-center text-slate-500 font-semibold">
+                        No loan transactions found for this employee.
+                      </td>
+                    </tr>
+                  ) : (
+                    ledgerData.ledgerRows.map((row, idx) => {
+                      const isDisbursement = row.type === 'DISBURSEMENT';
+                      const dateStr = new Date(row.date).toLocaleDateString('en-PK', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      });
+
+                      return (
+                        <tr key={row.id || idx} className="hover:bg-slate-900/60 transition">
+                          <td className="py-2.5 px-3 font-mono text-slate-500">{idx + 1}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-300">{dateStr}</td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase ${
+                                isDisbursement
+                                  ? 'bg-rose-950/80 text-rose-300 border-rose-800'
+                                  : 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
+                              }`}
+                            >
+                              {isDisbursement ? 'Issued' : 'Repaid'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 font-medium text-slate-200">{row.description}</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-rose-400 font-bold">
+                            {isDisbursement ? `Rs. ${formatPKR(row.debit)}` : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-emerald-400 font-bold">
+                            {!isDisbursement ? `Rs. ${formatPKR(row.credit)}` : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-black text-white">
+                            Rs. {formatPKR(row.runningBalance)}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-800">
+              <button
+                onClick={() => setIsLedgerOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition text-xs"
+              >
+                Close Ledger
+              </button>
+            </div>
           </div>
         </div>
       )}
