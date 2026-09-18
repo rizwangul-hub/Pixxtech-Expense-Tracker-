@@ -14,6 +14,8 @@ import {
   X,
   ShieldCheck,
   AlertTriangle,
+  BookOpen,
+  FileText,
 } from 'lucide-react';
 import { payrollAPI, accountsAPI } from '../services/api.js';
 
@@ -47,6 +49,26 @@ export const StaffPayrollSubTab = () => {
   const [reverseTargetRow, setReverseTargetRow] = useState(null);
   const [reverseReason, setReverseReason] = useState('');
   const [processingReverse, setProcessingReverse] = useState(false);
+
+  // Individual Employee Ledger Modal
+  const [ledgerModalOpen, setLedgerModalOpen] = useState(false);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [selectedLedgerData, setSelectedLedgerData] = useState(null);
+
+  const openEmployeeLedgerModal = async (employeeId) => {
+    try {
+      setLedgerLoading(true);
+      setLedgerModalOpen(true);
+      const res = await payrollAPI.getEmployeeLedger(employeeId);
+      if (res?.success && res.data) {
+        setSelectedLedgerData(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load employee ledger:', err);
+    } finally {
+      setLedgerLoading(false);
+    }
+  };
 
   const fetchAccounts = async () => {
     try {
@@ -160,9 +182,35 @@ export const StaffPayrollSubTab = () => {
     }
   };
 
+  const [downloadingMonthlyPDF, setDownloadingMonthlyPDF] = useState(false);
+
   const handleDownloadExcel = () => {
     const url = payrollAPI.downloadSalarySheetExcelUrl(selectedMonth);
     window.open(url, '_blank');
+  };
+
+  const handleDownloadMonthlyPDF = async () => {
+    try {
+      setDownloadingMonthlyPDF(true);
+      await payrollAPI.downloadMonthlySalarySheetPDF(selectedMonth);
+    } catch (err) {
+      console.error('Download Monthly PDF Error:', err);
+      setMsg({ type: 'error', text: 'Failed to download Monthly Salary Sheet PDF.' });
+    } finally {
+      setDownloadingMonthlyPDF(false);
+    }
+  };
+
+  const handlePrintMonthlyPDF = async () => {
+    try {
+      setDownloadingMonthlyPDF(true);
+      await payrollAPI.printMonthlySalarySheetPDF(selectedMonth);
+    } catch (err) {
+      console.error('Print Monthly PDF Error:', err);
+      setMsg({ type: 'error', text: 'Failed to print Monthly Salary Sheet PDF.' });
+    } finally {
+      setDownloadingMonthlyPDF(false);
+    }
   };
 
   const handleDownloadSalarySlip = async (employeeId, name) => {
@@ -298,10 +346,28 @@ export const StaffPayrollSubTab = () => {
 
             <button
               onClick={handleDownloadExcel}
-              className="bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              className="bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
               title="Download Excel Salary Sheet matching official layout"
             >
-              <Download size={14} /> Download Excel Sheet
+              <Download size={14} /> Download Excel
+            </button>
+
+            <button
+              onClick={handleDownloadMonthlyPDF}
+              disabled={downloadingMonthlyPDF}
+              className="bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-800/60 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+              title="Download Official Monthly Salary Sheet & Finance Payout PDF"
+            >
+              <FileSpreadsheet size={14} /> {downloadingMonthlyPDF ? 'Generating PDF...' : 'Download PDF Sheet'}
+            </button>
+
+            <button
+              onClick={handlePrintMonthlyPDF}
+              disabled={downloadingMonthlyPDF}
+              className="bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/60 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+              title="Print Monthly Salary Sheet PDF directly"
+            >
+              <Printer size={14} /> Print PDF
             </button>
 
             <button
@@ -547,6 +613,13 @@ export const StaffPayrollSubTab = () => {
                           >
                             <Printer size={12} /> Print
                           </button>
+                          <button
+                            onClick={() => openEmployeeLedgerModal(row.employeeId)}
+                            className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-400 hover:text-purple-300 border border-slate-700 transition inline-flex items-center gap-1 font-bold text-[10px]"
+                            title="View Individual Employee Account Ledger Statement"
+                          >
+                            <BookOpen size={12} /> Ledger
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -738,6 +811,177 @@ export const StaffPayrollSubTab = () => {
                 className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs disabled:opacity-50"
               >
                 {processingReverse ? 'Reversing...' : 'Confirm Reversal'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* INDIVIDUAL EMPLOYEE ACCOUNT LEDGER MODAL */}
+      {ledgerModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-purple-950 border border-purple-800 text-purple-300">
+                  <BookOpen size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white tracking-tight">
+                    Individual Employee Account Ledger Statement
+                  </h3>
+                  {selectedLedgerData?.employee && (
+                    <div className="text-xs text-purple-300 font-medium">
+                      <strong className="text-white">{selectedLedgerData.employee.name}</strong> ({selectedLedgerData.employee.employeeCode || 'EMP-PIX'}) • {selectedLedgerData.employee.designation} | {selectedLedgerData.employee.department}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setLedgerModalOpen(false);
+                  setSelectedLedgerData(null);
+                }}
+                className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-5 overflow-y-auto space-y-5 flex-1">
+              {ledgerLoading ? (
+                <div className="py-12 text-center text-slate-400 font-semibold flex flex-col items-center justify-center gap-2">
+                  <RefreshCw className="animate-spin text-purple-400" size={24} />
+                  Loading employee account statement...
+                </div>
+              ) : selectedLedgerData ? (
+                <>
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        Total Salary Accrued
+                      </div>
+                      <div className="text-lg font-black text-purple-400 font-mono mt-1">
+                        Rs. {formatPKR(selectedLedgerData.summary?.totalAccrued)}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">Total payroll earnings due</div>
+                    </div>
+
+                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        Total Salary Disbursed
+                      </div>
+                      <div className="text-lg font-black text-emerald-400 font-mono mt-1">
+                        Rs. {formatPKR(selectedLedgerData.summary?.totalPaid)}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">Paid via Bank / Cash Accounts</div>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border text-center ${
+                      selectedLedgerData.summary?.pendingBalance > 0
+                        ? 'bg-amber-950/40 border-amber-800/80'
+                        : 'bg-emerald-950/40 border-emerald-800/80'
+                    }`}>
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        Current Pending Liability
+                      </div>
+                      <div className={`text-lg font-black font-mono mt-1 ${
+                        selectedLedgerData.summary?.pendingBalance > 0 ? 'text-amber-400' : 'text-emerald-400'
+                      }`}>
+                        Rs. {formatPKR(selectedLedgerData.summary?.pendingBalance)}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        {selectedLedgerData.summary?.pendingBalance > 0 ? 'Outstanding Unpaid Amount' : 'FULLY PAID (Rs. 0)'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ledger Table */}
+                  <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-900 border-b border-slate-800 text-slate-400 uppercase font-bold text-[10px] tracking-wider">
+                          <th className="py-2.5 px-3">Date</th>
+                          <th className="py-2.5 px-3">Month</th>
+                          <th className="py-2.5 px-3">Voucher No.</th>
+                          <th className="py-2.5 px-3">Detail / Narration</th>
+                          <th className="py-2.5 px-3 text-right">Accrued (+)</th>
+                          <th className="py-2.5 px-3 text-right">Disbursed (-)</th>
+                          <th className="py-2.5 px-3 text-right">Pending Balance</th>
+                          <th className="py-2.5 px-3 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-medium">
+                        {selectedLedgerData.ledger?.length === 0 ? (
+                          <tr>
+                            <td colSpan="8" className="py-6 text-center text-slate-500 font-semibold">
+                              No ledger entries recorded for this employee.
+                            </td>
+                          </tr>
+                        ) : (
+                          selectedLedgerData.ledger?.map((entry, i) => {
+                            return (
+                              <tr key={i} className="hover:bg-slate-900/40 transition">
+                                <td className="py-2.5 px-3 font-mono text-slate-300">
+                                  {new Date(entry.date).toLocaleDateString('en-PK')}
+                                </td>
+                                <td className="py-2.5 px-3 font-bold text-purple-400 font-mono">
+                                  {entry.month}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-blue-400">
+                                  {entry.voucherNo}
+                                </td>
+                                <td className="py-2.5 px-3 text-white">
+                                  <div>{entry.detail}</div>
+                                  {entry.paidFromAccount !== '-' && (
+                                    <div className="text-[10px] text-slate-400 font-mono">
+                                      Disbursed from: {entry.paidFromAccount}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-purple-300">
+                                  {entry.accruedAmount > 0 ? `Rs. ${formatPKR(entry.accruedAmount)}` : '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-400">
+                                  {entry.paidAmount > 0 ? `Rs. ${formatPKR(entry.paidAmount)}` : '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-black text-amber-300">
+                                  Rs. {formatPKR(entry.runningPendingBalance)}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${
+                                    entry.status === 'PAID'
+                                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                      : 'bg-amber-950 text-amber-300 border border-amber-800'
+                                  }`}>
+                                    {entry.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-800 bg-slate-950 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setLedgerModalOpen(false);
+                  setSelectedLedgerData(null);
+                }}
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition"
+              >
+                Close Ledger
               </button>
             </div>
           </div>

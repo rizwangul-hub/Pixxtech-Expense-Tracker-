@@ -5,6 +5,8 @@ import {
   savePayroll,
   downloadSalarySheetExcel,
   generateSalarySlipPDF,
+  generateMonthlySalarySheetPDF,
+  getEmployeeLedger,
   paySingleSalary,
   payBulkSalary,
   reverseSalaryPayment,
@@ -18,6 +20,8 @@ router.use(authenticate);
 router.get('/', getMonthlyPayroll);
 router.post('/save', savePayroll);
 router.get('/excel', downloadSalarySheetExcel);
+router.get('/monthly-sheet-pdf', generateMonthlySalarySheetPDF);
+router.get('/employee-ledger/:employeeId', getEmployeeLedger);
 router.get('/slip/:employeeId/pdf', generateSalarySlipPDF);
 
 router.post('/pay-single', paySingleSalary);

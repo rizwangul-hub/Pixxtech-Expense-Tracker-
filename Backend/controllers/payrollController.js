@@ -1133,7 +1133,16 @@ export const paySingleSalary = async (req, res) => {
     const salariesCategory = await getOrCreateSalariesCategory();
     const clearingAccount = await getOrCreateOtherIncomeClearingAccount();
 
-    const pDate = new Date(paymentDate || Date.now());
+    const [yStr, mStr] = month.split('-');
+    const year = parseInt(yStr, 10);
+    const monthNum = parseInt(mStr, 10);
+    const endOfMonthDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
+
+    let pDate = paymentDate ? new Date(paymentDate) : endOfMonthDate;
+    if (isNaN(pDate.getTime()) || pDate.getUTCFullYear() !== year || (pDate.getUTCMonth() + 1) !== monthNum) {
+      pDate = endOfMonthDate;
+    }
+
     const voucherNo = await suggestNextVoucherNumber('EXPENSE', pDate);
 
     const transaction = await createTransaction({
@@ -1235,7 +1244,16 @@ export const payBulkSalary = async (req, res) => {
 
     const salariesCategory = await getOrCreateSalariesCategory();
     const clearingAccount = await getOrCreateOtherIncomeClearingAccount();
-    const pDate = new Date(paymentDate || Date.now());
+    
+    const [yStr, mStr] = month.split('-');
+    const year = parseInt(yStr, 10);
+    const monthNum = parseInt(mStr, 10);
+    const endOfMonthDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
+
+    let pDate = paymentDate ? new Date(paymentDate) : endOfMonthDate;
+    if (isNaN(pDate.getTime()) || pDate.getUTCFullYear() !== year || (pDate.getUTCMonth() + 1) !== monthNum) {
+      pDate = endOfMonthDate;
+    }
 
     const results = [];
     for (const pDoc of payrollDocs) {
@@ -1433,5 +1451,569 @@ export const getSalaryReconciliation = async (req, res) => {
     return apiError(res, 'Failed to fetch salary reconciliation data.', 500);
   }
 };
+
+/**
+ * @desc    Generate official Monthly Salary Sheet & Finance Payout PDF Report
+ * @route   GET /api/staff/payroll/monthly-sheet-pdf
+ * @access  Private
+ */
+export const generateMonthlySalarySheetPDF = async (req, res) => {
+  try {
+    const { month = '2026-08' } = req.query;
+
+    const [y, m] = month.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, 1);
+    const monthName = dateObj.toLocaleString('en-US', { month: 'long' });
+    const formattedTitleDate = `${monthName} ${y}`;
+
+    // 1. Fetch Employees & Payroll Records
+    const employees = await Employee.find({ status: { $ne: 'INACTIVE' } }).sort({ name: 1 }).lean();
+    const savedPayrolls = await Payroll.find({ payrollMonth: month }).lean();
+
+    const savedMap = new Map();
+    savedPayrolls.forEach((p) => savedMap.set(p.employeeId.toString(), p));
+
+    let grandBasic = 0;
+    let grandAllowance = 0;
+    let grandOvertime = 0;
+    let grandBonus = 0;
+    let grandGross = 0;
+    let grandLoanDed = 0;
+    let grandLopDed = 0;
+    let grandOtherDed = 0;
+    let grandTotalDed = 0;
+    let grandNetPay = 0;
+    let totalPaid = 0;
+    let totalPending = 0;
+
+    const accountBreakdownMap = {};
+
+    const itemizedRows = employees.map((emp, index) => {
+      const pDoc = savedMap.get(emp._id.toString());
+
+      const basic = pDoc ? pDoc.basicSalary : (emp.basicSalary || 0);
+      const allowance = pDoc && pDoc.allowance !== undefined
+        ? pDoc.allowance
+        : (emp.allowance || (
+            (emp.fuelAllowance || 0) +
+            (emp.foodAllowance || 0) +
+            (emp.mobileAllowance || 0) +
+            (emp.performanceAllowance || 0) +
+            (emp.otherAllowances || 0)
+          ));
+      const allowanceReason = pDoc ? (pDoc.allowanceReason || '') : (emp.allowanceReason || '');
+
+      const overtime = pDoc ? pDoc.overtimeAmount || 0 : 0;
+      const bonus = pDoc ? pDoc.bonusAmount || 0 : 0;
+      const gross = pDoc ? pDoc.grossSalary : (basic + allowance + overtime + bonus);
+
+      const loanDed = pDoc ? pDoc.loanDeduction || 0 : 0;
+      const lopDed = pDoc ? pDoc.lopDeduction || 0 : 0;
+      const othDed = pDoc ? (pDoc.otherDeduction || 0) + (pDoc.whtDeduction || 0) : 0;
+      const totDed = loanDed + lopDed + othDed;
+      const netPayable = Math.max(0, gross - totDed);
+
+      const status = pDoc?.paymentStatus === 'PAID' ? 'PAID' : 'PENDING';
+      const paidAccount = pDoc?.paidFromAccountName || '-';
+      const voucherNo = pDoc?.voucherNo || '-';
+
+      grandBasic += basic;
+      grandAllowance += allowance;
+      grandOvertime += overtime;
+      grandBonus += bonus;
+      grandGross += gross;
+      grandLoanDed += loanDed;
+      grandLopDed += lopDed;
+      grandOtherDed += othDed;
+      grandTotalDed += totDed;
+      grandNetPay += netPayable;
+
+      if (status === 'PAID') {
+        totalPaid += netPayable;
+        if (pDoc?.paidFromAccountName) {
+          accountBreakdownMap[pDoc.paidFromAccountName] = round2((accountBreakdownMap[pDoc.paidFromAccountName] || 0) + netPayable);
+        }
+      } else {
+        totalPending += netPayable;
+      }
+
+      return {
+        srNo: index + 1,
+        code: emp.employeeCode || `EMP-${index + 101}`,
+        name: emp.name,
+        designation: emp.designation || 'Staff',
+        department: emp.department || 'General',
+        presentDays: pDoc ? pDoc.presentDays : 30,
+        lopDays: pDoc ? pDoc.lopDays : 0,
+        basic,
+        allowance,
+        allowanceReason,
+        overtime,
+        bonus,
+        gross,
+        loanDed,
+        lopDed,
+        othDed,
+        totDed,
+        netPayable,
+        status,
+        paidAccount,
+        voucherNo,
+      };
+    });
+
+    const logoBase64 = getAssetBase64('logo.png');
+    const sarfrazSignBase64 = getAssetBase64('sarfrazsign.png');
+    const khurshidSignBase64 = getAssetBase64('khurshidsign.png');
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Monthly Salary Sheet - ${formattedTitleDate}</title>
+      <style>
+        @page {
+          size: A4 landscape;
+          margin: 8mm;
+        }
+        * { box-sizing: border-box; }
+        body {
+          font-family: 'Segoe UI', Arial, sans-serif;
+          color: #0f172a;
+          margin: 0;
+          padding: 4px;
+          background: #fff;
+          font-size: 11px;
+        }
+        .sheet-container {
+          width: 100%;
+          padding: 8px;
+        }
+        .header-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 8px;
+        }
+        .company-title {
+          font-size: 22px;
+          font-weight: 900;
+          color: #0f172a;
+          letter-spacing: 0.5px;
+          margin: 0;
+        }
+        .company-subtitle {
+          font-size: 10px;
+          color: #475569;
+        }
+        .banner-title {
+          background: #0f172a;
+          color: #ffffff;
+          text-align: center;
+          font-weight: 800;
+          font-size: 14px;
+          padding: 7px;
+          border-radius: 6px;
+          margin: 8px 0;
+          letter-spacing: 1px;
+        }
+        .metrics-grid {
+          width: 100%;
+          border-collapse: separate;
+          border-spacing: 8px;
+          margin-bottom: 10px;
+        }
+        .metric-card {
+          background: #f8fafc;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          padding: 8px 12px;
+          text-align: center;
+        }
+        .metric-label {
+          font-size: 9px;
+          font-weight: 700;
+          color: #64748b;
+          text-transform: uppercase;
+        }
+        .metric-value {
+          font-size: 15px;
+          font-weight: 900;
+          color: #0f172a;
+          margin-top: 2px;
+        }
+        .sheet-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 12px;
+        }
+        .sheet-table th {
+          background: #0f172a;
+          color: #ffffff;
+          font-weight: 700;
+          font-size: 9.5px;
+          padding: 6px 5px;
+          border: 1px solid #1e293b;
+          text-align: center;
+          text-transform: uppercase;
+        }
+        .sheet-table td {
+          padding: 5px 4px;
+          border: 1px solid #cbd5e1;
+          font-size: 10px;
+        }
+        .sheet-table tr:nth-child(even) td {
+          background: #f8fafc;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .font-bold { font-weight: 700; }
+        .font-black { font-weight: 900; }
+        .font-mono { font-family: monospace; }
+        .status-paid {
+          background: #dcfce7;
+          color: #15803d;
+          font-weight: 800;
+          padding: 2px 6px;
+          border-radius: 4px;
+          display: inline-block;
+          font-size: 9px;
+        }
+        .status-pending {
+          background: #fef3c7;
+          color: #b45309;
+          font-weight: 800;
+          padding: 2px 6px;
+          border-radius: 4px;
+          display: inline-block;
+          font-size: 9px;
+        }
+        .summary-row td {
+          background: #0f172a !important;
+          color: #ffffff !important;
+          font-weight: 900 !important;
+          font-size: 10.5px !important;
+          border: 1px solid #0f172a;
+        }
+        .sign-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 15px;
+        }
+        .sign-table td {
+          width: 33.33%;
+          text-align: center;
+          vertical-align: bottom;
+          padding: 0 15px;
+        }
+        .sign-line {
+          border-top: 1.5px solid #334155;
+          margin-top: 5px;
+          padding-top: 4px;
+          font-size: 10px;
+          font-weight: 700;
+          color: #1e293b;
+        }
+        .footer-note {
+          font-size: 9px;
+          color: #64748b;
+          text-align: center;
+          margin-top: 12px;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 6px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="sheet-container">
+        <!-- HEADER -->
+        <table class="header-table">
+          <tr>
+            <td style="width: 20%;">
+              ${logoBase64 ? `<img src="${logoBase64}" alt="Pixx Technologies" style="height: 48px; max-width: 180px; object-fit: contain;" />` : `<h2 style="margin:0; color:#059669;">PIXX TECH</h2>`}
+            </td>
+            <td style="width: 80%; text-align: right;">
+              <div class="company-title">PIXX TECHNOLOGIES PAKISTAN</div>
+              <div class="company-subtitle">Office 4C, 3rd Floor, Plaza 48-C, Main Boulevard, Bahria Town, Lahore | NTN: 8941205</div>
+              <div class="company-subtitle">Official Staff Payroll & Finance Disbursal Management System</div>
+            </td>
+          </tr>
+        </table>
+
+        <div style="height: 3px; background: linear-gradient(90deg, #059669, #0284c7, #6366f1); border-radius: 2px;"></div>
+
+        <!-- BANNER -->
+        <div class="banner-title">
+          MONTHLY SALARY SHEET & FINANCE PAYOUT REPORT — ${formattedTitleDate.toUpperCase()}
+        </div>
+
+        <!-- METRICS GRID -->
+        <table class="metrics-grid">
+          <tr>
+            <td class="metric-card">
+              <div class="metric-label">Total Staff Count</div>
+              <div class="metric-value">${itemizedRows.length} Employees</div>
+            </td>
+            <td class="metric-card">
+              <div class="metric-label">Gross Payroll Amount</div>
+              <div class="metric-value" style="color: #4f46e5;">Rs. ${formatPKR(grandGross)}</div>
+            </td>
+            <td class="metric-card">
+              <div class="metric-label">Net Salary Liability</div>
+              <div class="metric-value" style="color: #0f172a;">Rs. ${formatPKR(grandNetPay)}</div>
+            </td>
+            <td class="metric-card" style="background: #f0fdf4; border-color: #bbf7d0;">
+              <div class="metric-label" style="color: #15803d;">Total Disbursed (Paid)</div>
+              <div class="metric-value" style="color: #166534;">Rs. ${formatPKR(totalPaid)}</div>
+            </td>
+            <td class="metric-card" style="background: #fffbeb; border-color: #fde68a;">
+              <div class="metric-label" style="color: #b45309;">Total Pending Payout</div>
+              <div class="metric-value" style="color: #92400e;">Rs. ${formatPKR(totalPending)}</div>
+            </td>
+          </tr>
+        </table>
+
+        <!-- ITEMIZED SALARY TABLE -->
+        <table class="sheet-table">
+          <thead>
+            <tr>
+              <th style="width: 3%;">#</th>
+              <th style="width: 13%;">Employee Name & Code</th>
+              <th style="width: 10%;">Designation / Dept</th>
+              <th style="width: 5%;">Days</th>
+              <th style="width: 8%;">Basic Salary</th>
+              <th style="width: 11%;">Allowance (Reason)</th>
+              <th style="width: 7%;">Gross Salary</th>
+              <th style="width: 6%;">Loan Ded.</th>
+              <th style="width: 6%;">LOP Ded.</th>
+              <th style="width: 8%;">Net Payable</th>
+              <th style="width: 7%;">Status</th>
+              <th style="width: 16%;">Paid Account / Voucher</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemizedRows
+              .map(
+                (r) => `
+              <tr>
+                <td class="text-center font-bold">${r.srNo}</td>
+                <td>
+                  <div class="font-bold" style="color: #0f172a;">${r.name}</div>
+                  <div class="font-mono" style="font-size: 8.5px; color: #64748b;">${r.code}</div>
+                </td>
+                <td>
+                  <div class="font-bold" style="color: #334155;">${r.designation}</div>
+                  <div style="font-size: 8.5px; color: #64748b;">${r.department}</div>
+                </td>
+                <td class="text-center font-mono">
+                  ${r.presentDays}<span style="color: #94a3b8;">/30</span>
+                  ${r.lopDays > 0 ? `<br/><span style="color: #e11d48; font-size: 8px;">(${r.lopDays} LOP)</span>` : ''}
+                </td>
+                <td class="text-right font-mono">${formatPKR(r.basic)}</td>
+                <td>
+                  <div class="text-right font-mono font-bold">${formatPKR(r.allowance)}</div>
+                  ${r.allowanceReason ? `<div style="font-size: 8px; color: #475569; text-align: right;">${r.allowanceReason}</div>` : ''}
+                </td>
+                <td class="text-right font-mono font-bold" style="color: #4f46e5;">${formatPKR(r.gross)}</td>
+                <td class="text-right font-mono" style="color: ${r.loanDed > 0 ? '#e11d48' : '#64748b'};">${formatPKR(r.loanDed)}</td>
+                <td class="text-right font-mono" style="color: ${r.lopDed > 0 ? '#e11d48' : '#64748b'};">${formatPKR(r.lopDed)}</td>
+                <td class="text-right font-mono font-black" style="color: #059669; font-size: 11px;">Rs. ${formatPKR(r.netPayable)}</td>
+                <td class="text-center">
+                  <span class="${r.status === 'PAID' ? 'status-paid' : 'status-pending'}">${r.status}</span>
+                </td>
+                <td>
+                  <div class="font-bold" style="font-size: 9px; color: #1e293b;">${r.paidAccount}</div>
+                  ${r.voucherNo !== '-' ? `<div class="font-mono" style="font-size: 8.5px; color: #0284c7;">Voucher: ${r.voucherNo}</div>` : ''}
+                </td>
+              </tr>
+            `
+              )
+              .join('')}
+
+            <!-- GRAND TOTAL SUMMARY ROW -->
+            <tr class="summary-row">
+              <td colspan="4" class="text-center">TOTAL MONTHLY PAYROLL SUMMARY</td>
+              <td class="text-right font-mono">${formatPKR(grandBasic)}</td>
+              <td class="text-right font-mono">${formatPKR(grandAllowance)}</td>
+              <td class="text-right font-mono">${formatPKR(grandGross)}</td>
+              <td class="text-right font-mono">${formatPKR(grandLoanDed)}</td>
+              <td class="text-right font-mono">${formatPKR(grandLopDed)}</td>
+              <td class="text-right font-mono">Rs. ${formatPKR(grandNetPay)}</td>
+              <td class="text-center">${totalPending === 0 ? 'ALL PAID' : 'PARTIAL'}</td>
+              <td class="text-center font-mono" style="font-size: 9px;">Paid: Rs. ${formatPKR(totalPaid)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- SIGNATURE BLOCK -->
+        <table class="sign-table">
+          <tr>
+            <td>
+              <div style="height: 38px;"></div>
+              <div class="sign-line">Prepared By: Human Resources Manager<br/><span style="font-size:8.5px; color:#64748b;">Payroll & Attendance Verified</span></div>
+            </td>
+            <td>
+              ${sarfrazSignBase64 ? `<img src="${sarfrazSignBase64}" style="height: 38px; max-width: 120px; object-fit: contain; margin-bottom: 2px;" />` : ''}
+              <div class="sign-line">Sarfraz Sb (Manager Operations)<br/><span style="font-size:8.5px; color:#64748b;">Checked & Disbursed</span></div>
+            </td>
+            <td>
+              ${khurshidSignBase64 ? `<img src="${khurshidSignBase64}" style="height: 38px; max-width: 120px; object-fit: contain; margin-bottom: 2px;" />` : ''}
+              <div class="sign-line">Khurshid Anwar (Finance Director)<br/><span style="font-size:8.5px; color:#64748b;">Approved & Executive Verification</span></div>
+            </td>
+          </tr>
+        </table>
+
+        <div class="footer-note">
+          Official Monthly Salary Sheet & Finance Payout System Document issued by Pixx Technologies Pakistan • Generated on ${new Date().toLocaleDateString('en-PK')} • System Record.
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+
+    try {
+      const puppeteer = (await import('puppeteer-core')).default;
+      const execPath = getBrowserExecutablePath();
+
+      const launchOpts = {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      };
+      if (execPath) launchOpts.executablePath = execPath;
+
+      const browser = await puppeteer.launch(launchOpts);
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        landscape: true,
+        margin: { top: '6mm', right: '6mm', bottom: '6mm', left: '6mm' },
+        printBackground: true,
+      });
+
+      await browser.close();
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=Monthly_Salary_Sheet_${month}.pdf`);
+      return res.status(200).send(pdfBuffer);
+    } catch (pdfErr) {
+      console.warn('[Puppeteer Warning]: Falling back to HTML for Monthly Salary Sheet:', pdfErr.message);
+      res.setHeader('Content-Type', 'text/html');
+      return res.status(200).send(htmlContent);
+    }
+  } catch (error) {
+    console.error('[Generate Monthly Salary Sheet PDF Error]:', error);
+    return apiError(res, error.message || 'Failed to generate Monthly Salary Sheet PDF.', 500);
+  }
+};
+
+/**
+ * @desc    Get detailed individual Employee Account Ledger (Accruals, Payouts, & Pending Balance)
+ * @route   GET /api/staff/payroll/employee-ledger/:employeeId
+ * @access  Private
+ */
+export const getEmployeeLedger = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    const employee = await Employee.findById(employeeId).lean();
+    if (!employee) {
+      return apiError(res, 'Employee record not found.', 404);
+    }
+
+    const payrollDocs = await Payroll.find({ employeeId }).sort({ payrollMonth: 1 }).lean();
+
+    const rawLedgerEntries = [];
+    let totalAccrued = 0;
+    let totalPaid = 0;
+
+    for (const p of payrollDocs) {
+      const netPay = round2(p.netPayable);
+      if (netPay <= 0) continue;
+
+      const [yStr, mStr] = p.payrollMonth.split('-');
+      const year = parseInt(yStr, 10);
+      const monthNum = parseInt(mStr, 10);
+      const accrualDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
+
+      // 1. Accrual Entry (Credit / Salary Due to Employee)
+      rawLedgerEntries.push({
+        date: accrualDate,
+        month: p.payrollMonth,
+        type: 'SALARY_ACCRUAL',
+        voucherNo: p.voucherNo || `ACCRUAL-${p.payrollMonth}`,
+        detail: `Monthly Salary Accrual — ${p.payrollMonth}`,
+        accruedAmount: netPay,
+        paidAmount: 0,
+        status: p.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
+        paidFromAccount: p.paidFromAccountName || '-',
+        payrollId: p._id,
+      });
+
+      totalAccrued += netPay;
+
+      // 2. Disbursal Entry (Debit / Salary Paid to Employee)
+      if (p.paymentStatus === 'PAID') {
+        const payoutDate = p.paymentDate || p.paidDate || accrualDate;
+        rawLedgerEntries.push({
+          date: payoutDate,
+          month: p.payrollMonth,
+          type: 'SALARY_DISBURSAL',
+          voucherNo: p.voucherNo || 'PAID',
+          detail: `Salary Disbursal via ${p.paidFromAccountName || 'Finance Bank/Cash'} (Voucher: ${p.voucherNo})`,
+          accruedAmount: 0,
+          paidAmount: netPay,
+          status: 'PAID',
+          paidFromAccount: p.paidFromAccountName || 'Finance Account',
+          payrollId: p._id,
+        });
+
+        totalPaid += netPay;
+      }
+    }
+
+    // Sort entries chronologically: Date ASC
+    rawLedgerEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Calculate running pending liability balance
+    let runningPendingBalance = 0;
+    const ledger = rawLedgerEntries.map((entry) => {
+      runningPendingBalance = round2(runningPendingBalance + entry.accruedAmount - entry.paidAmount);
+      return {
+        ...entry,
+        runningPendingBalance: Math.max(0, runningPendingBalance),
+      };
+    });
+
+    const pendingBalance = Math.max(0, round2(totalAccrued - totalPaid));
+
+    return apiSuccess(
+      res,
+      {
+        employee: {
+          _id: employee._id,
+          name: employee.name,
+          employeeCode: employee.employeeCode,
+          designation: employee.designation,
+          department: employee.department,
+          basicSalary: employee.basicSalary,
+        },
+        summary: {
+          totalAccrued: round2(totalAccrued),
+          totalPaid: round2(totalPaid),
+          pendingBalance,
+        },
+        ledger,
+      },
+      `Employee account ledger fetched for ${employee.name}.`
+    );
+  } catch (error) {
+    console.error('[Get Employee Ledger Error]:', error);
+    return apiError(res, error.message || 'Failed to fetch employee ledger.', 500);
+  }
+};
+
+
 
 
