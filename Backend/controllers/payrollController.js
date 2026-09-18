@@ -855,8 +855,7 @@ export const generateSalarySlipPDF = async (req, res) => {
         </div>
         <div class="hdr-info">
           <div class="hdr-title">PIXX TECHNOLOGIES PAKISTAN</div>
-          <div class="hdr-addr">Office 4C, 3rd Floor, Plaza 48-C, Main Boulevard, Bahria Town, Lahore &nbsp;|&nbsp; NTN: 8941205</div>
-          <div class="hdr-addr">Email: hr@pixxtech.com &nbsp;|&nbsp; Web: www.pixxtech.com</div>
+          <div class="hdr-addr">Basement Office 4C chanbeli Block Bahria Town Lahore</div>
         </div>
       </div>
 
@@ -1761,8 +1760,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
         </div>
         <div class="company-block">
           <div class="company-name">PIXX TECHNOLOGIES PAKISTAN</div>
-          <div class="company-addr">Office 4C, 3rd Floor, Plaza 48-C, Main Boulevard, Bahria Town, Lahore &nbsp;|&nbsp; NTN: 8941205</div>
-          <div class="company-addr">HR &amp; Finance Payroll Management System &nbsp;|&nbsp; hr@pixxtech.com</div>
+          <div class="company-addr">Basement Office 4C chanbeli Block Bahria Town Lahore</div>
         </div>
       </div>
 
