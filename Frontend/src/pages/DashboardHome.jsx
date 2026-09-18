@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
- ShieldCheck,
  Database,
  Coins,
  CheckCircle2,
  Clock,
  Layers,
- FileText,
  Building2,
  ChevronRight,
  Users,
@@ -18,13 +16,10 @@ import {
  FileSpreadsheet,
 } from 'lucide-react';
 import { formatPKR } from '../utils/formatters.js';
-import { isAdmin } from '../utils/permissions.js';
 import { propertiesAPI, tenantsAPI, agreementsAPI, rentDueAPI, accountsAPI, rentReceivedAPI, vouchersAPI, otherIncomeAPI } from '../services/api.js';
 
 export function DashboardHome({
  user,
- onNavigateToUsers,
- onOpenTerminal,
  onNavigateToProperties,
  onNavigateToTenants,
  onNavigateToAgreements,
@@ -35,7 +30,6 @@ export function DashboardHome({
  onNavigateToTransfers,
  onNavigateToTransactions,
 }) {
- const userIsAdmin = isAdmin(user);
  const normalizedRole = user?.role === 'ADMIN_PUBLISHER' ? 'ADMIN' : user?.role || 'DATA_ENTRY';
 
  // Live Portfolio Stats from Database
@@ -102,56 +96,6 @@ export function DashboardHome({
 
   return (
     <div className="space-y-6">
-      {/* Welcome & Overview Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Pixx Technologies • Pakistan Operations
-              </span>
-            </div>
-            <h1 className="page-title">
-              Pakistan Property Finance & Expense Management System
-            </h1>
-            <p className="text-sm text-slate-600 mt-1 max-w-3xl font-medium leading-relaxed">
-              Foundation dashboard establishing secure JWT authentication, Role-Based Access Control (RBAC),
-              standardized Pakistan Rupee (PKR) formatting, and audit trail architecture for all upcoming property and expense modules.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {onNavigateToProperties && (
-              <button
-                onClick={onNavigateToProperties}
-                className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition shadow-2xs text-white-keep"
-              >
-                <Building2 size={16} className="text-white-keep" />
-                Properties Directory
-              </button>
-            )}
-            {userIsAdmin && (
-              <button
-                onClick={onNavigateToUsers}
-                className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-2xs text-white-keep"
-              >
-                <ShieldCheck size={16} className="text-white-keep" />
-                Manage Users
-              </button>
-            )}
-            {onOpenTerminal && (
-              <button
-                onClick={onOpenTerminal}
-                className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition shadow-2xs"
-              >
-                <FileText size={16} className="text-slate-700" />
-                Launch Operational View
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* Live Properties Portfolio Metrics */}
       {portfolioStats && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">

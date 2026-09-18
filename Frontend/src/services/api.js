@@ -816,6 +816,64 @@ export const payrollAPI = {
   downloadSalarySlipPDFUrl: (employeeId, month) => {
     return getFullApiUrl(`/staff/payroll/slip/${employeeId}/pdf?month=${encodeURIComponent(month)}`);
   },
+  downloadSalarySlipPDF: async (employeeId, month, employeeName = 'Employee') => {
+    const res = await api.get(`/staff/payroll/slip/${employeeId}/pdf`, {
+      params: { month },
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    const cleanName = (employeeName || 'Employee').replace(/\s+/g, '_');
+    link.download = `Salary_Slip_${cleanName}_${month}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+    return true;
+  },
+  printSalarySlipPDF: async (employeeId, month) => {
+    const res = await api.get(`/staff/payroll/slip/${employeeId}/pdf`, {
+      params: { month },
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    iframe.src = blobUrl;
+
+    document.body.appendChild(iframe);
+
+    return new Promise((resolve) => {
+      iframe.onload = () => {
+        setTimeout(() => {
+          try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+          } catch (e) {
+            console.error('Iframe print failed, opening blob tab:', e);
+            window.open(blobUrl, '_blank');
+          }
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+            window.URL.revokeObjectURL(blobUrl);
+            resolve(true);
+          }, 60000);
+        }, 500);
+      };
+    });
+  },
 };
 
 export default api;

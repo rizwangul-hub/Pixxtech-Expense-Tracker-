@@ -617,7 +617,28 @@ export const downloadSalarySheetExcel = async (req, res) => {
 };
 
 /**
- * @desc    Generate Printable PDF Salary Slip for an Employee matching Salary Slip.pdf format
+ * Helper to encode assets (Logo & Signatures) to base64 data URIs
+ */
+const getAssetBase64 = (fileName) => {
+  const possiblePaths = [
+    path.join(process.cwd(), 'Frontend', 'src', 'assets', 'image', fileName),
+    path.join(process.cwd(), '..', 'Frontend', 'src', 'assets', 'image', fileName),
+    path.join(process.cwd(), 'src', 'assets', 'image', fileName),
+    path.join(process.cwd(), 'assets', fileName),
+  ];
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      const fileData = fs.readFileSync(p);
+      const ext = path.extname(p).replace('.', '');
+      return `data:image/${ext === 'svg' ? 'svg+xml' : ext};base64,${fileData.toString('base64')}`;
+    }
+  }
+  return '';
+};
+
+/**
+ * @desc    Generate Printable PDF Salary Slip for an Employee matching official format
  * @route   GET /api/staff/payroll/slip/:employeeId/pdf
  * @access  Private
  */
@@ -634,11 +655,16 @@ export const generateSalarySlipPDF = async (req, res) => {
     const savedPayroll = await Payroll.findOne({ employeeId, payrollMonth: month }).lean();
 
     const basic = savedPayroll ? savedPayroll.basicSalary : employee.basicSalary || 0;
-    const fuel = savedPayroll ? savedPayroll.fuelAllowance : employee.fuelAllowance || 0;
-    const food = savedPayroll ? savedPayroll.foodAllowance : employee.foodAllowance || 0;
-    const mobile = savedPayroll ? savedPayroll.mobileAllowance : employee.mobileAllowance || 0;
-    const perf = savedPayroll ? savedPayroll.performanceAllowance : employee.performanceAllowance || 0;
-    const otherAllow = savedPayroll ? savedPayroll.otherAllowances : employee.otherAllowances || 0;
+    const allowance = savedPayroll && savedPayroll.allowance !== undefined
+      ? savedPayroll.allowance
+      : (employee.allowance || (
+          (employee.fuelAllowance || 0) +
+          (employee.foodAllowance || 0) +
+          (employee.mobileAllowance || 0) +
+          (employee.performanceAllowance || 0) +
+          (employee.otherAllowances || 0)
+        ));
+    const allowanceReason = savedPayroll ? (savedPayroll.allowanceReason || '') : (employee.allowanceReason || '');
 
     const overtime = savedPayroll ? savedPayroll.overtimeAmount || 0 : 0;
     const bonus = savedPayroll ? savedPayroll.bonusAmount || 0 : 0;
@@ -647,7 +673,7 @@ export const generateSalarySlipPDF = async (req, res) => {
 
     const gross = savedPayroll
       ? savedPayroll.grossSalary
-      : basic + fuel + food + mobile + perf + otherAllow + overtime + bonus + leaveEncashment + otherReceipts;
+      : basic + allowance + overtime + bonus + leaveEncashment + otherReceipts;
 
     const loanDed = savedPayroll ? savedPayroll.loanDeduction : 0;
     const lopDed = savedPayroll ? savedPayroll.lopDeduction : 0;
@@ -673,7 +699,11 @@ export const generateSalarySlipPDF = async (req, res) => {
     const { numberToWords } = await import('../services/staffPayrollService.js');
     const amountInWords = numberToWords(netPayable);
 
-    // Render HTML template matching the official Salary Slip.pdf layout (Image 2)
+    // Base64 Asset Images
+    const logoBase64 = getAssetBase64('logo.png');
+    const sarfrazSignBase64 = getAssetBase64('sarfrazsign.png');
+    const khurshidSignBase64 = getAssetBase64('khurshidsign.png');
+
     const htmlContent = `
     <!DOCTYPE html>
     <html lang="en">
@@ -683,215 +713,324 @@ export const generateSalarySlipPDF = async (req, res) => {
       <style>
         @page {
           size: A4 portrait;
-          margin: 10mm;
+          margin: 12mm;
         }
+        * { box-sizing: border-box; }
         body {
-          font-family: 'Times New Roman', Times, serif;
-          color: #000;
+          font-family: 'Segoe UI', Arial, sans-serif;
+          color: #0f172a;
           margin: 0;
-          padding: 15px;
+          padding: 10px;
           background: #fff;
-        }
-        .slip-container {
-          width: 100%;
-          max-width: 850px;
-          margin: 0 auto;
-          box-sizing: border-box;
-        }
-        table.outer-table {
-          width: 100%;
-          border-collapse: collapse;
           font-size: 13px;
         }
-        table.outer-table td, table.outer-table th {
-          border: 1px solid #000;
-          padding: 4px 6px;
+        .slip-card {
+          border: 2px solid #0f172a;
+          border-radius: 12px;
+          padding: 20px;
+          background: #ffffff;
         }
-        .header-title {
-          text-align: center;
-          font-size: 34px;
-          font-weight: bold;
-          padding: 10px 0;
-          letter-spacing: 1px;
-        }
-        .sub-title {
-          text-align: center;
-          font-size: 18px;
-          font-weight: bold;
-          padding: 6px 0;
-        }
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-        .font-bold { font-weight: bold; }
-        .inner-table {
+        .header-table {
           width: 100%;
-          height: 100%;
           border-collapse: collapse;
-          font-size: 13px;
+          margin-bottom: 12px;
         }
-        .inner-table td {
-          border: 1px solid #000;
-          padding: 4px 6px;
+        .header-table td {
+          vertical-align: middle;
         }
-        .big-payout {
-          font-size: 44px;
-          font-weight: bold;
+        .company-title {
+          font-size: 26px;
+          font-weight: 900;
+          color: #0f172a;
+          margin: 0;
+          letter-spacing: 0.5px;
+        }
+        .company-subtitle {
+          font-size: 11px;
+          color: #475569;
+          margin: 3px 0 0 0;
+          font-weight: 600;
+        }
+        .banner-title {
+          background: #0f172a;
+          color: #ffffff;
           text-align: center;
-          padding: 60px 10px;
-          letter-spacing: 1.5px;
-          font-family: 'Times New Roman', Times, serif;
-        }
-        .words-box {
-          text-align: center;
+          padding: 9px;
           font-size: 14px;
-          padding: 8px 5px;
+          font-weight: 800;
+          letter-spacing: 1.5px;
+          border-radius: 6px;
+          text-transform: uppercase;
+          margin: 15px 0;
+        }
+        .info-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 15px;
+          font-size: 12px;
+        }
+        .info-table td {
+          padding: 6px 8px;
+          border: 1px solid #cbd5e1;
+        }
+        .info-label {
+          background: #f8fafc;
+          font-weight: 700;
+          color: #334155;
+          width: 18%;
+        }
+        .info-val {
+          font-weight: 600;
+          color: #0f172a;
+          width: 32%;
+        }
+        .grid-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 15px;
+          font-size: 12px;
+        }
+        .grid-table th {
+          background: #1e293b;
+          color: #ffffff;
+          padding: 8px;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          text-align: left;
+          border: 1px solid #0f172a;
+        }
+        .grid-table td {
+          padding: 6px 8px;
+          border: 1px solid #cbd5e1;
+        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .font-mono { font-family: 'Courier New', Courier, monospace; }
+        .font-bold { font-weight: bold; }
+        
+        .payout-box {
+          background: #f0fdf4;
+          border: 2px solid #16a34a;
+          border-radius: 10px;
+          padding: 16px;
+          text-align: center;
+          margin: 18px 0;
+        }
+        .payout-amount {
+          font-size: 32px;
+          font-weight: 900;
+          color: #15803d;
+          letter-spacing: 1px;
+          font-family: 'Courier New', Courier, monospace;
+        }
+        .payout-words {
+          font-size: 13px;
+          font-weight: 700;
+          color: #166534;
+          margin-top: 5px;
+          font-style: italic;
+        }
+        .sign-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 25px;
+          text-align: center;
+        }
+        .sign-table td {
+          vertical-align: bottom;
+          padding: 10px;
+          width: 33.33%;
+        }
+        .sign-line {
+          border-top: 1.5px dashed #475569;
+          margin-top: 5px;
+          padding-top: 5px;
+          font-size: 11px;
+          font-weight: 700;
+          color: #1e293b;
+        }
+        .footer-note {
+          font-size: 10px;
+          color: #64748b;
+          text-align: center;
+          margin-top: 15px;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 8px;
         }
       </style>
     </head>
     <body>
-      <div class="slip-container">
-        <table class="outer-table">
+      <div class="slip-card">
+        <!-- HEADER -->
+        <table class="header-table">
           <tr>
-            <td colspan="6" class="header-title">PIXX TECHNOLOGIES</td>
-          </tr>
-          <tr>
-            <td colspan="6" class="sub-title">Salary Pay Slip For The Month Of ${formattedTitleDate}</td>
-          </tr>
-          <tr>
-            <td class="font-bold" style="width: 8%;">Name:</td>
-            <td class="font-bold" style="width: 37%; font-size: 15px;">${employee.name}</td>
-            <td class="font-bold" style="width: 15%;">Designation</td>
-            <td colspan="3" class="font-bold" style="font-size: 15%;">${employee.designation}</td>
-          </tr>
-          <tr>
-            <!-- LEFT COLUMN: FINANCIAL ITEMIZED BREAKDOWN -->
-            <td colspan="3" style="vertical-align: top; padding: 0; width: 50%;">
-              <table class="inner-table">
-                <tr>
-                  <td style="width: 6%;">I</td>
-                  <td>Net Salary</td>
-                  <td style="width: 12%;">PKR</td>
-                  <td class="text-right font-bold" style="width: 25%;">${formatPKR(basic)}</td>
-                </tr>
-                <tr>
-                  <td>II</td>
-                  <td>OT</td>
-                  <td>PKR</td>
-                  <td class="text-right">${overtime ? formatPKR(overtime) : '0'}</td>
-                </tr>
-                <tr>
-                  <td>III</td>
-                  <td>Bonus</td>
-                  <td>PKR</td>
-                  <td class="text-right">${bonus ? formatPKR(bonus) : ''}</td>
-                </tr>
-                <tr>
-                  <td>IV</td>
-                  <td>Leave Encashment</td>
-                  <td>PKR</td>
-                  <td class="text-right">${leaveEncashment ? formatPKR(leaveEncashment) : '0'}</td>
-                </tr>
-                <tr>
-                  <td colspan="3">&nbsp;</td>
-                  <td>&nbsp;</td>
-                </tr>
-                <tr>
-                  <td colspan="3">&nbsp;</td>
-                  <td>&nbsp;</td>
-                </tr>
-                <tr>
-                  <td colspan="3">Total Other Receipts</td>
-                  <td class="text-right font-bold">${otherReceipts ? formatPKR(otherReceipts) : '0'}</td>
-                </tr>
-                <tr>
-                  <td colspan="2" class="text-right font-bold">Sub Total</td>
-                  <td class="font-bold">PKR</td>
-                  <td class="text-right font-bold">${formatPKR(gross)}</td>
-                </tr>
-                <tr>
-                  <td colspan="3" class="font-bold">Total Gross Salary</td>
-                  <td class="text-right font-bold">${formatPKR(gross)}</td>
-                </tr>
-                <tr>
-                  <td colspan="4" class="font-bold">Deductions</td>
-                </tr>
-                <tr>
-                  <td colspan="2">a.Advance Salary</td>
-                  <td>PKR</td>
-                  <td class="text-right">${formatPKR(loanDed)}</td>
-                </tr>
-                <tr>
-                  <td colspan="2">b.Deductions</td>
-                  <td>PKR</td>
-                  <td class="text-right">${formatPKR(lopDed + othDed)}</td>
-                </tr>
-                <tr>
-                  <td colspan="2">c. WHT</td>
-                  <td>PKR</td>
-                  <td class="text-right">${formatPKR(whtDed)}</td>
-                </tr>
-                <tr>
-                  <td colspan="3">Total Deductions</td>
-                  <td class="text-right font-bold">${formatPKR(totDed)}</td>
-                </tr>
-                <tr>
-                  <td colspan="2">&nbsp;</td>
-                  <td class="font-bold">PKR</td>
-                  <td class="text-right font-bold">&nbsp;</td>
-                </tr>
-                <tr>
-                  <td colspan="3" class="font-bold">SALARY AFTER DEDUCTIONS</td>
-                  <td class="text-right font-bold">${formatPKR(netPayable)}</td>
-                </tr>
-                <tr>
-                  <td colspan="3" class="font-bold">NET TAKE HOME</td>
-                  <td class="text-right font-bold">${formatPKR(netPayable)}</td>
-                </tr>
-              </table>
+            <td style="width: 25%;">
+              ${logoBase64 ? `<img src="${logoBase64}" alt="Pixx Technologies" style="height: 55px; max-width: 190px; object-fit: contain;" />` : `<h2 style="margin:0; color:#059669;">PIXX TECH</h2>`}
             </td>
-
-            <!-- RIGHT COLUMN: ATTENDANCE & HUGE BOLD PAYOUT DISPLAY -->
-            <td colspan="3" style="vertical-align: top; padding: 0; width: 50%;">
-              <table class="inner-table" style="height: 100%;">
-                <tr>
-                  <td style="width: 8%; font-weight: bold;">A</td>
-                  <td style="font-weight: bold;">Total Attendance</td>
-                  <td class="text-right font-bold" style="width: 20%;">${presentDays}</td>
-                </tr>
-                <tr>
-                  <td style="font-weight: bold;">B</td>
-                  <td style="font-weight: bold;">Total Leaves</td>
-                  <td class="text-right font-bold">${leaveDays}</td>
-                </tr>
-                <tr>
-                  <td></td>
-                  <td>Allowed Leaves</td>
-                  <td class="text-right font-bold">${allowedLeaves}</td>
-                </tr>
-                <tr>
-                  <td></td>
-                  <td>Loss of Pay days</td>
-                  <td class="text-right font-bold">${lopDays}</td>
-                </tr>
-                <tr>
-                  <td style="font-weight: bold;">C</td>
-                  <td style="font-weight: bold;">Total Salary Days</td>
-                  <td class="text-right font-bold">${totalSalaryDays}</td>
-                </tr>
-                <tr>
-                  <td colspan="3" class="big-payout">
-                    PKR ${formatPKR(netPayable)}
-                  </td>
-                </tr>
-                <tr>
-                  <td colspan="3" class="words-box">
-                    ${amountInWords}
-                  </td>
-                </tr>
-              </table>
+            <td style="width: 75%; text-align: right;">
+              <div class="company-title">PIXX TECHNOLOGIES PAKISTAN</div>
+              <div class="company-subtitle">Office 4C, 3rd Floor, Plaza 48-C, Main Boulevard, Bahria Town, Lahore | NTN: 8941205</div>
+              <div class="company-subtitle">Email: hr@pixxtech.com | Web: www.pixxtech.com</div>
             </td>
           </tr>
         </table>
+
+        <div style="height: 3px; background: linear-gradient(90deg, #059669, #0284c7, #6366f1); border-radius: 2px;"></div>
+
+        <!-- DOCUMENT TITLE BANNER -->
+        <div class="banner-title">
+          SALARY PAY SLIP — ${formattedTitleDate.toUpperCase()}
+        </div>
+
+        <!-- EMPLOYEE INFO METADATA GRID -->
+        <table class="info-table">
+          <tr>
+            <td class="info-label">Employee Name:</td>
+            <td class="info-val font-bold" style="font-size: 14px; color: #0f172a;">${employee.name}</td>
+            <td class="info-label">Employee Code:</td>
+            <td class="info-val font-mono font-bold">${employee.employeeCode || 'EMP-PIX'}</td>
+          </tr>
+          <tr>
+            <td class="info-label">Designation:</td>
+            <td class="info-val font-bold" style="color: #4f46e5;">${employee.designation}</td>
+            <td class="info-label">Workplace / Dept:</td>
+            <td class="info-val font-bold" style="color: #059669;">${employee.department}</td>
+          </tr>
+          <tr>
+            <td class="info-label">Pay Period:</td>
+            <td class="info-val font-mono">${formattedTitleDate}</td>
+            <td class="info-label">Payment Status:</td>
+            <td class="info-val font-bold" style="color: #059669;">${savedPayroll?.paymentStatus || 'FINALIZED'}</td>
+          </tr>
+          <tr>
+            <td class="info-label">Bank Name:</td>
+            <td class="info-val">${savedPayroll?.bankName || employee.bankName || 'Cash / Bank'}</td>
+            <td class="info-label">IBAN / Account:</td>
+            <td class="info-val font-mono">${savedPayroll?.ibanNumber || employee.ibanNumber || 'N/A'}</td>
+          </tr>
+        </table>
+
+        <!-- ITEMIZED EARNINGS & DEDUCTIONS BREAKDOWN -->
+        <table class="grid-table">
+          <thead>
+            <tr>
+              <th style="width: 50%; background: #065f46;">EARNINGS ITEMIZATION</th>
+              <th style="width: 50%; background: #881337;">DEDUCTIONS ITEMIZATION</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <!-- LEFT: EARNINGS -->
+              <td style="vertical-align: top; padding: 0;">
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="border: none; padding: 6px;">Basic Salary</td>
+                    <td class="text-right font-mono font-bold" style="border: none; padding: 6px;">PKR ${formatPKR(basic)}</td>
+                  </tr>
+                  ${allowance > 0 ? `
+                  <tr>
+                    <td style="border: none; padding: 6px;">Allowance <br/><span style="font-size:10px; color:#475569;">(${allowanceReason || 'General Allowance'})</span></td>
+                    <td class="text-right font-mono font-bold" style="border: none; padding: 6px; color:#059669;">+PKR ${formatPKR(allowance)}</td>
+                  </tr>
+                  ` : ''}
+                  ${overtime > 0 ? `
+                  <tr>
+                    <td style="border: none; padding: 6px;">Overtime (OT)</td>
+                    <td class="text-right font-mono" style="border: none; padding: 6px;">PKR ${formatPKR(overtime)}</td>
+                  </tr>
+                  ` : ''}
+                  ${bonus > 0 ? `
+                  <tr>
+                    <td style="border: none; padding: 6px;">Bonus</td>
+                    <td class="text-right font-mono" style="border: none; padding: 6px;">PKR ${formatPKR(bonus)}</td>
+                  </tr>
+                  ` : ''}
+                  ${otherReceipts > 0 ? `
+                  <tr>
+                    <td style="border: none; padding: 6px;">Other Receipts</td>
+                    <td class="text-right font-mono" style="border: none; padding: 6px;">PKR ${formatPKR(otherReceipts)}</td>
+                  </tr>
+                  ` : ''}
+                  <tr style="border-top: 1px solid #cbd5e1; background: #f8fafc;">
+                    <td style="border: none; padding: 8px; font-weight: bold;">TOTAL GROSS SALARY</td>
+                    <td class="text-right font-mono font-bold" style="border: none; padding: 8px; font-size: 13px;">PKR ${formatPKR(gross)}</td>
+                  </tr>
+                </table>
+              </td>
+
+              <!-- RIGHT: DEDUCTIONS & ATTENDANCE SUMMARY -->
+              <td style="vertical-align: top; padding: 0;">
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="border: none; padding: 6px;">Loan / Advance Salary</td>
+                    <td class="text-right font-mono font-bold" style="border: none; padding: 6px; color:#e11d48;">-PKR ${formatPKR(loanDed)}</td>
+                  </tr>
+                  <tr>
+                    <td style="border: none; padding: 6px;">Loss of Pay (LOP) Deduction</td>
+                    <td class="text-right font-mono" style="border: none; padding: 6px;">-PKR ${formatPKR(lopDed)}</td>
+                  </tr>
+                  ${othDed > 0 ? `
+                  <tr>
+                    <td style="border: none; padding: 6px;">Other Deductions</td>
+                    <td class="text-right font-mono" style="border: none; padding: 6px;">-PKR ${formatPKR(othDed)}</td>
+                  </tr>
+                  ` : ''}
+                  ${whtDed > 0 ? `
+                  <tr>
+                    <td style="border: none; padding: 6px;">WHT Tax Deduction</td>
+                    <td class="text-right font-mono" style="border: none; padding: 6px;">-PKR ${formatPKR(whtDed)}</td>
+                  </tr>
+                  ` : ''}
+                  <tr style="border-top: 1px solid #cbd5e1; background: #fff1f2;">
+                    <td style="border: none; padding: 8px; font-weight: bold; color:#9f1239;">TOTAL DEDUCTIONS</td>
+                    <td class="text-right font-mono font-bold" style="border: none; padding: 8px; font-size: 13px; color:#9f1239;">-PKR ${formatPKR(totDed)}</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- ATTENDANCE METRICS BAR -->
+        <table style="width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px;">
+          <tr>
+            <td style="padding: 6px 10px; font-weight: bold;">Attendance: <span style="color:#059669; font-family:monospace;">${presentDays} Days</span></td>
+            <td style="padding: 6px 10px; font-weight: bold;">Leaves Taken: <span style="color:#334155; font-family:monospace;">${leaveDays} Days</span></td>
+            <td style="padding: 6px 10px; font-weight: bold;">Allowed Leaves: <span style="color:#334155; font-family:monospace;">${allowedLeaves} Days</span></td>
+            <td style="padding: 6px 10px; font-weight: bold;">LOP Days: <span style="color:#e11d48; font-family:monospace;">${lopDays} Days</span></td>
+            <td style="padding: 6px 10px; font-weight: bold;">Salary Days: <span style="color:#4f46e5; font-family:monospace;">${totalSalaryDays} Days</span></td>
+          </tr>
+        </table>
+
+        <!-- NET TAKE HOME PAYOUT CARD -->
+        <div class="payout-box">
+          <div style="font-size: 11px; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 1px;">NET PAYABLE SALARY DISBURSED</div>
+          <div class="payout-amount">PKR ${formatPKR(netPayable)}</div>
+          <div class="payout-words">"${amountInWords}"</div>
+        </div>
+
+        <!-- SIGNATURES FOOTER -->
+        <table class="sign-table">
+          <tr>
+            <td>
+              ${sarfrazSignBase64 ? `<img src="${sarfrazSignBase64}" style="height: 48px; max-width: 130px; object-fit: contain; margin-bottom: 3px;" />` : ''}
+              <div class="sign-line">Sarfaraz (Senior Accountant)<br/><span style="font-size:9px; color:#64748b;">Prepared By</span></div>
+            </td>
+            <td>
+              ${khurshidSignBase64 ? `<img src="${khurshidSignBase64}" style="height: 48px; max-width: 130px; object-fit: contain; margin-bottom: 3px;" />` : ''}
+              <div class="sign-line">Khurshid Anwar (Finance Director)<br/><span style="font-size:9px; color:#64748b;">Approved & Verified</span></div>
+            </td>
+            <td>
+              <div style="height: 48px;"></div>
+              <div class="sign-line">${employee.name}<br/><span style="font-size:9px; color:#64748b;">Employee Acknowledgement</span></div>
+            </td>
+          </tr>
+        </table>
+
+        <div class="footer-note">
+          This is an official computer-generated Salary Pay Slip issued by Pixx Technologies Pakistan. Document generated on ${new Date().toLocaleDateString('en-PK')} • Verified system record.
+        </div>
       </div>
     </body>
     </html>
@@ -914,7 +1053,7 @@ export const generateSalarySlipPDF = async (req, res) => {
 
       const pdfBuffer = await page.pdf({
         format: 'A4',
-        margin: { top: '15mm', right: '15mm', bottom: '15mm', left: '15mm' },
+        margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' },
         printBackground: true,
       });
 
