@@ -262,6 +262,7 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
     const priorTransactions = await Transaction.find({
       date: { $lt: start },
       $or: [{ drAccountId: accountId }, { crAccountId: accountId }],
+      status: { $ne: 'REVERSED' },
     }).lean();
 
     for (const tx of priorTransactions) {
@@ -387,6 +388,7 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
   // Fetch all transactions prior to this month to compute Opening Balances
   const priorTransactions = await Transaction.find({
     date: { $lt: startOfMonth },
+    status: { $ne: 'REVERSED' },
   }).lean();
 
   // Pre-aggregate prior movements by account
@@ -410,6 +412,7 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
   // Fetch all transactions within the target month
   const monthTransactions = await Transaction.find({
     date: { $gte: startOfMonth, $lte: endOfMonth },
+    status: { $ne: 'REVERSED' },
   })
     .populate('categoryId', 'name type isRentalHead')
     .populate('propertyId', 'plazaName')
@@ -545,6 +548,7 @@ export const getHeadWiseExpenseReport = async (year, month) => {
   const transactions = await Transaction.find({
     date: { $gte: startOfMonth, $lte: endOfMonth },
     categoryId: { $in: expenseCatIds },
+    status: { $ne: 'REVERSED' },
   })
     .populate('categoryId', 'name type isRentalHead')
     .populate('crAccountId', 'name type')

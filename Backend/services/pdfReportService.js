@@ -217,6 +217,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   // 3. Fetch Master Transactions for Journal (Pages 4 & 5)
   const transactions = await Transaction.find({
     date: { $gte: startDate, $lte: endDate },
+    status: { $ne: 'REVERSED' },
   })
     .populate('categoryId', 'name type isRentalHead')
     .populate('drAccountId', 'name type')
@@ -226,7 +227,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     .lean();
 
   // Filter only expenses for Master Journal if appropriate, or show all
-  const expenseTransactions = transactions.filter(t => t.categoryId?.type === 'EXPENSE');
+  const expenseTransactions = transactions.filter(t => t.categoryId?.type === 'EXPENSE' && t.status !== 'REVERSED');
   const masterJournalList = (expenseTransactions.length > 0 ? expenseTransactions : transactions).map(tx => ({
     date: formatShortDate(tx.date),
     vn: tx.voucherNo,
