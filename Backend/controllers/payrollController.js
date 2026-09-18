@@ -64,10 +64,16 @@ const launchPuppeteer = async () => {
     chromium.setGraphicsMode = false;
 
     const browser = await puppeteer.launch({
-      args: chromium.args,
+      args: [
+        ...chromium.args,
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-sandbox',
+        '--single-process',
+      ],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      headless: true,
     });
     return browser;
   }
@@ -1019,10 +1025,11 @@ export const generateSalarySlipPDF = async (req, res) => {
     `;
 
     // Try Puppeteer PDF rendering
+    let browser;
     try {
-      const browser = await launchPuppeteer();
+      browser = await launchPuppeteer();
       const page = await browser.newPage();
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
 
       const pdfBuffer = await page.pdf({
         format: 'A4',
@@ -1896,10 +1903,11 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
     </html>
     `;
 
+    let browser;
     try {
-      const browser = await launchPuppeteer();
+      browser = await launchPuppeteer();
       const page = await browser.newPage();
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
 
       const pdfBuffer = await page.pdf({
         format: 'A4',
@@ -1907,8 +1915,6 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
         margin: { top: '6mm', right: '6mm', bottom: '6mm', left: '6mm' },
         printBackground: true,
       });
-
-      await browser.close();
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename=Monthly_Salary_Sheet_${month}.pdf`);
@@ -1919,6 +1925,12 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
         success: false,
         message: `PDF generation failed: ${pdfErr.message}`,
       });
+    } finally {
+      if (browser) {
+        await browser.close().catch((closeErr) => {
+          console.error('[Puppeteer Cleanup Error] Monthly Salary Sheet PDF:', closeErr.message);
+        });
+      }
     }
   } catch (error) {
     console.error('[Generate Monthly Salary Sheet PDF Error]:', error);
@@ -2031,7 +2043,5 @@ export const getEmployeeLedger = async (req, res) => {
     return apiError(res, error.message || 'Failed to fetch employee ledger.', 500);
   }
 };
-
-
 
 
