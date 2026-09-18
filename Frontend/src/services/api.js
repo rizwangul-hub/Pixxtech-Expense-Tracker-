@@ -744,13 +744,6 @@ export const staffAPI = {
     const res = await api.put(`/staff/leaves/${id}/status`, data);
     return res.data;
   },
-  getEmployeeLoanLedger: async (employeeId) => {
-    const res = await api.get(`/staff/employees/${employeeId}/loan-ledger`);
-    return res.data;
-  },
-  downloadLoanLedgerPDFUrl: (employeeId) => {
-    return getFullApiUrl(`/staff/employees/${employeeId}/loan-ledger/pdf`);
-  },
 };
 
 // Attendance API
@@ -801,11 +794,24 @@ export const payrollAPI = {
     const res = await api.post('/staff/payroll/save', data);
     return res.data;
   },
+  paySingleSalary: async (data) => {
+    const res = await api.post('/staff/payroll/pay-single', data);
+    return res.data;
+  },
+  payBulkSalary: async (data) => {
+    const res = await api.post('/staff/payroll/pay-bulk', data);
+    return res.data;
+  },
+  reverseSalaryPayment: async (data) => {
+    const res = await api.post('/staff/payroll/reverse', data);
+    return res.data;
+  },
+  getSalaryReconciliation: async (params = {}) => {
+    const res = await api.get('/staff/payroll/reconciliation', { params });
+    return res.data;
+  },
   downloadSalarySheetExcelUrl: (month) => {
     return getFullApiUrl(`/staff/payroll/excel?month=${encodeURIComponent(month)}`);
-  },
-  downloadSalarySheetPDFUrl: (month) => {
-    return getFullApiUrl(`/staff/payroll/pdf?month=${encodeURIComponent(month)}`);
   },
   downloadSalarySlipPDFUrl: (employeeId, month) => {
     return getFullApiUrl(`/staff/payroll/slip/${employeeId}/pdf?month=${encodeURIComponent(month)}`);

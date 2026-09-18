@@ -5,7 +5,10 @@ import {
   savePayroll,
   downloadSalarySheetExcel,
   generateSalarySlipPDF,
-  generateSalarySheetPDF,
+  paySingleSalary,
+  payBulkSalary,
+  reverseSalaryPayment,
+  getSalaryReconciliation,
 } from '../controllers/payrollController.js';
 
 const router = express.Router();
@@ -15,7 +18,11 @@ router.use(authenticate);
 router.get('/', getMonthlyPayroll);
 router.post('/save', savePayroll);
 router.get('/excel', downloadSalarySheetExcel);
-router.get('/pdf', generateSalarySheetPDF);
 router.get('/slip/:employeeId/pdf', generateSalarySlipPDF);
+
+router.post('/pay-single', paySingleSalary);
+router.post('/pay-bulk', payBulkSalary);
+router.post('/reverse', reverseSalaryPayment);
+router.get('/reconciliation', getSalaryReconciliation);
 
 export default router;

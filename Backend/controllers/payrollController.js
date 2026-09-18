@@ -5,8 +5,38 @@ import Employee from '../models/Employee.js';
 import Attendance from '../models/Attendance.js';
 import StaffLoan from '../models/StaffLoan.js';
 import Payroll from '../models/Payroll.js';
+import Account from '../models/Account.js';
+import Category from '../models/Category.js';
+import Transaction from '../models/Transaction.js';
+import Voucher from '../models/Voucher.js';
+import StaffAuditLog from '../models/StaffAuditLog.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
-import { getLogoBase64 } from '../utils/logoHelper.js';
+import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
+import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
+
+/**
+ * Helper to ensure canonical Salaries category head exists
+ */
+export const getOrCreateSalariesCategory = async () => {
+  let category = await Category.findOne({
+    type: 'EXPENSE',
+    name: { $regex: /^Salaries$/i },
+    expenseClassification: 'GENERAL_EXPENSE',
+  });
+
+  if (!category) {
+    category = await Category.create({
+      name: 'Salaries',
+      type: 'EXPENSE',
+      expenseClassification: 'GENERAL_EXPENSE',
+      propertyId: null,
+      unitId: null,
+      isRentalHead: false,
+    });
+  }
+
+  return category;
+};
 
 /**
  * Format number into Pakistani Rupees string
@@ -80,10 +110,7 @@ export const getMonthlyPayroll = async (req, res) => {
       const mobile = emp.mobileAllowance || 0;
       const perf = emp.performanceAllowance || 0;
       const other = emp.otherAllowances || 0;
-      const extraAllow = saved ? (saved.extraAllowance || 0) : 0;
-      const allowReason = saved ? (saved.allowanceReason || '') : '';
-
-      const gross = basic + fuel + food + mobile + perf + other + extraAllow;
+      const gross = basic + fuel + food + mobile + perf + other;
 
       // Attendance metrics
       const records = empAttMap.get(empIdStr) || [];
@@ -127,8 +154,6 @@ export const getMonthlyPayroll = async (req, res) => {
         mobileAllowance: mobile,
         performanceAllowance: perf,
         otherAllowances: other,
-        extraAllowance: extraAllow,
-        allowanceReason: allowReason,
         grossSalary: gross,
         totalDays,
         presentDays: saved ? saved.presentDays : presentDays,
@@ -145,6 +170,15 @@ export const getMonthlyPayroll = async (req, res) => {
         ibanNumber: saved ? saved.ibanNumber : emp.ibanNumber || '',
         bankName: saved ? saved.bankName : emp.bankName || '',
         status: saved ? saved.status : 'DRAFT',
+        paymentStatus: saved?.paymentStatus || (saved ? 'PENDING_PAYMENT' : 'DRAFT'),
+        paidFromAccountId: saved?.paidFromAccountId || null,
+        paidFromAccountName: saved?.paidFromAccountName || '',
+        paymentDate: saved?.paymentDate || null,
+        transactionId: saved?.transactionId || null,
+        voucherId: saved?.voucherId || null,
+        voucherNo: saved?.voucherNo || '',
+        paymentMethod: saved?.paymentMethod || 'BANK_TRANSFER',
+        paymentNotes: saved?.paymentNotes || '',
       };
     });
 
@@ -179,17 +213,13 @@ export const savePayroll = async (req, res) => {
     const savedResults = [];
 
     for (const rec of payrollRecords) {
-      const extraAllow = Number(rec.extraAllowance) || 0;
-      const allowReason = (rec.allowanceReason || '').trim();
-
       const gross =
         (Number(rec.basicSalary) || 0) +
         (Number(rec.fuelAllowance) || 0) +
         (Number(rec.foodAllowance) || 0) +
         (Number(rec.mobileAllowance) || 0) +
         (Number(rec.performanceAllowance) || 0) +
-        (Number(rec.otherAllowances) || 0) +
-        extraAllow;
+        (Number(rec.otherAllowances) || 0);
 
       const loanDed = Number(rec.loanDeduction) || 0;
       const lopDed = Number(rec.lopDeduction) || 0;
@@ -197,38 +227,45 @@ export const savePayroll = async (req, res) => {
       const totDed = loanDed + lopDed + othDed;
       const netPayable = Math.max(0, gross - totDed);
 
+      const existingDoc = await Payroll.findOne({ payrollMonth: month, employeeId: rec.employeeId });
+      const isAlreadyPaid = existingDoc?.paymentStatus === 'PAID';
+
+      const updatePayload = {
+        payrollMonth: month,
+        employeeId: rec.employeeId,
+        employeeName: rec.name,
+        designation: rec.designation,
+        department: rec.department,
+        basicSalary: Number(rec.basicSalary) || 0,
+        fuelAllowance: Number(rec.fuelAllowance) || 0,
+        foodAllowance: Number(rec.foodAllowance) || 0,
+        mobileAllowance: Number(rec.mobileAllowance) || 0,
+        performanceAllowance: Number(rec.performanceAllowance) || 0,
+        otherAllowances: Number(rec.otherAllowances) || 0,
+        grossSalary: gross,
+        totalDays: Number(rec.totalDays) || 30,
+        presentDays: Number(rec.presentDays) || 0,
+        lateDays: Number(rec.lateDays) || 0,
+        leaveDays: Number(rec.leaveDays) || 0,
+        lopDays: Number(rec.lopDays) || 0,
+        lopDeduction: lopDed,
+        loanDeduction: loanDed,
+        otherDeduction: othDed,
+        totalDeduction: totDed,
+        netPayable,
+        accountTitle: rec.accountTitle || '',
+        ibanNumber: rec.ibanNumber || '',
+        bankName: rec.bankName || '',
+      };
+
+      if (!isAlreadyPaid) {
+        updatePayload.status = 'FINALIZED';
+        updatePayload.paymentStatus = 'PENDING_PAYMENT';
+      }
+
       const pDoc = await Payroll.findOneAndUpdate(
         { payrollMonth: month, employeeId: rec.employeeId },
-        {
-          payrollMonth: month,
-          employeeId: rec.employeeId,
-          employeeName: rec.name,
-          designation: rec.designation,
-          department: rec.department,
-          basicSalary: Number(rec.basicSalary) || 0,
-          fuelAllowance: Number(rec.fuelAllowance) || 0,
-          foodAllowance: Number(rec.foodAllowance) || 0,
-          mobileAllowance: Number(rec.mobileAllowance) || 0,
-          performanceAllowance: Number(rec.performanceAllowance) || 0,
-          otherAllowances: Number(rec.otherAllowances) || 0,
-          extraAllowance: extraAllow,
-          allowanceReason: allowReason,
-          grossSalary: gross,
-          totalDays: Number(rec.totalDays) || 30,
-          presentDays: Number(rec.presentDays) || 0,
-          lateDays: Number(rec.lateDays) || 0,
-          leaveDays: Number(rec.leaveDays) || 0,
-          lopDays: Number(rec.lopDays) || 0,
-          lopDeduction: lopDed,
-          loanDeduction: loanDed,
-          otherDeduction: othDed,
-          totalDeduction: totDed,
-          netPayable,
-          accountTitle: rec.accountTitle || '',
-          ibanNumber: rec.ibanNumber || '',
-          bankName: rec.bankName || '',
-          status: 'FINALIZED',
-        },
+        updatePayload,
         { upsert: true, returnDocument: 'after', runValidators: true }
       );
 
@@ -290,7 +327,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
     });
 
     // Title Row 1: Company Name Banner
-    ws1.mergeCells('A1:N1');
+    ws1.mergeCells('A1:L1');
     const titleCell = ws1.getCell('A1');
     titleCell.value = 'PIXX TECHNOLOGIES PAKISTAN';
     titleCell.font = { name: 'Segoe UI', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -299,7 +336,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
     ws1.getRow(1).height = 36;
 
     // Subtitle Row 2: Month & Title
-    ws1.mergeCells('A2:N2');
+    ws1.mergeCells('A2:L2');
     const subCell = ws1.getCell('A2');
     subCell.value = `MONTHLY SALARY SHEET — ${month.toUpperCase()}`;
     subCell.font = { name: 'Segoe UI', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -317,12 +354,10 @@ export const downloadSalarySheetExcel = async (req, res) => {
       'Designation',
       'Workplace / Dept',
       'Basic Salary (PKR)',
-      'Regular Allowances (PKR)',
-      'Extra Allowance (PKR)',
-      'Allowance Reason',
+      'Allowances (PKR)',
       'Gross Salary (PKR)',
-      'Loan / Adv Ded (PKR)',
-      'Net Payable (PKR)',
+      'Loan / Advance Deduction (PKR)',
+      'Net Payable Salary (PKR)',
       'Account Title',
       'IBAN Number',
       'Bank Name',
@@ -331,7 +366,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
     headerRow.height = 28;
 
     headerRow.eachCell((cell) => {
-      cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.font = { name: 'Segoe UI', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E1B4B' } };
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = {
@@ -353,11 +388,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
       const mobile = emp.mobileAllowance || 0;
       const perf = emp.performanceAllowance || 0;
       const other = emp.otherAllowances || 0;
-      const extraAllow = saved ? (saved.extraAllowance || 0) : 0;
-      const allowReason = saved ? (saved.allowanceReason || '') : '';
-
-      const regAllow = fuel + food + mobile + perf + other;
-      const gross = basic + regAllow + extraAllow;
+      const gross = basic + fuel + food + mobile + perf + other;
       const loanDed = saved ? saved.loanDeduction : 0;
       const netPay = saved ? saved.netPayable : Math.max(0, gross - loanDed);
 
@@ -367,9 +398,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
         emp.designation,
         emp.department,
         basic,
-        regAllow,
-        extraAllow,
-        allowReason,
+        fuel + food + mobile + perf + other,
         gross,
         loanDed,
         netPay,
@@ -394,10 +423,10 @@ export const downloadSalarySheetExcel = async (req, res) => {
 
         if (colNumber === 1) {
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        } else if ([5, 6, 7, 9, 10, 11].includes(colNumber)) {
+        } else if ([5, 6, 7, 8, 9].includes(colNumber)) {
           cell.alignment = { horizontal: 'right', vertical: 'middle' };
           cell.numFmt = '#,##0';
-          if (colNumber === 11) {
+          if (colNumber === 9) {
             cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF047857' } };
           }
         } else {
@@ -417,10 +446,8 @@ export const downloadSalarySheetExcel = async (req, res) => {
       { formula: `SUM(E${startRowIndex}:E${endRowIndex})` },
       { formula: `SUM(F${startRowIndex}:F${endRowIndex})` },
       { formula: `SUM(G${startRowIndex}:G${endRowIndex})` },
-      '',
+      { formula: `SUM(H${startRowIndex}:H${endRowIndex})` },
       { formula: `SUM(I${startRowIndex}:I${endRowIndex})` },
-      { formula: `SUM(J${startRowIndex}:J${endRowIndex})` },
-      { formula: `SUM(K${startRowIndex}:K${endRowIndex})` },
       '',
       '',
       '',
@@ -428,7 +455,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
 
     totalRow.height = 26;
     totalRow.eachCell((cell, colNumber) => {
-      cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+      cell.font = { name: 'Segoe UI', size: 11, bold: true, color: { argb: 'FF0F172A' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
       cell.border = {
         top: { style: 'thin', color: { argb: 'FF94A3B8' } },
@@ -437,7 +464,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
         right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
       };
 
-      if ([5, 6, 7, 9, 10, 11].includes(colNumber)) {
+      if ([5, 6, 7, 8, 9].includes(colNumber)) {
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
         cell.numFmt = '#,##0';
       } else {
@@ -449,20 +476,136 @@ export const downloadSalarySheetExcel = async (req, res) => {
 
     // Precise Auto-Fit Column Widths
     ws1.columns = [
-      { width: 7 },  // Sr.No
-      { width: 24 }, // Employee Name
-      { width: 22 }, // Designation
-      { width: 20 }, // Workplace
-      { width: 18 }, // Basic Salary
-      { width: 20 }, // Reg Allowances
-      { width: 18 }, // Extra Allowance
-      { width: 24 }, // Allowance Reason
-      { width: 18 }, // Gross Salary
-      { width: 20 }, // Loan Ded
-      { width: 22 }, // Net Payable
-      { width: 24 }, // Account Title
-      { width: 26 }, // IBAN Number
-      { width: 22 }, // Bank Name
+      { width: 8 },  // Sr.No
+      { width: 26 }, // Employee Name
+      { width: 24 }, // Designation
+      { width: 22 }, // Workplace
+      { width: 20 }, // Basic Salary
+      { width: 18 }, // Allowances
+      { width: 20 }, // Gross Salary
+      { width: 26 }, // Loan Deduction
+      { width: 24 }, // Net Payable
+      { width: 26 }, // Account Title
+      { width: 28 }, // IBAN Number
+      { width: 24 }, // Bank Name
+    ];
+
+    // -------------------------------------------------------------
+    // SHEET 2: BANK SALARY TRANSFER SHEET
+    // -------------------------------------------------------------
+    const ws2 = workbook.addWorksheet('Bank Transfer Sheet', {
+      views: [{ showGridLines: true }],
+    });
+
+    ws2.mergeCells('A1:G1');
+    const bTitle = ws2.getCell('A1');
+    bTitle.value = 'PIXX TECHNOLOGIES PAKISTAN';
+    bTitle.font = { name: 'Segoe UI', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+    bTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    bTitle.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws2.getRow(1).height = 36;
+
+    ws2.mergeCells('A2:G2');
+    const bSub = ws2.getCell('A2');
+    bSub.value = `BANK SALARY TRANSFER SHEET — ${month.toUpperCase()}`;
+    bSub.font = { name: 'Segoe UI', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+    bSub.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    bSub.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws2.getRow(2).height = 26;
+
+    ws2.getRow(3).height = 12;
+
+    const bHeaders = ['Sr.No', 'Employee Name', 'Designation', 'Net Salary (PKR)', 'Account Title', 'IBAN Number', 'Bank Name'];
+    const bHeaderRow = ws2.addRow(bHeaders);
+    bHeaderRow.height = 28;
+
+    bHeaderRow.eachCell((cell) => {
+      cell.font = { name: 'Segoe UI', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF065F46' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FF064E3B' } },
+        bottom: { style: 'medium', color: { argb: 'FF064E3B' } },
+      };
+    });
+
+    let bSrNo = 1;
+    let bStartRow = 5;
+
+    employees.forEach((emp, index) => {
+      const saved = payrollMap.get(emp._id.toString());
+      const gross = (emp.basicSalary || 0) + (emp.fuelAllowance || 0) + (emp.foodAllowance || 0) + (emp.mobileAllowance || 0) + (emp.performanceAllowance || 0) + (emp.otherAllowances || 0);
+      const loanDed = saved ? saved.loanDeduction : 0;
+      const netPay = saved ? saved.netPayable : Math.max(0, gross - loanDed);
+
+      const row = ws2.addRow([
+        bSrNo++,
+        emp.name,
+        emp.designation,
+        netPay,
+        emp.accountTitle || emp.name,
+        emp.ibanNumber || 'N/A',
+        emp.bankName || 'Cash / Bank',
+      ]);
+
+      row.height = 22;
+      const isEven = index % 2 === 0;
+      row.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Segoe UI', size: 10 };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF0FDF4' } };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        };
+
+        if (colNumber === 1) cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        else if (colNumber === 4) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          cell.numFmt = '#,##0';
+          cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF047857' } };
+        } else {
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        }
+      });
+    });
+
+    const bEndRow = bStartRow + employees.length - 1;
+
+    const bTotalRow = ws2.addRow([
+      '',
+      'TOTAL BANK PAYOUT',
+      '',
+      { formula: `SUM(D${bStartRow}:D${bEndRow})` },
+      '',
+      '',
+      '',
+    ]);
+
+    bTotalRow.height = 26;
+    bTotalRow.eachCell((cell, colNumber) => {
+      cell.font = { name: 'Segoe UI', size: 11, bold: true, color: { argb: 'FF064E3B' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF059669' } },
+        bottom: { style: 'double', color: { argb: 'FF064E3B' } },
+      };
+
+      if (colNumber === 4) {
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        cell.numFmt = '#,##0';
+      }
+    });
+
+    ws2.mergeCells(`B${bEndRow + 1}:C${bEndRow + 1}`);
+
+    ws2.columns = [
+      { width: 8 },  // Sr.No
+      { width: 26 }, // Employee Name
+      { width: 24 }, // Designation
+      { width: 22 }, // Net Salary
+      { width: 26 }, // Account Title
+      { width: 28 }, // IBAN Number
+      { width: 24 }, // Bank Name
     ];
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -477,7 +620,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
 };
 
 /**
- * @desc    Generate Printable PDF Salary Slip for an Employee
+ * @desc    Generate Printable PDF Salary Slip for an Employee matching Salary Slip.pdf format
  * @route   GET /api/staff/payroll/slip/:employeeId/pdf
  * @access  Private
  */
@@ -499,10 +642,6 @@ export const generateSalarySlipPDF = async (req, res) => {
     const mobile = savedPayroll ? savedPayroll.mobileAllowance : employee.mobileAllowance || 0;
     const perf = savedPayroll ? savedPayroll.performanceAllowance : employee.performanceAllowance || 0;
     const otherAllow = savedPayroll ? savedPayroll.otherAllowances : employee.otherAllowances || 0;
-    const extraAllow = savedPayroll ? (savedPayroll.extraAllowance || 0) : 0;
-    const allowReason = savedPayroll ? (savedPayroll.allowanceReason || '') : '';
-
-    const totalAllowances = fuel + food + mobile + perf + otherAllow + extraAllow;
 
     const overtime = savedPayroll ? savedPayroll.overtimeAmount || 0 : 0;
     const bonus = savedPayroll ? savedPayroll.bonusAmount || 0 : 0;
@@ -511,7 +650,7 @@ export const generateSalarySlipPDF = async (req, res) => {
 
     const gross = savedPayroll
       ? savedPayroll.grossSalary
-      : basic + totalAllowances + overtime + bonus + leaveEncashment + otherReceipts;
+      : basic + fuel + food + mobile + perf + otherAllow + overtime + bonus + leaveEncashment + otherReceipts;
 
     const loanDed = savedPayroll ? savedPayroll.loanDeduction : 0;
     const lopDed = savedPayroll ? savedPayroll.lopDeduction : 0;
@@ -537,10 +676,7 @@ export const generateSalarySlipPDF = async (req, res) => {
     const { numberToWords } = await import('../services/staffPayrollService.js');
     const amountInWords = numberToWords(netPayable);
 
-    // Get Base64 Logo
-    const logoDataUri = getLogoBase64();
-
-    // Render Colorful HTML template with Pixx Technologies branding & logo
+    // Render HTML template matching the official Salary Slip.pdf layout (Image 2)
     const htmlContent = `
     <!DOCTYPE html>
     <html lang="en">
@@ -553,8 +689,8 @@ export const generateSalarySlipPDF = async (req, res) => {
           margin: 10mm;
         }
         body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          color: #0f172a;
+          font-family: 'Times New Roman', Times, serif;
+          color: #000;
           margin: 0;
           padding: 15px;
           background: #fff;
@@ -564,332 +700,198 @@ export const generateSalarySlipPDF = async (req, res) => {
           max-width: 850px;
           margin: 0 auto;
           box-sizing: border-box;
-          border: 2px solid #0f172a;
-          border-radius: 8px;
-          overflow: hidden;
         }
-        .brand-header {
-          background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-          color: #ffffff;
-          padding: 16px 20px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        .brand-logo-area {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-        }
-        .brand-logo {
-          max-height: 50px;
-          width: auto;
-          background: #ffffff;
-          padding: 4px;
-          border-radius: 6px;
-        }
-        .brand-title {
-          font-size: 24px;
-          font-weight: 900;
-          letter-spacing: 1px;
-          margin: 0;
-          color: #38bdf8;
-        }
-        .brand-sub {
-          font-size: 11px;
-          color: #94a3b8;
-          font-weight: 600;
-          margin-top: 2px;
-        }
-        .slip-tag {
-          text-align: right;
-        }
-        .slip-tag-title {
-          font-size: 16px;
-          font-weight: 800;
-          color: #34d399;
-          text-transform: uppercase;
-        }
-        .slip-tag-month {
-          font-size: 12px;
-          color: #cbd5e1;
-          font-weight: 600;
-        }
-        
-        /* Employee details header bar */
-        .emp-bar {
-          background: #f8fafc;
-          border-bottom: 2px solid #e2e8f0;
-          padding: 12px 20px;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 15px;
-          font-size: 12px;
-        }
-        .emp-bar-row {
-          display: flex;
-          justify-content: space-between;
-          padding: 3px 0;
-        }
-        .emp-label { color: #64748b; font-weight: 600; }
-        .emp-val { color: #0f172a; font-weight: 800; }
-
         table.outer-table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 12px;
+          font-size: 13px;
         }
-        table.outer-table td {
-          border: 1px solid #cbd5e1;
-          padding: 0;
-          vertical-align: top;
+        table.outer-table td, table.outer-table th {
+          border: 1px solid #000;
+          padding: 4px 6px;
         }
-        .inner-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 12px;
+        .header-title {
+          text-align: center;
+          font-size: 34px;
+          font-weight: bold;
+          padding: 10px 0;
+          letter-spacing: 1px;
         }
-        .inner-table td, .inner-table th {
-          border: 1px solid #e2e8f0;
-          padding: 6px 10px;
-        }
-        .table-header {
-          background: #1e293b;
-          color: #ffffff;
-          font-weight: 800;
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          padding: 8px 10px;
+        .sub-title {
+          text-align: center;
+          font-size: 18px;
+          font-weight: bold;
+          padding: 6px 0;
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        .font-bold { font-weight: 700; }
-        .font-black { font-weight: 900; }
-        
-        .big-payout-box {
-          background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
-          color: #ffffff;
+        .font-bold { font-weight: bold; }
+        .inner-table {
+          width: 100%;
+          height: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
+        }
+        .inner-table td {
+          border: 1px solid #000;
+          padding: 4px 6px;
+        }
+        .big-payout {
+          font-size: 44px;
+          font-weight: bold;
           text-align: center;
-          padding: 40px 15px;
-          border-radius: 8px;
-          margin: 15px;
-        }
-        .big-payout-title {
-          font-size: 12px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          color: #a7f3d0;
-          margin-bottom: 6px;
-        }
-        .big-payout-val {
-          font-size: 38px;
-          font-weight: 900;
-          letter-spacing: 1px;
-          font-family: 'Segoe UI', sans-serif;
+          padding: 60px 10px;
+          letter-spacing: 1.5px;
+          font-family: 'Times New Roman', Times, serif;
         }
         .words-box {
-          background: #f0fdf4;
-          border: 1px border #bbf7d0;
-          color: #166534;
           text-align: center;
-          font-size: 12px;
-          font-weight: 700;
-          padding: 10px;
-          margin: 0 15px 15px 15px;
-          border-radius: 6px;
-        }
-        .reason-badge {
-          background: #eff6ff;
-          color: #1d4ed8;
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 700;
-          display: inline-block;
-          margin-top: 2px;
+          font-size: 14px;
+          padding: 8px 5px;
         }
       </style>
     </head>
     <body>
       <div class="slip-container">
-        <!-- BRAND HEADER WITH LOGO -->
-        <div class="brand-header">
-          <div class="brand-logo-area">
-            ${logoDataUri ? `<img src="${logoDataUri}" class="brand-logo" alt="Pixx Tech Logo" />` : ''}
-            <div>
-              <div class="brand-title">PIXX TECHNOLOGIES</div>
-              <div class="brand-sub">Official Employee Salary Pay Slip</div>
-            </div>
-          </div>
-          <div class="slip-tag">
-            <div class="slip-tag-title">SALARY SLIP</div>
-            <div class="slip-tag-month">${formattedTitleDate}</div>
-          </div>
-        </div>
-
-        <!-- EMPLOYEE INFO BAR -->
-        <div class="emp-bar">
-          <div>
-            <div class="emp-bar-row">
-              <span class="emp-label">Employee Name:</span>
-              <span class="emp-val" style="font-size: 14px; color: #0284c7;">${employee.name}</span>
-            </div>
-            <div class="emp-bar-row">
-              <span class="emp-label">Employee Code:</span>
-              <span class="emp-val">${employee.employeeCode || 'PK-EMP'}</span>
-            </div>
-            <div class="emp-bar-row">
-              <span class="emp-label">Designation:</span>
-              <span class="emp-val">${employee.designation}</span>
-            </div>
-          </div>
-          <div>
-            <div class="emp-bar-row">
-              <span class="emp-label">Workplace / Dept:</span>
-              <span class="emp-val" style="color: #7c3aed;">${employee.department}</span>
-            </div>
-            <div class="emp-bar-row">
-              <span class="emp-label">Bank Account:</span>
-              <span class="emp-val">${employee.bankName || 'Cash / Bank'}</span>
-            </div>
-            <div class="emp-bar-row">
-              <span class="emp-label">Account Title / IBAN:</span>
-              <span class="emp-val">${employee.accountTitle || employee.name} (${employee.ibanNumber || 'N/A'})</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- MAIN CONTENT TABLE -->
         <table class="outer-table">
           <tr>
-            <!-- LEFT COLUMN: EARNINGS & DEDUCTIONS -->
-            <td style="width: 55%;">
-              <div class="table-header">Financial Payout Breakdown</div>
+            <td colspan="6" class="header-title">PIXX TECHNOLOGIES</td>
+          </tr>
+          <tr>
+            <td colspan="6" class="sub-title">Salary Pay Slip For The Month Of ${formattedTitleDate}</td>
+          </tr>
+          <tr>
+            <td class="font-bold" style="width: 8%;">Name:</td>
+            <td class="font-bold" style="width: 37%; font-size: 15px;">${employee.name}</td>
+            <td class="font-bold" style="width: 15%;">Designation</td>
+            <td colspan="3" class="font-bold" style="font-size: 15%;">${employee.designation}</td>
+          </tr>
+          <tr>
+            <!-- LEFT COLUMN: FINANCIAL ITEMIZED BREAKDOWN -->
+            <td colspan="3" style="vertical-align: top; padding: 0; width: 50%;">
               <table class="inner-table">
-                <tr style="background: #f8fafc;">
-                  <th style="text-align: left; color: #475569;">Description</th>
-                  <th style="text-align: center; color: #475569; width: 50px;">Curr</th>
-                  <th style="text-align: right; color: #475569; width: 100px;">Amount (PKR)</th>
+                <tr>
+                  <td style="width: 6%;">I</td>
+                  <td>Net Salary</td>
+                  <td style="width: 12%;">PKR</td>
+                  <td class="text-right font-bold" style="width: 25%;">${formatPKR(basic)}</td>
                 </tr>
                 <tr>
-                  <td>Basic Salary</td>
-                  <td class="text-center font-bold">PKR</td>
-                  <td class="text-right font-bold">${formatPKR(basic)}</td>
-                </tr>
-                ${
-                  totalAllowances > 0
-                    ? `
-                <tr>
-                  <td>
-                    Regular & Staff Allowances
-                    ${allowReason ? `<br/><span class="reason-badge">Reason: ${allowReason}</span>` : ''}
-                  </td>
-                  <td class="text-center font-bold">PKR</td>
-                  <td class="text-right font-bold" style="color: #059669;">+${formatPKR(totalAllowances)}</td>
-                </tr>
-                `
-                    : ''
-                }
-                ${
-                  overtime > 0
-                    ? `
-                <tr>
-                  <td>Overtime Pay</td>
-                  <td class="text-center">PKR</td>
-                  <td class="text-right">+${formatPKR(overtime)}</td>
-                </tr>
-                `
-                    : ''
-                }
-                ${
-                  bonus > 0
-                    ? `
-                <tr>
-                  <td>Performance Bonus</td>
-                  <td class="text-center">PKR</td>
-                  <td class="text-right">+${formatPKR(bonus)}</td>
-                </tr>
-                `
-                    : ''
-                }
-                <tr style="background: #f1f5f9;">
-                  <td class="font-bold">TOTAL GROSS SALARY</td>
-                  <td class="text-center font-bold">PKR</td>
-                  <td class="text-right font-black" style="color: #0f172a; font-size: 13px;">${formatPKR(gross)}</td>
-                </tr>
-                
-                <!-- DEDUCTIONS -->
-                <tr style="background: #fef2f2;">
-                  <td colspan="3" class="font-bold" style="color: #991b1b; text-transform: uppercase; font-size: 11px;">Deductions & Adjustments</td>
+                  <td>II</td>
+                  <td>OT</td>
+                  <td>PKR</td>
+                  <td class="text-right">${overtime ? formatPKR(overtime) : '0'}</td>
                 </tr>
                 <tr>
-                  <td>Advance Loan Repayment Deduction</td>
-                  <td class="text-center">PKR</td>
-                  <td class="text-right" style="color: #dc2626;">-${formatPKR(loanDed)}</td>
+                  <td>III</td>
+                  <td>Bonus</td>
+                  <td>PKR</td>
+                  <td class="text-right">${bonus ? formatPKR(bonus) : ''}</td>
                 </tr>
-                ${
-                  lopDed > 0 || othDed > 0
-                    ? `
                 <tr>
-                  <td>Loss of Pay / Other Deductions</td>
-                  <td class="text-center">PKR</td>
-                  <td class="text-right" style="color: #dc2626;">-${formatPKR(lopDed + othDed)}</td>
+                  <td>IV</td>
+                  <td>Leave Encashment</td>
+                  <td>PKR</td>
+                  <td class="text-right">${leaveEncashment ? formatPKR(leaveEncashment) : '0'}</td>
                 </tr>
-                `
-                    : ''
-                }
-                <tr style="background: #fee2e2;">
-                  <td class="font-bold" style="color: #991b1b;">TOTAL DEDUCTIONS</td>
-                  <td class="text-center font-bold" style="color: #991b1b;">PKR</td>
-                  <td class="text-right font-black" style="color: #991b1b;">-${formatPKR(totDed)}</td>
+                <tr>
+                  <td colspan="3">&nbsp;</td>
+                  <td>&nbsp;</td>
                 </tr>
-
-                <tr style="background: #ecfdf5; border-top: 2px solid #10b981;">
-                  <td class="font-black" style="color: #065f46; font-size: 13px;">NET TAKE HOME SALARY</td>
-                  <td class="text-center font-black" style="color: #065f46;">PKR</td>
-                  <td class="text-right font-black" style="color: #047857; font-size: 15px;">${formatPKR(netPayable)}</td>
+                <tr>
+                  <td colspan="3">&nbsp;</td>
+                  <td>&nbsp;</td>
+                </tr>
+                <tr>
+                  <td colspan="3">Total Other Receipts</td>
+                  <td class="text-right font-bold">${otherReceipts ? formatPKR(otherReceipts) : '0'}</td>
+                </tr>
+                <tr>
+                  <td colspan="2" class="text-right font-bold">Sub Total</td>
+                  <td class="font-bold">PKR</td>
+                  <td class="text-right font-bold">${formatPKR(gross)}</td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="font-bold">Total Gross Salary</td>
+                  <td class="text-right font-bold">${formatPKR(gross)}</td>
+                </tr>
+                <tr>
+                  <td colspan="4" class="font-bold">Deductions</td>
+                </tr>
+                <tr>
+                  <td colspan="2">a.Advance Salary</td>
+                  <td>PKR</td>
+                  <td class="text-right">${formatPKR(loanDed)}</td>
+                </tr>
+                <tr>
+                  <td colspan="2">b.Deductions</td>
+                  <td>PKR</td>
+                  <td class="text-right">${formatPKR(lopDed + othDed)}</td>
+                </tr>
+                <tr>
+                  <td colspan="2">c. WHT</td>
+                  <td>PKR</td>
+                  <td class="text-right">${formatPKR(whtDed)}</td>
+                </tr>
+                <tr>
+                  <td colspan="3">Total Deductions</td>
+                  <td class="text-right font-bold">${formatPKR(totDed)}</td>
+                </tr>
+                <tr>
+                  <td colspan="2">&nbsp;</td>
+                  <td class="font-bold">PKR</td>
+                  <td class="text-right font-bold">&nbsp;</td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="font-bold">SALARY AFTER DEDUCTIONS</td>
+                  <td class="text-right font-bold">${formatPKR(netPayable)}</td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="font-bold">NET TAKE HOME</td>
+                  <td class="text-right font-bold">${formatPKR(netPayable)}</td>
                 </tr>
               </table>
             </td>
 
-            <!-- RIGHT COLUMN: ATTENDANCE & NET PAYOUT CALLOUT -->
-            <td style="width: 45%;">
-              <div class="table-header" style="background: #0f766e;">Monthly Attendance Record</div>
-              <table class="inner-table">
+            <!-- RIGHT COLUMN: ATTENDANCE & HUGE BOLD PAYOUT DISPLAY -->
+            <td colspan="3" style="vertical-align: top; padding: 0; width: 50%;">
+              <table class="inner-table" style="height: 100%;">
                 <tr>
-                  <td class="font-bold">Total Days in Month</td>
-                  <td class="text-right font-bold">30</td>
+                  <td style="width: 8%; font-weight: bold;">A</td>
+                  <td style="font-weight: bold;">Total Attendance</td>
+                  <td class="text-right font-bold" style="width: 20%;">${presentDays}</td>
                 </tr>
                 <tr>
-                  <td class="font-bold">Present / Worked Days</td>
-                  <td class="text-right font-bold" style="color: #047857;">${presentDays}</td>
+                  <td style="font-weight: bold;">B</td>
+                  <td style="font-weight: bold;">Total Leaves</td>
+                  <td class="text-right font-bold">${leaveDays}</td>
                 </tr>
                 <tr>
-                  <td class="font-bold">Approved Leaves</td>
-                  <td class="text-right font-bold">${leaveDays} (Allowed: ${allowedLeaves})</td>
+                  <td></td>
+                  <td>Allowed Leaves</td>
+                  <td class="text-right font-bold">${allowedLeaves}</td>
                 </tr>
                 <tr>
-                  <td class="font-bold">Loss of Pay (Absent) Days</td>
-                  <td class="text-right font-bold" style="color: #dc2626;">${lopDays}</td>
+                  <td></td>
+                  <td>Loss of Pay days</td>
+                  <td class="text-right font-bold">${lopDays}</td>
                 </tr>
-                <tr style="background: #f0fdf4;">
-                  <td class="font-black" style="color: #166534;">Paid Salary Days</td>
-                  <td class="text-right font-black" style="color: #166534;">${totalSalaryDays} Days</td>
+                <tr>
+                  <td style="font-weight: bold;">C</td>
+                  <td style="font-weight: bold;">Total Salary Days</td>
+                  <td class="text-right font-bold">${totalSalaryDays}</td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="big-payout">
+                    PKR ${formatPKR(netPayable)}
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="words-box">
+                    ${amountInWords}
+                  </td>
                 </tr>
               </table>
-
-              <!-- BIG BOLD NET SALARY CARD -->
-              <div class="big-payout-box">
-                <div class="big-payout-title">NET PAYOUT AMOUNT</div>
-                <div class="big-payout-val">PKR ${formatPKR(netPayable)}</div>
-              </div>
-
-              <div class="words-box">
-                <strong>Amount in Words:</strong><br/>
-                ${amountInWords}
-              </div>
             </td>
           </tr>
         </table>
@@ -915,7 +917,7 @@ export const generateSalarySlipPDF = async (req, res) => {
 
       const pdfBuffer = await page.pdf({
         format: 'A4',
-        margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' },
+        margin: { top: '15mm', right: '15mm', bottom: '15mm', left: '15mm' },
         printBackground: true,
       });
 
@@ -936,260 +938,364 @@ export const generateSalarySlipPDF = async (req, res) => {
 };
 
 /**
- * @desc    Generate Printable PDF Landscape Monthly Salary Sheet with Logo & Branding
- * @route   GET /api/staff/payroll/pdf
+ * @desc    Pay single employee salary from existing Finance Bank/Cash Account
+ * @route   POST /api/staff/payroll/pay-single
  * @access  Private
  */
-export const generateSalarySheetPDF = async (req, res) => {
+export const paySingleSalary = async (req, res) => {
+  try {
+    const {
+      month,
+      employeeId,
+      payrollId,
+      paidFromAccountId,
+      paymentMethod = 'BANK_TRANSFER',
+      paymentNotes = '',
+      paymentDate = new Date(),
+    } = req.body;
+
+    if (!month || (!employeeId && !payrollId) || !paidFromAccountId) {
+      return apiError(res, 'Month (YYYY-MM), employeeId/payrollId, and paidFromAccountId are required.', 400);
+    }
+
+    let pDoc = null;
+    if (payrollId) {
+      pDoc = await Payroll.findById(payrollId);
+    } else {
+      pDoc = await Payroll.findOne({ payrollMonth: month, employeeId });
+    }
+
+    if (!pDoc) {
+      return apiError(res, 'Payroll record not found. Please calculate and save payroll first.', 404);
+    }
+
+    if (pDoc.paymentStatus === 'PAID') {
+      return apiError(res, `Salary for ${pDoc.employeeName} for ${month} is already marked PAID (Voucher: ${pDoc.voucherNo}).`, 400);
+    }
+
+    const netAmount = round2(pDoc.netPayable);
+    if (netAmount <= 0) {
+      return apiError(res, `Net payable for ${pDoc.employeeName} is Rs. 0. Payout not required.`, 400);
+    }
+
+    const account = await Account.findById(paidFromAccountId);
+    if (!account) {
+      return apiError(res, 'Selected Finance Bank/Cash Account not found.', 404);
+    }
+    if (!account.isActive) {
+      return apiError(res, `Account "${account.name}" is inactive.`, 400);
+    }
+
+    if (account.currentBalance < netAmount) {
+      return apiError(
+        res,
+        `Insufficient balance in "${account.name}". Current Balance: Rs. ${formatPKR(account.currentBalance)}, Required: Rs. ${formatPKR(netAmount)}.`,
+        400
+      );
+    }
+
+    const salariesCategory = await getOrCreateSalariesCategory();
+    const clearingAccount = await getOrCreateOtherIncomeClearingAccount();
+
+    const pDate = new Date(paymentDate || Date.now());
+    const voucherNo = await suggestNextVoucherNumber('EXPENSE', pDate);
+
+    const transaction = await createTransaction({
+      date: pDate,
+      voucherNo,
+      detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`,
+      categoryId: salariesCategory._id,
+      drAccountId: clearingAccount._id,
+      crAccountId: account._id,
+      amount: netAmount,
+      transactionType: 'EXPENSE',
+      expenseClassification: 'GENERAL_EXPENSE',
+      reportCategory: 'Payments',
+      sourceModule: 'EXPENSE',
+      sourceId: pDoc._id,
+      createdBy: req.user?._id || null,
+    });
+
+    pDoc.status = 'PAID';
+    pDoc.paymentStatus = 'PAID';
+    pDoc.paidFromAccountId = account._id;
+    pDoc.paidFromAccountName = account.name;
+    pDoc.paymentDate = pDate;
+    pDoc.paidDate = pDate;
+    pDoc.transactionId = transaction._id;
+    pDoc.voucherId = transaction.voucherId;
+    pDoc.voucherNo = transaction.voucherNo;
+    pDoc.paymentMethod = paymentMethod;
+    pDoc.paymentNotes = paymentNotes;
+    await pDoc.save();
+
+    await StaffAuditLog.create({
+      userId: req.user?._id || null,
+      userName: req.user?.name || 'System Operator',
+      action: 'SALARY_PAID',
+      recordId: pDoc._id.toString(),
+      details: `Paid salary of Rs. ${formatPKR(netAmount)} to ${pDoc.employeeName} from ${account.name} (Voucher: ${transaction.voucherNo}).`,
+      newValue: {
+        amount: netAmount,
+        account: account.name,
+        voucherNo: transaction.voucherNo,
+      },
+    });
+
+    return apiSuccess(
+      res,
+      { payroll: pDoc, transaction, updatedAccountBalance: account.currentBalance - netAmount },
+      `Salary of Rs. ${formatPKR(netAmount)} successfully paid to ${pDoc.employeeName} from ${account.name}.`
+    );
+  } catch (error) {
+    console.error('[Pay Single Salary Error]:', error);
+    return apiError(res, error.message || 'Failed to process salary payment.', 500);
+  }
+};
+
+/**
+ * @desc    Pay multiple employee salaries in bulk from single Finance Account
+ * @route   POST /api/staff/payroll/pay-bulk
+ * @access  Private
+ */
+export const payBulkSalary = async (req, res) => {
+  try {
+    const {
+      month,
+      payrollIds = [],
+      paidFromAccountId,
+      paymentMethod = 'BANK_TRANSFER',
+      paymentNotes = '',
+      paymentDate = new Date(),
+    } = req.body;
+
+    if (!month || !Array.isArray(payrollIds) || payrollIds.length === 0 || !paidFromAccountId) {
+      return apiError(res, 'Month, non-empty payrollIds array, and paidFromAccountId are required.', 400);
+    }
+
+    const account = await Account.findById(paidFromAccountId);
+    if (!account || !account.isActive) {
+      return apiError(res, 'Valid, active Finance Bank/Cash Account is required.', 400);
+    }
+
+    const payrollDocs = await Payroll.find({
+      _id: { $in: payrollIds },
+      payrollMonth: month,
+      paymentStatus: { $ne: 'PAID' },
+    });
+
+    if (payrollDocs.length === 0) {
+      return apiError(res, 'No eligible unpaid payroll records found for payout.', 400);
+    }
+
+    const totalRequired = round2(payrollDocs.reduce((sum, p) => sum + p.netPayable, 0));
+    if (account.currentBalance < totalRequired) {
+      return apiError(
+        res,
+        `Insufficient account balance in "${account.name}". Current: Rs. ${formatPKR(account.currentBalance)}, Total Required for ${payrollDocs.length} employees: Rs. ${formatPKR(totalRequired)}.`,
+        400
+      );
+    }
+
+    const salariesCategory = await getOrCreateSalariesCategory();
+    const clearingAccount = await getOrCreateOtherIncomeClearingAccount();
+    const pDate = new Date(paymentDate || Date.now());
+
+    const results = [];
+    for (const pDoc of payrollDocs) {
+      const netAmount = round2(pDoc.netPayable);
+      if (netAmount <= 0) continue;
+
+      const voucherNo = await suggestNextVoucherNumber('EXPENSE', pDate);
+      const transaction = await createTransaction({
+        date: pDate,
+        voucherNo,
+        detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`,
+        categoryId: salariesCategory._id,
+        drAccountId: clearingAccount._id,
+        crAccountId: account._id,
+        amount: netAmount,
+        transactionType: 'EXPENSE',
+        expenseClassification: 'GENERAL_EXPENSE',
+        reportCategory: 'Payments',
+        sourceModule: 'EXPENSE',
+        sourceId: pDoc._id,
+        createdBy: req.user?._id || null,
+      });
+
+      pDoc.status = 'PAID';
+      pDoc.paymentStatus = 'PAID';
+      pDoc.paidFromAccountId = account._id;
+      pDoc.paidFromAccountName = account.name;
+      pDoc.paymentDate = pDate;
+      pDoc.paidDate = pDate;
+      pDoc.transactionId = transaction._id;
+      pDoc.voucherId = transaction.voucherId;
+      pDoc.voucherNo = transaction.voucherNo;
+      pDoc.paymentMethod = paymentMethod;
+      pDoc.paymentNotes = paymentNotes;
+      await pDoc.save();
+
+      results.push({
+        employeeName: pDoc.employeeName,
+        amount: netAmount,
+        voucherNo: transaction.voucherNo,
+      });
+    }
+
+    await StaffAuditLog.create({
+      userId: req.user?._id || null,
+      userName: req.user?.name || 'System Operator',
+      action: 'BULK_SALARY_PAID',
+      recordId: month,
+      details: `Bulk paid ${results.length} employee salaries totaling Rs. ${formatPKR(totalRequired)} from ${account.name}.`,
+      newValue: { count: results.length, totalPaid: totalRequired, account: account.name },
+    });
+
+    return apiSuccess(
+      res,
+      { count: results.length, totalAmountPaid: totalRequired, paidList: results },
+      `Successfully disbursed ${results.length} employee salaries totaling Rs. ${formatPKR(totalRequired)} from ${account.name}.`
+    );
+  } catch (error) {
+    console.error('[Pay Bulk Salary Error]:', error);
+    return apiError(res, error.message || 'Failed to process bulk salary payments.', 500);
+  }
+};
+
+/**
+ * @desc    Reverse a paid salary transaction & restore bank/cash balance
+ * @route   POST /api/staff/payroll/reverse
+ * @access  Private
+ */
+export const reverseSalaryPayment = async (req, res) => {
+  try {
+    const { payrollId, employeeId, month, reason = '' } = req.body;
+
+    let pDoc = null;
+    if (payrollId) {
+      pDoc = await Payroll.findById(payrollId);
+    } else {
+      pDoc = await Payroll.findOne({ payrollMonth: month, employeeId });
+    }
+
+    if (!pDoc) {
+      return apiError(res, 'Payroll record not found.', 404);
+    }
+
+    if (pDoc.paymentStatus !== 'PAID') {
+      return apiError(res, `Salary for ${pDoc.employeeName} is not marked as PAID.`, 400);
+    }
+
+    const transactionId = pDoc.transactionId;
+    const paidAccountId = pDoc.paidFromAccountId;
+    const paidAmount = round2(pDoc.netPayable);
+
+    if (transactionId) {
+      const tx = await Transaction.findById(transactionId);
+      if (tx && tx.status !== 'REVERSED') {
+        tx.status = 'REVERSED';
+        await tx.save();
+
+        if (tx.voucherId) {
+          await Voucher.findByIdAndUpdate(tx.voucherId, { status: 'REVERSED' });
+        }
+
+        if (paidAccountId) {
+          await Account.findByIdAndUpdate(paidAccountId, {
+            $inc: { currentBalance: paidAmount },
+          });
+        }
+
+        const clearingAcc = await getOrCreateOtherIncomeClearingAccount();
+        if (clearingAcc) {
+          await Account.findByIdAndUpdate(clearingAcc._id, {
+            $inc: { currentBalance: -paidAmount },
+          });
+        }
+      }
+    }
+
+    const prevVoucher = pDoc.voucherNo;
+    pDoc.status = 'FINALIZED';
+    pDoc.paymentStatus = 'PENDING_PAYMENT';
+    pDoc.paidFromAccountId = null;
+    pDoc.paidFromAccountName = '';
+    pDoc.paymentDate = null;
+    pDoc.paidDate = null;
+    pDoc.transactionId = null;
+    pDoc.voucherId = null;
+    pDoc.voucherNo = '';
+    pDoc.paymentMethod = 'BANK_TRANSFER';
+    pDoc.paymentNotes = '';
+    await pDoc.save();
+
+    await StaffAuditLog.create({
+      userId: req.user?._id || null,
+      userName: req.user?.name || 'System Operator',
+      action: 'SALARY_PAYMENT_REVERSED',
+      recordId: pDoc._id.toString(),
+      details: `Reversed salary payment of Rs. ${formatPKR(paidAmount)} for ${pDoc.employeeName} (Voucher ${prevVoucher}). Reason: ${reason || 'N/A'}.`,
+    });
+
+    return apiSuccess(
+      res,
+      { payroll: pDoc },
+      `Salary payment for ${pDoc.employeeName} reversed successfully. Disbursing account balance restored.`
+    );
+  } catch (error) {
+    console.error('[Reverse Salary Payment Error]:', error);
+    return apiError(res, error.message || 'Failed to reverse salary payment.', 500);
+  }
+};
+
+/**
+ * @desc    Get monthly salary liability vs finance payouts reconciliation
+ * @route   GET /api/staff/payroll/reconciliation
+ * @access  Private
+ */
+export const getSalaryReconciliation = async (req, res) => {
   try {
     const { month = '2026-08' } = req.query;
 
-    const employees = await Employee.find({ isActive: true }).sort({ department: 1, name: 1 }).lean();
-    const existingPayroll = await Payroll.find({ payrollMonth: month }).lean();
-    const payrollMap = new Map();
-    existingPayroll.forEach((p) => payrollMap.set(p.employeeId.toString(), p));
+    const payrollDocs = await Payroll.find({ payrollMonth: month }).lean();
 
-    const logoDataUri = getLogoBase64();
+    let totalLiability = 0;
+    let totalPaid = 0;
+    let totalPending = 0;
 
-    let grandGross = 0;
-    let grandLoanDed = 0;
-    let grandNetPay = 0;
+    const accountBreakdown = {};
 
-    const rowsHTML = employees
-      .map((emp, index) => {
-        const saved = payrollMap.get(emp._id.toString());
-        const basic = emp.basicSalary || 0;
-        const fuel = emp.fuelAllowance || 0;
-        const food = emp.foodAllowance || 0;
-        const mobile = emp.mobileAllowance || 0;
-        const perf = emp.performanceAllowance || 0;
-        const other = emp.otherAllowances || 0;
-        const extraAllow = saved ? (saved.extraAllowance || 0) : 0;
-        const allowReason = saved ? (saved.allowanceReason || '') : '';
+    payrollDocs.forEach((p) => {
+      const net = round2(p.netPayable);
+      totalLiability += net;
 
-        const regAllow = fuel + food + mobile + perf + other;
-        const gross = basic + regAllow + extraAllow;
-        const loanDed = saved ? saved.loanDeduction : 0;
-        const netPay = saved ? saved.netPayable : Math.max(0, gross - loanDed);
+      if (p.paymentStatus === 'PAID') {
+        totalPaid += net;
+        const accName = p.paidFromAccountName || 'Unknown Finance Account';
+        accountBreakdown[accName] = round2((accountBreakdown[accName] || 0) + net);
+      } else {
+        totalPending += net;
+      }
+    });
 
-        grandGross += gross;
-        grandLoanDed += loanDed;
-        grandNetPay += netPay;
-
-        const bg = index % 2 === 0 ? '#ffffff' : '#f8fafc';
-
-        return `
-        <tr style="background: ${bg};">
-          <td style="text-align: center; font-weight: bold; color: #64748b;">${index + 1}</td>
-          <td style="font-weight: 800; color: #0f172a;">${emp.name}</td>
-          <td style="color: #334155;">${emp.designation}</td>
-          <td style="font-weight: 700; color: #7c3aed;">${emp.department}</td>
-          <td style="text-align: right; font-family: monospace;">${formatPKR(basic)}</td>
-          <td style="text-align: right; font-family: monospace; color: #059669;">+${formatPKR(regAllow + extraAllow)}</td>
-          <td style="font-size: 10px; color: #2563eb;">${allowReason || '—'}</td>
-          <td style="text-align: right; font-family: monospace; font-weight: 800; color: #0f172a;">${formatPKR(gross)}</td>
-          <td style="text-align: right; font-family: monospace; font-weight: 800; color: #dc2626;">${loanDed > 0 ? '-' + formatPKR(loanDed) : '0'}</td>
-          <td style="text-align: right; font-family: monospace; font-weight: 900; color: #047857; font-size: 12px;">Rs. ${formatPKR(netPay)}</td>
-          <td style="font-size: 10px;">${emp.accountTitle || emp.name}</td>
-          <td style="font-size: 10px; font-family: monospace; color: #6366f1;">${emp.bankName || 'Cash'} • ${emp.ibanNumber || 'N/A'}</td>
-        </tr>
-      `;
-      })
-      .join('');
-
-    const htmlContent = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <title>Monthly Salary Sheet - ${month}</title>
-      <style>
-        @page {
-          size: A4 landscape;
-          margin: 8mm;
-        }
-        body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          color: #0f172a;
-          margin: 0;
-          padding: 10px;
-          background: #fff;
-        }
-        .header-banner {
-          background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-          color: #ffffff;
-          padding: 14px 20px;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 12px;
-        }
-        .logo-box {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .logo-img {
-          max-height: 44px;
-          background: #fff;
-          padding: 3px;
-          border-radius: 5px;
-        }
-        .banner-title {
-          font-size: 22px;
-          font-weight: 900;
-          color: #38bdf8;
-          letter-spacing: 1px;
-        }
-        .banner-sub {
-          font-size: 12px;
-          color: #a7f3d0;
-          font-weight: 700;
-          text-transform: uppercase;
-        }
-        .kpi-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 10px;
-          margin-bottom: 12px;
-        }
-        .kpi-card {
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          padding: 8px 12px;
-          border-radius: 6px;
-        }
-        .kpi-label { font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; }
-        .kpi-val { font-size: 16px; font-weight: 900; font-family: monospace; }
-        
-        table.sheet-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 11px;
-        }
-        table.sheet-table th {
-          background: #1e1b4b;
-          color: #ffffff;
-          padding: 8px 6px;
-          font-size: 10px;
-          text-transform: uppercase;
-          border: 1px solid #0f172a;
-        }
-        table.sheet-table td {
-          padding: 6px;
-          border: 1px solid #cbd5e1;
-        }
-        .total-row {
-          background: #fef3c7 !important;
-          font-weight: 900;
-          font-size: 12px;
-        }
-        .total-row td {
-          border-top: 2px solid #0f172a !important;
-          border-bottom: 3px double #0f172a !important;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="header-banner">
-        <div class="logo-box">
-          ${logoDataUri ? `<img src="${logoDataUri}" class="logo-img" alt="Pixx Logo" />` : ''}
-          <div>
-            <div class="banner-title">PIXX TECHNOLOGIES PAKISTAN</div>
-            <div class="banner-sub">Monthly Staff Salary Sheet — ${month}</div>
-          </div>
-        </div>
-        <div style="text-align: right;">
-          <div style="font-size: 11px; color: #cbd5e1;">Generated Date:</div>
-          <div style="font-size: 12px; font-weight: 800; color: #ffffff;">${new Date().toLocaleDateString('en-PK')}</div>
-        </div>
-      </div>
-
-      <div class="kpi-row">
-        <div class="kpi-card">
-          <div class="kpi-label">Total Monthly Gross Salary</div>
-          <div class="kpi-val" style="color: #0f172a;">Rs. ${formatPKR(grandGross)}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Total Loan / Advance Deducted</div>
-          <div class="kpi-val" style="color: #dc2626;">Rs. ${formatPKR(grandLoanDed)}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Total Net Payable Salary</div>
-          <div class="kpi-val" style="color: #047857;">Rs. ${formatPKR(grandNetPay)}</div>
-        </div>
-      </div>
-
-      <table class="sheet-table">
-        <thead>
-          <tr>
-            <th style="width: 30px;">Sr</th>
-            <th>Employee Name</th>
-            <th>Designation</th>
-            <th>Workplace</th>
-            <th style="text-align: right;">Basic (PKR)</th>
-            <th style="text-align: right;">Allowances</th>
-            <th>Reason</th>
-            <th style="text-align: right;">Gross (PKR)</th>
-            <th style="text-align: right;">Loan Ded</th>
-            <th style="text-align: right;">Net Payable</th>
-            <th>Account Title</th>
-            <th>Bank & IBAN</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHTML}
-          <tr class="total-row">
-            <td colspan="4" style="text-align: center;">GRAND TOTAL PAYOUT</td>
-            <td style="text-align: right;">—</td>
-            <td style="text-align: right;">—</td>
-            <td>—</td>
-            <td style="text-align: right; color: #0f172a;">Rs. ${formatPKR(grandGross)}</td>
-            <td style="text-align: right; color: #dc2626;">Rs. ${formatPKR(grandLoanDed)}</td>
-            <td style="text-align: right; color: #047857; font-size: 13px;">Rs. ${formatPKR(grandNetPay)}</td>
-            <td colspan="2"></td>
-          </tr>
-        </tbody>
-      </table>
-    </body>
-    </html>
-    `;
-
-    // Try Puppeteer PDF rendering
-    try {
-      const puppeteer = (await import('puppeteer-core')).default;
-      const execPath = getBrowserExecutablePath();
-
-      const launchOpts = {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      };
-      if (execPath) launchOpts.executablePath = execPath;
-
-      const browser = await puppeteer.launch(launchOpts);
-      const page = await browser.newPage();
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        landscape: true,
-        margin: { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' },
-        printBackground: true,
-      });
-
-      await browser.close();
-
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `inline; filename=Monthly_Salary_Sheet_${month}.pdf`);
-      return res.status(200).send(pdfBuffer);
-    } catch (pdfErr) {
-      console.warn('[Puppeteer Warning]: Falling back to raw HTML for Salary Sheet PDF:', pdfErr.message);
-      res.setHeader('Content-Type', 'text/html');
-      return res.status(200).send(htmlContent);
-    }
+    return apiSuccess(
+      res,
+      {
+        month,
+        totalEmployees: payrollDocs.length,
+        totalLiability: round2(totalLiability),
+        totalPaid: round2(totalPaid),
+        totalPending: round2(totalPending),
+        accountBreakdown,
+        payroll: payrollDocs,
+      },
+      `Salary reconciliation for ${month}.`
+    );
   } catch (error) {
-    console.error('[Generate Salary Sheet PDF Error]:', error);
-    return apiError(res, 'Failed to generate Monthly Salary Sheet PDF.', 500);
+    console.error('[Get Salary Reconciliation Error]:', error);
+    return apiError(res, 'Failed to fetch salary reconciliation data.', 500);
   }
 };
+
+

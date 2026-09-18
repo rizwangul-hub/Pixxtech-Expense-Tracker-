@@ -50,14 +50,6 @@ const payrollSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    extraAllowance: {
-      type: Number,
-      default: 0,
-    },
-    allowanceReason: {
-      type: String,
-      default: '',
-    },
     grossSalary: {
       type: Number,
       required: true,
@@ -121,9 +113,54 @@ const payrollSchema = new mongoose.Schema(
       enum: ['DRAFT', 'FINALIZED', 'PAID'],
       default: 'FINALIZED',
     },
+    paymentStatus: {
+      type: String,
+      enum: ['DRAFT', 'CALCULATED', 'APPROVED', 'PENDING_PAYMENT', 'PAID'],
+      default: 'PENDING_PAYMENT',
+      index: true,
+    },
+    paidFromAccountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Account',
+      default: null,
+      index: true,
+    },
+    paidFromAccountName: {
+      type: String,
+      default: '',
+    },
+    paymentDate: {
+      type: Date,
+      default: null,
+    },
+    transactionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Transaction',
+      default: null,
+      index: true,
+    },
+    voucherId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Voucher',
+      default: null,
+    },
+    voucherNo: {
+      type: String,
+      default: '',
+      index: true,
+    },
+    paymentMethod: {
+      type: String,
+      enum: ['BANK_TRANSFER', 'CASH', 'CHEQUE'],
+      default: 'BANK_TRANSFER',
+    },
+    paymentNotes: {
+      type: String,
+      default: '',
+    },
     paidDate: {
       type: Date,
-      default: Date.now,
+      default: null,
     },
     notes: {
       type: String,
