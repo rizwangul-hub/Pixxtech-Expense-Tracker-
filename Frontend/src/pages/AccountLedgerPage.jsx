@@ -385,41 +385,66 @@ export function AccountLedgerPage({
                 </tr>
               ) : (
                 filteredEntries.map((row) => {
-                  const hasDebit = (row.debit || 0) > 0;
-                  const hasCredit = (row.credit || 0) > 0;
+                  const isReversed = row.status === 'REVERSED';
+                  const hasDebit = !isReversed && (row.debit || 0) > 0;
+                  const hasCredit = !isReversed && (row.credit || 0) > 0;
 
                   return (
-                    <tr key={row._id} className="hover:bg-slate-800/40 transition">
+                    <tr
+                      key={row._id}
+                      className={`transition ${
+                        isReversed
+                          ? 'opacity-60 bg-rose-950/20 hover:bg-rose-950/30'
+                          : 'hover:bg-slate-800/40'
+                      }`}
+                    >
                       {/* Date */}
-                      <td className="py-2.5 px-3.5 text-slate-400 whitespace-nowrap">
+                      <td className={`py-2.5 px-3.5 whitespace-nowrap ${isReversed ? 'text-rose-400/60' : 'text-slate-400'}`}>
                         {formatDate(row.date)}
                       </td>
 
                       {/* Voucher No */}
-                      <td className="py-2.5 px-3.5 font-bold text-slate-200 whitespace-nowrap">
+                      <td className={`py-2.5 px-3.5 font-bold whitespace-nowrap ${isReversed ? 'text-rose-300/60 line-through' : 'text-slate-200'}`}>
                         {row.voucherNo || '—'}
                       </td>
 
                       {/* Detail */}
-                      <td className="py-2.5 px-3.5 font-sans text-white max-w-xs">
-                        <div className="truncate font-medium">{row.detail}</div>
+                      <td className="py-2.5 px-3.5 font-sans max-w-xs">
+                        <div className={`truncate font-medium ${isReversed ? 'text-rose-300/60 line-through' : 'text-white'}`}>
+                          {row.detail}
+                        </div>
+                        {isReversed && (
+                          <div className="text-[9px] text-rose-400/70 font-sans font-bold mt-0.5">
+                            ✕ Reversed — No balance effect
+                          </div>
+                        )}
                       </td>
 
                       {/* Head / Category */}
-                      <td className="py-2.5 px-3.5 font-sans text-slate-300 whitespace-nowrap">
+                      <td className={`py-2.5 px-3.5 font-sans whitespace-nowrap ${isReversed ? 'text-rose-300/50' : 'text-slate-300'}`}>
                         <span className="truncate">{row.categoryName || 'General'}</span>
                       </td>
 
                       {/* Contra Account */}
-                      <td className="py-2.5 px-3.5 font-sans text-slate-400 whitespace-nowrap max-w-xs">
+                      <td className={`py-2.5 px-3.5 font-sans whitespace-nowrap max-w-xs ${isReversed ? 'text-slate-500' : 'text-slate-400'}`}>
                         <span className="truncate">
-                          {hasDebit ? row.crAccount : row.drAccount}
+                          {isReversed
+                            ? 'External Parties / Operations Clearing'
+                            : hasDebit ? row.crAccount : row.drAccount}
                         </span>
                       </td>
 
                       {/* Debit */}
                       <td className="py-2.5 px-3.5 text-right font-mono font-semibold">
-                        {hasDebit ? (
+                        {isReversed ? (
+                          row.originalAmount ? (
+                            <span className="text-rose-400/50 line-through text-[10px]">
+                              +{formatPKR(row.originalAmount)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-600">—</span>
+                          )
+                        ) : hasDebit ? (
                           <span className="text-emerald-400">+{formatPKR(row.debit)}</span>
                         ) : (
                           <span className="text-slate-600">—</span>
@@ -428,7 +453,15 @@ export function AccountLedgerPage({
 
                       {/* Credit */}
                       <td className="py-2.5 px-3.5 text-right font-mono font-semibold">
-                        {hasCredit ? (
+                        {isReversed ? (
+                          row.originalAmount ? (
+                            <span className="text-rose-400/50 line-through text-[10px]">
+                              -{formatPKR(row.originalAmount)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-600">—</span>
+                          )
+                        ) : hasCredit ? (
                           <span className="text-rose-400">-{formatPKR(row.credit)}</span>
                         ) : (
                           <span className="text-slate-600">—</span>
@@ -436,15 +469,25 @@ export function AccountLedgerPage({
                       </td>
 
                       {/* Running Balance */}
-                      <td className="py-2.5 px-3.5 text-right font-mono font-bold text-white">
-                        {formatPKR(row.balance)}
+                      <td className={`py-2.5 px-3.5 text-right font-mono font-bold ${isReversed ? 'text-slate-500' : 'text-white'}`}>
+                        {isReversed ? (
+                          <span className="text-slate-500 text-[10px]">* {formatPKR(row.balance)}</span>
+                        ) : (
+                          formatPKR(row.balance)
+                        )}
                       </td>
 
                       {/* Status */}
                       <td className="py-2.5 px-3.5 text-center font-sans">
-                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">
-                          {row.status || 'VERIFIED'}
-                        </span>
+                        {isReversed ? (
+                          <span className="text-[10px] font-bold text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-800/40">
+                            REVERSED
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">
+                            {row.status || 'VERIFIED'}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );

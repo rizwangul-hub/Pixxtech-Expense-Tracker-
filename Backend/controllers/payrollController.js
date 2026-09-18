@@ -1573,300 +1573,350 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
       <meta charset="UTF-8">
       <title>Monthly Salary Sheet - ${formattedTitleDate}</title>
       <style>
-        @page {
-          size: A4 landscape;
-          margin: 8mm;
-        }
-        * { box-sizing: border-box; }
+        @page { size: A4 landscape; margin: 7mm 8mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
           font-family: 'Segoe UI', Arial, sans-serif;
-          color: #0f172a;
-          margin: 0;
-          padding: 4px;
+          color: #1e293b;
           background: #fff;
-          font-size: 11px;
+          font-size: 9.5px;
         }
-        .sheet-container {
-          width: 100%;
-          padding: 8px;
+        /* ─── HEADER ─── */
+        .page-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 2.5px solid #0f172a;
+          padding-bottom: 6px;
+          margin-bottom: 6px;
         }
-        .header-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 8px;
+        .logo-wrap img {
+          height: 34px;
+          width: auto;
+          object-fit: contain;
+          display: block;
         }
-        .company-title {
-          font-size: 22px;
-          font-weight: 900;
-          color: #0f172a;
-          letter-spacing: 0.5px;
-          margin: 0;
-        }
-        .company-subtitle {
-          font-size: 10px;
-          color: #475569;
-        }
-        .banner-title {
-          background: #0f172a;
-          color: #ffffff;
-          text-align: center;
-          font-weight: 800;
-          font-size: 14px;
-          padding: 7px;
-          border-radius: 6px;
-          margin: 8px 0;
-          letter-spacing: 1px;
-        }
-        .metrics-grid {
-          width: 100%;
-          border-collapse: separate;
-          border-spacing: 8px;
-          margin-bottom: 10px;
-        }
-        .metric-card {
-          background: #f8fafc;
-          border: 1px solid #cbd5e1;
-          border-radius: 8px;
-          padding: 8px 12px;
-          text-align: center;
-        }
-        .metric-label {
-          font-size: 9px;
-          font-weight: 700;
-          color: #64748b;
-          text-transform: uppercase;
-        }
-        .metric-value {
+        .company-block { text-align: right; }
+        .company-name {
           font-size: 15px;
           font-weight: 900;
           color: #0f172a;
+          letter-spacing: 0.4px;
+          line-height: 1.1;
+        }
+        .company-addr {
+          font-size: 8px;
+          color: #64748b;
           margin-top: 2px;
         }
-        .sheet-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 12px;
+        /* ─── GRADIENT LINE ─── */
+        .grad-bar {
+          height: 3px;
+          background: linear-gradient(90deg, #059669 0%, #0284c7 50%, #6366f1 100%);
+          border-radius: 2px;
+          margin-bottom: 5px;
         }
-        .sheet-table th {
+        /* ─── DOCUMENT TITLE STRIP ─── */
+        .doc-title {
           background: #0f172a;
-          color: #ffffff;
-          font-weight: 700;
-          font-size: 9.5px;
-          padding: 6px 5px;
-          border: 1px solid #1e293b;
+          color: #fff;
           text-align: center;
-          text-transform: uppercase;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 1.2px;
+          padding: 5px 0;
+          border-radius: 5px;
+          margin-bottom: 6px;
         }
-        .sheet-table td {
-          padding: 5px 4px;
-          border: 1px solid #cbd5e1;
-          font-size: 10px;
+        /* ─── METRICS BAR ─── */
+        .metrics-bar {
+          display: flex;
+          gap: 5px;
+          margin-bottom: 7px;
         }
-        .sheet-table tr:nth-child(even) td {
+        .metric-box {
+          flex: 1;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          padding: 5px 8px;
+          text-align: center;
           background: #f8fafc;
         }
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-        .font-bold { font-weight: 700; }
-        .font-black { font-weight: 900; }
-        .font-mono { font-family: monospace; }
-        .status-paid {
-          background: #dcfce7;
-          color: #15803d;
-          font-weight: 800;
-          padding: 2px 6px;
-          border-radius: 4px;
-          display: inline-block;
-          font-size: 9px;
+        .metric-box.green { background: #f0fdf4; border-color: #bbf7d0; }
+        .metric-box.amber { background: #fffbeb; border-color: #fde68a; }
+        .metric-lbl {
+          font-size: 7.5px;
+          font-weight: 700;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
-        .status-pending {
-          background: #fef3c7;
-          color: #b45309;
-          font-weight: 800;
-          padding: 2px 6px;
-          border-radius: 4px;
-          display: inline-block;
-          font-size: 9px;
+        .metric-val {
+          font-size: 12px;
+          font-weight: 900;
+          color: #0f172a;
+          margin-top: 1px;
         }
-        .summary-row td {
-          background: #0f172a !important;
-          color: #ffffff !important;
-          font-weight: 900 !important;
-          font-size: 10.5px !important;
-          border: 1px solid #0f172a;
-        }
-        .sign-table {
+        .metric-val.indigo { color: #4f46e5; }
+        .metric-val.gn { color: #166534; }
+        .metric-val.am { color: #92400e; }
+        /* ─── SALARY TABLE ─── */
+        .sal-table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 15px;
+          margin-bottom: 10px;
+          font-size: 8.5px;
         }
-        .sign-table td {
-          width: 33.33%;
+        .sal-table thead tr {
+          background: #0f172a;
+          color: #fff;
+        }
+        .sal-table th {
+          padding: 5px 4px;
           text-align: center;
-          vertical-align: bottom;
-          padding: 0 15px;
+          font-weight: 700;
+          font-size: 8px;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+          border: 1px solid #1e293b;
+        }
+        .sal-table th.left { text-align: left; }
+        .sal-table td {
+          padding: 4px 4px;
+          border: 1px solid #e2e8f0;
+          vertical-align: top;
+        }
+        .sal-table tbody tr:nth-child(even) td { background: #f8fafc; }
+        .sal-table tbody tr:hover td { background: #eff6ff; }
+        /* ─── TOTALS ROW ─── */
+        .sal-table .totals-row td {
+          background: #0f172a !important;
+          color: #fff !important;
+          font-weight: 800 !important;
+          font-size: 9px !important;
+          border-color: #1e293b;
+        }
+        /* ─── STATUS BADGES ─── */
+        .badge-paid {
+          display: inline-block;
+          background: #dcfce7;
+          color: #15803d;
+          border: 1px solid #86efac;
+          font-weight: 800;
+          font-size: 7.5px;
+          padding: 1px 5px;
+          border-radius: 3px;
+        }
+        .badge-pending {
+          display: inline-block;
+          background: #fef3c7;
+          color: #b45309;
+          border: 1px solid #fcd34d;
+          font-weight: 800;
+          font-size: 7.5px;
+          padding: 1px 5px;
+          border-radius: 3px;
+        }
+        /* ─── SIGNATURES ─── */
+        .sign-section {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 8px;
+          gap: 20px;
+        }
+        .sign-block {
+          flex: 1;
+          text-align: center;
+        }
+        .sign-block img {
+          height: 32px;
+          width: auto;
+          object-fit: contain;
+          margin-bottom: 3px;
+          display: block;
+          margin-left: auto;
+          margin-right: auto;
         }
         .sign-line {
-          border-top: 1.5px solid #334155;
-          margin-top: 5px;
-          padding-top: 4px;
-          font-size: 10px;
+          border-top: 1px solid #64748b;
+          padding-top: 3px;
+          font-size: 8px;
           font-weight: 700;
           color: #1e293b;
         }
-        .footer-note {
-          font-size: 9px;
-          color: #64748b;
+        .sign-line span { font-size: 7px; color: #94a3b8; font-weight: 400; }
+        /* ─── FOOTER ─── */
+        .doc-footer {
+          font-size: 7.5px;
+          color: #94a3b8;
           text-align: center;
-          margin-top: 12px;
           border-top: 1px solid #e2e8f0;
-          padding-top: 6px;
+          padding-top: 4px;
+          margin-top: 6px;
         }
+        /* ─── UTILS ─── */
+        .tr { text-align: right; }
+        .tc { text-align: center; }
+        .tl { text-align: left; }
+        .fw9 { font-weight: 900; }
+        .fw7 { font-weight: 700; }
+        .mono { font-family: 'Courier New', monospace; }
+        .col-indigo { color: #4f46e5; }
+        .col-green { color: #059669; }
+        .col-red { color: #e11d48; }
+        .col-slate { color: #64748b; }
+        .col-blue { color: #0284c7; }
       </style>
     </head>
     <body>
-      <div class="sheet-container">
-        <!-- HEADER -->
-        <table class="header-table">
-          <tr>
-            <td style="width: 20%;">
-              ${logoBase64 ? `<img src="${logoBase64}" alt="Pixx Technologies" style="height: 48px; max-width: 180px; object-fit: contain;" />` : `<h2 style="margin:0; color:#059669;">PIXX TECH</h2>`}
-            </td>
-            <td style="width: 80%; text-align: right;">
-              <div class="company-title">PIXX TECHNOLOGIES PAKISTAN</div>
-              <div class="company-subtitle">Office 4C, 3rd Floor, Plaza 48-C, Main Boulevard, Bahria Town, Lahore | NTN: 8941205</div>
-              <div class="company-subtitle">Official Staff Payroll & Finance Disbursal Management System</div>
-            </td>
-          </tr>
-        </table>
 
-        <div style="height: 3px; background: linear-gradient(90deg, #059669, #0284c7, #6366f1); border-radius: 2px;"></div>
-
-        <!-- BANNER -->
-        <div class="banner-title">
-          MONTHLY SALARY SHEET & FINANCE PAYOUT REPORT — ${formattedTitleDate.toUpperCase()}
+      <!-- PAGE HEADER -->
+      <div class="page-header">
+        <div class="logo-wrap">
+          ${logoBase64
+            ? `<img src="${logoBase64}" alt="Pixx Technologies" />`
+            : `<div style="font-size:16px;font-weight:900;color:#059669;">PIXX TECH</div>`
+          }
         </div>
-
-        <!-- METRICS GRID -->
-        <table class="metrics-grid">
-          <tr>
-            <td class="metric-card">
-              <div class="metric-label">Total Staff Count</div>
-              <div class="metric-value">${itemizedRows.length} Employees</div>
-            </td>
-            <td class="metric-card">
-              <div class="metric-label">Gross Payroll Amount</div>
-              <div class="metric-value" style="color: #4f46e5;">Rs. ${formatPKR(grandGross)}</div>
-            </td>
-            <td class="metric-card">
-              <div class="metric-label">Net Salary Liability</div>
-              <div class="metric-value" style="color: #0f172a;">Rs. ${formatPKR(grandNetPay)}</div>
-            </td>
-            <td class="metric-card" style="background: #f0fdf4; border-color: #bbf7d0;">
-              <div class="metric-label" style="color: #15803d;">Total Disbursed (Paid)</div>
-              <div class="metric-value" style="color: #166534;">Rs. ${formatPKR(totalPaid)}</div>
-            </td>
-            <td class="metric-card" style="background: #fffbeb; border-color: #fde68a;">
-              <div class="metric-label" style="color: #b45309;">Total Pending Payout</div>
-              <div class="metric-value" style="color: #92400e;">Rs. ${formatPKR(totalPending)}</div>
-            </td>
-          </tr>
-        </table>
-
-        <!-- ITEMIZED SALARY TABLE -->
-        <table class="sheet-table">
-          <thead>
-            <tr>
-              <th style="width: 3%;">#</th>
-              <th style="width: 13%;">Employee Name & Code</th>
-              <th style="width: 10%;">Designation / Dept</th>
-              <th style="width: 5%;">Days</th>
-              <th style="width: 8%;">Basic Salary</th>
-              <th style="width: 11%;">Allowance (Reason)</th>
-              <th style="width: 7%;">Gross Salary</th>
-              <th style="width: 6%;">Loan Ded.</th>
-              <th style="width: 6%;">LOP Ded.</th>
-              <th style="width: 8%;">Net Payable</th>
-              <th style="width: 7%;">Status</th>
-              <th style="width: 16%;">Paid Account / Voucher</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemizedRows
-              .map(
-                (r) => `
-              <tr>
-                <td class="text-center font-bold">${r.srNo}</td>
-                <td>
-                  <div class="font-bold" style="color: #0f172a;">${r.name}</div>
-                  <div class="font-mono" style="font-size: 8.5px; color: #64748b;">${r.code}</div>
-                </td>
-                <td>
-                  <div class="font-bold" style="color: #334155;">${r.designation}</div>
-                  <div style="font-size: 8.5px; color: #64748b;">${r.department}</div>
-                </td>
-                <td class="text-center font-mono">
-                  ${r.presentDays}<span style="color: #94a3b8;">/30</span>
-                  ${r.lopDays > 0 ? `<br/><span style="color: #e11d48; font-size: 8px;">(${r.lopDays} LOP)</span>` : ''}
-                </td>
-                <td class="text-right font-mono">${formatPKR(r.basic)}</td>
-                <td>
-                  <div class="text-right font-mono font-bold">${formatPKR(r.allowance)}</div>
-                  ${r.allowanceReason ? `<div style="font-size: 8px; color: #475569; text-align: right;">${r.allowanceReason}</div>` : ''}
-                </td>
-                <td class="text-right font-mono font-bold" style="color: #4f46e5;">${formatPKR(r.gross)}</td>
-                <td class="text-right font-mono" style="color: ${r.loanDed > 0 ? '#e11d48' : '#64748b'};">${formatPKR(r.loanDed)}</td>
-                <td class="text-right font-mono" style="color: ${r.lopDed > 0 ? '#e11d48' : '#64748b'};">${formatPKR(r.lopDed)}</td>
-                <td class="text-right font-mono font-black" style="color: #059669; font-size: 11px;">Rs. ${formatPKR(r.netPayable)}</td>
-                <td class="text-center">
-                  <span class="${r.status === 'PAID' ? 'status-paid' : 'status-pending'}">${r.status}</span>
-                </td>
-                <td>
-                  <div class="font-bold" style="font-size: 9px; color: #1e293b;">${r.paidAccount}</div>
-                  ${r.voucherNo !== '-' ? `<div class="font-mono" style="font-size: 8.5px; color: #0284c7;">Voucher: ${r.voucherNo}</div>` : ''}
-                </td>
-              </tr>
-            `
-              )
-              .join('')}
-
-            <!-- GRAND TOTAL SUMMARY ROW -->
-            <tr class="summary-row">
-              <td colspan="4" class="text-center">TOTAL MONTHLY PAYROLL SUMMARY</td>
-              <td class="text-right font-mono">${formatPKR(grandBasic)}</td>
-              <td class="text-right font-mono">${formatPKR(grandAllowance)}</td>
-              <td class="text-right font-mono">${formatPKR(grandGross)}</td>
-              <td class="text-right font-mono">${formatPKR(grandLoanDed)}</td>
-              <td class="text-right font-mono">${formatPKR(grandLopDed)}</td>
-              <td class="text-right font-mono">Rs. ${formatPKR(grandNetPay)}</td>
-              <td class="text-center">${totalPending === 0 ? 'ALL PAID' : 'PARTIAL'}</td>
-              <td class="text-center font-mono" style="font-size: 9px;">Paid: Rs. ${formatPKR(totalPaid)}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- SIGNATURE BLOCK -->
-        <table class="sign-table">
-          <tr>
-            <td>
-              <div style="height: 38px;"></div>
-              <div class="sign-line">Prepared By: Human Resources Manager<br/><span style="font-size:8.5px; color:#64748b;">Payroll & Attendance Verified</span></div>
-            </td>
-            <td>
-              ${sarfrazSignBase64 ? `<img src="${sarfrazSignBase64}" style="height: 38px; max-width: 120px; object-fit: contain; margin-bottom: 2px;" />` : ''}
-              <div class="sign-line">Sarfraz Sb (Manager Operations)<br/><span style="font-size:8.5px; color:#64748b;">Checked & Disbursed</span></div>
-            </td>
-            <td>
-              ${khurshidSignBase64 ? `<img src="${khurshidSignBase64}" style="height: 38px; max-width: 120px; object-fit: contain; margin-bottom: 2px;" />` : ''}
-              <div class="sign-line">Khurshid Anwar (Finance Director)<br/><span style="font-size:8.5px; color:#64748b;">Approved & Executive Verification</span></div>
-            </td>
-          </tr>
-        </table>
-
-        <div class="footer-note">
-          Official Monthly Salary Sheet & Finance Payout System Document issued by Pixx Technologies Pakistan • Generated on ${new Date().toLocaleDateString('en-PK')} • System Record.
+        <div class="company-block">
+          <div class="company-name">PIXX TECHNOLOGIES PAKISTAN</div>
+          <div class="company-addr">Office 4C, 3rd Floor, Plaza 48-C, Main Boulevard, Bahria Town, Lahore &nbsp;|&nbsp; NTN: 8941205</div>
+          <div class="company-addr">HR &amp; Finance Payroll Management System &nbsp;|&nbsp; hr@pixxtech.com</div>
         </div>
       </div>
+
+      <!-- GRADIENT BAR -->
+      <div class="grad-bar"></div>
+
+      <!-- DOCUMENT TITLE -->
+      <div class="doc-title">
+        MONTHLY SALARY SHEET &amp; FINANCE PAYOUT REPORT &mdash; ${formattedTitleDate.toUpperCase()}
+      </div>
+
+      <!-- METRICS BAR -->
+      <div class="metrics-bar">
+        <div class="metric-box">
+          <div class="metric-lbl">Total Employees</div>
+          <div class="metric-val">${itemizedRows.length}</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-lbl">Total Basic Salary</div>
+          <div class="metric-val mono">Rs. ${formatPKR(grandBasic)}</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-lbl">Gross Payroll Amount</div>
+          <div class="metric-val indigo mono">Rs. ${formatPKR(grandGross)}</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-lbl">Total Deductions</div>
+          <div class="metric-val mono" style="color:#e11d48;">Rs. ${formatPKR(grandTotalDed)}</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-lbl">Net Salary Liability</div>
+          <div class="metric-val fw9 mono">Rs. ${formatPKR(grandNetPay)}</div>
+        </div>
+        <div class="metric-box green">
+          <div class="metric-lbl" style="color:#15803d;">Total Disbursed</div>
+          <div class="metric-val gn mono">Rs. ${formatPKR(totalPaid)}</div>
+        </div>
+        <div class="metric-box amber">
+          <div class="metric-lbl" style="color:#b45309;">Total Pending</div>
+          <div class="metric-val am mono">Rs. ${formatPKR(totalPending)}</div>
+        </div>
+      </div>
+
+      <!-- ITEMIZED SALARY TABLE -->
+      <table class="sal-table">
+        <thead>
+          <tr>
+            <th style="width:2.5%;">#</th>
+            <th class="left" style="width:12%;">Employee Name</th>
+            <th class="left" style="width:9%;">Designation / Dept</th>
+            <th style="width:4.5%;">Days</th>
+            <th style="width:8%;">Basic (Rs.)</th>
+            <th style="width:9%;">Allowance &amp; Reason</th>
+            <th style="width:7%;">Gross (Rs.)</th>
+            <th style="width:6%;">Loan Ded.</th>
+            <th style="width:5%;">LOP Ded.</th>
+            <th style="width:5%;">Other Ded.</th>
+            <th style="width:8%;">Net Payable (Rs.)</th>
+            <th style="width:6%;">Status</th>
+            <th style="width:18%;">Paid Account &amp; Voucher</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemizedRows.map((r) => `
+          <tr>
+            <td class="tc mono fw7" style="color:#94a3b8;">${r.srNo}</td>
+            <td>
+              <div class="fw7" style="color:#0f172a;">${r.name}</div>
+              <div class="mono col-slate" style="font-size:7px;">${r.code}</div>
+            </td>
+            <td>
+              <div class="fw7" style="color:#334155;">${r.designation}</div>
+              <div style="font-size:7px;color:#7c3aed;">${r.department}</div>
+            </td>
+            <td class="tc mono">
+              <span class="fw7">${r.presentDays}</span><span class="col-slate">/30</span>
+              ${r.lopDays > 0 ? `<div class="col-red" style="font-size:7px;">${r.lopDays} LOP</div>` : ''}
+            </td>
+            <td class="tr mono">${formatPKR(r.basic)}</td>
+            <td class="tr">
+              <div class="mono fw7">${r.allowance > 0 ? formatPKR(r.allowance) : '—'}</div>
+              ${r.allowanceReason ? `<div style="font-size:7px;color:#64748b;">${r.allowanceReason}</div>` : ''}
+            </td>
+            <td class="tr mono fw7 col-indigo">${formatPKR(r.gross)}</td>
+            <td class="tr mono ${r.loanDed > 0 ? 'col-red' : 'col-slate'}">${r.loanDed > 0 ? formatPKR(r.loanDed) : '—'}</td>
+            <td class="tr mono ${r.lopDed > 0 ? 'col-red' : 'col-slate'}">${r.lopDed > 0 ? formatPKR(r.lopDed) : '—'}</td>
+            <td class="tr mono ${r.othDed > 0 ? 'col-red' : 'col-slate'}">${r.othDed > 0 ? formatPKR(r.othDed) : '—'}</td>
+            <td class="tr mono fw9 col-green" style="font-size:9.5px;">Rs. ${formatPKR(r.netPayable)}</td>
+            <td class="tc">
+              <span class="${r.status === 'PAID' ? 'badge-paid' : 'badge-pending'}">${r.status}</span>
+            </td>
+            <td>
+              <div class="fw7" style="font-size:8px;color:#1e293b;">${r.paidAccount}</div>
+              ${r.voucherNo !== '-' ? `<div class="mono col-blue" style="font-size:7px;">Vn: ${r.voucherNo}</div>` : ''}
+            </td>
+          </tr>
+          `).join('')}
+
+          <!-- GRAND TOTALS ROW -->
+          <tr class="totals-row">
+            <td colspan="4" class="tc fw9" style="letter-spacing:0.5px;">TOTAL MONTHLY PAYROLL SUMMARY</td>
+            <td class="tr mono">${formatPKR(grandBasic)}</td>
+            <td class="tr mono">${formatPKR(grandAllowance)}</td>
+            <td class="tr mono">${formatPKR(grandGross)}</td>
+            <td class="tr mono">${formatPKR(grandLoanDed)}</td>
+            <td class="tr mono">${formatPKR(grandLopDed)}</td>
+            <td class="tr mono">${formatPKR(grandOtherDed)}</td>
+            <td class="tr mono fw9" style="font-size:10px;">Rs. ${formatPKR(grandNetPay)}</td>
+            <td class="tc">${totalPending === 0 ? 'ALL PAID' : `${itemizedRows.filter(r => r.status === 'PAID').length} PAID`}</td>
+            <td class="tr mono" style="font-size:7.5px;">Paid: Rs. ${formatPKR(totalPaid)}<br/>Pending: Rs. ${formatPKR(totalPending)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- SIGNATURES -->
+      <div class="sign-section">
+        <div class="sign-block">
+          <div style="height:32px;"></div>
+          <div class="sign-line">Prepared By: Human Resources Manager<br/><span>Payroll &amp; Attendance Verified</span></div>
+        </div>
+        <div class="sign-block">
+          ${sarfrazSignBase64 ? `<img src="${sarfrazSignBase64}" alt="Sarfraz Sign" />` : '<div style="height:32px;"></div>'}
+          <div class="sign-line">Sarfraz Sb (Manager Operations)<br/><span>Checked &amp; Disbursed</span></div>
+        </div>
+        <div class="sign-block">
+          ${khurshidSignBase64 ? `<img src="${khurshidSignBase64}" alt="Khurshid Sign" />` : '<div style="height:32px;"></div>'}
+          <div class="sign-line">Khurshid Anwar (Finance Director)<br/><span>Approved &amp; Executive Verification</span></div>
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div class="doc-footer">
+        Official Monthly Salary Sheet &amp; Finance Payout System Document &mdash; Pixx Technologies Pakistan &mdash; Generated: ${new Date().toLocaleDateString('en-PK')} &mdash; Confidential Internal Record
+      </div>
+
     </body>
     </html>
     `;

@@ -464,9 +464,11 @@ export const getAccountLedger = async (req, res) => {
 
     if (periodStart) {
       // Find all transactions between openingBalanceDate and periodStart
+      // Exclude REVERSED transactions — they should not affect balance
       const priorTxFilter = {
         $or: [{ drAccountId: id }, { crAccountId: id }],
         date: { $lt: periodStart },
+        status: { $ne: 'REVERSED' },
       };
 
       const priorTransactions = await Transaction.find(priorTxFilter)
@@ -515,6 +517,8 @@ export const getAccountLedger = async (req, res) => {
       .lean();
 
     // 3. Compute running balance sequentially
+    // REVERSED transactions are shown in the ledger for audit trail, but
+    // they must NOT affect the running balance or totals.
     let runningBalance = openingBalance;
     let totalMoneyIn = 0;
     let totalMoneyOut = 0;
@@ -522,9 +526,11 @@ export const getAccountLedger = async (req, res) => {
     const ledgerEntries = transactions.map((tx) => {
       const isDr = tx.drAccountId?._id?.toString() === id.toString();
       const isCr = tx.crAccountId?._id?.toString() === id.toString();
+      const isReversed = tx.status === 'REVERSED';
 
-      const debit = isDr ? tx.amount : 0;
-      const credit = isCr ? tx.amount : 0;
+      // REVERSED transactions: show the row but do NOT affect balance
+      const debit = (isDr && !isReversed) ? tx.amount : 0;
+      const credit = (isCr && !isReversed) ? tx.amount : 0;
 
       runningBalance = round2(runningBalance + debit - credit);
       totalMoneyIn += debit;
@@ -539,10 +545,12 @@ export const getAccountLedger = async (req, res) => {
         drAccount: tx.drAccountId?.name || 'Account',
         crAccount: tx.crAccountId?.name || 'Account',
         categoryName: tx.categoryId?.name || 'General',
-        debit: round2(debit),
-        credit: round2(credit),
+        // Show original amounts in the row for audit trail visibility
+        debit: isReversed ? 0 : round2(isDr ? tx.amount : 0),
+        credit: isReversed ? 0 : round2(isCr ? tx.amount : 0),
         balance: round2(runningBalance),
         status: tx.status,
+        originalAmount: isReversed ? tx.amount : null,
       };
     });
 
