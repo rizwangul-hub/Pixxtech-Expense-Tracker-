@@ -165,9 +165,24 @@ export const StaffPayrollSubTab = () => {
     window.open(url, '_blank');
   };
 
-  const handleOpenSalarySlip = (employeeId) => {
-    const url = payrollAPI.downloadSalarySlipPDFUrl(employeeId, selectedMonth);
-    window.open(url, '_blank');
+  const handleDownloadSalarySlip = async (employeeId, name) => {
+    try {
+      await payrollAPI.downloadSalarySlipPDF(employeeId, selectedMonth, name);
+    } catch (err) {
+      console.error('Download Salary Slip Error:', err);
+      const url = payrollAPI.downloadSalarySlipPDFUrl(employeeId, selectedMonth);
+      window.open(url, '_blank');
+    }
+  };
+
+  const handlePrintSalarySlip = async (employeeId) => {
+    try {
+      await payrollAPI.printSalarySlipPDF(employeeId, selectedMonth);
+    } catch (err) {
+      console.error('Print Salary Slip Error:', err);
+      const url = payrollAPI.downloadSalarySlipPDFUrl(employeeId, selectedMonth);
+      window.open(url, '_blank');
+    }
   };
 
   // Finance Payout Handlers
@@ -516,14 +531,23 @@ export const StaffPayrollSubTab = () => {
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => handleOpenSalarySlip(row.employeeId)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 transition inline-flex items-center gap-1 font-bold text-[11px]"
-                          title="Generate Printable PDF Salary Slip"
-                        >
-                          <Printer size={13} /> Slip PDF
-                        </button>
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleDownloadSalarySlip(row.employeeId, row.name)}
+                            className="px-2 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 transition inline-flex items-center gap-1 font-bold text-[10px]"
+                            title="Download Official Salary Slip PDF"
+                          >
+                            <Download size={12} /> Download
+                          </button>
+                          <button
+                            onClick={() => handlePrintSalarySlip(row.employeeId)}
+                            className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 border border-slate-700 transition inline-flex items-center gap-1 font-bold text-[10px]"
+                            title="Print Official Salary Slip"
+                          >
+                            <Printer size={12} /> Print
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

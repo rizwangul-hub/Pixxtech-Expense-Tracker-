@@ -60,6 +60,19 @@ export function MainLayout({
     ...(userIsAdmin
       ? [
           {
+            id: 'staff',
+            label: 'Staff HR',
+            icon: Users,
+            status: 'active',
+            permission: PERMISSIONS.MANAGE_USERS,
+            badge: 'HR / Payroll',
+            badgeColor: 'bg-purple-100 text-purple-800 border-purple-200',
+          },
+        ]
+      : []),
+    ...(userIsAdmin
+      ? [
+          {
             id: 'chart-of-accounts',
             label: 'Chart of Accounts',
             icon: Layers,
@@ -201,14 +214,6 @@ export function MainLayout({
       permission: PERMISSIONS.EXPORT_REPORTS,
       badge: 'Publish',
       badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    },
-    {
-      id: 'staff',
-      label: 'Staff HR',
-      icon: Users,
-      status: 'active',
-      badge: 'HR / Payroll',
-      badgeColor: 'bg-purple-100 text-purple-800 border-purple-200',
     },
     {
       id: 'users',
