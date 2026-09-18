@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 import path from 'path';
 import ExcelJS from 'exceljs';
 import Employee from '../models/Employee.js';
@@ -50,14 +50,14 @@ const formatPKR = (val) => {
 };
 
 /**
- * Smart Puppeteer launcher — works on Vercel (serverless) AND local Windows.
+ * Smart Puppeteer launcher â€” works on Vercel (serverless) AND local Windows.
  * - On Vercel: uses @sparticuz/chromium (bundled headless Chromium for serverless)
  * - On local Windows: finds Edge or Chrome executable automatically
  */
 const launchPuppeteer = async () => {
   const puppeteer = (await import('puppeteer-core')).default;
 
-  // ── Vercel / serverless environment ──────────────────────────────────────
+  // â”€â”€ Vercel / serverless environment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.RAILWAY_ENVIRONMENT) {
     const chromium = (await import('@sparticuz/chromium')).default;
     chromium.setHeadlessMode = true;
@@ -72,7 +72,7 @@ const launchPuppeteer = async () => {
     return browser;
   }
 
-  // ── Local Windows development ─────────────────────────────────────────────
+  // â”€â”€ Local Windows development â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const localPaths = [
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
@@ -363,7 +363,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
     // Subtitle Row 2: Month & Title
     ws1.mergeCells('A2:L2');
     const subCell = ws1.getCell('A2');
-    subCell.value = `MONTHLY SALARY SHEET — ${month.toUpperCase()}`;
+    subCell.value = `MONTHLY SALARY SHEET â€” ${month.toUpperCase()}`;
     subCell.font = { name: 'Segoe UI', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
     subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
     subCell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -532,7 +532,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
 
     ws2.mergeCells('A2:G2');
     const bSub = ws2.getCell('A2');
-    bSub.value = `BANK SALARY TRANSFER SHEET — ${month.toUpperCase()}`;
+    bSub.value = `BANK SALARY TRANSFER SHEET â€” ${month.toUpperCase()}`;
     bSub.font = { name: 'Segoe UI', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
     bSub.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
     bSub.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -739,327 +739,281 @@ export const generateSalarySlipPDF = async (req, res) => {
       <meta charset="UTF-8">
       <title>Salary Pay Slip - ${employee.name}</title>
       <style>
-        @page {
-          size: A4 portrait;
-          margin: 12mm;
-        }
-        * { box-sizing: border-box; }
+        @page { size: A4 portrait; margin: 10mm 12mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
           font-family: 'Segoe UI', Arial, sans-serif;
-          color: #0f172a;
-          margin: 0;
-          padding: 10px;
-          background: #fff;
-          font-size: 13px;
-        }
-        .slip-card {
-          border: 2px solid #0f172a;
-          border-radius: 12px;
-          padding: 20px;
-          background: #ffffff;
-        }
-        .header-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 12px;
-        }
-        .header-table td {
-          vertical-align: middle;
-        }
-        .company-title {
-          font-size: 26px;
-          font-weight: 900;
-          color: #0f172a;
-          margin: 0;
-          letter-spacing: 0.5px;
-        }
-        .company-subtitle {
-          font-size: 11px;
-          color: #475569;
-          margin: 3px 0 0 0;
-          font-weight: 600;
-        }
-        .banner-title {
-          background: #0f172a;
-          color: #ffffff;
-          text-align: center;
-          padding: 9px;
-          font-size: 14px;
-          font-weight: 800;
-          letter-spacing: 1.5px;
-          border-radius: 6px;
-          text-transform: uppercase;
-          margin: 15px 0;
-        }
-        .info-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 15px;
-          font-size: 12px;
-        }
-        .info-table td {
-          padding: 6px 8px;
-          border: 1px solid #cbd5e1;
-        }
-        .info-label {
-          background: #f8fafc;
-          font-weight: 700;
-          color: #334155;
-          width: 18%;
-        }
-        .info-val {
-          font-weight: 600;
-          color: #0f172a;
-          width: 32%;
-        }
-        .grid-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 15px;
-          font-size: 12px;
-        }
-        .grid-table th {
-          background: #1e293b;
-          color: #ffffff;
-          padding: 8px;
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          text-align: left;
-          border: 1px solid #0f172a;
-        }
-        .grid-table td {
-          padding: 6px 8px;
-          border: 1px solid #cbd5e1;
-        }
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-        .font-mono { font-family: 'Courier New', Courier, monospace; }
-        .font-bold { font-weight: bold; }
-        
-        .payout-box {
-          background: #f0fdf4;
-          border: 2px solid #16a34a;
-          border-radius: 10px;
-          padding: 16px;
-          text-align: center;
-          margin: 18px 0;
-        }
-        .payout-amount {
-          font-size: 32px;
-          font-weight: 900;
-          color: #15803d;
-          letter-spacing: 1px;
-          font-family: 'Courier New', Courier, monospace;
-        }
-        .payout-words {
-          font-size: 13px;
-          font-weight: 700;
-          color: #166534;
-          margin-top: 5px;
-          font-style: italic;
-        }
-        .sign-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-top: 25px;
-          text-align: center;
-        }
-        .sign-table td {
-          vertical-align: bottom;
-          padding: 10px;
-          width: 33.33%;
-        }
-        .sign-line {
-          border-top: 1.5px dashed #475569;
-          margin-top: 5px;
-          padding-top: 5px;
-          font-size: 11px;
-          font-weight: 700;
           color: #1e293b;
+          background: #fff;
+          font-size: 11px;
         }
-        .footer-note {
-          font-size: 10px;
-          color: #64748b;
-          text-align: center;
-          margin-top: 15px;
-          border-top: 1px solid #e2e8f0;
-          padding-top: 8px;
+
+        /* â”€â”€ HEADER â”€â”€ */
+        .hdr {
+          display: table;
+          width: 100%;
+          border-bottom: 2.5px solid #0f172a;
+          padding-bottom: 8px;
+          margin-bottom: 5px;
         }
+        .hdr-logo { display: table-cell; width: 110px; vertical-align: middle; }
+        .hdr-logo img { height: 36px; width: auto; object-fit: contain; display: block; }
+        .hdr-info { display: table-cell; vertical-align: middle; text-align: right; }
+        .hdr-title { font-size: 16px; font-weight: 900; color: #0f172a; line-height: 1.1; }
+        .hdr-addr { font-size: 8px; color: #64748b; margin-top: 2px; }
+
+        /* â”€â”€ GRADIENT BAR â”€â”€ */
+        .grad { height: 3px; background: linear-gradient(90deg,#059669,#0284c7,#6366f1); border-radius:2px; margin: 5px 0; }
+
+        /* â”€â”€ BANNER â”€â”€ */
+        .banner {
+          background: #0f172a; color: #fff;
+          text-align: center; font-size: 11px; font-weight: 800;
+          letter-spacing: 1.5px; padding: 6px 0; border-radius: 5px;
+          margin-bottom: 8px; text-transform: uppercase;
+        }
+
+        /* â”€â”€ INFO GRID â”€â”€ */
+        .info-tbl { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+        .info-tbl td { border: 1px solid #cbd5e1; padding: 5px 7px; font-size: 10.5px; }
+        .lbl { background: #f1f5f9; font-weight: 700; color: #334155; width: 18%; white-space: nowrap; }
+        .val { font-weight: 600; color: #0f172a; width: 32%; }
+
+        /* â”€â”€ SECTION HEADER â”€â”€ */
+        .sec-hdr {
+          display: table; width: 100%;
+          border-collapse: collapse; margin-bottom: 0;
+        }
+        .sec-earn { display: table-cell; width: 50%; background: #064e3b; color: #fff;
+          font-size: 10px; font-weight: 800; text-transform: uppercase;
+          letter-spacing: 0.8px; padding: 6px 8px;
+          border: 1px solid #047857; }
+        .sec-ded { display: table-cell; width: 50%; background: #7f1d1d; color: #fff;
+          font-size: 10px; font-weight: 800; text-transform: uppercase;
+          letter-spacing: 0.8px; padding: 6px 8px; text-align: right;
+          border: 1px solid #991b1b; }
+
+        /* â”€â”€ EARN / DEDUCT TABLES â”€â”€ */
+        .ed-wrap { display: table; width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+        .earn-cell { display: table-cell; width: 50%; vertical-align: top; border: 1px solid #cbd5e1; border-right: none; }
+        .ded-cell  { display: table-cell; width: 50%; vertical-align: top; border: 1px solid #cbd5e1; }
+        .ed-row { display: table; width: 100%; border-collapse: collapse; }
+        .ed-row-r { border-bottom: 1px solid #f1f5f9; }
+        .ed-name { display: table-cell; padding: 5px 7px; font-size: 10.5px; color: #334155; }
+        .ed-amt  { display: table-cell; padding: 5px 7px; font-size: 10.5px; text-align: right;
+                   font-family: 'Courier New', monospace; font-weight: 700; }
+        .total-row { background: #f8fafc; border-top: 1.5px solid #94a3b8; }
+        .total-row .ed-name { font-weight: 800; font-size: 11px; color: #0f172a; }
+        .total-row .ed-amt  { font-size: 11px; font-weight: 900; }
+        .earn-col { color: #059669; }
+        .ded-col  { color: #e11d48; }
+
+        /* â”€â”€ ATTENDANCE BAR â”€â”€ */
+        .att-tbl { width: 100%; border-collapse: collapse; background: #f8fafc;
+                   border: 1px solid #e2e8f0; margin-bottom: 10px; }
+        .att-tbl td { padding: 6px 8px; font-size: 10px; font-weight: 700;
+                      border-right: 1px solid #e2e8f0; text-align: center; }
+        .att-tbl td:last-child { border-right: none; }
+        .att-val { display: block; font-family: 'Courier New', monospace;
+                   font-size: 13px; font-weight: 900; margin-top: 1px; }
+
+        /* â”€â”€ NET PAYOUT â”€â”€ */
+        .payout {
+          background: #f0fdf4; border: 2px solid #16a34a;
+          border-radius: 8px; padding: 12px 16px;
+          text-align: center; margin-bottom: 12px;
+        }
+        .payout-lbl { font-size: 9px; font-weight: 800; color: #166534;
+                      text-transform: uppercase; letter-spacing: 1px; }
+        .payout-amt { font-size: 28px; font-weight: 900; color: #15803d;
+                      font-family: 'Courier New', monospace; margin: 4px 0; }
+        .payout-words { font-size: 11px; font-weight: 700; color: #166534; font-style: italic; }
+
+        /* â”€â”€ SIGNATURES â”€â”€ */
+        .sign-tbl { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+        .sign-tbl td { width: 33.33%; text-align: center; padding: 0 10px; vertical-align: bottom; }
+        .sign-tbl img { height: 36px; width: auto; object-fit: contain; margin-bottom: 3px; display: block; margin-left: auto; margin-right: auto; }
+        .sign-line { border-top: 1.5px dashed #475569; padding-top: 4px; font-size: 9.5px; font-weight: 700; }
+        .sign-line span { font-size: 8.5px; color: #94a3b8; font-weight: 400; }
+
+        /* â”€â”€ FOOTER â”€â”€ */
+        .slip-footer { font-size: 8px; color: #94a3b8; text-align: center;
+                       border-top: 1px solid #e2e8f0; padding-top: 5px; }
       </style>
     </head>
     <body>
-      <div class="slip-card">
-        <!-- HEADER -->
-        <table class="header-table">
-          <tr>
-            <td style="width: 25%;">
-              ${logoBase64 ? `<img src="${logoBase64}" alt="Pixx Technologies" style="height: 55px; max-width: 190px; object-fit: contain;" />` : `<h2 style="margin:0; color:#059669;">PIXX TECH</h2>`}
-            </td>
-            <td style="width: 75%; text-align: right;">
-              <div class="company-title">PIXX TECHNOLOGIES PAKISTAN</div>
-              <div class="company-subtitle">Office 4C, 3rd Floor, Plaza 48-C, Main Boulevard, Bahria Town, Lahore | NTN: 8941205</div>
-              <div class="company-subtitle">Email: hr@pixxtech.com | Web: www.pixxtech.com</div>
-            </td>
-          </tr>
-        </table>
 
-        <div style="height: 3px; background: linear-gradient(90deg, #059669, #0284c7, #6366f1); border-radius: 2px;"></div>
-
-        <!-- DOCUMENT TITLE BANNER -->
-        <div class="banner-title">
-          SALARY PAY SLIP — ${formattedTitleDate.toUpperCase()}
+      <!-- HEADER -->
+      <div class="hdr">
+        <div class="hdr-logo">
+          ${logoBase64
+            ? `<img src="${logoBase64}" alt="Pixx Technologies" />`
+            : `<span style="font-size:15px;font-weight:900;color:#059669;">PIXX</span>`}
         </div>
-
-        <!-- EMPLOYEE INFO METADATA GRID -->
-        <table class="info-table">
-          <tr>
-            <td class="info-label">Employee Name:</td>
-            <td class="info-val font-bold" style="font-size: 14px; color: #0f172a;">${employee.name}</td>
-            <td class="info-label">Employee Code:</td>
-            <td class="info-val font-mono font-bold">${employee.employeeCode || 'EMP-PIX'}</td>
-          </tr>
-          <tr>
-            <td class="info-label">Designation:</td>
-            <td class="info-val font-bold" style="color: #4f46e5;">${employee.designation}</td>
-            <td class="info-label">Workplace / Dept:</td>
-            <td class="info-val font-bold" style="color: #059669;">${employee.department}</td>
-          </tr>
-          <tr>
-            <td class="info-label">Pay Period:</td>
-            <td class="info-val font-mono">${formattedTitleDate}</td>
-            <td class="info-label">Payment Status:</td>
-            <td class="info-val font-bold" style="color: #059669;">${savedPayroll?.paymentStatus || 'FINALIZED'}</td>
-          </tr>
-          <tr>
-            <td class="info-label">Bank Name:</td>
-            <td class="info-val">${savedPayroll?.bankName || employee.bankName || 'Cash / Bank'}</td>
-            <td class="info-label">IBAN / Account:</td>
-            <td class="info-val font-mono">${savedPayroll?.ibanNumber || employee.ibanNumber || 'N/A'}</td>
-          </tr>
-        </table>
-
-        <!-- ITEMIZED EARNINGS & DEDUCTIONS BREAKDOWN -->
-        <table class="grid-table">
-          <thead>
-            <tr>
-              <th style="width: 50%; background: #065f46;">EARNINGS ITEMIZATION</th>
-              <th style="width: 50%; background: #881337;">DEDUCTIONS ITEMIZATION</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <!-- LEFT: EARNINGS -->
-              <td style="vertical-align: top; padding: 0;">
-                <table style="width: 100%; border-collapse: collapse;">
-                  <tr>
-                    <td style="border: none; padding: 6px;">Basic Salary</td>
-                    <td class="text-right font-mono font-bold" style="border: none; padding: 6px;">PKR ${formatPKR(basic)}</td>
-                  </tr>
-                  ${allowance > 0 ? `
-                  <tr>
-                    <td style="border: none; padding: 6px;">Allowance <br/><span style="font-size:10px; color:#475569;">(${allowanceReason || 'General Allowance'})</span></td>
-                    <td class="text-right font-mono font-bold" style="border: none; padding: 6px; color:#059669;">+PKR ${formatPKR(allowance)}</td>
-                  </tr>
-                  ` : ''}
-                  ${overtime > 0 ? `
-                  <tr>
-                    <td style="border: none; padding: 6px;">Overtime (OT)</td>
-                    <td class="text-right font-mono" style="border: none; padding: 6px;">PKR ${formatPKR(overtime)}</td>
-                  </tr>
-                  ` : ''}
-                  ${bonus > 0 ? `
-                  <tr>
-                    <td style="border: none; padding: 6px;">Bonus</td>
-                    <td class="text-right font-mono" style="border: none; padding: 6px;">PKR ${formatPKR(bonus)}</td>
-                  </tr>
-                  ` : ''}
-                  ${otherReceipts > 0 ? `
-                  <tr>
-                    <td style="border: none; padding: 6px;">Other Receipts</td>
-                    <td class="text-right font-mono" style="border: none; padding: 6px;">PKR ${formatPKR(otherReceipts)}</td>
-                  </tr>
-                  ` : ''}
-                  <tr style="border-top: 1px solid #cbd5e1; background: #f8fafc;">
-                    <td style="border: none; padding: 8px; font-weight: bold;">TOTAL GROSS SALARY</td>
-                    <td class="text-right font-mono font-bold" style="border: none; padding: 8px; font-size: 13px;">PKR ${formatPKR(gross)}</td>
-                  </tr>
-                </table>
-              </td>
-
-              <!-- RIGHT: DEDUCTIONS & ATTENDANCE SUMMARY -->
-              <td style="vertical-align: top; padding: 0;">
-                <table style="width: 100%; border-collapse: collapse;">
-                  <tr>
-                    <td style="border: none; padding: 6px;">Loan / Advance Salary</td>
-                    <td class="text-right font-mono font-bold" style="border: none; padding: 6px; color:#e11d48;">-PKR ${formatPKR(loanDed)}</td>
-                  </tr>
-                  <tr>
-                    <td style="border: none; padding: 6px;">Loss of Pay (LOP) Deduction</td>
-                    <td class="text-right font-mono" style="border: none; padding: 6px;">-PKR ${formatPKR(lopDed)}</td>
-                  </tr>
-                  ${othDed > 0 ? `
-                  <tr>
-                    <td style="border: none; padding: 6px;">Other Deductions</td>
-                    <td class="text-right font-mono" style="border: none; padding: 6px;">-PKR ${formatPKR(othDed)}</td>
-                  </tr>
-                  ` : ''}
-                  ${whtDed > 0 ? `
-                  <tr>
-                    <td style="border: none; padding: 6px;">WHT Tax Deduction</td>
-                    <td class="text-right font-mono" style="border: none; padding: 6px;">-PKR ${formatPKR(whtDed)}</td>
-                  </tr>
-                  ` : ''}
-                  <tr style="border-top: 1px solid #cbd5e1; background: #fff1f2;">
-                    <td style="border: none; padding: 8px; font-weight: bold; color:#9f1239;">TOTAL DEDUCTIONS</td>
-                    <td class="text-right font-mono font-bold" style="border: none; padding: 8px; font-size: 13px; color:#9f1239;">-PKR ${formatPKR(totDed)}</td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- ATTENDANCE METRICS BAR -->
-        <table style="width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px;">
-          <tr>
-            <td style="padding: 6px 10px; font-weight: bold;">Attendance: <span style="color:#059669; font-family:monospace;">${presentDays} Days</span></td>
-            <td style="padding: 6px 10px; font-weight: bold;">Leaves Taken: <span style="color:#334155; font-family:monospace;">${leaveDays} Days</span></td>
-            <td style="padding: 6px 10px; font-weight: bold;">Allowed Leaves: <span style="color:#334155; font-family:monospace;">${allowedLeaves} Days</span></td>
-            <td style="padding: 6px 10px; font-weight: bold;">LOP Days: <span style="color:#e11d48; font-family:monospace;">${lopDays} Days</span></td>
-            <td style="padding: 6px 10px; font-weight: bold;">Salary Days: <span style="color:#4f46e5; font-family:monospace;">${totalSalaryDays} Days</span></td>
-          </tr>
-        </table>
-
-        <!-- NET TAKE HOME PAYOUT CARD -->
-        <div class="payout-box">
-          <div style="font-size: 11px; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 1px;">NET PAYABLE SALARY DISBURSED</div>
-          <div class="payout-amount">PKR ${formatPKR(netPayable)}</div>
-          <div class="payout-words">"${amountInWords}"</div>
-        </div>
-
-        <!-- SIGNATURES FOOTER -->
-        <table class="sign-table">
-          <tr>
-            <td>
-              ${sarfrazSignBase64 ? `<img src="${sarfrazSignBase64}" style="height: 48px; max-width: 130px; object-fit: contain; margin-bottom: 3px;" />` : ''}
-              <div class="sign-line">Sarfaraz (Senior Accountant)<br/><span style="font-size:9px; color:#64748b;">Prepared By</span></div>
-            </td>
-            <td>
-              ${khurshidSignBase64 ? `<img src="${khurshidSignBase64}" style="height: 48px; max-width: 130px; object-fit: contain; margin-bottom: 3px;" />` : ''}
-              <div class="sign-line">Khurshid Anwar (Finance Director)<br/><span style="font-size:9px; color:#64748b;">Approved & Verified</span></div>
-            </td>
-            <td>
-              <div style="height: 48px;"></div>
-              <div class="sign-line">${employee.name}<br/><span style="font-size:9px; color:#64748b;">Employee Acknowledgement</span></div>
-            </td>
-          </tr>
-        </table>
-
-        <div class="footer-note">
-          This is an official computer-generated Salary Pay Slip issued by Pixx Technologies Pakistan. Document generated on ${new Date().toLocaleDateString('en-PK')} • Verified system record.
+        <div class="hdr-info">
+          <div class="hdr-title">PIXX TECHNOLOGIES PAKISTAN</div>
+          <div class="hdr-addr">Office 4C, 3rd Floor, Plaza 48-C, Main Boulevard, Bahria Town, Lahore &nbsp;|&nbsp; NTN: 8941205</div>
+          <div class="hdr-addr">Email: hr@pixxtech.com &nbsp;|&nbsp; Web: www.pixxtech.com</div>
         </div>
       </div>
+
+      <!-- GRADIENT BAR -->
+      <div class="grad"></div>
+
+      <!-- BANNER -->
+      <div class="banner">SALARY PAY SLIP &mdash; ${formattedTitleDate.toUpperCase()}</div>
+
+      <!-- EMPLOYEE INFO GRID -->
+      <table class="info-tbl">
+        <tr>
+          <td class="lbl">Employee Name</td>
+          <td class="val" style="color:#0f172a;font-size:12px;font-weight:800;">${employee.name}</td>
+          <td class="lbl">Employee Code</td>
+          <td class="val" style="font-family:monospace;">${employee.employeeCode || 'EMP-PIX'}</td>
+        </tr>
+        <tr>
+          <td class="lbl">Designation</td>
+          <td class="val" style="color:#4f46e5;">${employee.designation}</td>
+          <td class="lbl">Department</td>
+          <td class="val" style="color:#059669;">${employee.department}</td>
+        </tr>
+        <tr>
+          <td class="lbl">Pay Period</td>
+          <td class="val" style="font-family:monospace;">${formattedTitleDate}</td>
+          <td class="lbl">Payment Status</td>
+          <td class="val" style="color:#15803d;font-weight:800;">${savedPayroll?.paymentStatus || 'FINALIZED'}</td>
+        </tr>
+        <tr>
+          <td class="lbl">Bank Name</td>
+          <td class="val">${savedPayroll?.bankName || employee.bankName || 'Cash / Bank'}</td>
+          <td class="lbl">IBAN / Account</td>
+          <td class="val" style="font-family:monospace;">${savedPayroll?.ibanNumber || employee.ibanNumber || 'N/A'}</td>
+        </tr>
+      </table>
+
+      <!-- EARNINGS & DEDUCTIONS SECTION HEADERS -->
+      <div class="sec-hdr">
+        <div class="sec-earn">&#9654; Earnings Itemization</div>
+        <div class="sec-ded">Deductions Itemization &#9664;</div>
+      </div>
+
+      <!-- EARNINGS & DEDUCTIONS BODY -->
+      <div class="ed-wrap">
+        <!-- LEFT: EARNINGS -->
+        <div class="earn-cell">
+          <div class="ed-row ed-row-r">
+            <div class="ed-name">Basic Salary</div>
+            <div class="ed-amt earn-col">PKR ${formatPKR(basic)}</div>
+          </div>
+          ${allowance > 0 ? `
+          <div class="ed-row ed-row-r">
+            <div class="ed-name">Allowance<br/><span style="font-size:9px;color:#64748b;">(${allowanceReason || 'General'})</span></div>
+            <div class="ed-amt earn-col">+PKR ${formatPKR(allowance)}</div>
+          </div>` : ''}
+          ${overtime > 0 ? `
+          <div class="ed-row ed-row-r">
+            <div class="ed-name">Overtime (OT)</div>
+            <div class="ed-amt earn-col">PKR ${formatPKR(overtime)}</div>
+          </div>` : ''}
+          ${bonus > 0 ? `
+          <div class="ed-row ed-row-r">
+            <div class="ed-name">Bonus</div>
+            <div class="ed-amt earn-col">PKR ${formatPKR(bonus)}</div>
+          </div>` : ''}
+          ${otherReceipts > 0 ? `
+          <div class="ed-row ed-row-r">
+            <div class="ed-name">Other Receipts</div>
+            <div class="ed-amt earn-col">PKR ${formatPKR(otherReceipts)}</div>
+          </div>` : ''}
+          <div class="ed-row total-row">
+            <div class="ed-name">TOTAL GROSS SALARY</div>
+            <div class="ed-amt" style="color:#0f172a;">PKR ${formatPKR(gross)}</div>
+          </div>
+        </div>
+
+        <!-- RIGHT: DEDUCTIONS -->
+        <div class="ded-cell">
+          <div class="ed-row ed-row-r">
+            <div class="ed-name">Loan / Advance Salary</div>
+            <div class="ed-amt ded-col">-PKR ${formatPKR(loanDed)}</div>
+          </div>
+          <div class="ed-row ed-row-r">
+            <div class="ed-name">Loss of Pay (LOP)</div>
+            <div class="ed-amt ded-col">-PKR ${formatPKR(lopDed)}</div>
+          </div>
+          ${othDed > 0 ? `
+          <div class="ed-row ed-row-r">
+            <div class="ed-name">Other Deductions</div>
+            <div class="ed-amt ded-col">-PKR ${formatPKR(othDed)}</div>
+          </div>` : ''}
+          ${whtDed > 0 ? `
+          <div class="ed-row ed-row-r">
+            <div class="ed-name">WHT Tax</div>
+            <div class="ed-amt ded-col">-PKR ${formatPKR(whtDed)}</div>
+          </div>` : ''}
+          <div class="ed-row total-row">
+            <div class="ed-name" style="color:#9f1239;">TOTAL DEDUCTIONS</div>
+            <div class="ed-amt ded-col">-PKR ${formatPKR(totDed)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ATTENDANCE BAR -->
+      <table class="att-tbl">
+        <tr>
+          <td>
+            <span style="color:#64748b;font-size:9px;">Attendance</span>
+            <span class="att-val" style="color:#059669;">${presentDays} Days</span>
+          </td>
+          <td>
+            <span style="color:#64748b;font-size:9px;">Leaves Taken</span>
+            <span class="att-val" style="color:#334155;">${leaveDays} Days</span>
+          </td>
+          <td>
+            <span style="color:#64748b;font-size:9px;">Allowed Leaves</span>
+            <span class="att-val" style="color:#334155;">${allowedLeaves} Days</span>
+          </td>
+          <td>
+            <span style="color:#64748b;font-size:9px;">LOP Days</span>
+            <span class="att-val" style="color:#e11d48;">${lopDays} Days</span>
+          </td>
+          <td>
+            <span style="color:#64748b;font-size:9px;">Salary Days</span>
+            <span class="att-val" style="color:#4f46e5;">${totalSalaryDays} Days</span>
+          </td>
+        </tr>
+      </table>
+
+      <!-- NET PAYOUT BOX -->
+      <div class="payout">
+        <div class="payout-lbl">NET PAYABLE SALARY DISBURSED</div>
+        <div class="payout-amt">PKR ${formatPKR(netPayable)}</div>
+        <div class="payout-words">&ldquo;${amountInWords}&rdquo;</div>
+      </div>
+
+      <!-- SIGNATURES -->
+      <table class="sign-tbl">
+        <tr>
+          <td>
+            ${sarfrazSignBase64 ? `<img src="${sarfrazSignBase64}" alt="Sarfraz Sign" />` : '<div style="height:36px;"></div>'}
+            <div class="sign-line">Sarfraz Sb (Manager Operations)<br/><span>Prepared &amp; Checked By</span></div>
+          </td>
+          <td>
+            ${khurshidSignBase64 ? `<img src="${khurshidSignBase64}" alt="Khurshid Sign" />` : '<div style="height:36px;"></div>'}
+            <div class="sign-line">Khurshid Anwar (Finance Director)<br/><span>Approved &amp; Verified</span></div>
+          </td>
+          <td>
+            <div style="height:36px;"></div>
+            <div class="sign-line">${employee.name}<br/><span>Employee Acknowledgement</span></div>
+          </td>
+        </tr>
+      </table>
+
+      <!-- FOOTER -->
+      <div class="slip-footer">
+        Official Computer-Generated Salary Pay Slip &mdash; Pixx Technologies Pakistan &mdash; Generated: ${new Date().toLocaleDateString('en-PK')} &mdash; Confidential Record
+      </div>
+
     </body>
     </html>
     `;
@@ -1169,7 +1123,7 @@ export const paySingleSalary = async (req, res) => {
     const transaction = await createTransaction({
       date: pDate,
       voucherNo,
-      detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`,
+      detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) â€” Month ${month}`,
       categoryId: salariesCategory._id,
       drAccountId: clearingAccount._id,
       crAccountId: account._id,
@@ -1285,7 +1239,7 @@ export const payBulkSalary = async (req, res) => {
       const transaction = await createTransaction({
         date: pDate,
         voucherNo,
-        detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`,
+        detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) â€” Month ${month}`,
         categoryId: salariesCategory._id,
         drAccountId: clearingAccount._id,
         crAccountId: account._id,
@@ -1602,7 +1556,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
           background: #fff;
           font-size: 9.5px;
         }
-        /* ─── HEADER ─── */
+        /* â”€â”€â”€ HEADER â”€â”€â”€ */
         .page-header {
           display: flex;
           align-items: center;
@@ -1630,14 +1584,14 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
           color: #64748b;
           margin-top: 2px;
         }
-        /* ─── GRADIENT LINE ─── */
+        /* â”€â”€â”€ GRADIENT LINE â”€â”€â”€ */
         .grad-bar {
           height: 3px;
           background: linear-gradient(90deg, #059669 0%, #0284c7 50%, #6366f1 100%);
           border-radius: 2px;
           margin-bottom: 5px;
         }
-        /* ─── DOCUMENT TITLE STRIP ─── */
+        /* â”€â”€â”€ DOCUMENT TITLE STRIP â”€â”€â”€ */
         .doc-title {
           background: #0f172a;
           color: #fff;
@@ -1649,7 +1603,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
           border-radius: 5px;
           margin-bottom: 6px;
         }
-        /* ─── METRICS BAR ─── */
+        /* â”€â”€â”€ METRICS BAR â”€â”€â”€ */
         .metrics-bar {
           display: flex;
           gap: 5px;
@@ -1681,7 +1635,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
         .metric-val.indigo { color: #4f46e5; }
         .metric-val.gn { color: #166534; }
         .metric-val.am { color: #92400e; }
-        /* ─── SALARY TABLE ─── */
+        /* â”€â”€â”€ SALARY TABLE â”€â”€â”€ */
         .sal-table {
           width: 100%;
           border-collapse: collapse;
@@ -1709,7 +1663,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
         }
         .sal-table tbody tr:nth-child(even) td { background: #f8fafc; }
         .sal-table tbody tr:hover td { background: #eff6ff; }
-        /* ─── TOTALS ROW ─── */
+        /* â”€â”€â”€ TOTALS ROW â”€â”€â”€ */
         .sal-table .totals-row td {
           background: #0f172a !important;
           color: #fff !important;
@@ -1717,7 +1671,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
           font-size: 9px !important;
           border-color: #1e293b;
         }
-        /* ─── STATUS BADGES ─── */
+        /* â”€â”€â”€ STATUS BADGES â”€â”€â”€ */
         .badge-paid {
           display: inline-block;
           background: #dcfce7;
@@ -1738,7 +1692,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
           padding: 1px 5px;
           border-radius: 3px;
         }
-        /* ─── SIGNATURES ─── */
+        /* â”€â”€â”€ SIGNATURES â”€â”€â”€ */
         .sign-section {
           display: flex;
           justify-content: space-between;
@@ -1766,7 +1720,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
           color: #1e293b;
         }
         .sign-line span { font-size: 7px; color: #94a3b8; font-weight: 400; }
-        /* ─── FOOTER ─── */
+        /* â”€â”€â”€ FOOTER â”€â”€â”€ */
         .doc-footer {
           font-size: 7.5px;
           color: #94a3b8;
@@ -1775,7 +1729,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
           padding-top: 4px;
           margin-top: 6px;
         }
-        /* ─── UTILS ─── */
+        /* â”€â”€â”€ UTILS â”€â”€â”€ */
         .tr { text-align: right; }
         .tc { text-align: center; }
         .tl { text-align: left; }
@@ -1883,13 +1837,13 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
             </td>
             <td class="tr mono">${formatPKR(r.basic)}</td>
             <td class="tr">
-              <div class="mono fw7">${r.allowance > 0 ? formatPKR(r.allowance) : '—'}</div>
+              <div class="mono fw7">${r.allowance > 0 ? formatPKR(r.allowance) : 'â€”'}</div>
               ${r.allowanceReason ? `<div style="font-size:7px;color:#64748b;">${r.allowanceReason}</div>` : ''}
             </td>
             <td class="tr mono fw7 col-indigo">${formatPKR(r.gross)}</td>
-            <td class="tr mono ${r.loanDed > 0 ? 'col-red' : 'col-slate'}">${r.loanDed > 0 ? formatPKR(r.loanDed) : '—'}</td>
-            <td class="tr mono ${r.lopDed > 0 ? 'col-red' : 'col-slate'}">${r.lopDed > 0 ? formatPKR(r.lopDed) : '—'}</td>
-            <td class="tr mono ${r.othDed > 0 ? 'col-red' : 'col-slate'}">${r.othDed > 0 ? formatPKR(r.othDed) : '—'}</td>
+            <td class="tr mono ${r.loanDed > 0 ? 'col-red' : 'col-slate'}">${r.loanDed > 0 ? formatPKR(r.loanDed) : 'â€”'}</td>
+            <td class="tr mono ${r.lopDed > 0 ? 'col-red' : 'col-slate'}">${r.lopDed > 0 ? formatPKR(r.lopDed) : 'â€”'}</td>
+            <td class="tr mono ${r.othDed > 0 ? 'col-red' : 'col-slate'}">${r.othDed > 0 ? formatPKR(r.othDed) : 'â€”'}</td>
             <td class="tr mono fw9 col-green" style="font-size:9.5px;">Rs. ${formatPKR(r.netPayable)}</td>
             <td class="tc">
               <span class="${r.status === 'PAID' ? 'badge-paid' : 'badge-pending'}">${r.status}</span>
@@ -2007,7 +1961,7 @@ export const getEmployeeLedger = async (req, res) => {
         month: p.payrollMonth,
         type: 'SALARY_ACCRUAL',
         voucherNo: p.voucherNo || `ACCRUAL-${p.payrollMonth}`,
-        detail: `Monthly Salary Accrual — ${p.payrollMonth}`,
+        detail: `Monthly Salary Accrual â€” ${p.payrollMonth}`,
         accruedAmount: netPay,
         paidAmount: 0,
         status: p.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',

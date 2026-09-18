@@ -842,41 +842,39 @@ export const payrollAPI = {
       params: { month },
       responseType: 'blob',
     });
+
+    // Detect JSON error blob
+    const contentType = res.headers['content-type'] || '';
+    if (contentType.includes('application/json') || !contentType.includes('application/pdf')) {
+      const text = await res.data.text();
+      let msg = 'PDF generation failed on the server.';
+      try { msg = JSON.parse(text).message || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+
     const blob = new Blob([res.data], { type: 'application/pdf' });
     const blobUrl = window.URL.createObjectURL(blob);
 
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    iframe.style.visibility = 'hidden';
-    iframe.src = blobUrl;
-
-    document.body.appendChild(iframe);
-
-    return new Promise((resolve) => {
-      iframe.onload = () => {
+    // Open in new tab — user can print from the browser's built-in PDF viewer
+    const newTab = window.open(blobUrl, '_blank');
+    if (!newTab) {
+      // Popup blocked — fallback: trigger download with print-hint name
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `Salary_Slip_Print_${month}.pdf`;
+      link.click();
+    } else {
+      // Auto-trigger print after PDF loads
+      newTab.addEventListener('load', () => {
         setTimeout(() => {
-          try {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-          } catch (e) {
-            console.error('Iframe print failed, opening blob tab:', e);
-            window.open(blobUrl, '_blank');
-          }
-          setTimeout(() => {
-            if (document.body.contains(iframe)) {
-              document.body.removeChild(iframe);
-            }
-            window.URL.revokeObjectURL(blobUrl);
-            resolve(true);
-          }, 60000);
-        }, 500);
-      };
-    });
+          try { newTab.print(); } catch (e) { /* user can print manually */ }
+        }, 800);
+      });
+    }
+
+    // Cleanup blob URL after delay
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 30000);
+    return true;
   },
   downloadMonthlySalarySheetPDF: async (month = '2026-08') => {
     const res = await api.get('/staff/payroll/monthly-sheet-pdf', {
@@ -923,38 +921,23 @@ export const payrollAPI = {
     const blob = new Blob([res.data], { type: 'application/pdf' });
     const blobUrl = window.URL.createObjectURL(blob);
 
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    iframe.style.visibility = 'hidden';
-    iframe.src = blobUrl;
-
-    document.body.appendChild(iframe);
-
-    return new Promise((resolve) => {
-      iframe.onload = () => {
+    // Open PDF in new tab — triggers browser's native PDF viewer with print option
+    const newTab = window.open(blobUrl, '_blank');
+    if (!newTab) {
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `Monthly_Salary_Sheet_${month}.pdf`;
+      link.click();
+    } else {
+      newTab.addEventListener('load', () => {
         setTimeout(() => {
-          try {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-          } catch (e) {
-            console.error('Iframe print failed, opening blob tab:', e);
-            window.open(blobUrl, '_blank');
-          }
-          setTimeout(() => {
-            if (document.body.contains(iframe)) {
-              document.body.removeChild(iframe);
-            }
-            window.URL.revokeObjectURL(blobUrl);
-            resolve(true);
-          }, 60000);
-        }, 500);
-      };
-    });
+          try { newTab.print(); } catch (e) { /* user can print manually */ }
+        }, 800);
+      });
+    }
+
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 30000);
+    return true;
   },
 };
 
