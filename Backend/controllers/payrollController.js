@@ -998,11 +998,11 @@ export const generateSalarySlipPDF = async (req, res) => {
         <tr>
           <td>
             ${sarfrazSignBase64 ? `<img src="${sarfrazSignBase64}" alt="Sarfraz Sign" />` : '<div style="height:36px;"></div>'}
-            <div class="sign-line">Sarfraz Sb (Manager Operations)<br/><span>Prepared &amp; Checked By</span></div>
+            <div class="sign-line">Sarfraz (Accountant)<br/><span>Prepared &amp; Checked By</span></div>
           </td>
           <td>
             ${khurshidSignBase64 ? `<img src="${khurshidSignBase64}" alt="Khurshid Sign" />` : '<div style="height:36px;"></div>'}
-            <div class="sign-line">Khurshid Anwar (Finance Director)<br/><span>Approved &amp; Verified</span></div>
+            <div class="sign-line">Khurshid Anwar (Assistant Manager)<br/><span>Approved &amp; Verified</span></div>
           </td>
           <td>
             <div style="height:36px;"></div>
@@ -1697,12 +1697,13 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
           padding: 1px 5px;
           border-radius: 3px;
         }
-        /* â”€â”€â”€ SIGNATURES â”€â”€â”€ */
+        /* ─── SIGNATURES ─── */
         .sign-section {
           display: flex;
-          justify-content: space-between;
-          margin-top: 8px;
-          gap: 20px;
+          justify-content: space-around;
+          max-width: 650px;
+          margin: 10px auto 0 auto;
+          gap: 60px;
         }
         .sign-block {
           flex: 1;
@@ -1878,16 +1879,12 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
       <!-- SIGNATURES -->
       <div class="sign-section">
         <div class="sign-block">
-          <div style="height:32px;"></div>
-          <div class="sign-line">Prepared By: Human Resources Manager<br/><span>Payroll &amp; Attendance Verified</span></div>
-        </div>
-        <div class="sign-block">
           ${sarfrazSignBase64 ? `<img src="${sarfrazSignBase64}" alt="Sarfraz Sign" />` : '<div style="height:32px;"></div>'}
-          <div class="sign-line">Sarfraz Sb (Manager Operations)<br/><span>Checked &amp; Disbursed</span></div>
+          <div class="sign-line">Sarfraz (Accountant)<br/><span>Prepared &amp; Disbursed</span></div>
         </div>
         <div class="sign-block">
           ${khurshidSignBase64 ? `<img src="${khurshidSignBase64}" alt="Khurshid Sign" />` : '<div style="height:32px;"></div>'}
-          <div class="sign-line">Khurshid Anwar (Finance Director)<br/><span>Approved &amp; Executive Verification</span></div>
+          <div class="sign-line">Khurshid Anwar (Assistant Manager)<br/><span>Approved &amp; Verified</span></div>
         </div>
       </div>
 
