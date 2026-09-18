@@ -1,4 +1,4 @@
-﻿import fs from 'fs';
+import fs from 'fs';
 import path from 'path';
 import ExcelJS from 'exceljs';
 import Employee from '../models/Employee.js';
@@ -50,54 +50,51 @@ const formatPKR = (val) => {
 };
 
 /**
- * Smart Puppeteer launcher â€” works on Vercel (serverless) AND local Windows.
- * - On Vercel: uses @sparticuz/chromium (bundled headless Chromium for serverless)
- * - On local Windows: finds Edge or Chrome executable automatically
+ * Helper to locate Edge or Chrome browser executable on Windows/Server
  */
-const launchPuppeteer = async () => {
-  const puppeteer = (await import('puppeteer-core')).default;
-
-  // â”€â”€ Vercel / serverless environment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.RAILWAY_ENVIRONMENT) {
-    const chromium = (await import('@sparticuz/chromium')).default;
-    chromium.setHeadlessMode = true;
-    chromium.setGraphicsMode = false;
-
-    const browser = await puppeteer.launch({
-      args: [
-        ...chromium.args,
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-sandbox',
-        '--single-process',
-      ],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    });
-    return browser;
-  }
-
-  // â”€â”€ Local Windows development â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const localPaths = [
+const getBrowserExecutablePath = () => {
+  const commonPaths = [
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   ];
 
-  let executablePath;
-  for (const p of localPaths) {
-    if (fs.existsSync(p)) { executablePath = p; break; }
+  for (const p of commonPaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
   }
-
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
-    ...(executablePath ? { executablePath } : {}),
-  });
-  return browser;
+  return undefined;
 };
+
+/**
+ * Smart Puppeteer launcher — works on Vercel (serverless via @sparticuz/chromium)
+ * and on local Windows machines (via installed Edge / Chrome).
+ */
+const launchPuppeteer = async () => {
+  const chromium = (await import('@sparticuz/chromium')).default;
+  const puppeteer = (await import('puppeteer-core')).default;
+
+  const localExecutablePath = getBrowserExecutablePath();
+  const executablePath = localExecutablePath || (await chromium.executablePath());
+
+  const launchOptions = {
+    headless: true,
+    args: localExecutablePath
+      ? [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ]
+      : chromium.args,
+    executablePath,
+  };
+
+  return await puppeteer.launch(launchOptions);
+};
+
 
 /**
  * @desc    Get / Calculate monthly payroll records for YYYY-MM
@@ -1037,8 +1034,6 @@ export const generateSalarySlipPDF = async (req, res) => {
         printBackground: true,
       });
 
-      await browser.close();
-
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `inline; filename=Salary_Slip_${employee.name.replace(/\s+/g, '_')}_${month}.pdf`);
       return res.status(200).send(pdfBuffer);
@@ -1048,6 +1043,10 @@ export const generateSalarySlipPDF = async (req, res) => {
         success: false,
         message: `PDF generation failed: ${pdfErr.message}`,
       });
+    } finally {
+      if (browser) {
+        await browser.close().catch((err) => console.error('[Puppeteer Cleanup Error]:', err.message));
+      }
     }
   } catch (error) {
     console.error('[Generate Salary Slip PDF Error]:', error);

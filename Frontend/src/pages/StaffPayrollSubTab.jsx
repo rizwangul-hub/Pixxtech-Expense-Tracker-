@@ -224,8 +224,10 @@ export const StaffPayrollSubTab = () => {
       await payrollAPI.downloadSalarySlipPDF(employeeId, selectedMonth, name);
     } catch (err) {
       console.error('Download Salary Slip Error:', err);
-      const url = payrollAPI.downloadSalarySlipPDFUrl(employeeId, selectedMonth);
-      window.open(url, '_blank');
+      setMsg({
+        type: 'error',
+        text: err?.message || 'Failed to download Salary Slip PDF.',
+      });
     }
   };
 
@@ -234,8 +236,10 @@ export const StaffPayrollSubTab = () => {
       await payrollAPI.printSalarySlipPDF(employeeId, selectedMonth);
     } catch (err) {
       console.error('Print Salary Slip Error:', err);
-      const url = payrollAPI.downloadSalarySlipPDFUrl(employeeId, selectedMonth);
-      window.open(url, '_blank');
+      setMsg({
+        type: 'error',
+        text: err?.message || 'Failed to print Salary Slip PDF.',
+      });
     }
   };
 
