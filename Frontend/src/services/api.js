@@ -883,6 +883,17 @@ export const payrollAPI = {
       params: { month },
       responseType: 'blob',
     });
+
+    // Check if backend returned an error JSON instead of a real PDF
+    const contentType = res.headers['content-type'] || '';
+    if (contentType.includes('application/json') || !contentType.includes('application/pdf')) {
+      // Read the error message from the blob
+      const text = await res.data.text();
+      let msg = 'PDF generation failed on the server.';
+      try { msg = JSON.parse(text).message || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+
     const blob = new Blob([res.data], { type: 'application/pdf' });
     const downloadUrl = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -899,6 +910,16 @@ export const payrollAPI = {
       params: { month },
       responseType: 'blob',
     });
+
+    // Check if backend returned an error JSON instead of a real PDF
+    const contentType = res.headers['content-type'] || '';
+    if (contentType.includes('application/json') || !contentType.includes('application/pdf')) {
+      const text = await res.data.text();
+      let msg = 'PDF generation failed on the server.';
+      try { msg = JSON.parse(text).message || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+
     const blob = new Blob([res.data], { type: 'application/pdf' });
     const blobUrl = window.URL.createObjectURL(blob);
 

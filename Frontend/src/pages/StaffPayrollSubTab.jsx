@@ -195,7 +195,10 @@ export const StaffPayrollSubTab = () => {
       await payrollAPI.downloadMonthlySalarySheetPDF(selectedMonth);
     } catch (err) {
       console.error('Download Monthly PDF Error:', err);
-      setMsg({ type: 'error', text: 'Failed to download Monthly Salary Sheet PDF.' });
+      setMsg({
+        type: 'error',
+        text: err?.message || 'Failed to download Monthly Salary Sheet PDF.',
+      });
     } finally {
       setDownloadingMonthlyPDF(false);
     }
@@ -207,7 +210,10 @@ export const StaffPayrollSubTab = () => {
       await payrollAPI.printMonthlySalarySheetPDF(selectedMonth);
     } catch (err) {
       console.error('Print Monthly PDF Error:', err);
-      setMsg({ type: 'error', text: 'Failed to print Monthly Salary Sheet PDF.' });
+      setMsg({
+        type: 'error',
+        text: err?.message || 'Failed to print Monthly Salary Sheet PDF.',
+      });
     } finally {
       setDownloadingMonthlyPDF(false);
     }

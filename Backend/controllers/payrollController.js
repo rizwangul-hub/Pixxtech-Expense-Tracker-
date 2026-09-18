@@ -1948,9 +1948,12 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename=Monthly_Salary_Sheet_${month}.pdf`);
       return res.status(200).send(pdfBuffer);
     } catch (pdfErr) {
-      console.warn('[Puppeteer Warning]: Falling back to HTML for Monthly Salary Sheet:', pdfErr.message);
-      res.setHeader('Content-Type', 'text/html');
-      return res.status(200).send(htmlContent);
+      console.error('[Puppeteer Error] Monthly Salary Sheet PDF failed:', pdfErr.message);
+      // Return a proper error — do NOT send HTML as PDF blob, that causes "Failed to load PDF document"
+      return res.status(500).json({
+        success: false,
+        message: `PDF generation failed: ${pdfErr.message}. Please ensure the backend server has access to Chrome/Edge browser.`,
+      });
     }
   } catch (error) {
     console.error('[Generate Monthly Salary Sheet PDF Error]:', error);
