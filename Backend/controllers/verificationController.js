@@ -228,7 +228,17 @@ export const getVerificationSummary = async (req, res) => {
  */
 export const getMySubmissions = async (req, res) => {
   try {
-    const entries = await PendingEntry.find({ submittedBy: req.user._id })
+    const query =
+      req.user.role === 'DATA_ENTRY'
+        ? {
+            $or: [
+              { submittedBy: req.user._id },
+              { status: { $in: ['PENDING_VERIFICATION', 'EDITED'] } },
+            ],
+          }
+        : { submittedBy: req.user._id };
+
+    const entries = await PendingEntry.find(query)
       .populate('propertyId', 'plazaName')
       .populate('tenantId', 'fullName')
       .populate('categoryId', 'name')
