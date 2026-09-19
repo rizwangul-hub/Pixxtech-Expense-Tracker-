@@ -2,7 +2,7 @@ import Transaction from '../models/Transaction.js';
 import PendingEntry from '../models/PendingEntry.js';
 import Account from '../models/Account.js';
 import MonthlyReport from '../models/MonthlyReport.js';
-import { createTransaction, round2 } from '../services/ledgerService.js';
+import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
 import { validateExpenseClassification } from '../services/expenseClassificationService.js';
 
@@ -211,34 +211,18 @@ export const getMyEntries = async (req, res) => {
  */
 export const suggestVoucherNumber = async (req, res) => {
   try {
-    const { month } = req.query; // optional YYYY-MM
-    const query = {};
-
+    const { date, month } = req.query;
+    let targetDate = date ? new Date(date) : new Date();
     if (month && /^\d{4}-\d{2}$/.test(month)) {
       const [y, m] = month.split('-').map(Number);
-      query.date = {
-        $gte: new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0)),
-        $lte: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)),
-      };
+      targetDate = new Date(Date.UTC(y, m - 1, 1));
     }
 
-    // Retrieve all voucher numbers to extract max numeric value
-    const vouchers = await Transaction.find(query, { voucherNo: 1 }).lean();
-
-    let maxNumber = 3000; // Baseline starting voucher number for Pixx Technologies
-    for (const v of vouchers) {
-      const num = parseInt(v.voucherNo.replace(/\D/g, ''), 10);
-      if (!isNaN(num) && num > maxNumber) {
-        maxNumber = num;
-      }
-    }
-
-    const nextVoucherNo = String(maxNumber + 1);
+    const nextVoucherNo = await suggestNextVoucherNumber(targetDate);
 
     return res.status(200).json({
       success: true,
       suggestedVoucherNo: nextVoucherNo,
-      totalVouchersInPeriod: vouchers.length,
     });
   } catch (error) {
     console.error('Error suggesting voucher number:', error);

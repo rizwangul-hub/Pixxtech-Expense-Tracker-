@@ -199,8 +199,8 @@ export const transactionsAPI = {
     const res = await api.get('/transactions/my-entries');
     return res.data;
   },
-  suggestVoucherNo: async (month) => {
-    const params = month ? { month } : {};
+  suggestVoucherNo: async (arg) => {
+    const params = typeof arg === 'string' ? (arg.includes('-') && arg.length <= 7 ? { month: arg } : { date: arg }) : (arg || {});
     const res = await api.get('/transactions/suggest-vn', { params });
     return res.data;
   },

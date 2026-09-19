@@ -76,10 +76,10 @@ export const VoucherEntryForm = ({
   const units = selectedProperty?.units || [];
 
   // Fetch next sequential Voucher Number
-  const fetchNextVn = async () => {
+  const fetchNextVn = async (targetDate = date) => {
     try {
       setFetchingVn(true);
-      const res = await transactionsAPI.suggestVoucherNo();
+      const res = await transactionsAPI.suggestVoucherNo(targetDate);
       if (res.suggestedVoucherNo) {
         setVoucherNo(res.suggestedVoucherNo);
       }
@@ -91,8 +91,8 @@ export const VoucherEntryForm = ({
   };
 
   useEffect(() => {
-    fetchNextVn();
-  }, []);
+    fetchNextVn(date);
+  }, [date]);
 
   useEffect(() => {
     const activeScopeCategories = categories.filter((c) => {

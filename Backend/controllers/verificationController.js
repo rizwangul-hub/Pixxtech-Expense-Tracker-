@@ -8,7 +8,7 @@ import Property from '../models/Property.js';
 import Tenant from '../models/Tenant.js';
 import Category from '../models/Category.js';
 import Account from '../models/Account.js';
-import { createTransaction, round2 } from '../services/ledgerService.js';
+import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { validateExpenseClassification } from '../services/expenseClassificationService.js';
@@ -692,11 +692,14 @@ export const createPendingEntry = async (req, res) => {
       finalUnitId = classificationResult.unitId;
     }
 
+    const entryDate = date ? new Date(date) : new Date();
+    const finalVoucherNo = voucherNo && voucherNo.trim() ? voucherNo.trim() : await suggestNextVoucherNumber(entryDate);
+
     const pending = await PendingEntry.create({
       entryType,
       amount: numAmount,
-      date: date ? new Date(date) : new Date(),
-      voucherNo: voucherNo ? voucherNo.trim() : '',
+      date: entryDate,
+      voucherNo: finalVoucherNo,
       rentMonth: rentMonth || null,
       propertyId: finalPropertyId,
       unitId: finalUnitId,

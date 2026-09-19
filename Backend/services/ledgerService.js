@@ -5,6 +5,7 @@ import Category from '../models/Category.js';
 import Property from '../models/Property.js';
 import Voucher from '../models/Voucher.js';
 import MonthlyReport from '../models/MonthlyReport.js';
+import PendingEntry from '../models/PendingEntry.js';
 import {
   validateExpenseClassification,
   validateExpenseCategory,
@@ -639,29 +640,53 @@ export const getHeadWiseExpenseReport = async (year, month) => {
 };
 
 /**
- * Suggest next sequential numeric voucher number
+ * Automatically generate formatted Voucher Number in the format:
+ * PT-{000 entry number}-{month(MM)}-{year(YY)}
+ * e.g., PT-001-09-26, PT-002-09-26, PT-003-09-26...
+ * Entry number increments automatically after every entry.
  */
-export const suggestNextVoucherNumber = async () => {
-  const [vouchers, txs] = await Promise.all([
-    Voucher.find({}, { voucherNumber: 1 }).lean(),
-    Transaction.find({}, { voucherNo: 1 }).lean(),
+export const suggestNextVoucherNumber = async (dateInput = null) => {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+
+  const monthStr = String(validDate.getMonth() + 1).padStart(2, '0');
+  const yearStr = String(validDate.getFullYear()).slice(-2);
+
+  const [vouchers, txs, pendings] = await Promise.all([
+    Voucher.find({}, { voucherNumber: 1 }).lean().catch(() => []),
+    Transaction.find({}, { voucherNo: 1 }).lean().catch(() => []),
+    PendingEntry.find({}, { voucherNo: 1 }).lean().catch(() => []),
   ]);
 
-  let maxNum = 3000; // Standard Pixx baseline voucher number
-  for (const v of vouchers) {
-    if (v.voucherNumber) {
-      const num = parseInt(v.voucherNumber.replace(/\D/g, ''), 10);
-      if (!isNaN(num) && num > maxNum) maxNum = num;
-    }
-  }
-  for (const t of txs) {
-    if (t.voucherNo) {
-      const num = parseInt(t.voucherNo.replace(/\D/g, ''), 10);
-      if (!isNaN(num) && num > maxNum) maxNum = num;
-    }
-  }
+  let maxNum = 0;
 
-  return String(maxNum + 1);
+  const processVn = (vn) => {
+    if (!vn || typeof vn !== 'string') return;
+    const trimmed = vn.trim();
+
+    // Match PT-001-09-26 or PT-001
+    const ptMatch = trimmed.match(/^PT-(\d+)/i);
+    if (ptMatch && ptMatch[1]) {
+      const num = parseInt(ptMatch[1], 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+      return;
+    }
+
+    // Match numeric portion of legacy voucher numbers (excluding large timestamps)
+    const genericNum = parseInt(trimmed.replace(/\D/g, ''), 10);
+    if (!isNaN(genericNum) && genericNum > maxNum && genericNum < 99999) {
+      maxNum = genericNum;
+    }
+  };
+
+  for (const v of vouchers) processVn(v.voucherNumber);
+  for (const t of txs) processVn(t.voucherNo);
+  for (const p of pendings) processVn(p.voucherNo);
+
+  const nextSeq = maxNum + 1;
+  const paddedSeq = String(nextSeq).padStart(3, '0');
+
+  return `PT-${paddedSeq}-${monthStr}-${yearStr}`;
 };
 
 /**
