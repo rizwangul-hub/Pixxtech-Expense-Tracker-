@@ -297,25 +297,53 @@ export const savePayroll = async (req, res) => {
         { upsert: true, returnDocument: 'after', runValidators: true }
       );
 
-      // If loan deduction was recorded, update employee loan balance
-      if (loanDed > 0) {
-        const emp = await Employee.findById(rec.employeeId);
-        if (emp && emp.loanBalance > 0) {
-          const prevBal = emp.loanBalance;
-          const newBal = Math.max(0, prevBal - loanDed);
-          emp.loanBalance = newBal;
-          await emp.save();
+      // Manage employee loan deduction & StaffLoan ledger accurately
+      const existingLoanRecord = await StaffLoan.findOne({
+        employeeId: rec.employeeId,
+        payrollMonth: month,
+        type: 'REPAYMENT',
+      });
 
-          await StaffLoan.create({
-            employeeId: emp._id,
-            type: 'REPAYMENT',
-            amount: loanDed,
-            previousBalance: prevBal,
-            newBalance: newBal,
-            payrollMonth: month,
-            description: `Salary Loan Deduction for ${month}`,
-            createdBy: req.user?._id || null,
-          });
+      const emp = await Employee.findById(rec.employeeId);
+      if (emp) {
+        if (loanDed > 0) {
+          if (existingLoanRecord) {
+            // Adjust balance for difference in loan deduction
+            const prevDeducted = existingLoanRecord.amount || 0;
+            const diff = loanDed - prevDeducted;
+            const newBal = Math.max(0, emp.loanBalance - diff);
+            emp.loanBalance = newBal;
+            await emp.save();
+
+            existingLoanRecord.amount = loanDed;
+            existingLoanRecord.previousBalance = emp.loanBalance + loanDed;
+            existingLoanRecord.newBalance = emp.loanBalance;
+            existingLoanRecord.description = `Salary Loan Deduction for ${month}`;
+            await existingLoanRecord.save();
+          } else {
+            // New loan deduction
+            const prevBal = emp.loanBalance || 0;
+            const newBal = Math.max(0, prevBal - loanDed);
+            emp.loanBalance = newBal;
+            await emp.save();
+
+            await StaffLoan.create({
+              employeeId: emp._id,
+              type: 'REPAYMENT',
+              amount: loanDed,
+              previousBalance: prevBal,
+              newBalance: newBal,
+              payrollMonth: month,
+              description: `Salary Loan Deduction for ${month}`,
+              createdBy: req.user?._id || null,
+            });
+          }
+        } else if (existingLoanRecord) {
+          // Loan deduction removed -> restore loan balance & remove repayment record
+          const prevDeducted = existingLoanRecord.amount || 0;
+          emp.loanBalance = (emp.loanBalance || 0) + prevDeducted;
+          await emp.save();
+          await StaffLoan.deleteOne({ _id: existingLoanRecord._id });
         }
       }
 
@@ -706,11 +734,18 @@ export const generateSalarySlipPDF = async (req, res) => {
       ? savedPayroll.grossSalary
       : basic + allowance + overtime + bonus + leaveEncashment + otherReceipts;
 
-    const loanDed = savedPayroll ? savedPayroll.loanDeduction : 0;
-    const lopDed = savedPayroll ? savedPayroll.lopDeduction : 0;
-    const othDed = savedPayroll ? savedPayroll.otherDeduction : 0;
-    const whtDed = savedPayroll ? savedPayroll.whtDeduction || 0 : 0;
-    const totDed = loanDed + lopDed + othDed + whtDed;
+    const reqLoanDed = req.query.loanDeduction !== undefined ? Number(req.query.loanDeduction) : undefined;
+    const reqLopDed = req.query.lopDeduction !== undefined ? Number(req.query.lopDeduction) : undefined;
+
+    const loanDed = reqLoanDed !== undefined && !isNaN(reqLoanDed)
+      ? reqLoanDed
+      : (savedPayroll ? (savedPayroll.loanDeduction || 0) : 0);
+    const lopDed = reqLopDed !== undefined && !isNaN(reqLopDed)
+      ? reqLopDed
+      : (savedPayroll ? (savedPayroll.lopDeduction || 0) : 0);
+    const othDed = savedPayroll ? (savedPayroll.otherDeduction || 0) : 0;
+    const whtDed = savedPayroll ? (savedPayroll.whtDeduction || 0) : 0;
+    const totDed = (Number(loanDed) || 0) + (Number(lopDed) || 0) + (Number(othDed) || 0) + (Number(whtDed) || 0);
     const netPayable = Math.max(0, gross - totDed);
 
     // Attendance metrics
@@ -935,14 +970,16 @@ export const generateSalarySlipPDF = async (req, res) => {
 
         <!-- RIGHT: DEDUCTIONS -->
         <div class="ded-cell">
+          ${loanDed > 0 ? `
           <div class="ed-row ed-row-r">
-            <div class="ed-name">Loan / Advance Salary</div>
+            <div class="ed-name">Loan / Advance Deduction</div>
             <div class="ed-amt ded-col">-PKR ${formatPKR(loanDed)}</div>
-          </div>
+          </div>` : ''}
+          ${lopDed > 0 ? `
           <div class="ed-row ed-row-r">
-            <div class="ed-name">Loss of Pay (LOP)</div>
+            <div class="ed-name">Absent / Leave Cut (LOP)</div>
             <div class="ed-amt ded-col">-PKR ${formatPKR(lopDed)}</div>
-          </div>
+          </div>` : ''}
           ${othDed > 0 ? `
           <div class="ed-row ed-row-r">
             <div class="ed-name">Other Deductions</div>
@@ -952,6 +989,11 @@ export const generateSalarySlipPDF = async (req, res) => {
           <div class="ed-row ed-row-r">
             <div class="ed-name">WHT Tax</div>
             <div class="ed-amt ded-col">-PKR ${formatPKR(whtDed)}</div>
+          </div>` : ''}
+          ${totDed === 0 ? `
+          <div class="ed-row ed-row-r">
+            <div class="ed-name">Nil (No Deductions)</div>
+            <div class="ed-amt" style="color:#059669;font-weight:700;">PKR 0</div>
           </div>` : ''}
           <div class="ed-row total-row">
             <div class="ed-name" style="color:#9f1239;">TOTAL DEDUCTIONS</div>

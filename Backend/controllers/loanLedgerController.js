@@ -24,8 +24,11 @@ export const getLoanLedger = async (req, res) => {
       ];
     }
 
-    // fetch loans
-    const loans = await StaffLoan.find(loanFilter).sort({ date: 1 }).lean();
+    // fetch loans with operator details
+    const loans = await StaffLoan.find(loanFilter)
+      .populate('createdBy', 'name email')
+      .sort({ date: 1 })
+      .lean();
 
     // group by employee
     const ledgerMap = new Map();
@@ -33,29 +36,36 @@ export const getLoanLedger = async (req, res) => {
       const empId = loan.employeeId.toString();
       if (!ledgerMap.has(empId)) ledgerMap.set(empId, []);
       ledgerMap.get(empId).push({
-        date: loan.date,
+        _id: loan._id,
+        date: loan.date || loan.createdAt,
         type: loan.type,
         amount: loan.amount,
-        description: loan.description || loan.type,
-        balance: loan.newBalance,
+        previousBalance: loan.previousBalance,
+        newBalance: loan.newBalance,
+        payrollMonth: loan.payrollMonth || '',
+        description: loan.description || (loan.type === 'DISBURSEMENT' ? 'Advance Salary Issued' : 'Loan Repayment / Deduction'),
+        createdBy: loan.createdBy ? { _id: loan.createdBy._id, name: loan.createdBy.name, email: loan.createdBy.email } : null,
+        operatorName: loan.createdBy?.name || 'System Operator',
       });
     }
 
     // attach employee details
     const employeeIds = Array.from(ledgerMap.keys());
-    const employees = await Employee.find({ _id: { $in: employeeIds } }, { name: 1 }).lean();
+    const employees = await Employee.find({ _id: { $in: employeeIds } }, { name: 1, designation: 1, department: 1, loanBalance: 1 }).lean();
     const employeeMap = new Map();
-    employees.forEach((e) => employeeMap.set(e._id.toString(), e.name));
+    employees.forEach((e) => employeeMap.set(e._id.toString(), e));
 
     const result = [];
     for (const [empId, entries] of ledgerMap.entries()) {
-      const name = employeeMap.get(empId) || '';
+      const empInfo = employeeMap.get(empId) || {};
       const totalDisbursed = entries.filter(e => e.type === 'DISBURSEMENT').reduce((s, e) => s + e.amount, 0);
       const totalRepaid = entries.filter(e => e.type === 'REPAYMENT').reduce((s, e) => s + e.amount, 0);
-      const outstanding = totalDisbursed - totalRepaid;
+      const outstanding = empInfo.loanBalance !== undefined ? empInfo.loanBalance : Math.max(0, totalDisbursed - totalRepaid);
       result.push({
         employeeId: empId,
-        employeeName: name,
+        employeeName: empInfo.name || '',
+        designation: empInfo.designation || '',
+        department: empInfo.department || '',
         totalDisbursed,
         totalRepaid,
         outstandingBalance: outstanding,

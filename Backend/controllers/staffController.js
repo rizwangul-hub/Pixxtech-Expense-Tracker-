@@ -479,7 +479,11 @@ export const getLoans = async (req, res) => {
     const query = {};
     if (employeeId) query.employeeId = employeeId;
 
-    const loans = await StaffLoan.find(query).populate('employeeId', 'name designation employeeCode department').sort({ createdAt: -1 }).lean();
+    const loans = await StaffLoan.find(query)
+      .populate('employeeId', 'name designation employeeCode department')
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
     return apiSuccess(res, loans, `Fetched ${loans.length} loan records.`);
   } catch (error) {
     return apiError(res, 'Failed to fetch loan records.', 500);
