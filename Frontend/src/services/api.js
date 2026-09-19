@@ -692,6 +692,10 @@ export const staffAPI = {
     const res = await api.put(`/staff/employees/${id}`, data);
     return res.data;
   },
+  deleteEmployee: async (id) => {
+    const res = await api.delete(`/staff/employees/${id}`);
+    return res.data;
+  },
   recordLoan: async (id, data) => {
     const res = await api.post(`/staff/employees/${id}/loan`, data);
     return res.data;

@@ -321,6 +321,39 @@ export const updateEmployee = async (req, res) => {
 };
 
 /**
+ * @desc    Delete an employee profile
+ * @route   DELETE /api/staff/employees/:id
+ * @access  Private
+ */
+export const deleteEmployee = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const employee = await Employee.findById(id);
+
+    if (!employee) {
+      return apiError(res, 'Employee not found.', 404);
+    }
+
+    const oldVal = employee.toObject();
+    await Employee.findByIdAndDelete(id);
+
+    await logStaffAudit(
+      req,
+      'EMPLOYEE_DELETED',
+      `Deleted employee profile '${employee.name}' (${employee.designation})`,
+      id,
+      oldVal,
+      null
+    );
+
+    return apiSuccess(res, null, `Employee '${employee.name}' deleted successfully.`);
+  } catch (error) {
+    console.error('[Delete Employee Error]:', error);
+    return apiError(res, error.message || 'Failed to delete employee.', 500);
+  }
+};
+
+/**
  * Staff Locations Endpoints
  */
 export const getLocations = async (req, res) => {

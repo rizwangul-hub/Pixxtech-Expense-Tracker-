@@ -8,6 +8,7 @@ import {
   Phone,
   DollarSign,
   Edit2,
+  Trash2,
   CheckCircle,
   X,
   Sparkles,
@@ -42,7 +43,28 @@ export const StaffDirectorySubTab = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmp, setEditingEmp] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const handleDeleteEmployee = async (emp) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete employee "${emp.name}"? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    try {
+      setDeletingId(emp._id);
+      await staffAPI.deleteEmployee(emp._id);
+      if (isModalOpen) setIsModalOpen(false);
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete employee.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const [formData, setFormData] = useState({
     name: '',
@@ -251,13 +273,23 @@ export const StaffDirectorySubTab = ({
                     <p className="text-xs font-semibold text-slate-400 mt-0.5">{emp.designation}</p>
                   </div>
 
-                  <button
-                    onClick={() => handleOpenEdit(emp)}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-                    title="Edit Employee Profile"
-                  >
-                    <Edit2 size={13} />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleOpenEdit(emp)}
+                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                      title="Edit Employee Profile"
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteEmployee(emp)}
+                      disabled={deletingId === emp._id}
+                      className="p-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800/60 text-rose-300 transition disabled:opacity-50"
+                      title="Delete Employee Profile"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Salary Package Breakdown */}
@@ -457,21 +489,35 @@ export const StaffDirectorySubTab = ({
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold transition disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : editingEmp ? 'Update Package' : 'Save Employee'}
-                </button>
+              <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                {editingEmp ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteEmployee(editingEmp)}
+                    disabled={deletingId === editingEmp._id}
+                    className="px-3 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800/60 text-rose-300 font-bold transition flex items-center gap-1.5 text-xs disabled:opacity-50"
+                  >
+                    <Trash2 size={14} /> Delete Employee
+                  </button>
+                ) : (
+                  <div />
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold transition text-xs disabled:opacity-50"
+                  >
+                    {saving ? 'Saving...' : editingEmp ? 'Update Package' : 'Save Employee'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
