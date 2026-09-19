@@ -110,6 +110,17 @@ h1.page-heading {
   font-weight: 700 !important;
 }
 
+.custom-table.compact-table th {
+  font-size: 11px !important;
+  padding: 8px 7px !important;
+}
+
+.custom-table.compact-table td {
+  font-size: 11px !important;
+  padding: 8px 7px !important;
+  overflow-wrap: anywhere;
+}
+
 /* Light Scrollbars */
 ::-webkit-scrollbar {
   width: 7px;

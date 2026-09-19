@@ -589,8 +589,8 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
             No pending entries found matching your selected filters. All clear!
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+          <div className="overflow-hidden">
+            <table className="w-full table-fixed text-left border-collapse text-[10px]">
               <thead>
                 <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 font-semibold text-[11px] uppercase tracking-wider">
                   <th className="py-3 px-4">Date / Month</th>

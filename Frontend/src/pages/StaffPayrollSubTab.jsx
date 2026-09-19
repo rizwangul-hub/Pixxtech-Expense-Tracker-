@@ -491,8 +491,8 @@ export const StaffPayrollSubTab = () => {
           </span>
         </div>
 
-        <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-950">
-          <table className="w-full text-left text-xs text-slate-300">
+        <div className="overflow-hidden border border-slate-800 rounded-xl bg-slate-950">
+          <table className="w-full table-fixed text-left text-[10px] text-slate-300">
             <thead className="bg-slate-900 text-slate-400 uppercase font-extrabold text-[10px] tracking-wider border-b border-slate-800">
               <tr>
                 <th className="py-3 px-3">Sr.</th>

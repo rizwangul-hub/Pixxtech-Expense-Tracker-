@@ -241,8 +241,8 @@ export const RecentEntriesTable = ({
 
       {/* ── TAB A: PENDING ENTRIES ─────────────────────────────────────────── */}
       {activeTab === 'pending' && (
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="custom-table">
+        <div className="overflow-hidden rounded-lg border border-slate-200">
+          <table className="custom-table compact-table w-full table-fixed">
             <thead>
               <tr>
                 <th className="text-left">Date</th>
@@ -358,8 +358,8 @@ export const RecentEntriesTable = ({
 
       {/* ── TAB B: VERIFIED ENTRIES ────────────────────────────────────────── */}
       {activeTab === 'verified' && (
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="custom-table">
+        <div className="overflow-hidden rounded-lg border border-slate-200">
+          <table className="custom-table compact-table w-full table-fixed">
             <thead>
               <tr>
                 <th className="text-left">Date</th>
