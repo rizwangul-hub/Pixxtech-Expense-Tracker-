@@ -94,7 +94,7 @@ export function MainLayout({
           },
         ]
       : []),
-    ...(userIsDataEntry
+    ...(userIsDataEntry || userIsAdmin || userIsVerifier
       ? [
           {
             id: 'operational',

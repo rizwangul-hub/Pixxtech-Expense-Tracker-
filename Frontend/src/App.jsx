@@ -254,7 +254,9 @@ export function App() {
           onOpenMasterAccounts={() => setCurrentSection('accounts')}
           onOpenProperties={() => setCurrentSection('properties')}
         />
-      ) : currentSection === 'expenses' || currentSection === 'operational' ? (
+      ) : currentSection === 'operational' ? (
+        <DataEntryDashboard user={user} />
+      ) : currentSection === 'expenses' ? (
         isVerifier(user) ? (
           <VerifierDashboard
             user={user}
