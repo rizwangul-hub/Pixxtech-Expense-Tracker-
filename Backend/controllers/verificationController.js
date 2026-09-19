@@ -26,6 +26,24 @@ const generateReceiptNumber = async (rentMonth) => {
 };
 
 /**
+ * Get or create Transfer category
+ */
+const getOrCreateTransferCategory = async () => {
+  let category = await Category.findOne({ type: 'TRANSFER' });
+  if (!category) {
+    category = await Category.findOne({ name: /transfer/i });
+  }
+  if (!category) {
+    category = await Category.create({
+      name: 'Internal Funds Transfer',
+      type: 'TRANSFER',
+      isRentalHead: false,
+    });
+  }
+  return category;
+};
+
+/**
  * Get or create Rental Income category
  */
 const getOrCreateRentalIncomeCategory = async () => {
@@ -555,6 +573,27 @@ export const verifyEntry = async (req, res) => {
 
       entry.postedTransactionId = postedTransaction._id;
       entry.postedRentReceivedId = postedRentReceived._id;
+    } else if (entry.entryType === 'TRANSFER') {
+      const transferCategory = await getOrCreateTransferCategory();
+      const drAcc = entry.drAccountId || entry.receivingAccountId;
+      const crAcc = entry.crAccountId;
+
+      postedTransaction = await createTransaction({
+        date: entry.date || new Date(),
+        voucherNo: entry.voucherNo,
+        detail: entry.detail || `Internal Transfer #${entry.voucherNo}`,
+        categoryId: transferCategory._id,
+        drAccountId: drAcc,
+        crAccountId: crAcc,
+        amount: entry.amount,
+        transactionType: 'TRANSFER',
+        attachments: entry.attachments || [],
+        status: 'VERIFIED',
+        checkedBy: req.user.name,
+        createdBy: entry.submittedBy,
+      });
+
+      entry.postedTransactionId = postedTransaction._id;
     }
 
     entry.status = 'VERIFIED';

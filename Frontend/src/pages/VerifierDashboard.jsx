@@ -184,6 +184,15 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   // Open Edit Modal
   const handleOpenEdit = (entry) => {
     setEditingEntry(entry);
+    const drAcc =
+      entry.drAccountId?._id ||
+      entry.drAccountId ||
+      entry.receivingAccountId?._id ||
+      entry.receivingAccountId ||
+      '';
+    const crAcc = entry.crAccountId?._id || entry.crAccountId || '';
+    const recAcc = entry.receivingAccountId?._id || entry.receivingAccountId || drAcc;
+
     setEditForm({
       amount: entry.amount || '',
       detail: entry.detail || '',
@@ -194,9 +203,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       propertyId: entry.propertyId?._id || entry.propertyId || '',
       unitId: entry.unitId || '',
       categoryId: entry.categoryId?._id || entry.categoryId || '',
-      crAccountId: entry.crAccountId?._id || entry.crAccountId || '',
-      drAccountId: entry.drAccountId?._id || entry.drAccountId || '',
-      receivingAccountId: entry.receivingAccountId?._id || entry.receivingAccountId || '',
+      crAccountId: crAcc,
+      drAccountId: drAcc,
+      receivingAccountId: recAcc,
       editNotes: '',
     });
   };
@@ -993,12 +1002,59 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                     </select>
                   </div>
                 </div>
+              ) : editingEntry?.entryType === 'TRANSFER' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">From Account (Cr. Disbursing)</label>
+                    <select
+                      value={editForm.crAccountId}
+                      onChange={(e) => setEditForm({ ...editForm, crAccountId: e.target.value })}
+                      required
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
+                    >
+                      <option value="">-- Select Source / Disbursing Account --</option>
+                      {accounts.map((a) => (
+                        <option key={a._id} value={a._id}>
+                          {a.name} ({a.type})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">To Account (Dr. Receiving)</label>
+                    <select
+                      value={editForm.drAccountId || editForm.receivingAccountId}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          drAccountId: e.target.value,
+                          receivingAccountId: e.target.value,
+                        })
+                      }
+                      required
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
+                    >
+                      <option value="">-- Select Destination / Receiving Account --</option>
+                      {accounts.map((a) => (
+                        <option key={a._id} value={a._id}>
+                          {a.name} ({a.type})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               ) : (
                 <div>
                   <label className="block text-slate-400 font-semibold mb-1">Receiving Bank / Cash Account (Dr.)</label>
                   <select
                     value={editForm.receivingAccountId}
-                    onChange={(e) => setEditForm({ ...editForm, receivingAccountId: e.target.value })}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        receivingAccountId: e.target.value,
+                        drAccountId: e.target.value,
+                      })
+                    }
                     required
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
                   >
