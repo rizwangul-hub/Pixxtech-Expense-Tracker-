@@ -653,9 +653,9 @@ export const suggestNextVoucherNumber = async (dateInput = null) => {
   const yearStr = String(validDate.getFullYear()).slice(-2);
 
   const [vouchers, txs, pendings] = await Promise.all([
-    Voucher.find({}, { voucherNumber: 1 }).lean().catch(() => []),
-    Transaction.find({}, { voucherNo: 1 }).lean().catch(() => []),
-    PendingEntry.find({}, { voucherNo: 1 }).lean().catch(() => []),
+    Voucher.find({ status: { $ne: 'REVERSED' } }, { voucherNumber: 1 }).lean().catch(() => []),
+    Transaction.find({ status: { $ne: 'REVERSED' } }, { voucherNo: 1 }).lean().catch(() => []),
+    PendingEntry.find({ status: { $ne: 'REJECTED' } }, { voucherNo: 1 }).lean().catch(() => []),
   ]);
 
   let maxNum = 0;

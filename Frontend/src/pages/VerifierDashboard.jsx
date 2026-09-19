@@ -784,12 +784,15 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Voucher # (VN)</label>
+                  <label className="block text-slate-400 font-semibold mb-1">
+                    Voucher # (VN) <span className="text-[10px] text-amber-400 font-normal">(Locked / Auto-assigned)</span>
+                  </label>
                   <input
                     type="text"
                     value={editForm.voucherNo}
-                    onChange={(e) => setEditForm({ ...editForm, voucherNo: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                    readOnly
+                    disabled
+                    className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-400 font-mono font-bold cursor-not-allowed select-none opacity-80"
                   />
                 </div>
 

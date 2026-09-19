@@ -523,12 +523,15 @@ export const RecentEntriesTable = ({
             <form onSubmit={handleSavePendingEdit} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1 font-semibold">Voucher No.</label>
+                  <label className="block text-slate-400 mb-1 font-semibold">
+                    Voucher No. <span className="text-[10px] text-amber-500 font-normal">(Locked)</span>
+                  </label>
                   <input
                     type="text"
                     value={editVoucherNo}
-                    onChange={(e) => setEditVoucherNo(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
+                    readOnly
+                    disabled
+                    className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-2 text-slate-400 font-mono font-bold cursor-not-allowed select-none opacity-80"
                   />
                 </div>
                 <div>
