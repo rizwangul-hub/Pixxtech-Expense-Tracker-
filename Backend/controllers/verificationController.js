@@ -228,17 +228,15 @@ export const getVerificationSummary = async (req, res) => {
  */
 export const getMySubmissions = async (req, res) => {
   try {
-    const query =
-      req.user.role === 'DATA_ENTRY'
-        ? {
-            $or: [
-              { submittedBy: req.user._id },
-              { status: { $in: ['PENDING_VERIFICATION', 'EDITED'] } },
-            ],
-          }
-        : { submittedBy: req.user._id };
+    const query = {
+      $or: [
+        { submittedBy: req.user._id },
+        { status: { $in: ['PENDING_VERIFICATION', 'EDITED'] } },
+      ],
+    };
 
     const entries = await PendingEntry.find(query)
+      .populate('submittedBy', 'name email role')
       .populate('propertyId', 'plazaName')
       .populate('tenantId', 'fullName')
       .populate('categoryId', 'name')
@@ -246,7 +244,7 @@ export const getMySubmissions = async (req, res) => {
       .populate('crAccountId', 'name')
       .populate('receivingAccountId', 'name')
       .sort({ submittedAt: -1 })
-      .limit(50)
+      .limit(100)
       .lean();
 
     return apiSuccess(res, entries, `Found ${entries.length} submissions.`);
