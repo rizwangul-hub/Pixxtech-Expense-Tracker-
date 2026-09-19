@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth.js';
+import { getLoanLedger } from '../controllers/loanLedgerController.js';
 import {
   getEmployees,
   getEmployeeById,
@@ -49,6 +50,7 @@ router.get('/loans', getLoans);
 router.post('/loans', recordLoan);
 router.post('/employees/:id/loan', recordLoan);
 
+router.get('/loan-ledger', getLoanLedger);
 // Leaves
 router.get('/leaves', getLeaves);
 router.post('/leaves', createLeave);

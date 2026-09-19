@@ -57,14 +57,14 @@ export function MainLayout({
       badge: 'Journal',
       badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
     },
-    ...(userIsAdmin
+    ...(userIsAdmin || userIsDataEntry
       ? [
           {
             id: 'staff',
             label: 'Staff HR',
             icon: Users,
             status: 'active',
-            permission: PERMISSIONS.MANAGE_USERS,
+            permission: userIsAdmin ? PERMISSIONS.MANAGE_USERS : PERMISSIONS.ENTER_DATA,
             badge: 'HR / Payroll',
             badgeColor: 'bg-purple-100 text-purple-800 border-purple-200',
           },
