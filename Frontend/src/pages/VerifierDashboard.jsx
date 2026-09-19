@@ -269,6 +269,20 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     }
   };
 
+  // Compute active categories filtered by scope for the edit modal
+  const activeScopeCategories = categories.filter((c) => {
+    if (c.type !== 'EXPENSE') return false;
+    if (editForm.unitId) {
+      const uId = c.unitId?._id || c.unitId;
+      return c.expenseClassification === 'UNIT_EXPENSE' && (!uId || String(uId) === String(editForm.unitId));
+    }
+    if (editForm.propertyId) {
+      const pId = c.propertyId?._id || c.propertyId;
+      return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && (!pId || String(pId) === String(editForm.propertyId));
+    }
+    return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
+  });
+
   return (
     <div className="space-y-6">
       {/* Top Header Banner */}
@@ -791,20 +805,125 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </div>
               </div>
 
+              {editingEntry?.entryType === 'EXPENSE' && (
+                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
+                  <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Building2 size={14} className="text-amber-400" />
+                      Property & Unit Allocation (Derives Scope)
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950/80 border border-amber-800/60 px-2 py-0.5 rounded">
+                      Scope: {editForm.unitId ? 'UNIT EXPENSE' : editForm.propertyId ? 'PROPERTY OWN' : 'GENERAL EXPENSE'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">Select Property (Optional)</label>
+                      <select
+                        value={editForm.propertyId}
+                        onChange={(e) => {
+                          const pId = e.target.value;
+                          const classification = pId ? (editForm.unitId ? 'UNIT_EXPENSE' : 'PROPERTY_OWN_EXPENSE') : 'GENERAL_EXPENSE';
+                          const newUnitId = pId ? editForm.unitId : '';
+                          const nextCats = categories.filter((c) => {
+                            if (c.type !== 'EXPENSE') return false;
+                            if (newUnitId && pId) {
+                              const uId = c.unitId?._id || c.unitId;
+                              return c.expenseClassification === 'UNIT_EXPENSE' && (!uId || String(uId) === String(newUnitId));
+                            }
+                            if (pId) {
+                              const propId = c.propertyId?._id || c.propertyId;
+                              return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && (!propId || String(propId) === String(pId));
+                            }
+                            return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
+                          });
+                          const isCurrentValid = nextCats.some((c) => String(c._id) === String(editForm.categoryId));
+                          const newCatId = isCurrentValid ? editForm.categoryId : (nextCats[0]?._id || '');
+
+                          setEditForm({
+                            ...editForm,
+                            propertyId: pId,
+                            unitId: newUnitId,
+                            expenseClassification: classification,
+                            categoryId: newCatId,
+                          });
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      >
+                        <option value="">-- None (General Expense) --</option>
+                        {properties.map((p) => (
+                          <option key={p._id} value={p._id}>
+                            {p.plazaName || p.propertyName || p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {editForm.propertyId && (
+                      <div>
+                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Select Unit (Optional)</label>
+                        <select
+                          value={editForm.unitId}
+                          onChange={(e) => {
+                            const uId = e.target.value;
+                            const classification = uId ? 'UNIT_EXPENSE' : 'PROPERTY_OWN_EXPENSE';
+                            const nextCats = categories.filter((c) => {
+                              if (c.type !== 'EXPENSE') return false;
+                              if (uId) {
+                                const unitIdVal = c.unitId?._id || c.unitId;
+                                return c.expenseClassification === 'UNIT_EXPENSE' && (!unitIdVal || String(unitIdVal) === String(uId));
+                              }
+                              if (editForm.propertyId) {
+                                const propId = c.propertyId?._id || c.propertyId;
+                                return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && (!propId || String(propId) === String(editForm.propertyId));
+                              }
+                              return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
+                            });
+                            const isCurrentValid = nextCats.some((c) => String(c._id) === String(editForm.categoryId));
+                            const newCatId = isCurrentValid ? editForm.categoryId : (nextCats[0]?._id || '');
+
+                            setEditForm({
+                              ...editForm,
+                              unitId: uId,
+                              expenseClassification: classification,
+                              categoryId: newCatId,
+                            });
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                        >
+                          <option value="">-- None (Property Own Expense) --</option>
+                          {(properties.find((p) => p._id === editForm.propertyId)?.units || []).map((u) => (
+                            <option key={u._id || u.unitName || u} value={u._id || u.unitName || u}>
+                              {u.unitName || u.unitNumber || u.name || u} {u.tenantName ? `(${u.tenantName})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {editingEntry?.entryType === 'EXPENSE' ? (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-400 font-semibold mb-1">Expense Head / Category</label>
+                    <label className="block text-slate-400 font-semibold mb-1">
+                      Expense Head / Category
+                      <span className="text-[10px] font-mono text-amber-400 ml-1">
+                        ({activeScopeCategories.length} available)
+                      </span>
+                    </label>
                     <select
                       value={editForm.categoryId}
                       onChange={(e) => setEditForm({ ...editForm, categoryId: e.target.value })}
                       required
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
                     >
-                      <option value="">-- Select Category --</option>
-                      {categories.map((c) => (
+                      <option value="">-- Select Scoped Category --</option>
+                      {activeScopeCategories.map((c) => (
                         <option key={c._id} value={c._id}>
-                          {c.name} ({c.expenseClassification || 'GENERAL'})
+                          {c.name}
                         </option>
                       ))}
                     </select>
@@ -842,59 +961,6 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                       </option>
                     ))}
                   </select>
-                </div>
-              )}
-
-              {editingEntry?.entryType === 'EXPENSE' && (
-                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
-                  <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                    <Building2 size={14} className="text-amber-400" />
-                    Property & Unit Allocation (Derives Scope)
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">Select Property (Optional)</label>
-                      <select
-                        value={editForm.propertyId}
-                        onChange={(e) => {
-                          const pId = e.target.value;
-                          const classification = pId ? (editForm.unitId ? 'UNIT_EXPENSE' : 'PROPERTY_OWN_EXPENSE') : 'GENERAL_EXPENSE';
-                          setEditForm({ ...editForm, propertyId: pId, unitId: pId ? editForm.unitId : '', expenseClassification: classification });
-                        }}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                      >
-                        <option value="">-- None (General Expense) --</option>
-                        {properties.map((p) => (
-                          <option key={p._id} value={p._id}>
-                            {p.plazaName || p.propertyName || p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {editForm.propertyId && (
-                      <div>
-                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Select Unit (Optional)</label>
-                        <select
-                          value={editForm.unitId}
-                          onChange={(e) => {
-                            const uId = e.target.value;
-                            const classification = uId ? 'UNIT_EXPENSE' : 'PROPERTY_OWN_EXPENSE';
-                            setEditForm({ ...editForm, unitId: uId, expenseClassification: classification });
-                          }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
-                        >
-                          <option value="">-- None (Property Own Expense) --</option>
-                          {(properties.find((p) => p._id === editForm.propertyId)?.units || []).map((u) => (
-                            <option key={u._id || u.unitName || u} value={u._id || u.unitName || u}>
-                              {u.unitName || u.unitNumber || u.name || u} {u.tenantName ? `(${u.tenantName})` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
 
