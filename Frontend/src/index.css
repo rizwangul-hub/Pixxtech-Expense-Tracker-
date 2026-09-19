@@ -131,22 +131,24 @@ h1.page-heading {
    Designed specifically for maximum clarity & senior readability
 ------------------------------------------------------------- */
 
-/* Form Control Defaults */
+/* Form Control Defaults for Senior User (Sarfraz) Readability - Bold 2px High Contrast Borders */
 input,
 select,
 textarea {
   background-color: #ffffff !important;
   color: #0f172a !important;
-  border-color: #cbd5e1 !important;
-  font-weight: 500;
+  border-width: 2px !important;
+  border-style: solid !important;
+  border-color: #334155 !important;
+  font-weight: 600 !important;
   font-size: 15px !important;
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #2563eb !important;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+  border-color: #1d4ed8 !important;
+  box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.25) !important;
   outline: none !important;
 }
 
