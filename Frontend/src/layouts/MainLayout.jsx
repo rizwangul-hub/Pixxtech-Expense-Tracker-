@@ -468,7 +468,7 @@ export function MainLayout({
         )}
 
         {/* Main Scrollable Content Area */}
-        <main className="min-w-0 min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8">
+        <main className="min-w-0 min-h-0 flex-1 overflow-y-auto bg-slate-50 p-0">
           <div className="w-full space-y-6">
             {children}
           </div>

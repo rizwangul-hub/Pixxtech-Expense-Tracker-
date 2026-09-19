@@ -16,9 +16,10 @@ const specificRules = [
   { matchName: 'Zulaikha Afzaal', dept: 'IT Office', time: '15:00' },
   { matchName: 'Abdul Rafey', dept: 'IT Office', time: '16:00' },
 
-  // Admin Rider in Bahria Town Office
+  // Bahria Town Office & 4A Driver Shift Times
   { matchName: 'Sabir Nawaz', dept: 'Bahria Town Office', desig: 'Admin Rider', time: '09:00' },
   { matchName: 'Majid Javed', dept: 'Bahria Town Office', time: '12:30' },
+  { matchName: 'Zaffar Hussain', time: '07:00' },
 ];
 
 async function updateShiftTimes() {

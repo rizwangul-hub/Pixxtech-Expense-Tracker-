@@ -234,7 +234,7 @@ export const DataEntryDashboard = ({ user }) => {
   return (
     <div className="min-h-full bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="flex-1 w-full p-2 sm:p-3 lg:p-4 space-y-6">
         {/* Persistent Live Cash Custodian Bar */}
         <CashCustodianBar
           custodians={custodians}

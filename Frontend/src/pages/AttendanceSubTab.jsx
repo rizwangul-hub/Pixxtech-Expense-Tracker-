@@ -63,17 +63,30 @@ export const AttendanceSubTab = () => {
     fetchMonthlySummary();
   }, [selectedMonth]);
 
+  // Helper filter functions to ensure each employee belongs strictly to ONE location tab without overlap
+  const isITOfficeRow = (r) => (r.department || '') === 'IT Office';
+  const isBahriaTownRow = (r) => {
+    const dept = r.department || '';
+    const desig = r.designation || '';
+    const name = r.name || '';
+    return (
+      dept !== 'IT Office' &&
+      (dept === 'Bahria Town Office' ||
+        dept === 'Admin Rider' ||
+        desig === 'Admin Rider' ||
+        name.toLowerCase().includes('zaffar hussain') ||
+        (dept === '4A Home' && desig === 'Driver'))
+    );
+  };
+
   // Filter attendance rows by selected active location tab
   // Excludes Security Guard, 4A Home, and non-attendance locations
   const filteredRows = attendanceRows.filter((r) => {
-    const dept = r.department || '';
-    const desig = r.designation || '';
-
     if (activeLocationTab === 'IT Office') {
-      return dept === 'IT Office';
+      return isITOfficeRow(r);
     }
     if (activeLocationTab === 'Bahria Town Office') {
-      return dept === 'Bahria Town Office' || dept === 'Admin Rider' || desig === 'Admin Rider';
+      return isBahriaTownRow(r);
     }
     return false;
   });
@@ -117,12 +130,7 @@ export const AttendanceSubTab = () => {
     setAttendanceRows((prev) =>
       prev.map((r) => {
         // Only update rows belonging to active tab
-        const dept = r.department || '';
-        const desig = r.designation || '';
-        const isMatch =
-          activeLocationTab === 'IT Office'
-            ? dept === 'IT Office'
-            : dept === 'Bahria Town Office' || dept === 'Admin Rider' || desig === 'Admin Rider';
+        const isMatch = activeLocationTab === 'IT Office' ? isITOfficeRow(r) : isBahriaTownRow(r);
 
         if (isMatch) {
           return {
@@ -315,7 +323,7 @@ export const AttendanceSubTab = () => {
                 : 'bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
-            <Building2 size={15} /> IT Office Attendance ({attendanceRows.filter((r) => r.department === 'IT Office').length})
+            <Building2 size={15} /> IT Office Attendance ({attendanceRows.filter(isITOfficeRow).length})
           </button>
 
           <button
@@ -326,7 +334,7 @@ export const AttendanceSubTab = () => {
                 : 'bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
-            <Building2 size={15} /> Bahria Town Office & Admin Rider ({attendanceRows.filter((r) => r.department === 'Bahria Town Office' || r.department === 'Admin Rider' || r.designation === 'Admin Rider').length})
+            <Building2 size={15} /> Bahria Town Office & Admin Rider ({attendanceRows.filter(isBahriaTownRow).length})
           </button>
         </div>
 
