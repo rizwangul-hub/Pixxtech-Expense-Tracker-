@@ -45,7 +45,7 @@ export const getLoanLedger = async (req, res) => {
     const employeeIds = Array.from(ledgerMap.keys());
     const employees = await Employee.find({ _id: { $in: employeeIds } }, { name: 1 }).lean();
     const employeeMap = new Map();
-    employees.forEach(e => employeeMap.set(e._id.toString(), e.name);
+    employees.forEach((e) => employeeMap.set(e._id.toString(), e.name));
 
     const result = [];
     for (const [empId, entries] of ledgerMap.entries()) {
