@@ -27,10 +27,26 @@ import { formatPKR } from '../utils/formatters.js';
 import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 import { RentCollectionModal } from '../components/RentCollectionModal.jsx';
 
+// Persistent in-memory cache for instant tab switching without blocking loading screens
+let verifierDataCache = {
+  pendingEntries: null,
+  summary: null,
+  accounts: [],
+  categories: [],
+  properties: [],
+};
+
 export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties }) => {
-  const [pendingEntries, setPendingEntries] = useState([]);
-  const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const hasCache = verifierDataCache.pendingEntries !== null;
+
+  const [pendingEntries, setPendingEntries] = useState(verifierDataCache.pendingEntries || []);
+  const [summary, setSummary] = useState(verifierDataCache.summary || null);
+  const [accounts, setAccounts] = useState(verifierDataCache.accounts || []);
+  const [categories, setCategories] = useState(verifierDataCache.categories || []);
+  const [properties, setProperties] = useState(verifierDataCache.properties || []);
+
+  const [loading, setLoading] = useState(!hasCache);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [feedback, setFeedback] = useState({ message: '', type: '' });
 
@@ -57,14 +73,16 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   // Direct Entry Mode Switcher for Khurshid
   const [directEntryMode, setDirectEntryMode] = useState(false);
   const [directEntryTab, setDirectEntryTab] = useState('voucher');
-  const [accounts, setAccounts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [properties, setProperties] = useState([]);
 
   // Load pending list & KPIs
-  const loadData = async () => {
+  const loadData = async (forceShowLoading = false) => {
     try {
-      setLoading(true);
+      if (forceShowLoading || verifierDataCache.pendingEntries === null) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+
       const params = {};
       if (filterType !== 'ALL') params.entryType = filterType;
       if (filterStatus !== 'ALL') params.status = filterStatus;
@@ -78,11 +96,26 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         accountsAPI.getProperties().catch(() => ({ properties: [] })),
       ]);
 
-      setPendingEntries(listRes.data?.entries || listRes.entries || []);
-      setSummary(sumRes.data || sumRes || null);
-      setAccounts(accRes.accounts || []);
-      setCategories(catRes.categories || []);
-      setProperties(propRes.properties || []);
+      const newEntries = listRes.data?.entries || listRes.entries || [];
+      const newSummary = sumRes.data || sumRes || null;
+      const newAccounts = accRes.accounts || [];
+      const newCategories = catRes.categories || [];
+      const newProperties = propRes.properties || [];
+
+      setPendingEntries(newEntries);
+      setSummary(newSummary);
+      setAccounts(newAccounts);
+      setCategories(newCategories);
+      setProperties(newProperties);
+
+      // Save to cache
+      verifierDataCache = {
+        pendingEntries: newEntries,
+        summary: newSummary,
+        accounts: newAccounts,
+        categories: newCategories,
+        properties: newProperties,
+      };
     } catch (err) {
       console.error('Failed to load verifier data:', err);
       setFeedback({
@@ -91,17 +124,18 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       });
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadData(false);
   }, [filterType, filterStatus]);
 
   // Handle Search Submission
   const handleSearch = (e) => {
     e.preventDefault();
-    loadData();
+    loadData(true);
   };
 
   // Verify / Approve Entry (Atomic post to Ledger)
@@ -268,12 +302,13 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
             </button>
 
             <button
-              onClick={loadData}
-              disabled={loading}
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
-              title="Refresh Queue"
+              onClick={() => loadData(true)}
+              disabled={loading || isRefreshing}
+              className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-2 text-xs font-bold"
+              title="Refresh Queue Data"
             >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={loading || isRefreshing ? 'animate-spin text-indigo-400' : ''} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh Queue'}</span>
             </button>
           </div>
         </div>

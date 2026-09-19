@@ -21,18 +21,29 @@ import { EvidenceImageUpload } from '../components/EvidenceImageUpload.jsx';
 import { formatPKR } from '../utils/formatters.js';
 import { isAdmin, isVerifier } from '../utils/permissions.js';
 
+// Persistent in-memory cache for instant DataEntryDashboard rendering
+let dataEntryCache = {
+  accounts: [],
+  custodians: [],
+  categories: [],
+  properties: [],
+  recentEntries: [],
+  otherHeads: [],
+  isLoaded: false,
+};
+
 export const DataEntryDashboard = ({ user }) => {
   const [activeTab, setActiveTab] = useState('expense'); // 'expense' | 'rent' | 'other' | 'transfer'
 
-  // Master data state
-  const [accounts, setAccounts] = useState([]);
-  const [custodians, setCustodians] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [properties, setProperties] = useState([]);
-  const [recentEntries, setRecentEntries] = useState([]);
-  const [otherHeads, setOtherHeads] = useState([]);
+  // Master data state initialized from cache if available
+  const [accounts, setAccounts] = useState(dataEntryCache.accounts);
+  const [custodians, setCustodians] = useState(dataEntryCache.custodians);
+  const [categories, setCategories] = useState(dataEntryCache.categories);
+  const [properties, setProperties] = useState(dataEntryCache.properties);
+  const [recentEntries, setRecentEntries] = useState(dataEntryCache.recentEntries);
+  const [otherHeads, setOtherHeads] = useState(dataEntryCache.otherHeads);
 
-  const [loadingData, setLoadingData] = useState(true);
+  const [loadingData, setLoadingData] = useState(!dataEntryCache.isLoaded);
   const [refreshingEntries, setRefreshingEntries] = useState(false);
   const [actionMessage, setActionMessage] = useState({ text: '', type: '' });
 
@@ -61,9 +72,11 @@ export const DataEntryDashboard = ({ user }) => {
   const [submittingTransfer, setSubmittingTransfer] = useState(false);
 
   // Load active accounts and metadata
-  const loadMasterData = async () => {
+  const loadMasterData = async (showLoading = false) => {
     try {
-      setLoadingData(true);
+      if (showLoading || !dataEntryCache.isLoaded) {
+        setLoadingData(true);
+      }
       const [accRes, catRes, propRes, entriesRes, headsRes] = await Promise.all([
         accountsAPI.getActiveSummary(),
         accountsAPI.getCategories(),
@@ -72,13 +85,29 @@ export const DataEntryDashboard = ({ user }) => {
         otherIncomeAPI.getHeads().catch(() => ({ data: { heads: [] } })),
       ]);
 
-      setAccounts(accRes.accounts || accRes.data?.accounts || []);
-      setCustodians(accRes.grouped?.custodians || []);
-      setCategories(catRes.categories || catRes.data?.categories || []);
-      setProperties(propRes.properties || propRes.data?.properties || []);
-      setRecentEntries(entriesRes.transactions || entriesRes.data?.transactions || []);
+      const accs = accRes.accounts || accRes.data?.accounts || [];
+      const custs = accRes.grouped?.custodians || [];
+      const cats = catRes.categories || catRes.data?.categories || [];
+      const props = propRes.properties || propRes.data?.properties || [];
+      const recents = entriesRes.transactions || entriesRes.data?.transactions || [];
       const heads = headsRes?.data?.heads || headsRes?.heads || [];
+
+      setAccounts(accs);
+      setCustodians(custs);
+      setCategories(cats);
+      setProperties(props);
+      setRecentEntries(recents);
       setOtherHeads(heads);
+
+      dataEntryCache = {
+        accounts: accs,
+        custodians: custs,
+        categories: cats,
+        properties: props,
+        recentEntries: recents,
+        otherHeads: heads,
+        isLoaded: true,
+      };
     } catch (err) {
       console.error('Failed to load master dashboard data:', err);
     } finally {
