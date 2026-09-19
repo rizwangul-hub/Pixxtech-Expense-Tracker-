@@ -16,7 +16,7 @@ import { CashCustodianBar } from '../components/CashCustodianBar.jsx';
 import { RentCollectionModal } from '../components/RentCollectionModal.jsx';
 import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 import { RecentEntriesTable } from '../components/RecentEntriesTable.jsx';
-import { accountsAPI, transactionsAPI, otherIncomeAPI, transfersAPI, uploadAPI } from '../services/api.js';
+import { accountsAPI, transactionsAPI, otherIncomeAPI, transfersAPI, uploadAPI, verificationAPI } from '../services/api.js';
 import { EvidenceImageUpload } from '../components/EvidenceImageUpload.jsx';
 import { formatPKR } from '../utils/formatters.js';
 import { isAdmin, isVerifier } from '../utils/permissions.js';
@@ -28,6 +28,7 @@ let dataEntryCache = {
   categories: [],
   properties: [],
   recentEntries: [],
+  pendingEntries: [],
   otherHeads: [],
   isLoaded: false,
 };
@@ -41,6 +42,7 @@ export const DataEntryDashboard = ({ user }) => {
   const [categories, setCategories] = useState(dataEntryCache.categories);
   const [properties, setProperties] = useState(dataEntryCache.properties);
   const [recentEntries, setRecentEntries] = useState(dataEntryCache.recentEntries);
+  const [pendingEntries, setPendingEntries] = useState(dataEntryCache.pendingEntries);
   const [otherHeads, setOtherHeads] = useState(dataEntryCache.otherHeads);
 
   const [loadingData, setLoadingData] = useState(!dataEntryCache.isLoaded);
@@ -77,12 +79,13 @@ export const DataEntryDashboard = ({ user }) => {
       if (showLoading || !dataEntryCache.isLoaded) {
         setLoadingData(true);
       }
-      const [accRes, catRes, propRes, entriesRes, headsRes] = await Promise.all([
+      const [accRes, catRes, propRes, entriesRes, headsRes, pendingRes] = await Promise.all([
         accountsAPI.getActiveSummary(),
         accountsAPI.getCategories(),
         accountsAPI.getProperties(),
         transactionsAPI.getMyEntries(),
         otherIncomeAPI.getHeads().catch(() => ({ data: { heads: [] } })),
+        verificationAPI.getMySubmissions().catch(() => ({ data: [] })),
       ]);
 
       const accs = accRes.accounts || accRes.data?.accounts || [];
@@ -91,12 +94,15 @@ export const DataEntryDashboard = ({ user }) => {
       const props = propRes.properties || propRes.data?.properties || [];
       const recents = entriesRes.transactions || entriesRes.data?.transactions || [];
       const heads = headsRes?.data?.heads || headsRes?.heads || [];
+      // pending entries: unverified submissions by this user
+      const pendings = (pendingRes?.data || []).filter(e => e.status !== 'VERIFIED');
 
       setAccounts(accs);
       setCustodians(custs);
       setCategories(cats);
       setProperties(props);
       setRecentEntries(recents);
+      setPendingEntries(pendings);
       setOtherHeads(heads);
 
       dataEntryCache = {
@@ -105,6 +111,7 @@ export const DataEntryDashboard = ({ user }) => {
         categories: cats,
         properties: props,
         recentEntries: recents,
+        pendingEntries: pendings,
         otherHeads: heads,
         isLoaded: true,
       };
@@ -115,17 +122,22 @@ export const DataEntryDashboard = ({ user }) => {
     }
   };
 
-  // Quick refresh for recent entries and account balances
+  // Quick refresh for recent entries, pending submissions, and account balances
   const refreshEntries = async () => {
     try {
       setRefreshingEntries(true);
-      const [entriesRes, accRes] = await Promise.all([
+      const [entriesRes, accRes, pendingRes] = await Promise.all([
         transactionsAPI.getMyEntries(),
         accountsAPI.getActiveSummary(),
+        verificationAPI.getMySubmissions().catch(() => ({ data: [] })),
       ]);
-      setRecentEntries(entriesRes.transactions || []);
+      const recents = entriesRes.transactions || [];
+      const pendings = (pendingRes?.data || []).filter(e => e.status !== 'VERIFIED');
+      setRecentEntries(recents);
+      setPendingEntries(pendings);
       setAccounts(accRes.accounts || accRes.data?.accounts || []);
       setCustodians(accRes.grouped?.custodians || []);
+      dataEntryCache = { ...dataEntryCache, recentEntries: recents, pendingEntries: pendings, accounts: accRes.accounts || accRes.data?.accounts || [], custodians: accRes.grouped?.custodians || [] };
     } catch (err) {
       console.error('Failed to refresh entries:', err);
     } finally {
@@ -143,7 +155,7 @@ export const DataEntryDashboard = ({ user }) => {
 
   const todayEntries = recentEntries.filter((e) => e.date && e.date.startsWith(todayStr));
   const monthEntries = recentEntries.filter((e) => e.date && e.date.startsWith(thisMonthStr));
-  const pendingEntries = recentEntries.filter((e) => e.status === 'PENDING');
+  const pendingLocalTx = recentEntries.filter((e) => e.status === 'PENDING');
   const reversedEntries = recentEntries.filter((e) => e.status === 'REVERSED');
 
   // Submit Other Income
@@ -266,7 +278,7 @@ export const DataEntryDashboard = ({ user }) => {
             <div className="text-2xl font-black font-mono text-amber-600 mt-1">
               {pendingEntries.length}
             </div>
-            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Awaiting management signoff</div>
+            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Awaiting Khurshid's signoff</div>
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
@@ -574,6 +586,7 @@ export const DataEntryDashboard = ({ user }) => {
         {/* Recent Entries Journal Table */}
         <RecentEntriesTable
           entries={recentEntries}
+          pendingEntries={pendingEntries}
           loading={refreshingEntries || loadingData}
           onRefresh={refreshEntries}
           onEntryUpdated={refreshEntries}

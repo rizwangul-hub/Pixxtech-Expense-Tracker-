@@ -26,9 +26,9 @@ router.post('/submit', authorize('DATA_ENTRY', 'VERIFIER', 'VERIFICATION_MANAGER
 
 // Single Entry Details & Actions (Khurshid Anwar / Verifier)
 router.get('/:id', getPendingEntryById);
-router.put('/:id', authorize('VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), updatePendingEntry);
+router.put('/:id', authorize('DATA_ENTRY', 'VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), updatePendingEntry);
 router.post('/:id/verify', authorize('VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), verifyEntry);
 router.post('/:id/reject', authorize('VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), rejectEntry);
-router.delete('/:id', authorize('VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), deletePendingEntry);
+router.delete('/:id', authorize('DATA_ENTRY', 'VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), deletePendingEntry);
 
 export default router;
