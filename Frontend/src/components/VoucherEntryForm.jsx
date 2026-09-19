@@ -269,7 +269,7 @@ export const VoucherEntryForm = ({
       onKeyDown={handleKeyDown}
       className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs"
     >
-      <div className="section-bar mb-5 shadow-2xs">
+      <div className="section-bar tab-expense-sky mb-5 shadow-2xs">
         <div>
           <h2 className="section-title flex items-center gap-2">
             <DollarSign className="w-5 h-5 text-white" />

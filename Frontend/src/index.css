@@ -227,11 +227,56 @@ a.bg-emerald-600,
 .text-white-keep,
 .section-bar,
 .section-title,
+.tab-expense-sky,
 [class*="bg-blue-600"] > *,
 [class*="bg-emerald-600"] > *,
 [class*="bg-indigo-600"] > *,
 [class*="bg-rose-600"] > * {
   color: #ffffff !important;
+}
+
+/* Cash Hand Custodians Top Bar - Solid Black Background & White Text */
+.custodian-black-bar {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 2px solid #334155 !important;
+}
+
+.custodian-card-black {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 2px solid #475569 !important;
+}
+
+.custodian-card-black * {
+  color: #ffffff !important;
+}
+
+.custodian-card-black .custodian-name {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+.custodian-card-black .custodian-amount {
+  color: #38bdf8 !important; /* Vibrant Sky-blue amount */
+  font-weight: 900 !important;
+}
+
+/* Sky Blue Expense Tab System */
+.tab-expense-sky {
+  background-color: #0284c7 !important; /* Sky Blue 600 */
+  color: #ffffff !important;
+  border: 2px solid #0369a1 !important;
+}
+
+.tab-expense-sky * {
+  color: #ffffff !important;
+}
+
+.tab-expense-sky-inactive {
+  background-color: #e0f2fe !important; /* Sky Blue 100 tint */
+  color: #0369a1 !important; /* Sky Blue 700 text */
+  border: 2px solid #7dd3fc !important; /* Sky Blue 300 border */
 }
 
 button.bg-blue-600,

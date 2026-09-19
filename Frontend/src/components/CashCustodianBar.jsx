@@ -15,29 +15,21 @@ export const CashCustodianBar = ({ custodians = [], onRefresh, loading = false }
   const totalCash = custodians.reduce((acc, c) => acc + (c.currentBalance || 0), 0);
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg mb-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3 border-b border-slate-800/80 pb-2">
+    <div className="custodian-black-bar rounded-xl p-4 shadow-lg mb-6 text-white-keep">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3 border-b border-slate-700/80 pb-2">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg border border-blue-500/20">
-            <Wallet className="w-4 h-4" />
+          <div className="p-1.5 bg-sky-500/20 text-sky-400 rounded-lg border border-sky-400/40">
+            <Wallet className="w-4 h-4 text-sky-400 text-white-keep" />
           </div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Live Cash-in-Hand Custodians
+          <span className="text-xs font-bold uppercase tracking-wider text-white-keep">
+            Live Cash-in-Hand Custodians (Sabir, Naveed, etc.)
           </span>
         </div>
 
         <div className="flex items-center gap-4 text-xs">
-          <div className="flex items-center gap-2 bg-slate-800/70 px-3 py-1 rounded-md border border-slate-700/60">
-            <span className="text-slate-400">Total Custodian Pool:</span>
-            <span
-              className={`font-mono font-bold ${
-                totalCash < 0
-                  ? 'text-rose-400'
-                  : totalCash < 10000
-                  ? 'text-amber-400'
-                  : 'text-emerald-400'
-              }`}
-            >
+          <div className="flex items-center gap-2 bg-black px-3 py-1 rounded-md border border-slate-700 text-white-keep">
+            <span className="text-slate-300">Total Custodian Pool:</span>
+            <span className="font-mono font-black text-sky-400 text-sm">
               Rs. {formatPKR(totalCash)}
             </span>
           </div>
@@ -46,9 +38,9 @@ export const CashCustodianBar = ({ custodians = [], onRefresh, loading = false }
             onClick={onRefresh}
             disabled={loading}
             title="Refresh Balances"
-            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition disabled:opacity-50"
+            className="p-1.5 text-white hover:bg-slate-800 rounded transition border border-slate-700 disabled:opacity-50 text-white-keep"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-white-keep ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
@@ -57,22 +49,6 @@ export const CashCustodianBar = ({ custodians = [], onRefresh, loading = false }
         {custodians.map((c) => {
           const balance = c.currentBalance || 0;
           const isNegative = balance < 0;
-          const isLow = balance >= 0 && balance < 2000;
-          const isHealthy = balance >= 2000;
-
-          let badgeColor = 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400';
-          let indicatorIcon = <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />;
-          let statusText = 'Healthy';
-
-          if (isNegative) {
-            badgeColor = 'bg-rose-500/10 border-rose-500/50 text-rose-300 ring-1 ring-rose-500/30 animate-pulse';
-            indicatorIcon = <AlertCircle className="w-3.5 h-3.5 text-rose-400" />;
-            statusText = 'Deficit / Negative!';
-          } else if (isLow) {
-            badgeColor = 'bg-amber-500/10 border-amber-500/40 text-amber-300';
-            indicatorIcon = <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />;
-            statusText = 'Low (< Rs. 2,000)';
-          }
 
           // Format clean handler display name
           const handlerName = c.name
@@ -83,21 +59,29 @@ export const CashCustodianBar = ({ custodians = [], onRefresh, loading = false }
           return (
             <div
               key={c._id || c.name}
-              className={`border rounded-lg p-3 transition-all ${badgeColor}`}
+              className="custodian-card-black border rounded-lg p-3 transition-all"
             >
               <div className="flex items-center justify-between text-xs mb-1">
-                <span className="font-medium text-slate-200 truncate pr-2" title={c.name}>
+                <span className="font-bold text-white custodian-name text-sm truncate pr-2" title={c.name}>
                   {handlerName}
                 </span>
-                <div className="flex items-center gap-1 shrink-0">{indicatorIcon}</div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {isNegative ? (
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                  )}
+                </div>
               </div>
 
               <div className="flex items-baseline justify-between mt-1">
-                <div className="font-mono text-base font-bold tracking-tight">
+                <div className="font-mono text-base font-black text-sky-400 custodian-amount">
                   Rs. {formatPKR(balance)}
                 </div>
-                <span className="text-[10px] uppercase font-semibold opacity-75">
-                  {statusText}
+                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                  isNegative ? 'bg-rose-900/80 text-rose-200 border border-rose-700' : 'bg-slate-800 text-slate-200 border border-slate-700'
+                }`}>
+                  {isNegative ? 'Deficit' : 'Cash Hand'}
                 </span>
               </div>
             </div>

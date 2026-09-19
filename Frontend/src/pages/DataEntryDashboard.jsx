@@ -311,13 +311,13 @@ export const DataEntryDashboard = ({ user }) => {
         <div className="flex items-center gap-2 overflow-x-auto border-b border-slate-200 pb-2">
           <button
             onClick={() => { setActiveTab('expense'); setActionMessage({ text: '', type: '' }); }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-black transition whitespace-nowrap ${
               activeTab === 'expense'
-                ? 'bg-blue-600 text-white shadow-sm font-extrabold'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
+                ? 'tab-expense-sky shadow-md font-black text-white-keep'
+                : 'tab-expense-sky-inactive font-bold'
             }`}
           >
-            <Layers className="w-4 h-4" />
+            <Layers className="w-4 h-4 text-white-keep" />
             Tab A: Expense Voucher Entry
           </button>
 
