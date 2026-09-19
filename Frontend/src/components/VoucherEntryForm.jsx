@@ -105,7 +105,7 @@ export const VoucherEntryForm = ({
         const pId = c.propertyId?._id || c.propertyId;
         return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && String(pId) === String(propertyId);
       }
-      return !c.propertyId && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
+      return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
     });
 
     if (activeScopeCategories.length > 0) {
@@ -449,7 +449,7 @@ export const VoucherEntryForm = ({
                     const pId = c.propertyId?._id || c.propertyId;
                     return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && String(pId) === String(propertyId);
                   }
-                  return !c.propertyId && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
+                  return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
                 });
 
                 const groupLabel = unitId

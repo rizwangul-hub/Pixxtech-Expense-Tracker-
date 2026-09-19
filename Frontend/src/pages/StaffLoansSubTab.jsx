@@ -27,6 +27,12 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
   const [errorMsg, setErrorMsg] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Loan History Modal States
+  const [historyEmp, setHistoryEmp] = useState(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyLogs, setHistoryLogs] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   const employeesWithLoans = employees.filter((e) => (e.loanBalance || 0) > 0);
   const filteredEmployees = employees.filter((emp) => {
     const q = searchQuery.toLowerCase().trim();
@@ -42,6 +48,21 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
     setDescription(type === 'DISBURSEMENT' ? 'Advance Salary Disbursement' : 'Loan Cash Repayment');
     setErrorMsg('');
     setIsModalOpen(true);
+  };
+
+  const handleOpenHistory = async (emp) => {
+    setHistoryEmp(emp);
+    setIsHistoryOpen(true);
+    setHistoryLoading(true);
+    try {
+      const res = await staffAPI.getLoans({ employeeId: emp._id });
+      setHistoryLogs(res.data || []);
+    } catch (err) {
+      console.error('[Loan History Error]:', err);
+      setHistoryLogs([]);
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   const handleSubmitLoan = async (e) => {
@@ -151,18 +172,26 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80">
+              <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => handleOpenModal(emp, 'DISBURSEMENT')}
+                    className="bg-rose-950/70 hover:bg-rose-900/90 text-rose-300 border border-rose-800/60 rounded-xl py-2 px-3 text-xs font-bold transition flex items-center justify-center gap-1"
+                  >
+                    <ArrowUpRight size={14} /> Issue Advance
+                  </button>
+                  <button
+                    onClick={() => handleOpenModal(emp, 'REPAYMENT')}
+                    className="bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-800/60 rounded-xl py-2 px-3 text-xs font-bold transition flex items-center justify-center gap-1"
+                  >
+                    <ArrowDownLeft size={14} /> Repay Loan
+                  </button>
+                </div>
                 <button
-                  onClick={() => handleOpenModal(emp, 'DISBURSEMENT')}
-                  className="bg-rose-950/70 hover:bg-rose-900/90 text-rose-300 border border-rose-800/60 rounded-xl py-2 px-3 text-xs font-bold transition flex items-center justify-center gap-1"
+                  onClick={() => handleOpenHistory(emp)}
+                  className="w-full bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-xl py-1.5 px-3 text-xs font-bold transition flex items-center justify-center gap-1.5"
                 >
-                  <ArrowUpRight size={14} /> Issue Advance
-                </button>
-                <button
-                  onClick={() => handleOpenModal(emp, 'REPAYMENT')}
-                  className="bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-800/60 rounded-xl py-2 px-3 text-xs font-bold transition flex items-center justify-center gap-1"
-                >
-                  <ArrowDownLeft size={14} /> Repay Loan
+                  <History size={14} className="text-purple-400" /> View Loan Timeline & Ledger
                 </button>
               </div>
             </div>
@@ -250,6 +279,116 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Loan History Timeline Modal */}
+      {isHistoryOpen && historyEmp && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <History size={18} className="text-purple-400" />
+                  Loan & Advance History Ledger
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Employee: <strong className="text-white font-bold">{historyEmp.name}</strong> ({historyEmp.designation}) | Outstanding Balance: <strong className="text-rose-400 font-mono font-bold">Rs. {formatPKR(historyEmp.loanBalance)}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setIsHistoryOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1">
+              {historyLoading ? (
+                <div className="py-12 text-center text-xs text-slate-400">Loading loan timeline...</div>
+              ) : historyLogs.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-500 font-medium">
+                  No loan transactions recorded for this employee yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] font-bold">
+                        <th className="py-2.5 px-3">Date & Time</th>
+                        <th className="py-2.5 px-3">Type</th>
+                        <th className="py-2.5 px-3 text-right">Amount (PKR)</th>
+                        <th className="py-2.5 px-3 text-right">Balance (Prev → New)</th>
+                        <th className="py-2.5 px-3">Description</th>
+                        <th className="py-2.5 px-3">Handled By</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-medium">
+                      {historyLogs.map((log) => {
+                        const isDisbursement = log.type === 'DISBURSEMENT';
+                        const createdDate = new Date(log.date || log.createdAt);
+                        const dateStr = createdDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                        const timeStr = createdDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                        const operatorName = log.createdBy?.name || log.operatorName || 'System Operator';
+
+                        return (
+                          <tr key={log._id} className="hover:bg-slate-800/40 transition">
+                            <td className="py-2.5 px-3 whitespace-nowrap text-slate-300">
+                              <span className="font-bold text-white block">{dateStr}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">{timeStr}</span>
+                            </td>
+                            <td className="py-2.5 px-3 whitespace-nowrap">
+                              <span
+                                className={`text-[10px] font-extrabold px-2 py-0.5 rounded border inline-block ${
+                                  isDisbursement
+                                    ? 'bg-rose-950/80 text-rose-300 border-rose-800/60'
+                                    : 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60'
+                                }`}
+                              >
+                                {isDisbursement ? 'ADVANCE DISBURSED' : 'REPAYMENT / DEDUCTION'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-black whitespace-nowrap">
+                              <span className={isDisbursement ? 'text-rose-400' : 'text-emerald-400'}>
+                                {isDisbursement ? '+' : '-'} Rs. {formatPKR(log.amount)}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                              Rs. {formatPKR(log.previousBalance)} → <strong className="text-white">Rs. {formatPKR(log.newBalance)}</strong>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-300 max-w-xs truncate">
+                              {log.description || (isDisbursement ? 'Advance Salary' : 'Salary Deduction')}
+                              {log.payrollMonth && (
+                                <span className="ml-1.5 text-[10px] text-purple-400 font-semibold bg-purple-950/60 border border-purple-800/40 px-1.5 py-0.5 rounded">
+                                  {log.payrollMonth}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 whitespace-nowrap">
+                              <span className="text-[11px] font-bold text-slate-300 bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                                👤 {operatorName}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsHistoryOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition text-xs"
+              >
+                Close Ledger
+              </button>
+            </div>
           </div>
         </div>
       )}

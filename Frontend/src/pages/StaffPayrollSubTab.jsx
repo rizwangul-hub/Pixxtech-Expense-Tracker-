@@ -148,11 +148,30 @@ export const StaffPayrollSubTab = () => {
     setPayrollRows((prev) =>
       prev.map((r) => {
         if (r.employeeId === empId) {
-          const newTotDed = numDed + (r.lopDeduction || 0) + (r.otherDeduction || 0);
+          const newTotDed = numDed + (Number(r.lopDeduction) || 0) + (Number(r.otherDeduction) || 0);
           const newNet = Math.max(0, r.grossSalary - newTotDed);
           return {
             ...r,
             loanDeduction: val,
+            totalDeduction: newTotDed,
+            netPayable: newNet,
+          };
+        }
+        return r;
+      })
+    );
+  };
+
+  const handleLopDeductionChange = (empId, val) => {
+    const numDed = isNaN(Number(val)) ? 0 : Number(val);
+    setPayrollRows((prev) =>
+      prev.map((r) => {
+        if (r.employeeId === empId) {
+          const newTotDed = (Number(r.loanDeduction) || 0) + numDed + (Number(r.otherDeduction) || 0);
+          const newNet = Math.max(0, r.grossSalary - newTotDed);
+          return {
+            ...r,
+            lopDeduction: val,
             totalDeduction: newTotDed,
             netPayable: newNet,
           };
@@ -219,9 +238,12 @@ export const StaffPayrollSubTab = () => {
     }
   };
 
-  const handleDownloadSalarySlip = async (employeeId, name) => {
+  const handleDownloadSalarySlip = async (row) => {
     try {
-      await payrollAPI.downloadSalarySlipPDF(employeeId, selectedMonth, name);
+      await payrollAPI.downloadSalarySlipPDF(row.employeeId, selectedMonth, row.name, {
+        loanDeduction: row.loanDeduction,
+        lopDeduction: row.lopDeduction,
+      });
     } catch (err) {
       console.error('Download Salary Slip Error:', err);
       setMsg({
@@ -231,9 +253,12 @@ export const StaffPayrollSubTab = () => {
     }
   };
 
-  const handlePrintSalarySlip = async (employeeId) => {
+  const handlePrintSalarySlip = async (row) => {
     try {
-      await payrollAPI.printSalarySlipPDF(employeeId, selectedMonth);
+      await payrollAPI.printSalarySlipPDF(row.employeeId, selectedMonth, {
+        loanDeduction: row.loanDeduction,
+        lopDeduction: row.lopDeduction,
+      });
     } catch (err) {
       console.error('Print Salary Slip Error:', err);
       setMsg({
@@ -480,6 +505,7 @@ export const StaffPayrollSubTab = () => {
                 <th className="py-3 px-3 text-center">Attendance</th>
                 <th className="py-3 px-3 text-right">Loan Bal</th>
                 <th className="py-3 px-3 text-right">Loan Ded (PKR)</th>
+                <th className="py-3 px-3 text-right">Absent / LOP Ded (PKR)</th>
                 <th className="py-3 px-4 text-right">Net Payable</th>
                 <th className="py-3 px-4">Bank & IBAN</th>
                 <th className="py-3 px-4 text-center">Finance Status & Action</th>
@@ -553,9 +579,21 @@ export const StaffPayrollSubTab = () => {
                           type="number"
                           placeholder="0"
                           disabled={isPaid}
-                          value={row.loanDeduction}
+                          value={row.loanDeduction !== undefined ? row.loanDeduction : 0}
                           onChange={(e) => handleLoanDeductionChange(row.employeeId, e.target.value)}
                           className="w-24 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-rose-300 font-mono font-bold text-right focus:outline-none focus:border-rose-500 disabled:opacity-50"
+                          title="Loan deduction (reduces loan balance)"
+                        />
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <input
+                          type="number"
+                          placeholder="0"
+                          disabled={isPaid}
+                          value={row.lopDeduction !== undefined ? row.lopDeduction : 0}
+                          onChange={(e) => handleLopDeductionChange(row.employeeId, e.target.value)}
+                          className="w-24 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-amber-300 font-mono font-bold text-right focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                          title="Absent or Leave salary deduction (does not touch loan balance)"
                         />
                       </td>
                       <td className="py-3 px-4 text-right font-mono font-black text-sm text-emerald-400">
@@ -610,14 +648,14 @@ export const StaffPayrollSubTab = () => {
                       <td className="py-3 px-4 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
-                            onClick={() => handleDownloadSalarySlip(row.employeeId, row.name)}
+                            onClick={() => handleDownloadSalarySlip(row)}
                             className="px-2 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 transition inline-flex items-center gap-1 font-bold text-[10px]"
                             title="Download Official Salary Slip PDF"
                           >
                             <Download size={12} /> Download
                           </button>
                           <button
-                            onClick={() => handlePrintSalarySlip(row.employeeId)}
+                            onClick={() => handlePrintSalarySlip(row)}
                             className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 border border-slate-700 transition inline-flex items-center gap-1 font-bold text-[10px]"
                             title="Print Official Salary Slip"
                           >

@@ -696,6 +696,14 @@ export const staffAPI = {
     const res = await api.post(`/staff/employees/${id}/loan`, data);
     return res.data;
   },
+  getLoanLedger: async (params = {}) => {
+    const res = await api.get('/staff/loan-ledger', { params });
+    return res.data;
+  },
+  getLoans: async (params = {}) => {
+    const res = await api.get('/staff/loans', { params });
+    return res.data;
+  },
   getDashboardStats: async () => {
     const res = await api.get('/staff/dashboard');
     return res.data;

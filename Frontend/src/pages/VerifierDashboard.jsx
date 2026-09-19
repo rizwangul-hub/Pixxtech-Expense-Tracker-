@@ -143,6 +143,10 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       expenseClassification: entry.expenseClassification || 'GENERAL_EXPENSE',
       propertyId: entry.propertyId?._id || entry.propertyId || '',
       unitId: entry.unitId || '',
+      categoryId: entry.categoryId?._id || entry.categoryId || '',
+      crAccountId: entry.crAccountId?._id || entry.crAccountId || '',
+      drAccountId: entry.drAccountId?._id || entry.drAccountId || '',
+      receivingAccountId: entry.receivingAccountId?._id || entry.receivingAccountId || '',
       editNotes: '',
     });
   };
@@ -752,16 +756,59 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </div>
               </div>
 
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1">Narration / Detail</label>
-                <textarea
-                  rows="3"
-                  value={editForm.detail}
-                  onChange={(e) => setEditForm({ ...editForm, detail: e.target.value })}
-                  required
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white"
-                />
-              </div>
+              {editingEntry?.entryType === 'EXPENSE' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">Expense Head / Category</label>
+                    <select
+                      value={editForm.categoryId}
+                      onChange={(e) => setEditForm({ ...editForm, categoryId: e.target.value })}
+                      required
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
+                    >
+                      <option value="">-- Select Category --</option>
+                      {categories.map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.name} ({c.expenseClassification || 'GENERAL'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">Paid From (Cr. Bank / Cash)</label>
+                    <select
+                      value={editForm.crAccountId}
+                      onChange={(e) => setEditForm({ ...editForm, crAccountId: e.target.value })}
+                      required
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
+                    >
+                      <option value="">-- Select Disbursing Account --</option>
+                      {accounts.map((a) => (
+                        <option key={a._id} value={a._id}>
+                          {a.name} ({a.type})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">Receiving Bank / Cash Account (Dr.)</label>
+                  <select
+                    value={editForm.receivingAccountId}
+                    onChange={(e) => setEditForm({ ...editForm, receivingAccountId: e.target.value })}
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
+                  >
+                    <option value="">-- Select Receiving Account --</option>
+                    {accounts.map((a) => (
+                      <option key={a._id} value={a._id}>
+                        {a.name} ({a.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {editingEntry?.entryType === 'EXPENSE' && (
                 <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
