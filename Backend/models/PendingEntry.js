@@ -11,10 +11,10 @@ const pendingEntrySchema = new mongoose.Schema(
   {
     entryType: {
       type: String,
-      required: [true, 'Entry type is required (RENT or EXPENSE)'],
+      required: [true, 'Entry type is required'],
       enum: {
-        values: ['RENT', 'EXPENSE'],
-        message: 'entryType must be either RENT or EXPENSE',
+        values: ['RENT', 'EXPENSE', 'TRANSFER', 'SALARY', 'OTHER_INCOME'],
+        message: 'Invalid entryType',
       },
       index: true,
     },
@@ -182,6 +182,26 @@ const pendingEntrySchema = new mongoose.Schema(
       type: String,
       default: '',
       trim: true,
+    },
+    // Single-edit Enforcement Metadata
+    isEdited: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    editedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    editedByName: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    editedAt: {
+      type: Date,
+      default: null,
     },
     // References to Official Posted Documents (Populated once verified)
     postedTransactionId: {

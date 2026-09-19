@@ -283,7 +283,7 @@ export const RecentEntriesTable = ({
                       ? { label: 'Edited / Re-pending', cls: 'bg-blue-100 text-blue-800 border-blue-300', Icon: Edit3 }
                       : { label: 'Awaiting Verification', cls: 'bg-amber-100 text-amber-800 border-amber-300', Icon: Clock };
 
-                  const canEdit = entry.status !== 'REJECTED';
+                  const canEdit = entry.status !== 'REJECTED' && !entry.isEdited;
 
                   return (
                     <tr key={entry._id} className="hover:bg-amber-50/40 transition-colors">

@@ -47,7 +47,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
 
   const [loading, setLoading] = useState(!hasCache);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
+  // Per-entry loading: stores the _id of the entry currently being acted on
+  // so only that row's buttons are disabled (not the entire table)
+  const [savingEntryId, setSavingEntryId] = useState(null);
   const [feedback, setFeedback] = useState({ message: '', type: '' });
 
   // Filter state
@@ -75,8 +77,14 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   const [directEntryTab, setDirectEntryTab] = useState('voucher');
 
   // Load pending list & KPIs
-  const loadData = async (forceShowLoading = false) => {
+  // Accept explicit filter overrides so the function always uses fresh values
+  // (avoids the stale-closure problem where useEffect captures old state)
+  const loadData = async (forceShowLoading = false, overrides = {}) => {
     try {
+      const currentType   = overrides.filterType   !== undefined ? overrides.filterType   : filterType;
+      const currentStatus = overrides.filterStatus !== undefined ? overrides.filterStatus : filterStatus;
+      const currentSearch = overrides.searchQuery  !== undefined ? overrides.searchQuery  : searchQuery;
+
       if (forceShowLoading || verifierDataCache.pendingEntries === null) {
         setLoading(true);
       } else {
@@ -84,9 +92,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       }
 
       const params = {};
-      if (filterType !== 'ALL') params.entryType = filterType;
-      if (filterStatus !== 'ALL') params.status = filterStatus;
-      if (searchQuery.trim()) params.search = searchQuery.trim();
+      if (currentType   !== 'ALL') params.entryType = currentType;
+      if (currentStatus !== 'ALL') params.status    = currentStatus;
+      if (currentSearch.trim())    params.search     = currentSearch.trim();
 
       const [listRes, sumRes, accRes, catRes, propRes] = await Promise.all([
         verificationAPI.getPending(params),
@@ -96,9 +104,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         accountsAPI.getProperties().catch(() => ({ properties: [] })),
       ]);
 
-      const newEntries = listRes.data?.entries || listRes.entries || [];
-      const newSummary = sumRes.data || sumRes || null;
-      const newAccounts = accRes.accounts || [];
+      const newEntries    = listRes.data?.entries || listRes.entries || [];
+      const newSummary    = sumRes.data || sumRes || null;
+      const newAccounts   = accRes.accounts   || [];
       const newCategories = catRes.categories || [];
       const newProperties = propRes.properties || [];
 
@@ -128,8 +136,11 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     }
   };
 
+  // Re-fetch whenever type or status filters change, passing the new values
+  // explicitly to avoid the stale-closure problem
   useEffect(() => {
-    loadData(false);
+    loadData(false, { filterType, filterStatus });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterType, filterStatus]);
 
   // Handle Search Submission
@@ -144,16 +155,21 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       return;
     }
 
+    const entryId = entry._id;
     try {
-      setActionLoading(true);
+      setSavingEntryId(entryId);
       setFeedback({ message: '', type: '' });
-      const res = await verificationAPI.verifyEntry(entry._id);
+      const res = await verificationAPI.verifyEntry(entryId);
       if (res.success) {
         setFeedback({
           message: `Entry verified successfully! Officially posted to central financial ledger.`,
           type: 'success',
         });
-        await loadData();
+        // Optimistically remove or mark as VERIFIED in local state immediately
+        setPendingEntries((prev) =>
+          prev.map((e) => e._id === entryId ? { ...e, status: 'VERIFIED' } : e)
+        );
+        loadData(false, { filterType, filterStatus });
       }
     } catch (err) {
       setFeedback({
@@ -161,7 +177,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         type: 'error',
       });
     } finally {
-      setActionLoading(false);
+      setSavingEntryId(null);
     }
   };
 
@@ -190,16 +206,36 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     e.preventDefault();
     if (!editingEntry) return;
 
+    const entryId = editingEntry._id;
     try {
-      setActionLoading(true);
-      const res = await verificationAPI.updatePending(editingEntry._id, editForm);
+      setSavingEntryId(entryId);
+      const res = await verificationAPI.updatePending(entryId, editForm);
       if (res.success) {
         setFeedback({
           message: 'Entry details corrected successfully. You can now verify it.',
           type: 'success',
         });
+        // Close modal immediately
         setEditingEntry(null);
-        await loadData();
+        // Optimistically mark entry as edited in local state so the Edit button
+        // disappears right away without waiting for the background refetch
+        setPendingEntries((prev) =>
+          prev.map((e) =>
+            e._id === entryId
+              ? {
+                  ...e,
+                  isEdited: true,
+                  status: 'EDITED',
+                  amount: Number(editForm.amount) || e.amount,
+                  date: editForm.date ? new Date(editForm.date).toISOString() : e.date,
+                  detail: editForm.detail ?? e.detail,
+                  rentMonth: editForm.rentMonth || e.rentMonth,
+                }
+              : e
+          )
+        );
+        // Background refresh to pull server truth (don't await — keep UI fast)
+        loadData(false, { filterType, filterStatus });
       }
     } catch (err) {
       setFeedback({
@@ -207,7 +243,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         type: 'error',
       });
     } finally {
-      setActionLoading(false);
+      setSavingEntryId(null);
     }
   };
 
@@ -222,16 +258,21 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     e.preventDefault();
     if (!rejectingEntry) return;
 
+    const entryId = rejectingEntry._id;
     try {
-      setActionLoading(true);
-      const res = await verificationAPI.rejectEntry(rejectingEntry._id, rejectionReason);
+      setSavingEntryId(entryId);
+      const res = await verificationAPI.rejectEntry(entryId, rejectionReason);
       if (res.success) {
         setFeedback({
           message: 'Entry has been rejected. It will not affect the ledger or accounts.',
           type: 'success',
         });
         setRejectingEntry(null);
-        await loadData();
+        // Optimistically mark as rejected in local state
+        setPendingEntries((prev) =>
+          prev.map((e) => e._id === entryId ? { ...e, status: 'REJECTED' } : e)
+        );
+        loadData(false, { filterType, filterStatus });
       }
     } catch (err) {
       setFeedback({
@@ -239,7 +280,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         type: 'error',
       });
     } finally {
-      setActionLoading(false);
+      setSavingEntryId(null);
     }
   };
 
@@ -250,14 +291,16 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     }
 
     try {
-      setActionLoading(true);
+      setSavingEntryId(entry._id);
       const res = await verificationAPI.deletePending(entry._id);
       if (res.success) {
         setFeedback({
           message: 'Draft entry deleted permanently.',
           type: 'success',
         });
-        await loadData();
+        // Optimistically remove deleted entry from local state
+        setPendingEntries((prev) => prev.filter((e) => e._id !== entry._id));
+        loadData(false, { filterType, filterStatus });
       }
     } catch (err) {
       setFeedback({
@@ -265,7 +308,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         type: 'error',
       });
     } finally {
-      setActionLoading(false);
+      setSavingEntryId(null);
     }
   };
 
@@ -684,27 +727,29 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               onClick={() => handleVerify(entry)}
-                              disabled={actionLoading}
-                              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow transition"
+                              disabled={savingEntryId === entry._id}
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow transition disabled:opacity-50"
                               title="Verify & Post to Ledger"
                             >
                               <Check size={12} />
                               <span>Verify / OK</span>
                             </button>
 
+                            {!entry.isEdited && (
                             <button
                               onClick={() => handleOpenEdit(entry)}
-                              disabled={actionLoading}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 transition"
+                              disabled={savingEntryId === entry._id}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 transition disabled:opacity-50"
                               title="Edit Entry"
                             >
                               <Edit3 size={13} />
                             </button>
+                            )}
 
                             <button
                               onClick={() => handleOpenReject(entry)}
-                              disabled={actionLoading}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-400 border border-slate-700 transition"
+                              disabled={savingEntryId === entry._id}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-400 border border-slate-700 transition disabled:opacity-50"
                               title="Reject Entry"
                             >
                               <XCircle size={13} />
@@ -712,8 +757,8 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
 
                             <button
                               onClick={() => handleDelete(entry)}
-                              disabled={actionLoading}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 border border-slate-700 transition"
+                              disabled={savingEntryId === entry._id}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 border border-slate-700 transition disabled:opacity-50"
                               title="Delete Draft"
                             >
                               <Trash2 size={13} />
@@ -988,8 +1033,8 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading}
-                  className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition flex items-center gap-1.5"
+                  disabled={savingEntryId === editingEntry?._id}
+                  className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition flex items-center gap-1.5 disabled:opacity-60"
                 >
                   <Check size={14} />
                   <span>Save Changes</span>
@@ -1044,8 +1089,8 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading}
-                  className="px-5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold transition flex items-center gap-1.5"
+                  disabled={savingEntryId === rejectingEntry?._id}
+                  className="px-5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold transition flex items-center gap-1.5 disabled:opacity-60"
                 >
                   <XCircle size={14} />
                   <span>Confirm Rejection</span>

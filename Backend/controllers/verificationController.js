@@ -303,6 +303,15 @@ export const updatePendingEntry = async (req, res) => {
       return apiError(res, 'Cannot edit an entry that has already been verified and posted.', 400);
     }
 
+    // Once-only edit enforcement: block further edits after first admin edit
+    if (entry.isEdited) {
+      return apiError(
+        res,
+        'This entry has already been edited once by an admin and is now locked from further edits. You may verify or delete it.',
+        403
+      );
+    }
+
     const previousSnapshot = {
       amount: entry.amount,
       date: entry.date,
@@ -353,6 +362,10 @@ export const updatePendingEntry = async (req, res) => {
     }
 
     entry.status = 'EDITED';
+    entry.isEdited = true;
+    entry.editedBy = req.user._id;
+    entry.editedByName = req.user.name;
+    entry.editedAt = new Date();
     entry.auditLog.push({
       action: 'EDITED',
       performedBy: req.user.name,
