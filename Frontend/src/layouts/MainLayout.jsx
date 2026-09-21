@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   Building2,
@@ -22,6 +22,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { hasPermission, isAdmin, isVerifier, isDataEntry, PERMISSIONS } from '../utils/permissions.js';
+import { verificationAPI } from '../services/api.js';
 import logo from '../assets/image/logo.png';
 
 export function MainLayout({
@@ -33,11 +34,37 @@ export function MainLayout({
   children,
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const userIsAdmin = isAdmin(user);
   const userIsVerifier = isVerifier(user);
   const userIsDataEntry = isDataEntry(user);
   const canEnterData = hasPermission(user, PERMISSIONS.ENTER_DATA);
   const canManageSettings = hasPermission(user, PERMISSIONS.MANAGE_SETTINGS);
+
+  useEffect(() => {
+    if (!userIsAdmin && !userIsVerifier) return;
+
+    let isMounted = true;
+    const fetchPendingCount = async () => {
+      try {
+        const sumRes = await verificationAPI.getSummary();
+        const data = sumRes.data || sumRes || {};
+        const count = typeof data.totalPendingCount === 'number' ? data.totalPendingCount : 0;
+        if (isMounted) {
+          setPendingCount(count);
+        }
+      } catch (err) {
+        // Silently fail if unauthorized or network error
+      }
+    };
+
+    fetchPendingCount();
+    const interval = setInterval(fetchPendingCount, 15000); // refresh every 15s
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [userIsAdmin, userIsVerifier, currentView]);
 
   const navigationItems = [
     {
@@ -89,8 +116,10 @@ export function MainLayout({
             label: 'Verification Queue',
             icon: ShieldCheck,
             status: 'active',
-            badge: 'Verifier',
-            badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
+            badge: pendingCount > 0 ? `${pendingCount} Pending` : '0 Pending',
+            badgeColor: pendingCount > 0
+              ? 'bg-rose-500 text-white border-rose-600 font-extrabold animate-pulse text-white-keep'
+              : 'bg-amber-100 text-amber-800 border-amber-200',
           },
         ]
       : []),
@@ -381,7 +410,9 @@ export function MainLayout({
                     <span
                       className={`text-xs font-bold px-2.5 py-0.5 rounded-md border ${
                         isActive
-                          ? 'bg-blue-700 text-white border-blue-500 text-white-keep'
+                          ? item.id === 'verification' && pendingCount > 0
+                            ? 'bg-rose-500 text-white border-rose-400 font-extrabold text-white-keep animate-pulse'
+                            : 'bg-blue-700 text-white border-blue-500 text-white-keep'
                           : item.badgeColor
                       }`}
                     >
@@ -451,7 +482,13 @@ export function MainLayout({
                         <span className="text-[15px] font-bold">{item.label}</span>
                       </div>
                       {item.badge && (
-                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-md border ${item.badgeColor}`}>
+                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-md border ${
+                          isActive
+                            ? item.id === 'verification' && pendingCount > 0
+                              ? 'bg-rose-500 text-white border-rose-400 font-extrabold text-white-keep animate-pulse'
+                              : 'bg-blue-700 text-white border-blue-500 text-white-keep'
+                            : item.badgeColor
+                        }`}>
                           {item.badge}
                         </span>
                       )}
