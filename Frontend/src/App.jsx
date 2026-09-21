@@ -24,6 +24,7 @@ import { VerifierDashboard } from './pages/VerifierDashboard.jsx';
 import { StaffPage } from './pages/StaffPage.jsx';
 import { LoginForm } from './components/LoginForm.jsx';
 import loadingImg from './assets/image/loading.png';
+import loadingMobileImg from './assets/image/loadingmb.jpg';
 import { authAPI } from './services/api.js';
 import { hasPermission, isAdmin, isVerifier, isDataEntry, PERMISSIONS } from './utils/permissions.js';
 
@@ -170,11 +171,14 @@ export function App() {
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 w-screen h-screen bg-slate-950 overflow-hidden select-none">
-        <img
-          src={loadingImg}
-          alt="PIXX TECHNOLOGIES Loading..."
-          className="w-full h-full object-cover object-center"
-        />
+        <picture className="block w-full h-full">
+          <source media="(max-width: 767px)" srcSet={loadingMobileImg} />
+          <img
+            src={loadingImg}
+            alt="PIXX TECHNOLOGIES Loading..."
+            className="w-full h-full object-cover object-center"
+          />
+        </picture>
       </div>
     );
   }
