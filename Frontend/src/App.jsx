@@ -170,15 +170,19 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 w-screen h-screen bg-slate-950 overflow-hidden select-none">
-        <picture className="block w-full h-full">
-          <source media="(max-width: 767px)" srcSet={loadingMobileImg} />
-          <img
-            src={loadingImg}
-            alt="PIXX TECHNOLOGIES Loading..."
-            className="w-full h-full object-cover object-center"
-          />
-        </picture>
+      <div className="fixed inset-0 z-50 w-screen h-screen bg-slate-950 overflow-hidden select-none flex items-center justify-center">
+        {/* Mobile / Responsive view loading artwork */}
+        <img
+          src={loadingMobileImg}
+          alt="PIXX TECHNOLOGIES Loading..."
+          className="w-full h-full object-cover object-center block md:hidden"
+        />
+        {/* Desktop view loading artwork */}
+        <img
+          src={loadingImg}
+          alt="PIXX TECHNOLOGIES Loading..."
+          className="w-full h-full object-cover object-center hidden md:block"
+        />
       </div>
     );
   }

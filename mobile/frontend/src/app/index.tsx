@@ -128,7 +128,7 @@ export default function MobileWebViewApp() {
       {isLoading && !hasError && (
         <View style={StyleSheet.absoluteFill}>
           <Image
-            source={require('@/assets/images/loading.png')}
+            source={require('@/assets/images/loadingmb.jpg')}
             style={styles.loadingImage}
             resizeMode="cover"
           />
