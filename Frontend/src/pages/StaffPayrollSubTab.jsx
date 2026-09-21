@@ -241,8 +241,11 @@ export const StaffPayrollSubTab = () => {
   const handleDownloadSalarySlip = async (row) => {
     try {
       await payrollAPI.downloadSalarySlipPDF(row.employeeId, selectedMonth, row.name, {
+        allowance: row.allowance,
+        allowanceReason: row.allowanceReason,
         loanDeduction: row.loanDeduction,
         lopDeduction: row.lopDeduction,
+        otherDeduction: row.otherDeduction,
       });
     } catch (err) {
       console.error('Download Salary Slip Error:', err);
@@ -256,8 +259,11 @@ export const StaffPayrollSubTab = () => {
   const handlePrintSalarySlip = async (row) => {
     try {
       await payrollAPI.printSalarySlipPDF(row.employeeId, selectedMonth, {
+        allowance: row.allowance,
+        allowanceReason: row.allowanceReason,
         loanDeduction: row.loanDeduction,
         lopDeduction: row.lopDeduction,
+        otherDeduction: row.otherDeduction,
       });
     } catch (err) {
       console.error('Print Salary Slip Error:', err);

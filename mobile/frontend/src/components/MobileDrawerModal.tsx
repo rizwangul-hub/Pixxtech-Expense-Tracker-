@@ -68,7 +68,7 @@ export default function MobileDrawerModal({
       badgeColor: '#DBEAFE',
       badgeTextColor: '#1E40AF',
       route: `${prefix}/ledgers`,
-      visible: true,
+      visible: !isDataEntry,
     },
     {
       id: 'staff',
@@ -118,7 +118,7 @@ export default function MobileDrawerModal({
       badgeColor: '#F1F5F9',
       badgeTextColor: '#334155',
       route: `${prefix}/properties`,
-      visible: true,
+      visible: !isDataEntry,
     },
     {
       id: 'tenants',
@@ -128,7 +128,7 @@ export default function MobileDrawerModal({
       badgeColor: '#D1FAE5',
       badgeTextColor: '#065F46',
       route: `${prefix}/tenants`,
-      visible: true,
+      visible: !isDataEntry,
     },
     {
       id: 'agreements',
@@ -138,7 +138,7 @@ export default function MobileDrawerModal({
       badgeColor: '#E0E7FF',
       badgeTextColor: '#3730A3',
       route: `${prefix}/agreements`,
-      visible: true,
+      visible: !isDataEntry,
     },
     {
       id: 'rent-due',
@@ -148,7 +148,7 @@ export default function MobileDrawerModal({
       badgeColor: '#FEF3C7',
       badgeTextColor: '#92400E',
       route: `${prefix}/rent-due`,
-      visible: true,
+      visible: !isDataEntry,
     },
     {
       id: 'income',
@@ -158,7 +158,7 @@ export default function MobileDrawerModal({
       badgeColor: '#D1FAE5',
       badgeTextColor: '#065F46',
       route: `${prefix}/rent-received`,
-      visible: true,
+      visible: !isDataEntry,
     },
     {
       id: 'other-income',
@@ -188,7 +188,7 @@ export default function MobileDrawerModal({
       badgeColor: '#DBEAFE',
       badgeTextColor: '#1E40AF',
       route: `${prefix}/accounts`,
-      visible: true,
+      visible: !isDataEntry,
     },
     {
       id: 'transfers',
@@ -208,7 +208,7 @@ export default function MobileDrawerModal({
       badgeColor: '#F1F5F9',
       badgeTextColor: '#334155',
       route: `${prefix}/transactions`,
-      visible: true,
+      visible: !isDataEntry,
     },
     {
       id: 'reports',
@@ -218,7 +218,7 @@ export default function MobileDrawerModal({
       badgeColor: '#EDE9FE',
       badgeTextColor: '#5B21B6',
       route: `${prefix}/reports`,
-      visible: true,
+      visible: !isDataEntry,
     },
     {
       id: 'monthly-reports',
@@ -228,7 +228,7 @@ export default function MobileDrawerModal({
       badgeColor: '#D1FAE5',
       badgeTextColor: '#065F46',
       route: `${prefix}/monthly-reports`,
-      visible: true,
+      visible: !isDataEntry,
     },
     {
       id: 'users',

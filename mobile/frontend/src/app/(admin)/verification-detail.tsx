@@ -68,12 +68,13 @@ export default function VerificationDetailScreen() {
     try {
       setLoading(true);
       const res = await verificationAPI.getPendingEntryById(id);
-      if (res?.entry) {
-        setEntry(res.entry);
-        setEditAmount(String(res.entry.amount || ''));
-        setEditDetail(res.entry.detail || '');
-        setEditVoucherNo(res.entry.voucherNo || '');
-        setEditRentMonth(res.entry.rentMonth || '');
+      const entryData = res?.data || res?.entry || (res as any);
+      if (entryData && (entryData._id || entryData.amount !== undefined)) {
+        setEntry(entryData);
+        setEditAmount(String(entryData.amount || ''));
+        setEditDetail(entryData.detail || '');
+        setEditVoucherNo(entryData.voucherNo || '');
+        setEditRentMonth(entryData.rentMonth || '');
       }
     } catch (err: any) {
       console.error('[VerificationDetail] Failed to load entry:', err);

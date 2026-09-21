@@ -832,9 +832,9 @@ export const payrollAPI = {
   downloadSalarySlipPDFUrl: (employeeId, month) => {
     return getFullApiUrl(`/staff/payroll/slip/${employeeId}/pdf?month=${encodeURIComponent(month)}`);
   },
-  downloadSalarySlipPDF: async (employeeId, month, employeeName = 'Employee') => {
+  downloadSalarySlipPDF: async (employeeId, month, employeeName = 'Employee', params = {}) => {
     const res = await api.get(`/staff/payroll/slip/${employeeId}/pdf`, {
-      params: { month },
+      params: { month, ...params },
       responseType: 'blob',
     });
     const blob = new Blob([res.data], { type: 'application/pdf' });
@@ -849,9 +849,9 @@ export const payrollAPI = {
     window.URL.revokeObjectURL(downloadUrl);
     return true;
   },
-  printSalarySlipPDF: async (employeeId, month) => {
+  printSalarySlipPDF: async (employeeId, month, params = {}) => {
     const res = await api.get(`/staff/payroll/slip/${employeeId}/pdf`, {
-      params: { month },
+      params: { month, ...params },
       responseType: 'blob',
     });
 

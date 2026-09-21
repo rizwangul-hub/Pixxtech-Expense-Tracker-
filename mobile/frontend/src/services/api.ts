@@ -415,7 +415,8 @@ export const verificationAPI = {
    */
   async getPendingEntryById(id: string): Promise<{
     success: boolean;
-    entry: PendingEntryItem;
+    data?: PendingEntryItem;
+    entry?: PendingEntryItem;
   }> {
     const res = await apiClient.get(`/verification/${id}`);
     return res.data;

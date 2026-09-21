@@ -10,6 +10,7 @@ import Category from '../models/Category.js';
 import Transaction from '../models/Transaction.js';
 import Voucher from '../models/Voucher.js';
 import StaffAuditLog from '../models/StaffAuditLog.js';
+import PendingEntry from '../models/PendingEntry.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
@@ -168,6 +169,12 @@ export const getMonthlyPayroll = async (req, res) => {
         if (r.status === 'HALF_DAY') presentDays += 0.5;
       });
 
+      const finalPresentDays = records.length > 0 ? presentDays : (saved && saved.presentDays !== undefined ? saved.presentDays : presentDays);
+      const finalLateDays = records.length > 0 ? lateDays : (saved && saved.lateDays !== undefined ? saved.lateDays : lateDays);
+      const finalLeaveDays = records.length > 0 ? leaveDays : (saved && saved.leaveDays !== undefined ? saved.leaveDays : leaveDays);
+      const finalLopDays = records.length > 0 ? lopDays : (saved && saved.lopDays !== undefined ? saved.lopDays : lopDays);
+      const allowedLeaves = emp.allowedMonthlyLeaves !== undefined ? emp.allowedMonthlyLeaves : 2;
+
       const loanDeduction = saved ? saved.loanDeduction : 0;
       const lopDeduction = saved ? saved.lopDeduction : 0;
       const otherDeduction = saved ? saved.otherDeduction : 0;
@@ -191,10 +198,11 @@ export const getMonthlyPayroll = async (req, res) => {
         allowanceReason,
         grossSalary: gross,
         totalDays,
-        presentDays: saved ? saved.presentDays : presentDays,
-        lateDays: saved ? saved.lateDays : lateDays,
-        leaveDays: saved ? saved.leaveDays : leaveDays,
-        lopDays: saved ? saved.lopDays : lopDays,
+        presentDays: finalPresentDays,
+        lateDays: finalLateDays,
+        leaveDays: finalLeaveDays,
+        lopDays: finalLopDays,
+        allowedLeaves,
         loanBalance: emp.loanBalance || 0,
         lopDeduction,
         loanDeduction,
@@ -261,6 +269,30 @@ export const savePayroll = async (req, res) => {
       const existingDoc = await Payroll.findOne({ payrollMonth: month, employeeId: rec.employeeId });
       const isAlreadyPaid = existingDoc?.paymentStatus === 'PAID';
 
+      // Fetch live attendance count if rec metrics are empty
+      let pDays = Number(rec.presentDays) || 0;
+      let lDays = Number(rec.lateDays) || 0;
+      let lvDays = Number(rec.leaveDays) || 0;
+      let lpDays = Number(rec.lopDays) || 0;
+
+      if (pDays === 0) {
+        const attRecs = await Attendance.find({
+          employeeId: rec.employeeId,
+          dateStr: new RegExp(`^${month}`),
+        }).lean();
+
+        attRecs.forEach((r) => {
+          if (r.status === 'PRESENT') pDays += 1;
+          if (r.status === 'LATE') {
+            pDays += 1;
+            lDays += 1;
+          }
+          if (r.status === 'LEAVE') lvDays += 1;
+          if (r.status === 'ABSENT') lpDays += 1;
+          if (r.status === 'HALF_DAY') pDays += 0.5;
+        });
+      }
+
       const updatePayload = {
         payrollMonth: month,
         employeeId: rec.employeeId,
@@ -272,10 +304,10 @@ export const savePayroll = async (req, res) => {
         allowanceReason: rec.allowanceReason || '',
         grossSalary: gross,
         totalDays: Number(rec.totalDays) || 30,
-        presentDays: Number(rec.presentDays) || 0,
-        lateDays: Number(rec.lateDays) || 0,
-        leaveDays: Number(rec.leaveDays) || 0,
-        lopDays: Number(rec.lopDays) || 0,
+        presentDays: pDays,
+        lateDays: lDays,
+        leaveDays: lvDays,
+        lopDays: lpDays,
         lopDeduction: lopDed,
         loanDeduction: loanDed,
         otherDeduction: othDed,
@@ -713,29 +745,58 @@ export const generateSalarySlipPDF = async (req, res) => {
 
     const savedPayroll = await Payroll.findOne({ employeeId, payrollMonth: month }).lean();
 
-    const basic = savedPayroll ? savedPayroll.basicSalary : employee.basicSalary || 0;
-    const allowance = savedPayroll && savedPayroll.allowance !== undefined
-      ? savedPayroll.allowance
-      : (employee.allowance || (
-          (employee.fuelAllowance || 0) +
-          (employee.foodAllowance || 0) +
-          (employee.mobileAllowance || 0) +
-          (employee.performanceAllowance || 0) +
-          (employee.otherAllowances || 0)
-        ));
-    const allowanceReason = savedPayroll ? (savedPayroll.allowanceReason || '') : (employee.allowanceReason || '');
+    // Query live attendance records for employee in target month
+    const attRecords = await Attendance.find({
+      employeeId,
+      dateStr: new RegExp(`^${month}`),
+    }).lean();
+
+    let livePresentDays = 0;
+    let liveLateDays = 0;
+    let liveLeaveDays = 0;
+    let liveLopDays = 0;
+
+    attRecords.forEach((r) => {
+      if (r.status === 'PRESENT') livePresentDays += 1;
+      if (r.status === 'LATE') {
+        livePresentDays += 1;
+        liveLateDays += 1;
+      }
+      if (r.status === 'LEAVE') liveLeaveDays += 1;
+      if (r.status === 'ABSENT') liveLopDays += 1;
+      if (r.status === 'HALF_DAY') livePresentDays += 0.5;
+    });
+
+    const basic = savedPayroll ? savedPayroll.basicSalary : (employee.basicSalary || 0);
+
+    const reqAllowance = req.query.allowance !== undefined ? Number(req.query.allowance) : undefined;
+    const reqAllowanceReason = req.query.allowanceReason;
+    const reqLoanDed = req.query.loanDeduction !== undefined ? Number(req.query.loanDeduction) : undefined;
+    const reqLopDed = req.query.lopDeduction !== undefined ? Number(req.query.lopDeduction) : undefined;
+    const reqOthDed = req.query.otherDeduction !== undefined ? Number(req.query.otherDeduction) : undefined;
+
+    const allowance = reqAllowance !== undefined && !isNaN(reqAllowance)
+      ? reqAllowance
+      : (savedPayroll && savedPayroll.allowance !== undefined
+          ? savedPayroll.allowance
+          : (employee.allowance || (
+              (employee.fuelAllowance || 0) +
+              (employee.foodAllowance || 0) +
+              (employee.mobileAllowance || 0) +
+              (employee.performanceAllowance || 0) +
+              (employee.otherAllowances || 0)
+            )));
+
+    const allowanceReason = reqAllowanceReason !== undefined
+      ? reqAllowanceReason
+      : (savedPayroll ? (savedPayroll.allowanceReason || '') : (employee.allowanceReason || ''));
 
     const overtime = savedPayroll ? savedPayroll.overtimeAmount || 0 : 0;
     const bonus = savedPayroll ? savedPayroll.bonusAmount || 0 : 0;
     const leaveEncashment = savedPayroll ? savedPayroll.leaveEncashmentAmount || 0 : 0;
     const otherReceipts = savedPayroll ? savedPayroll.otherReceiptsAmount || 0 : 0;
 
-    const gross = savedPayroll
-      ? savedPayroll.grossSalary
-      : basic + allowance + overtime + bonus + leaveEncashment + otherReceipts;
-
-    const reqLoanDed = req.query.loanDeduction !== undefined ? Number(req.query.loanDeduction) : undefined;
-    const reqLopDed = req.query.lopDeduction !== undefined ? Number(req.query.lopDeduction) : undefined;
+    const gross = basic + allowance + overtime + bonus + leaveEncashment + otherReceipts;
 
     const loanDed = reqLoanDed !== undefined && !isNaN(reqLoanDed)
       ? reqLoanDed
@@ -743,17 +804,22 @@ export const generateSalarySlipPDF = async (req, res) => {
     const lopDed = reqLopDed !== undefined && !isNaN(reqLopDed)
       ? reqLopDed
       : (savedPayroll ? (savedPayroll.lopDeduction || 0) : 0);
-    const othDed = savedPayroll ? (savedPayroll.otherDeduction || 0) : 0;
+    const othDed = reqOthDed !== undefined && !isNaN(reqOthDed)
+      ? reqOthDed
+      : (savedPayroll ? (savedPayroll.otherDeduction || 0) : 0);
     const whtDed = savedPayroll ? (savedPayroll.whtDeduction || 0) : 0;
+
     const totDed = (Number(loanDed) || 0) + (Number(lopDed) || 0) + (Number(othDed) || 0) + (Number(whtDed) || 0);
     const netPayable = Math.max(0, gross - totDed);
 
     // Attendance metrics
-    const presentDays = savedPayroll ? savedPayroll.presentDays : 30;
-    const leaveDays = savedPayroll ? savedPayroll.leaveDays : 0;
-    const allowedLeaves = savedPayroll ? savedPayroll.allowedLeaves : employee.allowedMonthlyLeaves || 2;
-    const lopDays = savedPayroll ? savedPayroll.lopDays : 0;
-    const totalSalaryDays = savedPayroll ? savedPayroll.totalSalaryDays || (30 - lopDays) : 30;
+    const presentDays = attRecords.length > 0 ? livePresentDays : (savedPayroll && savedPayroll.presentDays > 0 ? savedPayroll.presentDays : livePresentDays);
+    const leaveDays = attRecords.length > 0 ? liveLeaveDays : (savedPayroll && savedPayroll.leaveDays > 0 ? savedPayroll.leaveDays : liveLeaveDays);
+    const allowedLeaves = (savedPayroll && savedPayroll.allowedLeaves !== undefined && savedPayroll.allowedLeaves !== null)
+      ? savedPayroll.allowedLeaves
+      : (employee.allowedMonthlyLeaves !== undefined ? employee.allowedMonthlyLeaves : 2);
+    const lopDays = attRecords.length > 0 ? liveLopDays : (savedPayroll && savedPayroll.lopDays > 0 ? savedPayroll.lopDays : liveLopDays);
+    const totalSalaryDays = Math.max(0, 30 - lopDays);
 
     // Convert month to string e.g. "August 2026"
     const [y, m] = month.split('-').map(Number);

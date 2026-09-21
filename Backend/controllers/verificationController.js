@@ -8,8 +8,12 @@ import Property from '../models/Property.js';
 import Tenant from '../models/Tenant.js';
 import Category from '../models/Category.js';
 import Account from '../models/Account.js';
+import Payroll from '../models/Payroll.js';
+import Employee from '../models/Employee.js';
+import StaffLoan from '../models/StaffLoan.js';
 import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
+import { getOrCreateSalariesCategory } from './payrollController.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { validateExpenseClassification } from '../services/expenseClassificationService.js';
 
@@ -601,6 +605,100 @@ export const verifyEntry = async (req, res) => {
         checkedBy: req.user.name,
         createdBy: entry.submittedBy,
       });
+
+      entry.postedTransactionId = postedTransaction._id;
+    } else if (entry.entryType === 'SALARY') {
+      const salariesCategory = await getOrCreateSalariesCategory();
+      const paidFromAccountId = entry.crAccountId;
+      const netAmount = round2(entry.amount);
+
+      const account = await Account.findById(paidFromAccountId);
+      if (!account) {
+        return apiError(res, 'Selected Finance Bank/Cash Account not found.', 404);
+      }
+      if (account.currentBalance < netAmount) {
+        return apiError(
+          res,
+          `Insufficient balance in "${account.name}". Current Balance: Rs. ${account.currentBalance}, Required: Rs. ${netAmount}.`,
+          400
+        );
+      }
+
+      // 1. Create Transaction in Central Ledger
+      postedTransaction = await createTransaction({
+        date: entry.date || new Date(),
+        voucherNo: entry.voucherNo,
+        detail: entry.detail || `Salary Payout to Employee — Month ${entry.rentMonth}`,
+        categoryId: salariesCategory._id,
+        drAccountId: entry.drAccountId,
+        crAccountId: paidFromAccountId,
+        amount: netAmount,
+        transactionType: 'EXPENSE',
+        expenseClassification: 'GENERAL_EXPENSE',
+        reportCategory: 'Payments',
+        sourceModule: 'EXPENSE',
+        sourceId: entry.entryData?.payrollId || null,
+        status: 'VERIFIED',
+        checkedBy: req.user.name,
+        createdBy: entry.submittedBy,
+      });
+
+      // 2. Update Payroll document payment status & loan repayment
+      const payrollId = entry.entryData?.payrollId;
+      const employeeId = entry.tenantId || entry.entryData?.employeeId;
+      const month = entry.rentMonth || entry.entryData?.month;
+
+      let pDoc = null;
+      if (payrollId) {
+        pDoc = await Payroll.findById(payrollId);
+      } else if (employeeId && month) {
+        pDoc = await Payroll.findOne({ employeeId, payrollMonth: month });
+      }
+
+      if (pDoc) {
+        pDoc.status = 'PAID';
+        pDoc.paymentStatus = 'PAID';
+        pDoc.paidFromAccountId = account._id;
+        pDoc.paidFromAccountName = account.name;
+        pDoc.paymentDate = entry.date || new Date();
+        pDoc.paidDate = entry.date || new Date();
+        pDoc.transactionId = postedTransaction._id;
+        pDoc.voucherNo = entry.voucherNo;
+        pDoc.paymentMethod = entry.paymentMethod || 'BANK_TRANSFER';
+        pDoc.paymentNotes = entry.detail;
+        await pDoc.save();
+
+        // 3. Process Loan Deductions if present
+        const loanDed = pDoc.loanDeduction || Number(entry.entryData?.loanDeduction) || 0;
+        if (loanDed > 0) {
+          const emp = await Employee.findById(pDoc.employeeId);
+          if (emp) {
+            const prevBal = emp.loanBalance || 0;
+            const newBal = Math.max(0, prevBal - loanDed);
+            emp.loanBalance = newBal;
+            await emp.save();
+
+            const existingLoanRec = await StaffLoan.findOne({
+              employeeId: emp._id,
+              payrollMonth: month,
+              type: 'REPAYMENT',
+            });
+
+            if (!existingLoanRec) {
+              await StaffLoan.create({
+                employeeId: emp._id,
+                type: 'REPAYMENT',
+                amount: loanDed,
+                previousBalance: prevBal,
+                newBalance: newBal,
+                payrollMonth: month,
+                description: `Salary Loan Deduction for ${month} (Verified by ${req.user.name})`,
+                createdBy: req.user._id,
+              });
+            }
+          }
+        }
+      }
 
       entry.postedTransactionId = postedTransaction._id;
     }
