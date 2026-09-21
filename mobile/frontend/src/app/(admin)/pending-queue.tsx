@@ -46,13 +46,14 @@ export default function PendingQueueScreen() {
   const [summary, setSummary] = useState<{
     pendingRentCount: number;
     pendingExpenseCount: number;
+    pendingTransferCount?: number;
     totalPendingCount: number;
   } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'ALL' | 'RENT' | 'EXPENSE'>('ALL');
+  const [activeTab, setActiveTab] = useState<'ALL' | 'RENT' | 'EXPENSE' | 'TRANSFER'>('ALL');
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -80,6 +81,7 @@ export default function PendingQueueScreen() {
         setSummary({
           pendingRentCount: summaryRes.data.pendingRentCount || 0,
           pendingExpenseCount: summaryRes.data.pendingExpenseCount || 0,
+          pendingTransferCount: summaryRes.data.pendingTransferCount || 0,
           totalPendingCount: summaryRes.data.totalPendingCount || 0,
         });
       }
@@ -102,80 +104,77 @@ export default function PendingQueueScreen() {
     });
   };
 
-  const renderItem = ({ item }: { item: PendingEntryItem }) => {
+  const renderEntryItem = ({ item }: { item: PendingEntryItem }) => {
+    const isExpense = item.entryType === 'EXPENSE';
+    const isTransfer = item.entryType === 'TRANSFER';
     const isRent = item.entryType === 'RENT';
+
+    const accountName = isExpense
+      ? item.drAccountId?.name || 'Expense Account'
+      : isTransfer
+      ? `Dr: ${item.drAccountId?.name || item.receivingAccountId?.name || 'Dr'} / Cr: ${item.crAccountId?.name || 'Cr'}`
+      : item.receivingAccountId?.name || 'Bank/Cash Account';
+
     const propertyName =
       typeof item.propertyId === 'object' && item.propertyId?.plazaName
         ? item.propertyId.plazaName
-        : 'General';
-
-    const accountName =
-      (isRent ? item.receivingAccountId?.name : item.crAccountId?.name) || 'Not specified';
+        : null;
 
     return (
       <TouchableOpacity
         style={styles.card}
-        activeOpacity={0.7}
         onPress={() => handleEntryPress(item)}
+        activeOpacity={0.75}
       >
-        {/* Card Header: Type Badge & Status */}
         <View style={styles.cardHeader}>
           <View style={styles.typeBadgeContainer}>
             <View
               style={[
                 styles.typeIconBox,
-                { backgroundColor: isRent ? '#DCFCE7' : '#FEE2E2' },
+                { backgroundColor: isExpense ? '#FFE4E6' : isTransfer ? '#F3E8FF' : '#DBEAFE' },
               ]}
             >
-              {isRent ? (
-                <Feather name="dollar-sign" size={14} color="#16A34A" />
-              ) : (
-                <Feather name="credit-card" size={14} color="#DC2626" />
-              )}
+              <Feather
+                name={isExpense ? 'file-text' : isTransfer ? 'repeat' : 'home'}
+                size={14}
+                color={isExpense ? '#9F1239' : isTransfer ? '#6B21A8' : '#1E40AF'}
+              />
             </View>
             <Text
               style={[
                 styles.typeBadgeText,
-                { color: isRent ? '#15803D' : '#B91C1C' },
+                { color: isExpense ? '#9F1239' : isTransfer ? '#6B21A8' : '#1E40AF' },
               ]}
             >
-              {isRent ? 'RENT RECEIPT' : 'EXPENSE VOUCHER'}
+              {isExpense ? 'EXPENSE' : isTransfer ? 'TRANSFER' : 'RENT'}
             </Text>
+            <StatusBadge status={item.status} />
           </View>
-          <StatusBadge status={item.status} />
-        </View>
 
-        {/* Voucher No & Amount */}
-        <View style={styles.amountRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.voucherNo}>
-              {item.voucherNo ? `VN-${item.voucherNo}` : 'Pending VN'}
-            </Text>
-            <Text style={styles.dateText}>{formatDate(item.date)}</Text>
-          </View>
-          <Text
-            style={[
-              styles.amountText,
-              { color: isRent ? '#16A34A' : '#DC2626' },
-            ]}
-          >
+          <Text style={[styles.amountText, { color: isExpense ? '#DC2626' : isTransfer ? '#9333EA' : '#16A34A' }]}>
             {formatPKR(item.amount)}
           </Text>
         </View>
 
-        {/* Narration / Detail */}
         <Text style={styles.detailText} numberOfLines={2}>
           {item.detail || 'No description provided'}
         </Text>
 
-        {/* Property & Account Meta */}
         <View style={styles.metaBox}>
           <View style={styles.metaRow}>
-            <Feather name="map-pin" size={13} color="#64748B" style={styles.metaIcon} />
-            <Text style={styles.metaText} numberOfLines={1}>
-              {propertyName}
-            </Text>
+            <Feather name="calendar" size={13} color="#64748B" style={styles.metaIcon} />
+            <Text style={styles.metaText}>{formatDate(item.date)}</Text>
           </View>
+
+          {propertyName ? (
+            <View style={styles.metaRow}>
+              <Feather name="map-pin" size={13} color="#64748B" style={styles.metaIcon} />
+              <Text style={styles.metaText} numberOfLines={1}>
+                {propertyName}
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.metaRow}>
             <MaterialCommunityIcons
               name="bank-outline"
@@ -189,7 +188,6 @@ export default function PendingQueueScreen() {
           </View>
         </View>
 
-        {/* Card Footer: Submitted By & Review Arrow */}
         <View style={styles.cardFooter}>
           <View style={styles.submittedByRow}>
             <Feather name="user" size={13} color="#64748B" />
@@ -210,7 +208,6 @@ export default function PendingQueueScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* Screen Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -220,10 +217,8 @@ export default function PendingQueueScreen() {
           <Feather name="arrow-left" size={20} color="#0F172A" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Pending Verification</Text>
-          <Text style={styles.headerSubtitle}>
-            Review & verify entries from Data Entry
-          </Text>
+          <Text style={styles.headerTitle}>Verification Queue</Text>
+          <Text style={styles.headerSubtitle}>Temporary Entries Pending Approval</Text>
         </View>
         <TouchableOpacity
           style={styles.refreshIconBtn}
@@ -234,29 +229,34 @@ export default function PendingQueueScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Summary Counters Banner */}
       <View style={styles.counterBanner}>
         <View style={styles.counterItem}>
           <Text style={styles.counterValue}>{summary?.totalPendingCount ?? '—'}</Text>
-          <Text style={styles.counterLabel}>Total Pending</Text>
+          <Text style={styles.counterLabel}>Total</Text>
         </View>
         <View style={styles.counterDivider} />
         <View style={styles.counterItem}>
           <Text style={[styles.counterValue, { color: '#16A34A' }]}>
             {summary?.pendingRentCount ?? '—'}
           </Text>
-          <Text style={styles.counterLabel}>Rent Receipts</Text>
+          <Text style={styles.counterLabel}>Rent</Text>
         </View>
         <View style={styles.counterDivider} />
         <View style={styles.counterItem}>
           <Text style={[styles.counterValue, { color: '#DC2626' }]}>
             {summary?.pendingExpenseCount ?? '—'}
           </Text>
-          <Text style={styles.counterLabel}>Expense Vouchers</Text>
+          <Text style={styles.counterLabel}>Expenses</Text>
+        </View>
+        <View style={styles.counterDivider} />
+        <View style={styles.counterItem}>
+          <Text style={[styles.counterValue, { color: '#9333EA' }]}>
+            {summary?.pendingTransferCount ?? '—'}
+          </Text>
+          <Text style={styles.counterLabel}>Transfers</Text>
         </View>
       </View>
 
-      {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Feather name="search" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
         <TextInput
@@ -275,7 +275,6 @@ export default function PendingQueueScreen() {
         )}
       </View>
 
-      {/* Filter Tabs */}
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'ALL' && styles.tabButtonActive]}
@@ -287,7 +286,7 @@ export default function PendingQueueScreen() {
               activeTab === 'ALL' && styles.tabButtonTextActive,
             ]}
           >
-            All Pending ({summary?.totalPendingCount ?? 0})
+            All ({summary?.totalPendingCount ?? 0})
           </Text>
         </TouchableOpacity>
 
@@ -318,6 +317,20 @@ export default function PendingQueueScreen() {
             Expenses ({summary?.pendingExpenseCount ?? 0})
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'TRANSFER' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('TRANSFER')}
+        >
+          <Text
+            style={[
+              styles.tabButtonText,
+              activeTab === 'TRANSFER' && styles.tabButtonTextActive,
+            ]}
+          >
+            Transfers ({summary?.pendingTransferCount ?? 0})
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Entries List */}
@@ -330,7 +343,7 @@ export default function PendingQueueScreen() {
         <FlatList
           data={entries}
           keyExtractor={(item) => item._id}
-          renderItem={renderItem}
+          renderItem={renderEntryItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={

@@ -157,7 +157,7 @@ export interface TransactionItem {
 
 export interface PendingEntryItem {
   _id: string;
-  entryType: 'EXPENSE' | 'RENT';
+  entryType: 'EXPENSE' | 'RENT' | 'TRANSFER';
   amount: number;
   date: string;
   voucherNo?: string;
@@ -458,6 +458,7 @@ export const verificationAPI = {
     data: {
       pendingRentCount: number;
       pendingExpenseCount: number;
+      pendingTransferCount?: number;
       totalPendingCount: number;
       submittedTodayCount: number;
       submittedBySarfrazCount: number;

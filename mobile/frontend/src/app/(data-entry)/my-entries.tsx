@@ -25,7 +25,7 @@ import StatusBadge from '@/components/StatusBadge';
 type UnifiedEntry = {
   id: string;
   isPending: boolean;
-  type: 'RENT' | 'EXPENSE';
+  type: 'RENT' | 'EXPENSE' | 'TRANSFER';
   voucherNo: string;
   date: string;
   amount: number;

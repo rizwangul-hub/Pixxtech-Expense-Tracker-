@@ -10,14 +10,12 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { staffAPI } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import MobileDrawerModal from '@/components/MobileDrawerModal';
 
 export default function StaffHRScreen() {
-  const router = useRouter();
   const { isAdmin } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -27,9 +25,11 @@ export default function StaffHRScreen() {
     try {
       setLoading(true);
       const res = await staffAPI.getEmployees();
-      setEmployees(res.employees || res.data || []);
+      const rawList = res?.data?.employees || res?.employees || res?.data || [];
+      setEmployees(Array.isArray(rawList) ? rawList : []);
     } catch (err: any) {
       console.warn('Failed to load staff:', err.message);
+      setEmployees([]);
     } finally {
       setLoading(false);
     }
