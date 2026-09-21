@@ -42,6 +42,17 @@ export default function AdminLayout() {
       <Stack.Screen name="reports" options={{ headerShown: false }} />
       <Stack.Screen name="add-rent" options={{ headerShown: false }} />
       <Stack.Screen name="add-expense" options={{ headerShown: false }} />
+      <Stack.Screen name="staff" options={{ headerShown: false }} />
+      <Stack.Screen name="chart-of-accounts" options={{ headerShown: false }} />
+      <Stack.Screen name="tenants" options={{ headerShown: false }} />
+      <Stack.Screen name="agreements" options={{ headerShown: false }} />
+      <Stack.Screen name="rent-due" options={{ headerShown: false }} />
+      <Stack.Screen name="rent-received" options={{ headerShown: false }} />
+      <Stack.Screen name="other-income" options={{ headerShown: false }} />
+      <Stack.Screen name="expenses" options={{ headerShown: false }} />
+      <Stack.Screen name="transfers" options={{ headerShown: false }} />
+      <Stack.Screen name="monthly-reports" options={{ headerShown: false }} />
+      <Stack.Screen name="users" options={{ headerShown: false }} />
     </Stack>
   );
 }

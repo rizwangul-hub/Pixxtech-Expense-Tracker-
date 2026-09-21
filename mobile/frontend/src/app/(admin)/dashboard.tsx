@@ -21,6 +21,7 @@ import {
   TransactionItem,
 } from '@/services/api';
 import { StatusBadge } from '@/components/StatusBadge';
+import MobileDrawerModal from '@/components/MobileDrawerModal';
 
 const formatPKR = (val?: number): string => {
   if (val === undefined || val === null || isNaN(val)) return 'Rs. 0.00';
@@ -48,6 +49,7 @@ export default function AdminDashboardScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
 
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -134,6 +136,12 @@ export default function AdminDashboardScreen() {
       {/* Top App Bar */}
       <View style={styles.topBar}>
         <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={{ padding: 6, marginRight: 8, borderRadius: 8, backgroundColor: '#F1F5F9' }}
+            onPress={() => setDrawerOpen(true)}
+          >
+            <Feather name="menu" size={20} color="#0F172A" />
+          </TouchableOpacity>
           <Image
             source={require('@/assets/images/logo.png')}
             style={styles.headerLogo}

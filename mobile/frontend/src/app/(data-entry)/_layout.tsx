@@ -36,6 +36,20 @@ export default function DataEntryLayout() {
       <Stack.Screen name="add-expense" options={{ headerShown: false }} />
       <Stack.Screen name="my-entries" options={{ headerShown: false }} />
       <Stack.Screen name="entry-detail" options={{ headerShown: false }} />
+      <Stack.Screen name="ledgers" options={{ headerShown: false }} />
+      <Stack.Screen name="staff" options={{ headerShown: false }} />
+      <Stack.Screen name="properties" options={{ headerShown: false }} />
+      <Stack.Screen name="tenants" options={{ headerShown: false }} />
+      <Stack.Screen name="agreements" options={{ headerShown: false }} />
+      <Stack.Screen name="rent-due" options={{ headerShown: false }} />
+      <Stack.Screen name="rent-received" options={{ headerShown: false }} />
+      <Stack.Screen name="other-income" options={{ headerShown: false }} />
+      <Stack.Screen name="expenses" options={{ headerShown: false }} />
+      <Stack.Screen name="accounts" options={{ headerShown: false }} />
+      <Stack.Screen name="transfers" options={{ headerShown: false }} />
+      <Stack.Screen name="transactions" options={{ headerShown: false }} />
+      <Stack.Screen name="reports" options={{ headerShown: false }} />
+      <Stack.Screen name="monthly-reports" options={{ headerShown: false }} />
     </Stack>
   );
 }

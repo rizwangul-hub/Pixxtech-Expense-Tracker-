@@ -14,6 +14,52 @@ import {
 } from 'lucide-react';
 import { attendanceAPI } from '../services/api.js';
 
+const ATTENDANCE_ORDER = {
+  'Bahria Town Office': [
+    'Fahad Rasheed',
+    'Sarfraz Khan',
+    'Khurshid Anwar',
+    'Rizwan Ullah',
+    'Adeel Ahmad',
+    'Usman Salahudin',
+    'Zafer Hussain',
+    'Majid Javed',
+  ],
+  'IT Office': [
+    'Miss Nousheen',
+    'Samina Iqbal',
+    'Zulaikha Afzaal',
+    'Saeed Sb',
+    'Faaiz',
+    'Naveed Malik',
+    'Abdul Rafey Khan',
+    'Gulzaib Hamid',
+  ],
+};
+
+const normalizeEmployeeName = (name = '') =>
+  name
+    .toLowerCase()
+    .replace(/\b(miss|mr|mrs|ms)\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
+const employeeOrderIndex = (name, location) => {
+  const normalizedName = normalizeEmployeeName(name);
+  const order = ATTENDANCE_ORDER[location] || [];
+  const exactIndex = order.findIndex((person) => normalizeEmployeeName(person) === normalizedName);
+
+  if (exactIndex >= 0) return exactIndex;
+
+  // Keep common legacy spellings/nicknames aligned with the requested order.
+  const aliases = {
+    zaffarhussain: 'zaferhussain',
+    saeed: 'saeedsb',
+  };
+  const canonicalName = aliases[normalizedName] || normalizedName;
+  const aliasIndex = order.findIndex((person) => normalizeEmployeeName(person) === canonicalName);
+  return aliasIndex >= 0 ? aliasIndex : Number.MAX_SAFE_INTEGER;
+};
+
 export const AttendanceSubTab = () => {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [activeLocationTab, setActiveLocationTab] = useState('IT Office'); // 'IT Office' | 'Bahria Town Office'
@@ -81,14 +127,29 @@ export const AttendanceSubTab = () => {
 
   // Filter attendance rows by selected active location tab
   // Excludes Security Guard, 4A Home, and non-attendance locations
-  const filteredRows = attendanceRows.filter((r) => {
-    if (activeLocationTab === 'IT Office') {
-      return isITOfficeRow(r);
-    }
-    if (activeLocationTab === 'Bahria Town Office') {
-      return isBahriaTownRow(r);
-    }
-    return false;
+  const filteredRows = attendanceRows
+    .filter((r) => {
+      if (activeLocationTab === 'IT Office') {
+        return isITOfficeRow(r);
+      }
+      if (activeLocationTab === 'Bahria Town Office') {
+        return isBahriaTownRow(r);
+      }
+      return false;
+    })
+    .sort(
+      (a, b) =>
+        employeeOrderIndex(a.name, activeLocationTab) -
+        employeeOrderIndex(b.name, activeLocationTab)
+    );
+
+  const sortedMonthlySummary = [...monthlySummary].sort((a, b) => {
+    const locationOrder = { 'Bahria Town Office': 0, 'IT Office': 1 };
+    const aLocation = locationOrder[a.department] ?? 2;
+    const bLocation = locationOrder[b.department] ?? 2;
+
+    if (aLocation !== bLocation) return aLocation - bLocation;
+    return employeeOrderIndex(a.name, a.department) - employeeOrderIndex(b.name, b.department);
   });
 
   const handleRowChange = (empId, field, val) => {
@@ -505,7 +566,7 @@ export const AttendanceSubTab = () => {
                   </td>
                 </tr>
               ) : (
-                monthlySummary.map((sum) => (
+                sortedMonthlySummary.map((sum) => (
                   <tr key={sum.employeeId} className="hover:bg-slate-900/60 transition">
                     <td className="py-3 px-4">
                       <div className="font-bold text-white text-sm">{sum.name}</div>
