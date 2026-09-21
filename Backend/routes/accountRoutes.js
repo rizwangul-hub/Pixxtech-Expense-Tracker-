@@ -12,6 +12,7 @@ import {
   createCategory,
   deleteCategory,
   getProperties,
+  recalculateAllBalances,
 } from '../controllers/accountController.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { validateAccount } from '../middleware/validateAccount.js';
@@ -26,9 +27,13 @@ router.get('/monthly-summary', getMonthlySummary);
 router.get('/active-summary', getActiveAccountsSummary);
 router.get('/categories-list', getCategories);
 router.get('/properties-list', getProperties);
+
 // Data-entry & Admin users may add or delete expense heads
 router.post('/categories', authorize('ADMIN', 'ADMIN_PUBLISHER', 'DATA_ENTRY', 'VERIFIER'), createCategory);
 router.delete('/categories/:id', authorize('ADMIN', 'ADMIN_PUBLISHER', 'DATA_ENTRY', 'VERIFIER'), deleteCategory);
+
+// Admin-only: Reconcile account balances from actual transactions (fixes stored vs computed divergence)
+router.post('/recalculate-balances', authorize('ADMIN', 'ADMIN_PUBLISHER'), recalculateAllBalances);
 
 // Specific Account Ledger & Detail
 router.get('/:id/ledger', getAccountLedger);

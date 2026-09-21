@@ -857,18 +857,18 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
 
             {/* DESKTOP TABLE VIEW (Horizontally Scrollable & Generously Spaced) */}
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs min-w-[980px]">
+              <table className="w-full text-left border-collapse text-xs min-w-[1050px]">
                 <thead>
                   <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 font-semibold text-[11px] uppercase tracking-wider">
-                    <th className="py-3.5 px-4">Date / Month</th>
-                    <th className="py-3.5 px-3">Type</th>
-                    <th className="py-3.5 px-3">Submitter</th>
-                    <th className="py-3.5 px-4">Narration / Details</th>
-                    <th className="py-3.5 px-3">Property / Unit</th>
-                    <th className="py-3.5 px-3">Accounts Involved</th>
-                    <th className="py-3.5 px-4 text-right">Amount (PKR)</th>
-                    <th className="py-3.5 px-3 text-center">Status</th>
-                    <th className="py-3.5 px-4 text-center">Actions</th>
+                    <th className="py-3 px-3.5 w-32">Date / Month</th>
+                    <th className="py-3 px-3 w-28">Type</th>
+                    <th className="py-3 px-3 w-28">Submitter</th>
+                    <th className="py-3 px-3.5 w-72 min-w-[220px] max-w-[320px]">Narration / Details</th>
+                    <th className="py-3 px-3 w-40">Property / Unit</th>
+                    <th className="py-3 px-3 w-56">Accounts Involved</th>
+                    <th className="py-3 px-3.5 text-right w-32">Amount (PKR)</th>
+                    <th className="py-3 px-3 text-center w-32">Status</th>
+                    <th className="py-3 px-3 text-center w-36">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
@@ -879,37 +879,37 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
 
                     return (
                       <tr key={entry._id} className="hover:bg-slate-800/40 transition">
-                        <td className="py-4 px-4 whitespace-nowrap">
+                        <td className="py-2.5 px-3.5 whitespace-nowrap align-middle">
                           <div className="font-semibold text-white">
                             {entry.date ? new Date(entry.date).toLocaleDateString('en-PK') : '—'}
                           </div>
                           {entry.rentMonth && (
-                            <div className="text-[11px] font-mono text-indigo-400 font-semibold">
+                            <div className="text-[10px] font-mono text-indigo-400 font-semibold">
                               Month: {entry.rentMonth}
                             </div>
                           )}
                           {entry.voucherNo && (
-                            <div className="text-[11px] text-amber-400 font-mono font-bold">
+                            <div className="text-[10px] text-amber-400 font-mono font-bold">
                               VN: #{entry.voucherNo}
                             </div>
                           )}
                         </td>
 
-                        <td className="py-4 px-3 whitespace-nowrap">
+                        <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                           {entry.entryType === 'RENT' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-blue-950/70 text-blue-300 border border-blue-700/50">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-950/70 text-blue-300 border border-blue-700/50">
                               <Building2 size={11} /> Rent
                             </span>
                           ) : entry.entryType === 'TRANSFER' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-purple-950/70 text-purple-300 border border-purple-700/50">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950/70 text-purple-300 border border-purple-700/50">
                               <ArrowLeftRight size={11} /> Transfer
                             </span>
                           ) : (
-                            <div className="flex flex-col gap-1">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-rose-950/70 text-rose-300 border border-rose-700/50">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950/70 text-rose-300 border border-rose-700/50">
                                 <DollarSign size={11} /> Expense
                               </span>
-                              <span className="text-[10px] font-mono font-semibold text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                              <span className="text-[9px] font-mono font-semibold text-slate-400 bg-slate-950 px-1 py-0.2 rounded border border-slate-800">
                                 {entry.expenseClassification === 'PROPERTY_OWN_EXPENSE'
                                   ? 'Property Own'
                                   : entry.expenseClassification === 'UNIT_EXPENSE'
@@ -920,38 +920,41 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           )}
                         </td>
 
-                        <td className="py-4 px-3 whitespace-nowrap">
+                        <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                           <div className="font-semibold text-slate-200">
                             {entry.submittedByName || entry.submittedBy?.name || 'Sarfraz'}
                           </div>
-                          <div className="text-[11px] text-slate-500">
+                          <div className="text-[10px] text-slate-500">
                             {new Date(entry.submittedAt || entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </td>
 
-                        <td className="py-4 px-4 max-w-xs">
-                          <div className="text-slate-200 font-medium leading-relaxed" title={entry.detail}>
+                        <td className="py-2.5 px-3.5 max-w-[280px] lg:max-w-[320px] align-middle">
+                          <div
+                            className="text-slate-200 font-medium text-xs leading-snug line-clamp-2"
+                            title={entry.detail}
+                          >
                             {entry.detail || '—'}
                           </div>
                           {entry.categoryId?.name && (
-                            <div className="text-[11px] text-amber-400 font-mono mt-0.5">
+                            <div className="text-[10px] text-amber-400 font-mono truncate mt-0.5" title={entry.categoryId.name}>
                               Head: {entry.categoryId.name}
                             </div>
                           )}
                         </td>
 
-                        <td className="py-4 px-3 whitespace-nowrap">
-                          <div className="text-white font-semibold">
+                        <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                          <div className="text-white font-semibold truncate max-w-[160px]" title={entry.propertyId?.plazaName}>
                             {entry.propertyId?.plazaName || '—'}
                           </div>
                           {entry.tenantId?.fullName && (
-                            <div className="text-[11px] text-slate-400">
+                            <div className="text-[10px] text-slate-400 truncate max-w-[160px]" title={entry.tenantId.fullName}>
                               Tenant: {entry.tenantId.fullName}
                             </div>
                           )}
                         </td>
 
-                        <td className="py-4 px-3 whitespace-nowrap text-xs">
+                        <td className="py-2.5 px-3 whitespace-nowrap text-xs align-middle">
                           {entry.entryType === 'RENT' ? (
                             <div>
                               <span className="text-emerald-400 font-bold">Dr: </span>
@@ -984,33 +987,33 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           )}
                         </td>
 
-                        <td className="py-4 px-4 text-right whitespace-nowrap font-mono font-black text-emerald-400 text-sm">
+                        <td className="py-2.5 px-3.5 text-right whitespace-nowrap font-mono font-black text-emerald-400 text-sm align-middle">
                           {formatPKR(entry.amount)}
                         </td>
 
-                        <td className="py-4 px-3 text-center whitespace-nowrap">
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap align-middle">
                           {isPending ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700/60">
-                              <Clock size={11} /> Pending Review
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700/60">
+                              <Clock size={10} /> Pending Review
                             </span>
                           ) : isVerified ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60">
-                              <CheckCircle2 size={11} /> Verified
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60">
+                              <CheckCircle2 size={10} /> Verified
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-950/80 text-rose-300 border border-rose-700/60" title={entry.rejectionReason}>
-                              <XCircle size={11} /> Rejected
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-950/80 text-rose-300 border border-rose-700/60" title={entry.rejectionReason}>
+                              <XCircle size={10} /> Rejected
                             </span>
                           )}
                         </td>
 
-                        <td className="py-4 px-4 text-center whitespace-nowrap">
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap align-middle">
                           {isPending ? (
-                            <div className="flex items-center justify-center gap-2">
+                            <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() => handleVerify(entry)}
                                 disabled={savingEntryId === entry._id}
-                                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition disabled:opacity-50"
+                                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow transition disabled:opacity-50"
                                 title="Verify & Post to Ledger"
                               >
                                 <Check size={13} />
@@ -1024,7 +1027,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                                   className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 transition disabled:opacity-50"
                                   title="Edit Entry"
                                 >
-                                  <Edit3 size={14} />
+                                  <Edit3 size={13} />
                                 </button>
                               )}
 
@@ -1034,7 +1037,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                                 className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-400 border border-slate-700 transition disabled:opacity-50"
                                 title="Reject Entry"
                               >
-                                <XCircle size={14} />
+                                <XCircle size={13} />
                               </button>
 
                               <button
@@ -1043,11 +1046,11 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                                 className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 border border-slate-700 transition disabled:opacity-50"
                                 title="Delete Draft"
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={13} />
                               </button>
                             </div>
                           ) : (
-                            <div className="text-[11px] text-slate-500">
+                            <div className="text-[10px] text-slate-500">
                               {isVerified ? (
                                 <span>Verified by {entry.verifiedByName || 'Khurshid'}</span>
                               ) : (

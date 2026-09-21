@@ -400,6 +400,10 @@ export const accountsAPI = {
     const res = await api.get('/accounts/properties-list');
     return res.data;
   },
+  recalculateBalances: async () => {
+    const res = await api.post('/accounts/recalculate-balances');
+    return res.data;
+  },
 };
 
 export const transfersAPI = {

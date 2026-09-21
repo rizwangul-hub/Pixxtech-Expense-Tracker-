@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Clock,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import { accountsAPI } from '../services/api.js';
 import { formatPKR, formatDate } from '../utils/formatters.js';
@@ -45,6 +46,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [reconciling, setReconciling] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -198,6 +200,30 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
     }
   };
 
+  const handleReconcileBalances = async () => {
+    if (!window.confirm('Reconcile all account balances from actual transactions? This will recompute and fix any discrepancies between the stored balance and the ledger.')) {
+      return;
+    }
+    setReconciling(true);
+    try {
+      const res = await accountsAPI.recalculateBalances();
+      if (res?.success) {
+        const updated = res.data?.accountsUpdated ?? 0;
+        setSuccessMsg(
+          updated > 0
+            ? `✅ Balance reconciliation complete — ${updated} account(s) corrected.`
+            : '✅ All account balances are already in sync. No changes needed.'
+        );
+        fetchAccounts();
+        setTimeout(() => setSuccessMsg(''), 6000);
+      }
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Failed to reconcile balances.');
+    } finally {
+      setReconciling(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -230,6 +256,17 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
               >
                 <ArrowLeftRight size={15} />
                 Internal Transfers
+              </button>
+            )}
+            {userIsAdmin && (
+              <button
+                onClick={handleReconcileBalances}
+                disabled={reconciling}
+                className="bg-violet-700 hover:bg-violet-600 disabled:opacity-60 text-white font-bold px-4 py-2 rounded-lg text-xs transition flex items-center gap-2 shadow-sm"
+                title="Recompute all account balances from actual transaction records"
+              >
+                <RefreshCw size={14} className={reconciling ? 'animate-spin' : ''} />
+                {reconciling ? 'Reconciling...' : 'Reconcile Balances'}
               </button>
             )}
             {userIsAdmin && (
@@ -275,10 +312,10 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
               <Building2 size={16} className="text-sky-400" />
             </div>
             <div className="text-2xl font-black text-sky-400 font-mono mt-2">
-              {formatPKR(summary.bankBalancesTotal ?? 0)}
+              {formatPKR(summary.bankTotal ?? summary.bankBalancesTotal ?? 0)}
             </div>
             <div className="text-[11px] text-slate-500 mt-1">
-              {summary.bankAccountsCount ?? 0} active bank accounts
+              {summary.bankCount ?? summary.bankAccountsCount ?? 0} active bank accounts
             </div>
           </div>
 
@@ -288,10 +325,10 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
               <Wallet size={16} className="text-amber-400" />
             </div>
             <div className="text-2xl font-black text-amber-400 font-mono mt-2">
-              {formatPKR(summary.cashBalancesTotal ?? 0)}
+              {formatPKR(summary.cashTotal ?? summary.cashBalancesTotal ?? 0)}
             </div>
             <div className="text-[11px] text-slate-500 mt-1">
-              {summary.cashAccountsCount ?? 0} custodian cash accounts
+              {summary.cashCount ?? summary.cashAccountsCount ?? 0} custodian cash accounts
             </div>
           </div>
 
@@ -334,7 +371,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
             }`}
           >
             <Building2 size={13} />
-            Banks ({summary?.bankAccountsCount ?? 0})
+            Banks ({summary?.bankCount ?? summary?.bankAccountsCount ?? 0})
           </button>
           <button
             onClick={() => setActiveTab('CASH')}
@@ -345,7 +382,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
             }`}
           >
             <Wallet size={13} />
-            Cash Holders ({summary?.cashAccountsCount ?? 0})
+            Cash Holders ({summary?.cashCount ?? summary?.cashAccountsCount ?? 0})
           </button>
         </div>
 

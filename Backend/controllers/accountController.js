@@ -997,6 +997,74 @@ export const deleteCategory = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Recalculate all account currentBalance values from actual transactions.
+ *          This is a reconciliation/admin tool to fix any divergence between the stored
+ *          Account.currentBalance field and the dynamic ledger computation.
+ * @route   POST /api/accounts/recalculate-balances
+ * @access  Private (Admin / Admin Publisher only)
+ */
+export const recalculateAllBalances = async (req, res) => {
+  try {
+    const accounts = await Account.find({}).lean();
+
+    // Fetch all non-reversed transactions in one shot for efficiency
+    const allTransactions = await Transaction.find({ status: { $ne: 'REVERSED' } })
+      .select('drAccountId crAccountId amount')
+      .lean();
+
+    // Aggregate net movement per account
+    const netMap = new Map(); // accountId string => net movement
+    for (const tx of allTransactions) {
+      const drStr = tx.drAccountId?.toString();
+      const crStr = tx.crAccountId?.toString();
+      const amt = tx.amount || 0;
+
+      if (drStr) {
+        netMap.set(drStr, (netMap.get(drStr) || 0) + amt);
+      }
+      if (crStr) {
+        netMap.set(crStr, (netMap.get(crStr) || 0) - amt);
+      }
+    }
+
+    // Update each account: currentBalance = openingBalance + net transaction movement
+    const results = [];
+    for (const acc of accounts) {
+      const accIdStr = acc._id.toString();
+      const netMovement = netMap.get(accIdStr) || 0;
+      const recalculated = round2((acc.openingBalance || 0) + netMovement);
+      const previous = round2(acc.currentBalance || 0);
+
+      if (Math.abs(recalculated - previous) > 0.001) {
+        await Account.findByIdAndUpdate(acc._id, { currentBalance: recalculated });
+        results.push({
+          accountId: acc._id,
+          name: acc.name,
+          previous,
+          recalculated,
+          difference: round2(recalculated - previous),
+        });
+      }
+    }
+
+    return apiSuccess(
+      res,
+      {
+        accountsChecked: accounts.length,
+        accountsUpdated: results.length,
+        updates: results,
+      },
+      results.length > 0
+        ? `Reconciliation complete. Updated ${results.length} account balance(s).`
+        : 'All account balances are already in sync. No changes needed.'
+    );
+  } catch (error) {
+    console.error('[Recalculate Balances Error]:', error);
+    return apiError(res, 'Failed to recalculate account balances.', 500);
+  }
+};
+
 export default {
   getAccounts,
   getAccountById,
