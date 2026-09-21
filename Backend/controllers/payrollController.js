@@ -108,6 +108,8 @@ export const getMonthlyPayroll = async (req, res) => {
 
     const [y, m] = month.split('-').map(Number);
     const totalDays = new Date(y, m, 0).getDate();
+    const startDate = new Date(Date.UTC(y, m - 1, 1));
+    const endDate = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
 
     // Check if payroll already saved for this month
     const existingPayroll = await Payroll.find({ payrollMonth: month }).lean();
@@ -119,8 +121,14 @@ export const getMonthlyPayroll = async (req, res) => {
     if (department && department !== 'ALL') empQuery.department = department;
     const employees = await Employee.find(empQuery).sort({ department: 1, name: 1 }).lean();
 
-    // Fetch attendance summary for month
-    const attRecords = await Attendance.find({ dateStr: new RegExp(`^${month}`) }).lean();
+    // Fetch attendance summary for month using both dateStr regex and date range
+    const attRecords = await Attendance.find({
+      $or: [
+        { dateStr: new RegExp(`^${month}`) },
+        { date: { $gte: startDate, $lte: endDate } },
+      ],
+    }).lean();
+
     const empAttMap = new Map();
     attRecords.forEach((rec) => {
       const idStr = rec.employeeId.toString();
@@ -173,7 +181,7 @@ export const getMonthlyPayroll = async (req, res) => {
       const finalLateDays = records.length > 0 ? lateDays : (saved && saved.lateDays !== undefined ? saved.lateDays : lateDays);
       const finalLeaveDays = records.length > 0 ? leaveDays : (saved && saved.leaveDays !== undefined ? saved.leaveDays : leaveDays);
       const finalLopDays = records.length > 0 ? lopDays : (saved && saved.lopDays !== undefined ? saved.lopDays : lopDays);
-      const allowedLeaves = emp.allowedMonthlyLeaves !== undefined ? emp.allowedMonthlyLeaves : 2;
+      const allowedLeaves = Number(saved?.allowedLeaves ?? emp?.allowedMonthlyLeaves ?? emp?.allowedLeaves ?? 2) || 2;
 
       const loanDeduction = saved ? saved.loanDeduction : 0;
       const lopDeduction = saved ? saved.lopDeduction : 0;
@@ -208,7 +216,7 @@ export const getMonthlyPayroll = async (req, res) => {
         loanDeduction,
         otherDeduction,
         totalDeduction,
-        netPayable: saved ? saved.netPayable : netPayable,
+        netPayable: netPayable,
         accountTitle: saved ? saved.accountTitle : emp.accountTitle || emp.name,
         ibanNumber: saved ? saved.ibanNumber : emp.ibanNumber || '',
         bankName: saved ? saved.bankName : emp.bankName || '',
@@ -745,10 +753,17 @@ export const generateSalarySlipPDF = async (req, res) => {
 
     const savedPayroll = await Payroll.findOne({ employeeId, payrollMonth: month }).lean();
 
+    const [y, m] = month.split('-').map(Number);
+    const startDate = new Date(Date.UTC(y, m - 1, 1));
+    const endDate = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+
     // Query live attendance records for employee in target month
     const attRecords = await Attendance.find({
       employeeId,
-      dateStr: new RegExp(`^${month}`),
+      $or: [
+        { dateStr: new RegExp(`^${month}`) },
+        { date: { $gte: startDate, $lte: endDate } },
+      ],
     }).lean();
 
     let livePresentDays = 0;
@@ -815,14 +830,11 @@ export const generateSalarySlipPDF = async (req, res) => {
     // Attendance metrics
     const presentDays = attRecords.length > 0 ? livePresentDays : (savedPayroll && savedPayroll.presentDays > 0 ? savedPayroll.presentDays : livePresentDays);
     const leaveDays = attRecords.length > 0 ? liveLeaveDays : (savedPayroll && savedPayroll.leaveDays > 0 ? savedPayroll.leaveDays : liveLeaveDays);
-    const allowedLeaves = (savedPayroll && savedPayroll.allowedLeaves !== undefined && savedPayroll.allowedLeaves !== null)
-      ? savedPayroll.allowedLeaves
-      : (employee.allowedMonthlyLeaves !== undefined ? employee.allowedMonthlyLeaves : 2);
+    const allowedLeaves = Number(savedPayroll?.allowedLeaves ?? employee?.allowedMonthlyLeaves ?? employee?.allowedLeaves ?? 2) || 2;
     const lopDays = attRecords.length > 0 ? liveLopDays : (savedPayroll && savedPayroll.lopDays > 0 ? savedPayroll.lopDays : liveLopDays);
     const totalSalaryDays = Math.max(0, 30 - lopDays);
 
     // Convert month to string e.g. "August 2026"
-    const [y, m] = month.split('-').map(Number);
     const dateObj = new Date(y, m - 1, 1);
     const monthName = dateObj.toLocaleString('en-US', { month: 'long' });
     const formattedTitleDate = `${monthName} ${y}`;
@@ -1231,12 +1243,75 @@ export const paySingleSalary = async (req, res) => {
       pDate = endOfMonthDate;
     }
 
+    // Routing for Data Entry role (Sarfraz Khan): Create PendingEntry awaiting Khurshid's verification
+    if (req.user?.role === 'DATA_ENTRY') {
+      const existingPending = await PendingEntry.findOne({
+        entryType: 'SALARY',
+        status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
+        'entryData.payrollId': pDoc._id,
+      });
+
+      if (existingPending) {
+        return apiError(
+          res,
+          `Salary payout for ${pDoc.employeeName} for ${month} is already pending verification by Khurshid Anwar.`,
+          400
+        );
+      }
+
+      const voucherNo = await suggestNextVoucherNumber('EXPENSE', pDate);
+
+      const pending = await PendingEntry.create({
+        entryType: 'SALARY',
+        amount: netAmount,
+        date: pDate,
+        voucherNo,
+        rentMonth: month,
+        crAccountId: account._id,
+        drAccountId: clearingAccount._id,
+        receivingAccountId: account._id,
+        detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`.trim(),
+        tenantId: pDoc.employeeId,
+        entryData: {
+          payrollId: pDoc._id,
+          employeeId: pDoc.employeeId,
+          month,
+          loanDeduction: pDoc.loanDeduction || 0,
+          paidFromAccountId: account._id,
+          paymentMethod,
+          paymentNotes,
+        },
+        status: 'PENDING_VERIFICATION',
+        submittedBy: req.user._id,
+        submittedByName: req.user?.name || 'Sarfraz Khan',
+        submittedAt: new Date(),
+        auditLog: [
+          {
+            action: 'SUBMITTED',
+            performedBy: req.user?.name || 'Sarfraz Khan',
+            performedById: req.user._id,
+            timestamp: new Date(),
+            notes: `Salary payout entry submitted by Data Entry Operator. Awaiting review and verification by Khurshid Anwar.`,
+          },
+        ],
+      });
+
+      pDoc.paymentStatus = 'PENDING_VERIFICATION';
+      await pDoc.save();
+
+      return apiSuccess(
+        res,
+        { pendingEntry: pending, isPending: true, status: 'PENDING_VERIFICATION' },
+        `Salary payout of Rs. ${formatPKR(netAmount)} for ${pDoc.employeeName} submitted to Verification Queue. Bank funds will be disbursed upon Khurshid Anwar's approval.`
+      );
+    }
+
     const voucherNo = await suggestNextVoucherNumber('EXPENSE', pDate);
 
     const transaction = await createTransaction({
       date: pDate,
       voucherNo,
-      detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) â€” Month ${month}`,
+      detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`,
       categoryId: salariesCategory._id,
       drAccountId: clearingAccount._id,
       crAccountId: account._id,
@@ -1341,6 +1416,76 @@ export const payBulkSalary = async (req, res) => {
     let pDate = paymentDate ? new Date(paymentDate) : endOfMonthDate;
     if (isNaN(pDate.getTime()) || pDate.getUTCFullYear() !== year || (pDate.getUTCMonth() + 1) !== monthNum) {
       pDate = endOfMonthDate;
+    }
+
+    // Routing for Data Entry role (Sarfraz Khan): Create PendingEntry for each unpaid salary record
+    if (req.user?.role === 'DATA_ENTRY') {
+      const pendingResults = [];
+
+      for (const pDoc of payrollDocs) {
+        const netAmount = round2(pDoc.netPayable);
+        if (netAmount <= 0) continue;
+
+        const existingPending = await PendingEntry.findOne({
+          entryType: 'SALARY',
+          status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
+          'entryData.payrollId': pDoc._id,
+        });
+
+        if (existingPending) continue;
+
+        const voucherNo = await suggestNextVoucherNumber('EXPENSE', pDate);
+        const pending = await PendingEntry.create({
+          entryType: 'SALARY',
+          amount: netAmount,
+          date: pDate,
+          voucherNo,
+          rentMonth: month,
+          crAccountId: account._id,
+          drAccountId: clearingAccount._id,
+          receivingAccountId: account._id,
+          detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`.trim(),
+          tenantId: pDoc.employeeId,
+          entryData: {
+            payrollId: pDoc._id,
+            employeeId: pDoc.employeeId,
+            month,
+            loanDeduction: pDoc.loanDeduction || 0,
+            paidFromAccountId: account._id,
+            paymentMethod,
+            paymentNotes,
+          },
+          status: 'PENDING_VERIFICATION',
+          submittedBy: req.user._id,
+          submittedByName: req.user?.name || 'Sarfraz Khan',
+          submittedAt: new Date(),
+          auditLog: [
+            {
+              action: 'SUBMITTED',
+              performedBy: req.user?.name || 'Sarfraz Khan',
+              performedById: req.user._id,
+              timestamp: new Date(),
+              notes: `Bulk salary payout entry submitted by Data Entry Operator. Awaiting review and verification by Khurshid Anwar.`,
+            },
+          ],
+        });
+
+        pDoc.paymentStatus = 'PENDING_VERIFICATION';
+        await pDoc.save();
+
+        pendingResults.push({
+          employeeName: pDoc.employeeName,
+          amount: netAmount,
+          voucherNo,
+          pendingEntryId: pending._id,
+        });
+      }
+
+      return apiSuccess(
+        res,
+        { count: pendingResults.length, totalAmount: totalRequired, pendingList: pendingResults, isPending: true },
+        `Submitted ${pendingResults.length} salary payouts totaling Rs. ${formatPKR(totalRequired)} to Verification Queue for Khurshid Anwar's approval.`
+      );
     }
 
     const results = [];

@@ -248,6 +248,38 @@ export default function DataEntryDashboardScreen() {
             </View>
           </TouchableOpacity>
 
+          {/* Other Income Action */}
+          <TouchableOpacity
+            style={styles.actionCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/(data-entry)/other-income')}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: '#F0FDFA' }]}>
+              <Feather name="trending-up" size={24} color="#0F766E" />
+            </View>
+            <Text style={styles.actionTitle}>Other Income</Text>
+            <Text style={styles.actionSubtitle}>Submit other income received</Text>
+            <View style={styles.actionArrow}>
+              <Feather name="arrow-right" size={16} color="#0F766E" />
+            </View>
+          </TouchableOpacity>
+
+          {/* Internal Transfer Action */}
+          <TouchableOpacity
+            style={styles.actionCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/(data-entry)/transfers')}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: '#EEF2FF' }]}>
+              <Feather name="repeat" size={24} color="#4338CA" />
+            </View>
+            <Text style={styles.actionTitle}>Internal Transfer</Text>
+            <Text style={styles.actionSubtitle}>Move funds between accounts</Text>
+            <View style={styles.actionArrow}>
+              <Feather name="arrow-right" size={16} color="#4338CA" />
+            </View>
+          </TouchableOpacity>
+
           {/* Pending Submissions Action */}
           <TouchableOpacity
             style={styles.actionCard}

@@ -271,9 +271,9 @@ export function MainLayout({
   return (
     <div className="h-screen overflow-hidden bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Top Header */}
-      <header className="shrink-0 sticky top-0 z-40 h-20 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-0 flex items-center justify-between shadow-2xs">
+      <header className="shrink-0 sticky top-0 z-40 h-16 sm:h-20 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-2.5 sm:px-6 lg:px-8 py-0 flex items-center justify-between shadow-2xs">
         {/* Left Branding */}
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-2 sm:gap-3.5">
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -283,8 +283,8 @@ export function MainLayout({
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
 
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl p-1 bg-gradient-to-b from-slate-50 to-slate-100 border border-slate-200/80 shadow-2xs flex items-center justify-center shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="h-10 w-10 sm:h-14 sm:w-14 rounded-xl sm:rounded-2xl p-1 bg-gradient-to-b from-slate-50 to-slate-100 border border-slate-200/80 shadow-2xs flex items-center justify-center shrink-0">
               <img
                 src={logo}
                 alt="Pixx Technologies logo"
@@ -292,8 +292,8 @@ export function MainLayout({
               />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-none">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h1 className="text-xs sm:text-base font-black text-slate-900 tracking-tight leading-none">
                   PIXX TECHNOLOGIES
                 </h1>
                 <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200/80 hidden xl:inline-block">
@@ -308,7 +308,7 @@ export function MainLayout({
         </div>
 
         {/* Right User & Actions */}
-        <div className="flex items-center gap-2.5 sm:gap-3.5">
+        <div className="flex items-center gap-1.5 sm:gap-3.5">
           {/* Status Indicator */}
           <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-xs font-bold text-emerald-800 shadow-2xs">
             <span className="relative flex h-2.5 w-2.5">

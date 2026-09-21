@@ -103,36 +103,36 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
       {/* Container wrapper */}
       <div className="relative bg-slate-200 rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col my-auto border border-slate-300 overflow-hidden">
         {/* Top Screen Action Bar (Hidden during printing) */}
-        <div className="bg-slate-900 text-white px-6 py-3.5 flex items-center justify-between no-print border-b border-slate-800">
+        <div className="bg-slate-900 text-white px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2.5 no-print border-b border-slate-800">
           <div className="flex items-center gap-2">
             <Printer size={18} className="text-blue-400" />
             <span className="text-xs font-black uppercase tracking-wider">
-              A4 Single-Page Voucher Print / PDF Preview ({data.voucherNo})
+              A4 Voucher ({data.voucherNo})
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleDownloadPDF}
               disabled={downloadingPdf || printingPdf}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs shadow-md transition"
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs shadow-md transition"
               title="Download official A4 PDF"
             >
-              <Download size={16} />
-              {downloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+              <Download size={14} />
+              {downloadingPdf ? 'Downloading...' : 'PDF'}
             </button>
             <button
               onClick={handlePrint}
               disabled={downloadingPdf || printingPdf}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs shadow-md transition"
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs shadow-md transition"
               title="Print exact PDF voucher"
             >
-              <Printer size={16} />
-              {printingPdf ? 'Preparing PDF Print...' : 'Print Voucher (Ctrl+P)'}
+              <Printer size={14} />
+              {printingPdf ? 'Printing...' : 'Print'}
             </button>
             <button
               onClick={onClose}
-              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+              className="p-1.5 sm:p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
             >
               <X size={18} />
             </button>

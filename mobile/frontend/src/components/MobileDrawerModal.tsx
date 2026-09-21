@@ -6,11 +6,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   TouchableWithoutFeedback,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { verificationAPI } from '@/services/api';
 
@@ -107,7 +107,7 @@ export default function MobileDrawerModal({
       badge: 'Operator',
       badgeColor: '#D1FAE5',
       badgeTextColor: '#065F46',
-      route: `${prefix}/add-expense`,
+      route: `${prefix}/dashboard`,
       visible: true,
     },
     {
