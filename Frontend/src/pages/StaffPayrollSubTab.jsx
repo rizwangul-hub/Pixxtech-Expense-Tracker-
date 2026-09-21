@@ -491,12 +491,29 @@ export const StaffPayrollSubTab = () => {
           </span>
         </div>
 
-        <div className="overflow-hidden border border-slate-800 rounded-xl bg-slate-950">
-          <table className="w-full table-fixed text-left text-[10px] text-slate-300">
+        <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-950">
+          <table className="w-full min-w-[1900px] table-fixed text-left text-[10px] text-slate-300">
+            <colgroup>
+              <col className="w-[52px]" />
+              <col className="w-[155px]" />
+              <col className="w-[115px]" />
+              <col className="w-[105px]" />
+              <col className="w-[125px]" />
+              <col className="w-[220px]" />
+              <col className="w-[115px]" />
+              <col className="w-[105px]" />
+              <col className="w-[105px]" />
+              <col className="w-[125px]" />
+              <col className="w-[145px]" />
+              <col className="w-[135px]" />
+              <col className="w-[155px]" />
+              <col className="w-[175px]" />
+              <col className="w-[95px]" />
+            </colgroup>
             <thead className="bg-slate-900 text-slate-400 uppercase font-extrabold text-[10px] tracking-wider border-b border-slate-800">
               <tr>
-                <th className="py-3 px-3">Sr.</th>
-                <th className="py-3 px-4">Employee Name</th>
+                <th className="py-3 px-2">Sr.</th>
+                <th className="py-3 px-2">Employee Name</th>
                 <th className="py-3 px-3">Location</th>
                 <th className="py-3 px-3 text-right">Basic (PKR)</th>
                 <th className="py-3 px-3 text-right">Allowance (PKR)</th>
@@ -515,13 +532,13 @@ export const StaffPayrollSubTab = () => {
             <tbody className="divide-y divide-slate-800/60 font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan="14" className="py-8 text-center text-slate-500 font-semibold">
+                  <td colSpan="15" className="py-8 text-center text-slate-500 font-semibold">
                     Calculating monthly payroll sheet...
                   </td>
                 </tr>
               ) : payrollRows.length === 0 ? (
                 <tr>
-                  <td colSpan="14" className="py-8 text-center text-slate-500 font-semibold">
+                  <td colSpan="15" className="py-8 text-center text-slate-500 font-semibold">
                     No active staff found.
                   </td>
                 </tr>
@@ -531,33 +548,33 @@ export const StaffPayrollSubTab = () => {
 
                   return (
                     <tr key={row.employeeId} className="hover:bg-slate-900/60 transition">
-                      <td className="py-3 px-3 font-mono font-bold text-slate-500">{idx + 1}</td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-2 font-mono font-bold text-slate-500">{idx + 1}</td>
+                      <td className="py-3 px-2">
                         <div className="font-bold text-white text-sm">{row.name}</div>
                         <div className="text-[10px] text-slate-400">{row.designation}</div>
                       </td>
                       <td className="py-3 px-3 font-bold text-purple-400">{row.department}</td>
-                      <td className="py-3 px-3 text-right font-mono text-slate-300">
+                      <td className="py-3 px-2 text-left font-mono text-slate-300 whitespace-nowrap">
                         {formatPKR(row.basicSalary)}
                       </td>
-                      <td className="py-3 px-3 text-right">
+                      <td className="py-3 px-2 text-left">
                         <input
                           type="number"
                           placeholder="0"
                           disabled={isPaid}
                           value={row.allowance !== undefined ? row.allowance : 0}
                           onChange={(e) => handleAllowanceChange(row.employeeId, e.target.value)}
-                          className="w-24 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-emerald-400 font-mono font-bold text-right focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                          className="w-full max-w-[108px] bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-emerald-400 font-mono font-bold text-left focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                         />
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-2">
                         <input
                           type="text"
                           placeholder="Reason (e.g. Fuel, Mobile)"
                           disabled={isPaid}
                           value={row.allowanceReason || ''}
                           onChange={(e) => handleAllowanceReasonChange(row.employeeId, e.target.value)}
-                          className="w-36 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 font-medium text-xs focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 font-medium text-xs focus:outline-none focus:border-purple-500 disabled:opacity-50"
                         />
                       </td>
                       <td className="py-3 px-3 text-right font-mono text-white font-bold">

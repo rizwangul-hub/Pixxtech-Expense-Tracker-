@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -55,15 +55,34 @@ export default function PendingQueueScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'ALL' | 'RENT' | 'EXPENSE' | 'TRANSFER'>('ALL');
 
+  // Instant client-side memoized filtering for 0ms tab switching
+  const filteredEntries = useMemo(() => {
+    let list = entries;
+    if (activeTab !== 'ALL') {
+      list = list.filter((e) => e.entryType === activeTab);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter((e) => {
+        const vn = (e.voucherNo || '').toLowerCase();
+        const detail = (e.detail || '').toLowerCase();
+        const submitter = (e.submittedByName || e.submittedBy?.name || '').toLowerCase();
+        const prop = typeof e.propertyId === 'object' && e.propertyId?.plazaName ? e.propertyId.plazaName.toLowerCase() : '';
+        return vn.includes(q) || detail.includes(q) || submitter.includes(q) || prop.includes(q);
+      });
+    }
+    return list;
+  }, [entries, activeTab, searchQuery]);
+
   const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
       setRefreshing(true);
-    } else {
+    } else if (entries.length === 0) {
       setLoading(true);
     }
 
     try {
-      const params: { entryType?: string; search?: string } = {};
+      const params: { entryType?: string; search?: string; limit?: number } = { limit: 200 };
       if (activeTab !== 'ALL') {
         params.entryType = activeTab;
       }
@@ -91,7 +110,7 @@ export default function PendingQueueScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeTab, searchQuery]);
+  }, [activeTab, searchQuery, entries.length]);
 
   useEffect(() => {
     loadData();

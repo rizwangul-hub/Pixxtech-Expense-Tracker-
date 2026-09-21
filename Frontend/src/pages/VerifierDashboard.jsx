@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -58,6 +58,38 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   const [filterStatus, setFilterStatus] = useState('PENDING_VERIFICATION');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Instant client-side memoized list for 0ms tab switching & filtering
+  const filteredEntries = useMemo(() => {
+    let list = pendingEntries;
+
+    // Filter by Entry Type tab
+    if (filterType !== 'ALL') {
+      list = list.filter((e) => e.entryType === filterType);
+    }
+
+    // Filter by Status tab
+    if (filterStatus === 'PENDING_VERIFICATION') {
+      list = list.filter((e) => e.status === 'PENDING_VERIFICATION' || e.status === 'EDITED');
+    } else if (filterStatus !== 'ALL') {
+      list = list.filter((e) => e.status === filterStatus);
+    }
+
+    // Filter by Search Query
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter((e) => {
+        const vn = (e.voucherNo || '').toLowerCase();
+        const detail = (e.detail || '').toLowerCase();
+        const submitter = (e.submittedByName || e.submittedBy?.name || '').toLowerCase();
+        const ref = (e.referenceNumber || '').toLowerCase();
+        const prop = (e.propertyId?.plazaName || '').toLowerCase();
+        return vn.includes(q) || detail.includes(q) || submitter.includes(q) || ref.includes(q) || prop.includes(q);
+      });
+    }
+
+    return list;
+  }, [pendingEntries, filterType, filterStatus, searchQuery]);
+
   // Edit Modal State
   const [editingEntry, setEditingEntry] = useState(null);
   const [editForm, setEditForm] = useState({
@@ -92,30 +124,54 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         setIsRefreshing(true);
       }
 
-      const params = {};
+      const params = { limit: 200 };
       if (currentType   !== 'ALL') params.entryType = currentType;
       if (currentStatus !== 'ALL') params.status    = currentStatus;
       if (currentSearch.trim())    params.search     = currentSearch.trim();
 
-      const [listRes, sumRes, accRes, catRes, propRes] = await Promise.all([
+      // Only fetch heavy master dropdown data (accounts, categories, properties) if not loaded yet
+      const needsMaster = accounts.length === 0 || categories.length === 0 || properties.length === 0;
+
+      const promises = [
         verificationAPI.getPending(params),
         verificationAPI.getSummary(),
-        accountsAPI.getActiveSummary().catch(() => ({ accounts: [] })),
-        accountsAPI.getCategories().catch(() => ({ categories: [] })),
-        accountsAPI.getProperties().catch(() => ({ properties: [] })),
-      ]);
+      ];
 
-      const newEntries    = listRes.data?.entries || listRes.entries || [];
-      const newSummary    = sumRes.data || sumRes || null;
-      const newAccounts   = accRes.accounts   || [];
-      const newCategories = catRes.categories || [];
-      const newProperties = propRes.properties || [];
+      if (needsMaster) {
+        promises.push(
+          accountsAPI.getActiveSummary().catch(() => ({ accounts: [] })),
+          accountsAPI.getCategories().catch(() => ({ categories: [] })),
+          accountsAPI.getProperties().catch(() => ({ properties: [] }))
+        );
+      }
+
+      const results = await Promise.all(promises);
+
+      const listRes = results[0];
+      const sumRes  = results[1];
+      const newEntries = listRes.data?.entries || listRes.entries || [];
+      const newSummary = sumRes.data || sumRes || null;
 
       setPendingEntries(newEntries);
       setSummary(newSummary);
-      setAccounts(newAccounts);
-      setCategories(newCategories);
-      setProperties(newProperties);
+
+      let newAccounts   = accounts;
+      let newCategories = categories;
+      let newProperties = properties;
+
+      if (needsMaster) {
+        const accRes  = results[2] || {};
+        const catRes  = results[3] || {};
+        const propRes = results[4] || {};
+
+        newAccounts   = accRes.accounts   || [];
+        newCategories = catRes.categories || [];
+        newProperties = propRes.properties || [];
+
+        setAccounts(newAccounts);
+        setCategories(newCategories);
+        setProperties(newProperties);
+      }
 
       // Save to cache
       verifierDataCache = {
@@ -596,7 +652,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-white text-sm">Temporary Entries Review Queue</h3>
             <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">
-              {pendingEntries.length} items
+              {filteredEntries.length} items
             </span>
           </div>
           <div className="text-xs text-slate-400">
@@ -609,7 +665,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
             <RefreshCw size={24} className="mx-auto animate-spin mb-2 text-indigo-400" />
             Loading verification queue...
           </div>
-        ) : pendingEntries.length === 0 ? (
+        ) : filteredEntries.length === 0 ? (
           <div className="py-16 text-center text-slate-500 text-xs">
             <CheckCircle2 size={32} className="mx-auto mb-2 text-emerald-500/50" />
             No pending entries found matching your selected filters. All clear!
@@ -631,7 +687,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {pendingEntries.map((entry) => {
+                {filteredEntries.map((entry) => {
                   const isPending = entry.status === 'PENDING_VERIFICATION' || entry.status === 'EDITED';
                   const isVerified = entry.status === 'VERIFIED';
                   const isRejected = entry.status === 'REJECTED';
