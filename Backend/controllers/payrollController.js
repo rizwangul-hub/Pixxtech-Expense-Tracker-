@@ -104,7 +104,8 @@ const launchPuppeteer = async () => {
  */
 export const getMonthlyPayroll = async (req, res) => {
   try {
-    const { month = '2026-08', department } = req.query;
+    const currentMonthStr = new Date().toISOString().slice(0, 7);
+    const { month = currentMonthStr, department } = req.query;
 
     const [y, m] = month.split('-').map(Number);
     const totalDays = new Date(y, m, 0).getDate();
@@ -114,14 +115,14 @@ export const getMonthlyPayroll = async (req, res) => {
     // Check if payroll already saved for this month
     const existingPayroll = await Payroll.find({ payrollMonth: month }).lean();
     const existingMap = new Map();
-    existingPayroll.forEach((p) => existingMap.set(p.employeeId.toString(), p));
+    existingPayroll.forEach((p) => existingMap.set(String(p.employeeId), p));
 
     // Fetch active employees
     const empQuery = { isActive: true };
     if (department && department !== 'ALL') empQuery.department = department;
     const employees = await Employee.find(empQuery).sort({ department: 1, name: 1 }).lean();
 
-    // Fetch attendance summary for month using both dateStr regex and date range
+    // Fetch attendance summary for month directly matching Attendance collection
     const attRecords = await Attendance.find({
       $or: [
         { dateStr: new RegExp(`^${month}`) },
@@ -131,7 +132,7 @@ export const getMonthlyPayroll = async (req, res) => {
 
     const empAttMap = new Map();
     attRecords.forEach((rec) => {
-      const idStr = rec.employeeId.toString();
+      const idStr = String(rec.employeeId?._id || rec.employeeId);
       if (!empAttMap.has(idStr)) empAttMap.set(idStr, []);
       empAttMap.get(idStr).push(rec);
     });
@@ -141,7 +142,7 @@ export const getMonthlyPayroll = async (req, res) => {
     let grandNetPayable = 0;
 
     const payrollRows = employees.map((emp) => {
-      const empIdStr = emp._id.toString();
+      const empIdStr = String(emp._id);
       const saved = existingMap.get(empIdStr);
 
       const basic = emp.basicSalary || 0;
@@ -159,12 +160,13 @@ export const getMonthlyPayroll = async (req, res) => {
 
       const gross = basic + allowance;
 
-      // Attendance metrics
+      // Calculate attendance metrics from live Attendance records (identical to Monthly Aggregate Attendance Summary)
       const records = empAttMap.get(empIdStr) || [];
       let presentDays = 0;
       let lateDays = 0;
       let leaveDays = 0;
       let lopDays = 0;
+      let halfDays = 0;
 
       records.forEach((r) => {
         if (r.status === 'PRESENT') presentDays += 1;
@@ -174,9 +176,13 @@ export const getMonthlyPayroll = async (req, res) => {
         }
         if (r.status === 'LEAVE') leaveDays += 1;
         if (r.status === 'ABSENT') lopDays += 1;
-        if (r.status === 'HALF_DAY') presentDays += 0.5;
+        if (r.status === 'HALF_DAY') {
+          halfDays += 1;
+          presentDays += 0.5;
+        }
       });
 
+      // Always reflect actual attendance recorded in the backend
       const finalPresentDays = records.length > 0 ? presentDays : (saved && saved.presentDays !== undefined ? saved.presentDays : presentDays);
       const finalLateDays = records.length > 0 ? lateDays : (saved && saved.lateDays !== undefined ? saved.lateDays : lateDays);
       const finalLeaveDays = records.length > 0 ? leaveDays : (saved && saved.leaveDays !== undefined ? saved.leaveDays : leaveDays);
@@ -1692,19 +1698,38 @@ export const getSalaryReconciliation = async (req, res) => {
  */
 export const generateMonthlySalarySheetPDF = async (req, res) => {
   try {
-    const { month = '2026-08' } = req.query;
+    const currentMonthStr = new Date().toISOString().slice(0, 7);
+    const { month = currentMonthStr } = req.query;
 
     const [y, m] = month.split('-').map(Number);
     const dateObj = new Date(y, m - 1, 1);
     const monthName = dateObj.toLocaleString('en-US', { month: 'long' });
     const formattedTitleDate = `${monthName} ${y}`;
+    const totalDaysInMonth = new Date(y, m, 0).getDate();
+    const startDate = new Date(Date.UTC(y, m - 1, 1));
+    const endDate = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
 
     // 1. Fetch Employees & Payroll Records
     const employees = await Employee.find({ status: { $ne: 'INACTIVE' } }).sort({ name: 1 }).lean();
     const savedPayrolls = await Payroll.find({ payrollMonth: month }).lean();
 
     const savedMap = new Map();
-    savedPayrolls.forEach((p) => savedMap.set(p.employeeId.toString(), p));
+    savedPayrolls.forEach((p) => savedMap.set(String(p.employeeId), p));
+
+    // Fetch live attendance records for target month
+    const attRecords = await Attendance.find({
+      $or: [
+        { dateStr: new RegExp(`^${month}`) },
+        { date: { $gte: startDate, $lte: endDate } },
+      ],
+    }).lean();
+
+    const empAttMap = new Map();
+    attRecords.forEach((rec) => {
+      const idStr = String(rec.employeeId?._id || rec.employeeId);
+      if (!empAttMap.has(idStr)) empAttMap.set(idStr, []);
+      empAttMap.get(idStr).push(rec);
+    });
 
     let grandBasic = 0;
     let grandAllowance = 0;
@@ -1722,7 +1747,8 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
     const accountBreakdownMap = {};
 
     const itemizedRows = employees.map((emp, index) => {
-      const pDoc = savedMap.get(emp._id.toString());
+      const empIdStr = String(emp._id);
+      const pDoc = savedMap.get(empIdStr);
 
       const basic = pDoc ? pDoc.basicSalary : (emp.basicSalary || 0);
       const allowance = pDoc && pDoc.allowance !== undefined
@@ -1745,6 +1771,19 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
       const othDed = pDoc ? (pDoc.otherDeduction || 0) + (pDoc.whtDeduction || 0) : 0;
       const totDed = loanDed + lopDed + othDed;
       const netPayable = Math.max(0, gross - totDed);
+
+      // Live attendance calculation matching Monthly Aggregate Attendance Summary
+      const records = empAttMap.get(empIdStr) || [];
+      let livePresentDays = 0;
+      let liveLopDays = 0;
+      records.forEach((r) => {
+        if (r.status === 'PRESENT' || r.status === 'LATE') livePresentDays += 1;
+        if (r.status === 'HALF_DAY') livePresentDays += 0.5;
+        if (r.status === 'ABSENT') liveLopDays += 1;
+      });
+
+      const actualPresentDays = records.length > 0 ? livePresentDays : (pDoc?.presentDays ?? livePresentDays);
+      const actualLopDays = records.length > 0 ? liveLopDays : (pDoc?.lopDays ?? liveLopDays);
 
       const status = pDoc?.paymentStatus === 'PAID' ? 'PAID' : 'PENDING';
       const paidAccount = pDoc?.paidFromAccountName || '-';
@@ -1776,8 +1815,9 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
         name: emp.name,
         designation: emp.designation || 'Staff',
         department: emp.department || 'General',
-        presentDays: pDoc ? pDoc.presentDays : 30,
-        lopDays: pDoc ? pDoc.lopDays : 0,
+        presentDays: actualPresentDays,
+        lopDays: actualLopDays,
+        totalDays: totalDaysInMonth,
         basic,
         allowance,
         allowanceReason,

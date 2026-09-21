@@ -26,7 +26,7 @@ const formatPKR = (val) => {
 };
 
 export const StaffPayrollSubTab = () => {
-  const [selectedMonth, setSelectedMonth] = useState('2026-08');
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [payrollRows, setPayrollRows] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -587,11 +587,17 @@ export const StaffPayrollSubTab = () => {
                         {formatPKR(row.grossSalary)}
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <div className="text-[11px] font-bold text-emerald-400 font-mono">
-                          {row.presentDays} / {row.totalDays}
+                        <div className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-800/60 text-emerald-300 font-mono font-black text-xs">
+                          <span>{row.presentDays} Days</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          {row.presentDays} / {row.totalDays} Total
                         </div>
                         {row.lopDays > 0 && (
-                          <div className="text-[10px] text-rose-400 font-bold">{row.lopDays} LOP</div>
+                          <div className="text-[10px] text-rose-400 font-bold mt-0.5">{row.lopDays} LOP / Absent</div>
+                        )}
+                        {row.lateDays > 0 && (
+                          <div className="text-[9px] text-amber-400 font-medium">({row.lateDays} Late)</div>
                         )}
                       </td>
                       <td className="py-3 px-3 text-right font-mono font-bold text-rose-400">
