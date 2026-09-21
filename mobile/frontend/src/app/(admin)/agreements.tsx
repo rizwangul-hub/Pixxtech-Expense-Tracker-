@@ -22,9 +22,11 @@ export default function AgreementsScreen() {
     try {
       setLoading(true);
       const res = await agreementsAPI.getAgreements();
-      setAgreements(res.agreements || res.data || []);
+      const rawList = res?.agreements || res?.data?.agreements || res?.data || [];
+      setAgreements(Array.isArray(rawList) ? rawList : []);
     } catch (err: any) {
       console.warn('Failed to load agreements:', err.message);
+      setAgreements([]);
     } finally {
       setLoading(false);
     }

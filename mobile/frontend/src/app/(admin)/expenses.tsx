@@ -21,10 +21,11 @@ export default function ExpensesScreen() {
   const loadExpenses = async () => {
     try {
       setLoading(true);
-      const res = await reportsAPI.getHeadWiseSummary();
-      setSummary(res);
+      const res: any = await reportsAPI.getHeadWiseSummary();
+      setSummary(res?.data || res || null);
     } catch (err: any) {
       console.warn('Failed to load head-wise expenses:', err.message);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -36,7 +37,7 @@ export default function ExpensesScreen() {
 
   const totalSpent = summary?.totalExpensesOverall || 0;
   const classes = summary?.classificationTotals || {};
-  const heads = summary?.heads || [];
+  const heads = Array.isArray(summary?.heads) ? summary.heads : Array.isArray(summary?.data?.heads) ? summary.data.heads : [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -85,7 +86,7 @@ export default function ExpensesScreen() {
           <Text style={styles.sectionTitle}>Expense Heads Breakdown ({heads.length})</Text>
 
           {heads.map((head: any) => (
-            <View key={head.categoryId} style={styles.headCard}>
+            <View key={head.categoryId || head.headName} style={styles.headCard}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.headTitle}>{head.headName}</Text>
                 <Text style={styles.headSub}>{head.transactionCount || 0} Transactions</Text>

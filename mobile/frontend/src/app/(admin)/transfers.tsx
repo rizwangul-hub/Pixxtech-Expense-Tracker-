@@ -22,9 +22,11 @@ export default function TransfersScreen() {
     try {
       setLoading(true);
       const res = await transfersAPI.getTransfers();
-      setTransfers(res.transfers || res.data || []);
+      const rawList = res?.transfers || res?.data?.transfers || res?.data || [];
+      setTransfers(Array.isArray(rawList) ? rawList : []);
     } catch (err: any) {
       console.warn('Failed to load transfers:', err.message);
+      setTransfers([]);
     } finally {
       setLoading(false);
     }

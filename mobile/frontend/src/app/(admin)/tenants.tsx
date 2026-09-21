@@ -22,9 +22,11 @@ export default function TenantsScreen() {
     try {
       setLoading(true);
       const res = await tenantsAPI.getTenants();
-      setTenants(res.tenants || res.data || []);
+      const rawList = res?.tenants || res?.data?.tenants || res?.data || [];
+      setTenants(Array.isArray(rawList) ? rawList : []);
     } catch (err: any) {
       console.warn('Failed to load tenants:', err.message);
+      setTenants([]);
     } finally {
       setLoading(false);
     }

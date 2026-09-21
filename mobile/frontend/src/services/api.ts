@@ -851,88 +851,54 @@ export const accountLedgersAPI = {
 };
 
 export const staffAPI = {
-  async getEmployees(): Promise<{
-    success: boolean;
-    data?: any[];
-    employees?: any[];
-  }> {
+  async getEmployees(): Promise<any> {
     const res = await apiClient.get('/staff/employees');
     return res.data;
   },
-  async createEmployee(data: any): Promise<{
-    success: boolean;
-    message: string;
-    data?: any;
-  }> {
+  async createEmployee(data: any): Promise<any> {
     const res = await apiClient.post('/staff/employees', data);
     return res.data;
   },
-  async deleteEmployee(id: string): Promise<{
-    success: boolean;
-    message: string;
-  }> {
+  async deleteEmployee(id: string): Promise<any> {
     const res = await apiClient.delete(`/staff/employees/${id}`);
     return res.data;
   },
 };
 
 export const tenantsAPI = {
-  async getTenants(): Promise<{
-    success: boolean;
-    data?: any[];
-    tenants?: any[];
-  }> {
+  async getTenants(): Promise<any> {
     const res = await apiClient.get('/tenants');
     return res.data;
   },
 };
 
 export const agreementsAPI = {
-  async getAgreements(): Promise<{
-    success: boolean;
-    data?: any[];
-    agreements?: any[];
-  }> {
+  async getAgreements(): Promise<any> {
     const res = await apiClient.get('/agreements');
     return res.data;
   },
 };
 
 export const otherIncomeAPI = {
-  async getAllOtherIncome(): Promise<{
-    success: boolean;
-    data?: any[];
-    otherIncomes?: any[];
-  }> {
+  async getAllOtherIncome(): Promise<any> {
     const res = await apiClient.get('/other-income');
     return res.data;
   },
 };
 
 export const transfersAPI = {
-  async getTransfers(): Promise<{
-    success: boolean;
-    data?: any[];
-    transfers?: any[];
-  }> {
+  async getTransfers(): Promise<any> {
     const res = await apiClient.get('/transfers');
     return res.data;
   },
 };
 
 export const usersAPI = {
-  async getUsers(): Promise<{
-    success: boolean;
-    data?: any[];
-    users?: any[];
-  }> {
+  async getUsers(): Promise<any> {
     const res = await apiClient.get('/users');
     return res.data;
   },
-  async toggleUserStatus(id: string): Promise<{
-    success: boolean;
-    message: string;
-  }> {
+  async toggleUserStatus(id: string): Promise<any> {
     const res = await apiClient.patch(`/users/${id}/status`);
     return res.data;
   },

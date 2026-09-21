@@ -23,9 +23,11 @@ export default function UsersScreen() {
     try {
       setLoading(true);
       const res = await usersAPI.getUsers();
-      setUsers(res.users || res.data || []);
+      const rawList = res?.users || res?.data?.users || res?.data || [];
+      setUsers(Array.isArray(rawList) ? rawList : []);
     } catch (err: any) {
       console.warn('Failed to load system users:', err.message);
+      setUsers([]);
     } finally {
       setLoading(false);
     }

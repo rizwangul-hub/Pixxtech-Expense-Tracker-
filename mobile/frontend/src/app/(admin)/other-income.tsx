@@ -22,9 +22,11 @@ export default function OtherIncomeScreen() {
     try {
       setLoading(true);
       const res = await otherIncomeAPI.getAllOtherIncome();
-      setIncomeList(res.otherIncomes || res.data || []);
+      const rawList = res?.otherIncomes || res?.data?.otherIncomes || res?.data || [];
+      setIncomeList(Array.isArray(rawList) ? rawList : []);
     } catch (err: any) {
       console.warn('Failed to load other income:', err.message);
+      setIncomeList([]);
     } finally {
       setLoading(false);
     }

@@ -23,10 +23,11 @@ export default function MonthlyReportsScreen() {
   const loadReport = async () => {
     try {
       setLoading(true);
-      const res = await reportsAPI.getMonthlyFinancialSummary();
-      setReport(res);
+      const res: any = await reportsAPI.getMonthlyFinancialSummary();
+      setReport(res?.data || res || null);
     } catch (err: any) {
       console.warn('Failed to load monthly summary report:', err.message);
+      setReport(null);
     } finally {
       setLoading(false);
     }
@@ -46,7 +47,7 @@ export default function MonthlyReportsScreen() {
   };
 
   const matrix = report?.accountMatrix || {};
-  const grand = matrix.grandTotal || {};
+  const accountsList = Array.isArray(matrix?.accounts) ? matrix.accounts : [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -106,7 +107,7 @@ export default function MonthlyReportsScreen() {
 
           <Text style={styles.sectionTitle}>Bank & Cash Statement Matrix</Text>
 
-          {(matrix.accounts || []).map((acc: any) => (
+          {accountsList.map((acc: any) => (
             <View key={acc.accountId} style={styles.accCard}>
               <View style={styles.accHeader}>
                 <Feather

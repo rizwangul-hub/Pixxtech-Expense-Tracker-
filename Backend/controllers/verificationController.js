@@ -117,7 +117,10 @@ export const getPendingEntries = async (req, res) => {
     const query = {};
 
     if (status && status !== 'ALL') {
-      query.status = status;
+      query.status =
+        status === 'PENDING_VERIFICATION'
+          ? { $in: ['PENDING_VERIFICATION', 'EDITED'] }
+          : status;
     } else if (!status) {
       // Default to unverified / pending entries if no status filter parameter is specified
       query.status = { $in: ['PENDING_VERIFICATION', 'EDITED'] };

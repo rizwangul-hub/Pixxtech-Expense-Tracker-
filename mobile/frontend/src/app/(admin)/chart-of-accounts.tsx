@@ -21,10 +21,12 @@ export default function ChartOfAccountsScreen() {
   const loadChart = async () => {
     try {
       setLoading(true);
-      const res = await accountsAPI.getCategories();
-      setCategories(res.categories || []);
+      const res: any = await accountsAPI.getCategories();
+      const rawList = res?.categories || res?.data?.categories || res?.data || [];
+      setCategories(Array.isArray(rawList) ? rawList : []);
     } catch (err: any) {
       console.warn('Failed to load chart of accounts:', err.message);
+      setCategories([]);
     } finally {
       setLoading(false);
     }
