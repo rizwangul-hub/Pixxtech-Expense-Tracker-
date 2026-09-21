@@ -124,13 +124,13 @@ export default function MobileWebViewApp() {
         />
       </View>
 
-      {/* Initial Startup Screen: Exact loading.jpg ONLY */}
+      {/* Initial Startup Screen: Exact logo2.png ONLY */}
       {isLoading && !hasError && (
-        <View style={StyleSheet.absoluteFill}>
+        <View style={styles.loadingContainer}>
           <Image
-            source={require('@/assets/images/loading.jpg')}
+            source={require('@/assets/images/logo2.png')}
             style={styles.loadingImage}
-            resizeMode="cover"
+            resizeMode="contain"
           />
         </View>
       )}
@@ -165,9 +165,19 @@ const styles = StyleSheet.create({
   webView: {
     flex: 1,
   },
+  loadingContainer: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 10,
+  },
   loadingImage: {
-    width: '100%',
-    height: '100%',
+    width: '80%',
+    height: '40%',
+    maxWidth: 320,
+    maxHeight: 200,
   },
   errorContainer: {
     ...StyleSheet.absoluteFill,
