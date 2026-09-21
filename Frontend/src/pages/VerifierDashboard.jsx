@@ -522,67 +522,68 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       )}
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Pending Total</span>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1.5">
+            <span className="font-semibold">Pending Total</span>
             <Clock size={16} className="text-amber-400" />
           </div>
-          <div className="text-xl font-black font-mono text-amber-300">
+          <div className="text-2xl font-black font-mono text-amber-300">
             {summary?.totalPendingCount ?? 0}
           </div>
-          <div className="text-[10px] text-slate-500 mt-1">Awaiting signoff</div>
+          <div className="text-[11px] text-slate-500 mt-1">Awaiting signoff</div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Pending Rent</span>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1.5">
+            <span className="font-semibold">Pending Rent</span>
             <Building2 size={16} className="text-blue-400" />
           </div>
-          <div className="text-xl font-black font-mono text-blue-300">
+          <div className="text-2xl font-black font-mono text-blue-300">
             {summary?.pendingRentCount ?? 0}
           </div>
-          <div className="text-[10px] text-slate-500 mt-1">Rent collections</div>
+          <div className="text-[11px] text-slate-500 mt-1">Rent collections</div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Pending Expenses</span>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1.5">
+            <span className="font-semibold">Pending Expenses</span>
             <DollarSign size={16} className="text-rose-400" />
           </div>
-          <div className="text-xl font-black font-mono text-rose-300">
+          <div className="text-2xl font-black font-mono text-rose-300">
             {summary?.pendingExpenseCount ?? 0}
           </div>
-          <div className="text-[10px] text-slate-500 mt-1">Expense vouchers</div>
+          <div className="text-[11px] text-slate-500 mt-1">Expense vouchers</div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Pending Transfers</span>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1.5">
+            <span className="font-semibold">Pending Transfers</span>
             <ArrowLeftRight size={16} className="text-purple-400" />
           </div>
-          <div className="text-xl font-black font-mono text-purple-300">
+          <div className="text-2xl font-black font-mono text-purple-300">
             {summary?.pendingTransferCount ?? 0}
           </div>
-          <div className="text-[10px] text-slate-500 mt-1">Internal transfers</div>
+          <div className="text-[11px] text-slate-500 mt-1">Internal transfers</div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Verified (7 Days)</span>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 col-span-2 sm:col-span-1 hover:border-slate-700 transition">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1.5">
+            <span className="font-semibold">Verified (7 Days)</span>
             <CheckCircle2 size={16} className="text-emerald-400" />
           </div>
-          <div className="text-xl font-black font-mono text-emerald-300">
+          <div className="text-2xl font-black font-mono text-emerald-300">
             {summary?.recentlyVerifiedCount ?? 0}
           </div>
-          <div className="text-[10px] text-slate-500 mt-1">Approved & posted</div>
+          <div className="text-[11px] text-slate-500 mt-1">Approved & posted</div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-1">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          {/* Filter Type Pills */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl p-1.5 w-full sm:w-auto">
             {[
               { id: 'ALL', label: 'All Types' },
               { id: 'RENT', label: 'Rent Receipts' },
@@ -592,10 +593,10 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
               <button
                 key={t.id}
                 onClick={() => setFilterType(t.id)}
-                className={`px-3 py-1 rounded text-xs font-bold transition ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex-1 sm:flex-initial text-center ${
                   filterType === t.id
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-900'
                 }`}
               >
                 {t.label}
@@ -603,7 +604,8 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
             ))}
           </div>
 
-          <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-1">
+          {/* Filter Status Pills */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl p-1.5 w-full sm:w-auto">
             {[
               { id: 'PENDING_VERIFICATION', label: 'Pending Review' },
               { id: 'EDITED', label: 'Edited' },
@@ -614,10 +616,10 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
               <button
                 key={s.id}
                 onClick={() => setFilterStatus(s.id)}
-                className={`px-2.5 py-1 rounded text-xs font-bold transition ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex-1 sm:flex-initial text-center ${
                   filterStatus === s.id
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-900'
                 }`}
               >
                 {s.label}
@@ -626,32 +628,32 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
           </div>
         </div>
 
-        <form onSubmit={handleSearch} className="flex items-center gap-2 w-full md:w-80">
+        <form onSubmit={handleSearch} className="flex items-center gap-2 w-full lg:w-80">
           <div className="relative w-full">
-            <Search size={14} className="absolute left-3 top-2.5 text-slate-500" />
+            <Search size={14} className="absolute left-3 top-3 text-slate-500" />
             <input
               type="text"
               placeholder="Search narration, voucher #, submitter..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-medium"
             />
           </div>
           <button
             type="submit"
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition"
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition whitespace-nowrap"
           >
             Find
           </button>
         </form>
       </div>
 
-      {/* Main Verification Queue Table */}
+      {/* Main Verification Queue */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="px-5 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
             <h3 className="font-bold text-white text-sm">Temporary Entries Review Queue</h3>
-            <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">
+            <span className="text-xs bg-slate-800 text-indigo-300 border border-slate-700 font-bold px-2.5 py-0.5 rounded-full font-mono">
               {filteredEntries.length} items
             </span>
           </div>
@@ -671,212 +673,396 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
             No pending entries found matching your selected filters. All clear!
           </div>
         ) : (
-          <div className="overflow-hidden">
-            <table className="w-full table-fixed text-left border-collapse text-[10px]">
-              <thead>
-                <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 font-semibold text-[11px] uppercase tracking-wider">
-                  <th className="py-3 px-4">Date / Month</th>
-                  <th className="py-3 px-3">Type</th>
-                  <th className="py-3 px-3">Submitter</th>
-                  <th className="py-3 px-4">Narration / Details</th>
-                  <th className="py-3 px-3">Property / Unit</th>
-                  <th className="py-3 px-3">Accounts Involved</th>
-                  <th className="py-3 px-4 text-right">Amount (PKR)</th>
-                  <th className="py-3 px-3 text-center">Status</th>
-                  <th className="py-3 px-4 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {filteredEntries.map((entry) => {
-                  const isPending = entry.status === 'PENDING_VERIFICATION' || entry.status === 'EDITED';
-                  const isVerified = entry.status === 'VERIFIED';
-                  const isRejected = entry.status === 'REJECTED';
+          <>
+            {/* MOBILE / SMALL SCREEN CARD VIEW (Distinct Cards with Ample Spacing) */}
+            <div className="block md:hidden p-3.5 sm:p-4 space-y-4">
+              {filteredEntries.map((entry) => {
+                const isPending = entry.status === 'PENDING_VERIFICATION' || entry.status === 'EDITED';
+                const isVerified = entry.status === 'VERIFIED';
+                const isRejected = entry.status === 'REJECTED';
 
-                  return (
-                    <tr key={entry._id} className="hover:bg-slate-800/40 transition">
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="font-semibold text-white">
-                          {entry.date ? new Date(entry.date).toLocaleDateString('en-PK') : '—'}
-                        </div>
-                        {entry.rentMonth && (
-                          <div className="text-[10px] font-mono text-indigo-400">
-                            Month: {entry.rentMonth}
-                          </div>
-                        )}
-                        {entry.voucherNo && (
-                          <div className="text-[10px] text-slate-500 font-mono">
-                            VN: #{entry.voucherNo}
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-3 whitespace-nowrap">
-                        {entry.entryType === 'RENT' ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-950/70 text-blue-300 border border-blue-700/50">
-                            <Building2 size={10} /> Rent
-                          </span>
-                        ) : entry.entryType === 'TRANSFER' ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950/70 text-purple-300 border border-purple-700/50">
-                            <ArrowLeftRight size={10} /> Transfer
-                          </span>
-                        ) : (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950/70 text-rose-300 border border-rose-700/50">
-                              <DollarSign size={10} /> Expense
+                return (
+                  <div
+                    key={entry._id}
+                    className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3.5 hover:border-slate-700 transition shadow-sm"
+                  >
+                    {/* Header Row: Type, Status, Voucher/Date */}
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {entry.entryType === 'RENT' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-blue-950/80 text-blue-300 border border-blue-700/60">
+                              <Building2 size={12} /> Rent Receipt
                             </span>
-                            <span className="text-[9px] font-mono font-semibold text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
-                              {entry.expenseClassification === 'PROPERTY_OWN_EXPENSE'
-                                ? 'Property Own'
-                                : entry.expenseClassification === 'UNIT_EXPENSE'
-                                ? 'Unit Expense'
-                                : 'General'}
+                          ) : entry.entryType === 'TRANSFER' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-purple-950/80 text-purple-300 border border-purple-700/60">
+                              <ArrowLeftRight size={12} /> Transfer
                             </span>
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-3 whitespace-nowrap">
-                        <div className="font-medium text-slate-200">
-                          {entry.submittedByName || entry.submittedBy?.name || 'Sarfraz'}
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          {new Date(entry.submittedAt || entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4 max-w-xs">
-                        <div className="text-slate-200 truncate font-medium" title={entry.detail}>
-                          {entry.detail || '—'}
-                        </div>
-                        {entry.categoryId?.name && (
-                          <div className="text-[10px] text-amber-400/90 font-mono">
-                            Head: {entry.categoryId.name}
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-3 whitespace-nowrap">
-                        <div className="text-white font-medium">
-                          {entry.propertyId?.plazaName || '—'}
-                        </div>
-                        {entry.tenantId?.fullName && (
-                          <div className="text-[10px] text-slate-400">
-                            Tenant: {entry.tenantId.fullName}
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-3 whitespace-nowrap text-[11px]">
-                        {entry.entryType === 'RENT' ? (
-                          <div>
-                            <span className="text-emerald-400 font-medium">Dr: </span>
-                            <span className="text-slate-200">
-                              {entry.receivingAccountId?.name || 'Receiving Account'}
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-rose-950/80 text-rose-300 border border-rose-700/60">
+                              <DollarSign size={12} /> Expense
                             </span>
-                          </div>
-                        ) : entry.entryType === 'TRANSFER' ? (
-                          <div>
-                            <div>
-                              <span className="text-emerald-400 font-medium">Dr (Receiving): </span>
-                              <span className="text-slate-200">{entry.drAccountId?.name || entry.receivingAccountId?.name || 'Debit Account'}</span>
-                            </div>
-                            <div>
-                              <span className="text-rose-400 font-medium">Cr (Paying): </span>
-                              <span className="text-slate-200">{entry.crAccountId?.name || 'Credit Account'}</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div>
-                            <div>
-                              <span className="text-emerald-400 font-medium">Dr: </span>
-                              <span className="text-slate-200">{entry.drAccountId?.name || 'Debit Account'}</span>
-                            </div>
-                            <div>
-                              <span className="text-rose-400 font-medium">Cr: </span>
-                              <span className="text-slate-200">{entry.crAccountId?.name || 'Credit Account'}</span>
-                            </div>
-                          </div>
-                        )}
-                      </td>
+                          )}
 
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap font-mono font-bold text-white text-sm">
-                        {formatPKR(entry.amount)}
-                      </td>
+                          {entry.voucherNo && (
+                            <span className="text-xs font-mono font-bold text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/60">
+                              VN: #{entry.voucherNo}
+                            </span>
+                          )}
 
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                          {entry.rentMonth && (
+                            <span className="text-[11px] font-mono text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800/50">
+                              Month: {entry.rentMonth}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-slate-400 font-medium">
+                          Date: <span className="text-slate-200 font-semibold">{entry.date ? new Date(entry.date).toLocaleDateString('en-PK') : '—'}</span>
+                        </div>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div>
                         {isPending ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700/60">
-                            <Clock size={10} /> Pending Review
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700/60 whitespace-nowrap">
+                            <Clock size={11} /> Pending Review
                           </span>
                         ) : isVerified ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60">
-                            <CheckCircle2 size={10} /> Verified
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 whitespace-nowrap">
+                            <CheckCircle2 size={11} /> Verified
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-950/80 text-rose-300 border border-rose-700/60" title={entry.rejectionReason}>
-                            <XCircle size={10} /> Rejected
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-950/80 text-rose-300 border border-rose-700/60 whitespace-nowrap">
+                            <XCircle size={11} /> Rejected
                           </span>
                         )}
-                      </td>
+                      </div>
+                    </div>
 
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        {isPending ? (
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              onClick={() => handleVerify(entry)}
-                              disabled={savingEntryId === entry._id}
-                              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow transition disabled:opacity-50"
-                              title="Verify & Post to Ledger"
-                            >
-                              <Check size={12} />
-                              <span>Verify / OK</span>
-                            </button>
+                    {/* Amount Highlight */}
+                    <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800/80 rounded-lg p-3">
+                      <span className="text-xs font-semibold text-slate-400">Total Transaction Amount</span>
+                      <span className="text-lg font-black font-mono text-emerald-400">
+                        {formatPKR(entry.amount)}
+                      </span>
+                    </div>
 
-                            {!entry.isEdited && (
-                            <button
-                              onClick={() => handleOpenEdit(entry)}
-                              disabled={savingEntryId === entry._id}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 transition disabled:opacity-50"
-                              title="Edit Entry"
-                            >
-                              <Edit3 size={13} />
-                            </button>
-                            )}
+                    {/* Details / Narration */}
+                    <div className="space-y-1.5 text-xs">
+                      <div className="font-semibold text-slate-100 leading-snug">
+                        {entry.detail || 'No description provided'}
+                      </div>
+                      {entry.categoryId?.name && (
+                        <div className="text-[11px] text-amber-300 font-mono">
+                          Head / Category: <span className="font-semibold text-amber-200">{entry.categoryId.name}</span>
+                        </div>
+                      )}
+                      {entry.propertyId?.plazaName && (
+                        <div className="text-[11px] text-blue-300">
+                          Property: <span className="font-semibold text-white">{entry.propertyId.plazaName}</span>
+                          {entry.tenantId?.fullName && (
+                            <span className="text-slate-400 ml-2">(Tenant: {entry.tenantId.fullName})</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
-                            <button
-                              onClick={() => handleOpenReject(entry)}
-                              disabled={savingEntryId === entry._id}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-400 border border-slate-700 transition disabled:opacity-50"
-                              title="Reject Entry"
-                            >
-                              <XCircle size={13} />
-                            </button>
-
-                            <button
-                              onClick={() => handleDelete(entry)}
-                              disabled={savingEntryId === entry._id}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 border border-slate-700 transition disabled:opacity-50"
-                              title="Delete Draft"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                    {/* Accounts Involved */}
+                    <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-800/60 text-xs space-y-1">
+                      {entry.entryType === 'RENT' ? (
+                        <div className="flex items-center justify-between">
+                          <span className="text-emerald-400 font-bold">Receiving Account (Dr):</span>
+                          <span className="text-slate-200 font-semibold">{entry.receivingAccountId?.name || 'Bank / Cash'}</span>
+                        </div>
+                      ) : entry.entryType === 'TRANSFER' ? (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-emerald-400 font-bold">To Account (Dr):</span>
+                            <span className="text-slate-200 font-semibold">{entry.drAccountId?.name || entry.receivingAccountId?.name || '—'}</span>
                           </div>
-                        ) : (
-                          <div className="text-[10px] text-slate-500">
-                            {isVerified ? (
-                              <span>Verified by {entry.verifiedByName || 'Khurshid'}</span>
-                            ) : (
-                              <span>Rejected</span>
-                            )}
+                          <div className="flex items-center justify-between">
+                            <span className="text-rose-400 font-bold">From Account (Cr):</span>
+                            <span className="text-slate-200 font-semibold">{entry.crAccountId?.name || '—'}</span>
                           </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-emerald-400 font-bold">Debit (Expense):</span>
+                            <span className="text-slate-200 font-semibold">{entry.drAccountId?.name || 'Expense Account'}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-rose-400 font-bold">Credit (Paid From):</span>
+                            <span className="text-slate-200 font-semibold">{entry.crAccountId?.name || 'Bank / Cash'}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Submitter & Time */}
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                      <span>Submitted by: <strong className="text-slate-300">{entry.submittedByName || entry.submittedBy?.name || 'Sarfraz'}</strong></span>
+                      <span>{new Date(entry.submittedAt || entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+
+                    {/* Actions Row */}
+                    {isPending && (
+                      <div className="pt-2 border-t border-slate-800 flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={() => handleVerify(entry)}
+                          disabled={savingEntryId === entry._id}
+                          className="flex-1 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition disabled:opacity-50"
+                        >
+                          <Check size={15} />
+                          <span>Verify / OK</span>
+                        </button>
+
+                        {!entry.isEdited && (
+                          <button
+                            onClick={() => handleOpenEdit(entry)}
+                            disabled={savingEntryId === entry._id}
+                            className="p-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 transition disabled:opacity-50 flex items-center gap-1 text-xs font-bold"
+                            title="Edit Entry"
+                          >
+                            <Edit3 size={15} />
+                            <span>Edit</span>
+                          </button>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+
+                        <button
+                          onClick={() => handleOpenReject(entry)}
+                          disabled={savingEntryId === entry._id}
+                          className="p-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-400 border border-slate-700 transition disabled:opacity-50 flex items-center gap-1 text-xs font-bold"
+                          title="Reject Entry"
+                        >
+                          <XCircle size={15} />
+                          <span>Reject</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleDelete(entry)}
+                          disabled={savingEntryId === entry._id}
+                          className="p-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 border border-slate-700 transition disabled:opacity-50"
+                          title="Delete Draft"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* DESKTOP TABLE VIEW (Horizontally Scrollable & Generously Spaced) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs min-w-[980px]">
+                <thead>
+                  <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 font-semibold text-[11px] uppercase tracking-wider">
+                    <th className="py-3.5 px-4">Date / Month</th>
+                    <th className="py-3.5 px-3">Type</th>
+                    <th className="py-3.5 px-3">Submitter</th>
+                    <th className="py-3.5 px-4">Narration / Details</th>
+                    <th className="py-3.5 px-3">Property / Unit</th>
+                    <th className="py-3.5 px-3">Accounts Involved</th>
+                    <th className="py-3.5 px-4 text-right">Amount (PKR)</th>
+                    <th className="py-3.5 px-3 text-center">Status</th>
+                    <th className="py-3.5 px-4 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {filteredEntries.map((entry) => {
+                    const isPending = entry.status === 'PENDING_VERIFICATION' || entry.status === 'EDITED';
+                    const isVerified = entry.status === 'VERIFIED';
+                    const isRejected = entry.status === 'REJECTED';
+
+                    return (
+                      <tr key={entry._id} className="hover:bg-slate-800/40 transition">
+                        <td className="py-4 px-4 whitespace-nowrap">
+                          <div className="font-semibold text-white">
+                            {entry.date ? new Date(entry.date).toLocaleDateString('en-PK') : '—'}
+                          </div>
+                          {entry.rentMonth && (
+                            <div className="text-[11px] font-mono text-indigo-400 font-semibold">
+                              Month: {entry.rentMonth}
+                            </div>
+                          )}
+                          {entry.voucherNo && (
+                            <div className="text-[11px] text-amber-400 font-mono font-bold">
+                              VN: #{entry.voucherNo}
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-3 whitespace-nowrap">
+                          {entry.entryType === 'RENT' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-blue-950/70 text-blue-300 border border-blue-700/50">
+                              <Building2 size={11} /> Rent
+                            </span>
+                          ) : entry.entryType === 'TRANSFER' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-purple-950/70 text-purple-300 border border-purple-700/50">
+                              <ArrowLeftRight size={11} /> Transfer
+                            </span>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-rose-950/70 text-rose-300 border border-rose-700/50">
+                                <DollarSign size={11} /> Expense
+                              </span>
+                              <span className="text-[10px] font-mono font-semibold text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                                {entry.expenseClassification === 'PROPERTY_OWN_EXPENSE'
+                                  ? 'Property Own'
+                                  : entry.expenseClassification === 'UNIT_EXPENSE'
+                                  ? 'Unit Expense'
+                                  : 'General'}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-3 whitespace-nowrap">
+                          <div className="font-semibold text-slate-200">
+                            {entry.submittedByName || entry.submittedBy?.name || 'Sarfraz'}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {new Date(entry.submittedAt || entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-4 max-w-xs">
+                          <div className="text-slate-200 font-medium leading-relaxed" title={entry.detail}>
+                            {entry.detail || '—'}
+                          </div>
+                          {entry.categoryId?.name && (
+                            <div className="text-[11px] text-amber-400 font-mono mt-0.5">
+                              Head: {entry.categoryId.name}
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-3 whitespace-nowrap">
+                          <div className="text-white font-semibold">
+                            {entry.propertyId?.plazaName || '—'}
+                          </div>
+                          {entry.tenantId?.fullName && (
+                            <div className="text-[11px] text-slate-400">
+                              Tenant: {entry.tenantId.fullName}
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-3 whitespace-nowrap text-xs">
+                          {entry.entryType === 'RENT' ? (
+                            <div>
+                              <span className="text-emerald-400 font-bold">Dr: </span>
+                              <span className="text-slate-200 font-medium">
+                                {entry.receivingAccountId?.name || 'Receiving Account'}
+                              </span>
+                            </div>
+                          ) : entry.entryType === 'TRANSFER' ? (
+                            <div className="space-y-0.5">
+                              <div>
+                                <span className="text-emerald-400 font-bold">Dr (Receiving): </span>
+                                <span className="text-slate-200 font-medium">{entry.drAccountId?.name || entry.receivingAccountId?.name || 'Debit Account'}</span>
+                              </div>
+                              <div>
+                                <span className="text-rose-400 font-bold">Cr (Paying): </span>
+                                <span className="text-slate-200 font-medium">{entry.crAccountId?.name || 'Credit Account'}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-0.5">
+                              <div>
+                                <span className="text-emerald-400 font-bold">Dr: </span>
+                                <span className="text-slate-200 font-medium">{entry.drAccountId?.name || 'Debit Account'}</span>
+                              </div>
+                              <div>
+                                <span className="text-rose-400 font-bold">Cr: </span>
+                                <span className="text-slate-200 font-medium">{entry.crAccountId?.name || 'Credit Account'}</span>
+                              </div>
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-4 text-right whitespace-nowrap font-mono font-black text-emerald-400 text-sm">
+                          {formatPKR(entry.amount)}
+                        </td>
+
+                        <td className="py-4 px-3 text-center whitespace-nowrap">
+                          {isPending ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700/60">
+                              <Clock size={11} /> Pending Review
+                            </span>
+                          ) : isVerified ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60">
+                              <CheckCircle2 size={11} /> Verified
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-950/80 text-rose-300 border border-rose-700/60" title={entry.rejectionReason}>
+                              <XCircle size={11} /> Rejected
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-4 text-center whitespace-nowrap">
+                          {isPending ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => handleVerify(entry)}
+                                disabled={savingEntryId === entry._id}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition disabled:opacity-50"
+                                title="Verify & Post to Ledger"
+                              >
+                                <Check size={13} />
+                                <span>Verify / OK</span>
+                              </button>
+
+                              {!entry.isEdited && (
+                                <button
+                                  onClick={() => handleOpenEdit(entry)}
+                                  disabled={savingEntryId === entry._id}
+                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 transition disabled:opacity-50"
+                                  title="Edit Entry"
+                                >
+                                  <Edit3 size={14} />
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleOpenReject(entry)}
+                                disabled={savingEntryId === entry._id}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-400 border border-slate-700 transition disabled:opacity-50"
+                                title="Reject Entry"
+                              >
+                                <XCircle size={14} />
+                              </button>
+
+                              <button
+                                onClick={() => handleDelete(entry)}
+                                disabled={savingEntryId === entry._id}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 border border-slate-700 transition disabled:opacity-50"
+                                title="Delete Draft"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-slate-500">
+                              {isVerified ? (
+                                <span>Verified by {entry.verifiedByName || 'Khurshid'}</span>
+                              ) : (
+                                <span>Rejected</span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
