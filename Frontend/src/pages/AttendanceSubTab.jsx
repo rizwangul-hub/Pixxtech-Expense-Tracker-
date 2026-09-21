@@ -60,6 +60,9 @@ const employeeOrderIndex = (name, location) => {
     missnoushin: 'nousheen',
     misnoushin: 'nousheen',
     noushin: 'nousheen',
+    nausheen: 'nousheen',
+    missnausheen: 'nousheen',
+    misnausheen: 'nousheen',
     zaffarhussain: 'zaferhussain',
     saeed: 'saeedsb',
   };
