@@ -360,7 +360,7 @@ export default function PendingQueueScreen() {
         </View>
       ) : (
         <FlatList
-          data={entries}
+          data={filteredEntries}
           keyExtractor={(item) => item._id}
           renderItem={renderEntryItem}
           contentContainerStyle={styles.listContent}
