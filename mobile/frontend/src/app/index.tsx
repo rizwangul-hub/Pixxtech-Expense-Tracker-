@@ -124,13 +124,13 @@ export default function MobileWebViewApp() {
         />
       </View>
 
-      {/* Initial Startup Screen: Exact logo2.png ONLY */}
+      {/* Keep the loading artwork visible until the web app is ready. */}
       {isLoading && !hasError && (
-        <View style={styles.loadingContainer}>
+        <View style={StyleSheet.absoluteFill}>
           <Image
-            source={require('@/assets/images/logo2.png')}
+            source={require('@/assets/images/loading.png')}
             style={styles.loadingImage}
-            resizeMode="contain"
+            resizeMode="cover"
           />
         </View>
       )}
@@ -174,10 +174,8 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   loadingImage: {
-    width: '80%',
-    height: '40%',
-    maxWidth: 320,
-    maxHeight: 200,
+    width: '100%',
+    height: '100%',
   },
   errorContainer: {
     ...StyleSheet.absoluteFill,

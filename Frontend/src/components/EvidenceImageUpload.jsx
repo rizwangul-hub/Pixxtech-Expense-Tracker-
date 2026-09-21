@@ -31,6 +31,8 @@ export function EvidenceImageUpload({ files, onChange, disabled = false }) {
           {files.map((file, index) => (
             <span key={`${file.name}-${file.lastModified}-${index}`} className="inline-flex max-w-full items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-800">
               <span className="max-w-[180px] truncate">{file.name}</span>
+           
+           
               <button type="button" onClick={() => removeFile(index)} disabled={disabled} aria-label={`Remove ${file.name}`}>
                 <X size={13} />
               </button>
