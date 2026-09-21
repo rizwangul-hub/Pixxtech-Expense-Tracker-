@@ -17,6 +17,7 @@ import {
   FileText,
   Check,
   ArrowRight,
+  ArrowLeftRight,
   Eye,
   PlusCircle,
   Sparkles,
@@ -465,49 +466,60 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       )}
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
           <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
             <span>Pending Total</span>
             <Clock size={16} className="text-amber-400" />
           </div>
-          <div className="text-2xl font-black font-mono text-amber-300">
+          <div className="text-xl font-black font-mono text-amber-300">
             {summary?.totalPendingCount ?? 0}
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">Awaiting your signoff</div>
+          <div className="text-[10px] text-slate-500 mt-1">Awaiting signoff</div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
           <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
             <span>Pending Rent</span>
             <Building2 size={16} className="text-blue-400" />
           </div>
-          <div className="text-2xl font-black font-mono text-blue-300">
+          <div className="text-xl font-black font-mono text-blue-300">
             {summary?.pendingRentCount ?? 0}
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">Tenant rent collections</div>
+          <div className="text-[10px] text-slate-500 mt-1">Rent collections</div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
           <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
             <span>Pending Expenses</span>
             <DollarSign size={16} className="text-rose-400" />
           </div>
-          <div className="text-2xl font-black font-mono text-rose-300">
+          <div className="text-xl font-black font-mono text-rose-300">
             {summary?.pendingExpenseCount ?? 0}
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">Expense vouchers</div>
+          <div className="text-[10px] text-slate-500 mt-1">Expense vouchers</div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+            <span>Pending Transfers</span>
+            <ArrowLeftRight size={16} className="text-purple-400" />
+          </div>
+          <div className="text-xl font-black font-mono text-purple-300">
+            {summary?.pendingTransferCount ?? 0}
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1">Internal transfers</div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
           <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
             <span>Verified (7 Days)</span>
             <CheckCircle2 size={16} className="text-emerald-400" />
           </div>
-          <div className="text-2xl font-black font-mono text-emerald-300">
+          <div className="text-xl font-black font-mono text-emerald-300">
             {summary?.recentlyVerifiedCount ?? 0}
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">Approved & posted</div>
+          <div className="text-[10px] text-slate-500 mt-1">Approved & posted</div>
         </div>
       </div>
 
@@ -515,17 +527,22 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-1">
-            {['ALL', 'RENT', 'EXPENSE'].map((t) => (
+            {[
+              { id: 'ALL', label: 'All Types' },
+              { id: 'RENT', label: 'Rent Receipts' },
+              { id: 'EXPENSE', label: 'Expense Vouchers' },
+              { id: 'TRANSFER', label: 'Internal Transfers' },
+            ].map((t) => (
               <button
-                key={t}
-                onClick={() => setFilterType(t)}
+                key={t.id}
+                onClick={() => setFilterType(t.id)}
                 className={`px-3 py-1 rounded text-xs font-bold transition ${
-                  filterType === t
+                  filterType === t.id
                     ? 'bg-indigo-600 text-white'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                {t === 'ALL' ? 'All Types' : t === 'RENT' ? 'Rent Receipts' : 'Expense Vouchers'}
+                {t.label}
               </button>
             ))}
           </div>
@@ -543,7 +560,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 onClick={() => setFilterStatus(s.id)}
                 className={`px-2.5 py-1 rounded text-xs font-bold transition ${
                   filterStatus === s.id
-                    ? 'bg-slate-800 text-white'
+                    ? 'bg-indigo-600 text-white'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -642,6 +659,10 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-950/70 text-blue-300 border border-blue-700/50">
                             <Building2 size={10} /> Rent
                           </span>
+                        ) : entry.entryType === 'TRANSFER' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950/70 text-purple-300 border border-purple-700/50">
+                            <ArrowLeftRight size={10} /> Transfer
+                          </span>
                         ) : (
                           <div className="flex flex-col gap-0.5">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950/70 text-rose-300 border border-rose-700/50">
@@ -697,15 +718,26 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                               {entry.receivingAccountId?.name || 'Receiving Account'}
                             </span>
                           </div>
+                        ) : entry.entryType === 'TRANSFER' ? (
+                          <div>
+                            <div>
+                              <span className="text-emerald-400 font-medium">Dr (Receiving): </span>
+                              <span className="text-slate-200">{entry.drAccountId?.name || entry.receivingAccountId?.name || 'Debit Account'}</span>
+                            </div>
+                            <div>
+                              <span className="text-rose-400 font-medium">Cr (Paying): </span>
+                              <span className="text-slate-200">{entry.crAccountId?.name || 'Credit Account'}</span>
+                            </div>
+                          </div>
                         ) : (
                           <div>
                             <div>
                               <span className="text-emerald-400 font-medium">Dr: </span>
-                              <span className="text-slate-200">{entry.drAccountId?.name || 'Debit'}</span>
+                              <span className="text-slate-200">{entry.drAccountId?.name || 'Debit Account'}</span>
                             </div>
                             <div>
                               <span className="text-rose-400 font-medium">Cr: </span>
-                              <span className="text-slate-200">{entry.crAccountId?.name || 'Credit'}</span>
+                              <span className="text-slate-200">{entry.crAccountId?.name || 'Credit Account'}</span>
                             </div>
                           </div>
                         )}

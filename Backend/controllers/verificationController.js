@@ -116,14 +116,17 @@ export const getPendingEntries = async (req, res) => {
 
     const query = {};
 
-    if (status) {
+    if (status && status !== 'ALL') {
       query.status = status;
-    } else {
-      // Default to unverified / pending entries
+    } else if (!status) {
+      // Default to unverified / pending entries if no status filter parameter is specified
       query.status = { $in: ['PENDING_VERIFICATION', 'EDITED'] };
     }
 
-    if (entryType) query.entryType = entryType;
+    if (entryType && entryType !== 'ALL') {
+      query.entryType = entryType;
+    }
+
     if (submittedBy && mongoose.Types.ObjectId.isValid(submittedBy)) query.submittedBy = submittedBy;
     if (propertyId && mongoose.Types.ObjectId.isValid(propertyId)) query.propertyId = propertyId;
     if (tenantId && mongoose.Types.ObjectId.isValid(tenantId)) query.tenantId = tenantId;
@@ -201,6 +204,7 @@ export const getVerificationSummary = async (req, res) => {
     const [
       pendingRentCount,
       pendingExpenseCount,
+      pendingTransferCount,
       totalPendingCount,
       submittedTodayCount,
       submittedBySarfrazCount,
@@ -209,6 +213,7 @@ export const getVerificationSummary = async (req, res) => {
     ] = await Promise.all([
       PendingEntry.countDocuments({ status: { $in: ['PENDING_VERIFICATION', 'EDITED'] }, entryType: 'RENT' }),
       PendingEntry.countDocuments({ status: { $in: ['PENDING_VERIFICATION', 'EDITED'] }, entryType: 'EXPENSE' }),
+      PendingEntry.countDocuments({ status: { $in: ['PENDING_VERIFICATION', 'EDITED'] }, entryType: 'TRANSFER' }),
       PendingEntry.countDocuments({ status: { $in: ['PENDING_VERIFICATION', 'EDITED'] } }),
       PendingEntry.countDocuments({ submittedAt: { $gte: today } }),
       PendingEntry.countDocuments({
@@ -225,6 +230,7 @@ export const getVerificationSummary = async (req, res) => {
       {
         pendingRentCount,
         pendingExpenseCount,
+        pendingTransferCount,
         totalPendingCount,
         submittedTodayCount,
         submittedBySarfrazCount,

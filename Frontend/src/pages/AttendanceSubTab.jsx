@@ -26,13 +26,13 @@ const ATTENDANCE_ORDER = {
     'Majid Javed',
   ],
   'IT Office': [
-    'Miss Nousheen',
+    'Miss Nausheen',
     'Samina Iqbal',
     'Zulaikha Afzaal',
     'Saeed Sb',
-    'Faaiz',
-    'Naveed Malik',
-    'Abdul Rafey Khan',
+    'Faiz Mujahid',
+    'Malik Naveed',
+    'Abdul Rafey',
     'Gulzaib Hamid',
   ],
 };
@@ -40,7 +40,7 @@ const ATTENDANCE_ORDER = {
 const normalizeEmployeeName = (name = '') =>
   name
     .toLowerCase()
-    .replace(/\b(miss|mr|mrs|ms)\b/g, '')
+    .replace(/\b(miss|mr|mrs|ms|sb)\b/g, '')
     .replace(/[^a-z0-9]/g, '');
 
 const employeeOrderIndex = (name, location) => {
@@ -55,14 +55,22 @@ const employeeOrderIndex = (name, location) => {
     fahadrasheed: 'fahadrasheed',
     fahadrashid: 'fahadrasheed',
     fahadsb: 'fahadrasheed',
-    missnousheen: 'nousheen',
-    misnousheen: 'nousheen',
-    missnoushin: 'nousheen',
-    misnoushin: 'nousheen',
-    noushin: 'nousheen',
-    nausheen: 'nousheen',
-    missnausheen: 'nousheen',
-    misnausheen: 'nousheen',
+    missnousheen: 'nausheen',
+    misnousheen: 'nausheen',
+    missnoushin: 'nausheen',
+    misnoushin: 'nausheen',
+    nausheen: 'nausheen',
+    nousheen: 'nausheen',
+    noushin: 'nausheen',
+    missnausheen: 'nausheen',
+    misnausheen: 'nausheen',
+    faaiz: 'faizmujahid',
+    faiz: 'faizmujahid',
+    faizmujahid: 'faizmujahid',
+    naveedmalik: 'maliknaveed',
+    maliknaveed: 'maliknaveed',
+    abdulrafeykhan: 'abdulrafey',
+    abdulrafey: 'abdulrafey',
     zaffarhussain: 'zaferhussain',
     saeed: 'saeedsb',
   };
