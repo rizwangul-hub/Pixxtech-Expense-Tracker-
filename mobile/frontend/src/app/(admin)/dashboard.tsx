@@ -442,6 +442,12 @@ export default function AdminDashboardScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <MobileDrawerModal
+        visible={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        currentRoute="dashboard"
+      />
     </SafeAreaView>
   );
 }

@@ -26,7 +26,8 @@ export default function MobileDrawerModal({
   currentRoute = '',
 }: MobileDrawerModalProps) {
   const router = useRouter();
-  const { user, isAdmin, isVerifier, isDataEntry, logout } = useAuth();
+  const { user, isAdmin, isDataEntry, logout, role } = useAuth();
+  const isVerifier = role === 'VERIFIER' || role === 'VERIFICATION_MANAGER';
   const [pendingCount, setPendingCount] = useState<number>(0);
 
   useEffect(() => {

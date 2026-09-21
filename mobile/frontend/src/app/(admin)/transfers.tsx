@@ -71,7 +71,7 @@ export default function TransfersScreen() {
               <View key={tr._id || tr.id} style={styles.card}>
                 <View style={styles.cardHeader}>
                   <View style={styles.badge}>
-                    <Feather name="arrow-right-left" size={16} color="#4338CA" />
+                    <Feather name="repeat" size={16} color="#4338CA" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.vnTitle}>VN #{tr.voucherNo || '—'}</Text>

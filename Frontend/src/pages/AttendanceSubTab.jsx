@@ -52,6 +52,14 @@ const employeeOrderIndex = (name, location) => {
 
   // Keep common legacy spellings/nicknames aligned with the requested order.
   const aliases = {
+    fahadrasheed: 'fahadrasheed',
+    fahadrashid: 'fahadrasheed',
+    fahadsb: 'fahadrasheed',
+    missnousheen: 'nousheen',
+    misnousheen: 'nousheen',
+    missnoushin: 'nousheen',
+    misnoushin: 'nousheen',
+    noushin: 'nousheen',
     zaffarhussain: 'zaferhussain',
     saeed: 'saeedsb',
   };
