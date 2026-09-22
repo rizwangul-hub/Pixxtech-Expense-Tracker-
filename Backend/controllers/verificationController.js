@@ -1046,7 +1046,8 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
       drAccountName = drAccountName || 'Receiving Account';
       // Rent evidence should identify the credited unit, not only the
       // technical clearing account used by the ledger.
-      crAccountName = unitName || crAccountName || 'Rental Income / Clearing';
+      const rentLocationName = [propertyName, unitName].filter(Boolean).join(' - ');
+      crAccountName = rentLocationName || crAccountName || 'Rental Income / Clearing';
     } else {
       drAccountName = drAccountName || categoryName;
       crAccountName = crAccountName || 'Payment Account (Bank/Cash)';
