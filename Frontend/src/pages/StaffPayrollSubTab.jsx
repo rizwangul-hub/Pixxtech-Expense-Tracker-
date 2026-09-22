@@ -283,6 +283,10 @@ export const StaffPayrollSubTab = () => {
 
   // Finance Payout Handlers
   const openPayModal = (row) => {
+    if (!row.payrollId) {
+      setMsg({ type: 'error', text: 'Please click "Finalize & Save Payroll" before submitting this salary for payout.' });
+      return;
+    }
     setPayTargetRow(row);
     setPayNotes('');
     setPayAmount(String(row.remainingPayable ?? row.netPayable ?? 0));
@@ -791,7 +795,7 @@ export const StaffPayrollSubTab = () => {
                 <span className="text-slate-300 font-mono font-bold">{selectedMonth}</span>
               </div>
               <div className="flex justify-between items-center border-t border-slate-800/80 pt-2 text-sm">
-                <span className="text-slate-300 font-bold">Net Salary:</span>
+                <span className="text-slate-300 font-bold">Net Payable After Deductions:</span>
                 <span className="text-white font-mono font-black">Rs. {formatPKR(payTargetRow.netPayable)}</span>
               </div>
               <div className="flex justify-between items-center text-sm">

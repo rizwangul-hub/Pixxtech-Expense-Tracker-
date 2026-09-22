@@ -355,6 +355,13 @@ export const savePayroll = async (req, res) => {
 
       const emp = await Employee.findById(rec.employeeId);
       if (emp) {
+        if (loanDed > (emp.loanBalance || 0) + 0.01 && !existingLoanRecord) {
+          return apiError(
+            res,
+            `Loan deduction of Rs. ${formatPKR(loanDed)} cannot exceed ${emp.name}'s outstanding loan balance of Rs. ${formatPKR(emp.loanBalance || 0)}.`,
+            400
+          );
+        }
         if (loanDed > 0) {
           if (existingLoanRecord) {
             // Adjust balance for difference in loan deduction
@@ -1284,8 +1291,10 @@ export const paySingleSalary = async (req, res) => {
       pDate = endOfMonthDate;
     }
 
-    // Routing for Data Entry role (Sarfraz Khan): Create PendingEntry awaiting Khurshid's verification
-    if (req.user?.role === 'DATA_ENTRY') {
+    // Only approvers may post directly. All operational payout submissions are
+    // staged for verification so the bank is never debited before approval.
+    const canPostDirectly = ['ADMIN', 'ADMIN_PUBLISHER', 'VERIFIER', 'VERIFICATION_MANAGER'].includes(req.user?.role);
+    if (!canPostDirectly) {
       const pendingEntries = await PendingEntry.find({
         entryType: 'SALARY',
         status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
@@ -1334,6 +1343,10 @@ export const paySingleSalary = async (req, res) => {
           paymentNotes,
           paymentAmount: netAmount,
           payrollSnapshot: {
+            employeeName: pDoc.employeeName || '',
+            employeeId: pDoc.employeeId,
+            designation: pDoc.designation || '',
+            department: pDoc.department || '',
             basicSalary: pDoc.basicSalary || 0,
             allowance: pDoc.allowance || 0,
             allowanceReason: pDoc.allowanceReason || '',

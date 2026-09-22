@@ -766,11 +766,6 @@ export const verifyEntry = async (req, res) => {
         if (loanDed > 0) {
           const emp = await Employee.findById(pDoc.employeeId);
           if (emp) {
-            const prevBal = emp.loanBalance || 0;
-            const newBal = Math.max(0, prevBal - loanDed);
-            emp.loanBalance = newBal;
-            await emp.save();
-
             const existingLoanRec = await StaffLoan.findOne({
               employeeId: emp._id,
               payrollMonth: month,
@@ -778,6 +773,11 @@ export const verifyEntry = async (req, res) => {
             });
 
             if (!existingLoanRec) {
+              const prevBal = emp.loanBalance || 0;
+              const newBal = Math.max(0, prevBal - loanDed);
+              emp.loanBalance = newBal;
+              await emp.save();
+
               await StaffLoan.create({
                 employeeId: emp._id,
                 type: 'REPAYMENT',
