@@ -3,7 +3,7 @@ import Account from '../models/Account.js';
 import Category from '../models/Category.js';
 import Transaction from '../models/Transaction.js';
 import PendingEntry from '../models/PendingEntry.js';
-import { createTransaction, round2 } from '../services/ledgerService.js';
+import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
 
 /**
  * @desc    Collect property rent and automatically record double-entry voucher
@@ -59,11 +59,15 @@ export const collectRent = async (req, res) => {
 
     // If submitted by DATA_ENTRY (Sarfraz), save as temporary pending entry awaiting Khurshid's verification
     if (req.user.role === 'DATA_ENTRY') {
+      // Auto-generate voucher number in PT-XXX-MM-YY format (same as expense entries)
+      const entryDate = paymentDate ? new Date(paymentDate) : new Date();
+      const autoVoucherNo = await suggestNextVoucherNumber(entryDate);
+
       const pending = await PendingEntry.create({
         entryType: 'RENT',
         amount: paid,
-        date: paymentDate ? new Date(paymentDate) : new Date(),
-        voucherNo: '',
+        date: entryDate,
+        voucherNo: autoVoucherNo,
         rentMonth,
         propertyId: property._id,
         unitId: unit._id,
