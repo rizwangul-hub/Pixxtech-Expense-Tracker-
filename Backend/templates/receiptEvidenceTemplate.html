@@ -262,6 +262,7 @@
       border-collapse: collapse;
       margin-bottom: 7px;
       border: 1px solid #cbd5e1;
+      table-layout: fixed;
     }
 
     .accounting-table th,
@@ -269,6 +270,24 @@
       padding: 4px 7px;
       border-bottom: 1px solid #e2e8f0;
       font-size: 7.5pt;
+    }
+
+    .accounting-table th:nth-child(1),
+    .accounting-table td:nth-child(1) {
+      width: 68%;
+      text-align: left;
+    }
+
+    .accounting-table th:nth-child(2),
+    .accounting-table td:nth-child(2) {
+      width: 16%;
+      text-align: right;
+    }
+
+    .accounting-table th:nth-child(3),
+    .accounting-table td:nth-child(3) {
+      width: 16%;
+      text-align: right;
     }
 
     .accounting-table th {
@@ -567,8 +586,7 @@
       <table class="accounting-table">
         <thead>
           <tr>
-            <th>Account / Bank or Cash Memo</th>
-            <th>Memo</th>
+            <th>Account / Bank or Cash</th>
             <th class="accounting-amount">Debit (Dr.)</th>
             <th class="accounting-amount">Credit (Cr.)</th>
           </tr>
@@ -576,13 +594,11 @@
         <tbody>
           <tr>
             <td>{{drAccountName}}</td>
-            <td>{{categoryName}}</td>
             <td class="accounting-amount">{{formatPKR amount}}</td>
             <td class="accounting-amount">-</td>
           </tr>
           <tr>
             <td>{{crAccountName}}</td>
-            <td>{{categoryName}}</td>
             <td class="accounting-amount">-</td>
             <td class="accounting-amount">{{formatPKR amount}}</td>
           </tr>
