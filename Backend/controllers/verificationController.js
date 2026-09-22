@@ -178,6 +178,68 @@ export const getPendingEntries = async (req, res) => {
       PendingEntry.countDocuments(query),
     ]);
 
+    const salaryIds = entries
+      .filter((entry) => entry.entryType === 'SALARY')
+      .map((entry) => entry.entryData?.payrollId)
+      .filter((id) => id && mongoose.Types.ObjectId.isValid(id));
+    if (salaryIds.length > 0) {
+      const payrollDocs = await Payroll.find({ _id: { $in: salaryIds } })
+        .select('employeeName employeeId designation department basicSalary allowance allowanceReason grossSalary loanDeduction lopDeduction otherDeduction totalDeduction netPayable totalInstallmentsPaid salaryInstallments paymentStatus')
+        .lean();
+      const payrollMap = new Map(payrollDocs.map((doc) => [doc._id.toString(), doc]));
+      entries.forEach((entry) => {
+        if (entry.entryType !== 'SALARY') return;
+        // Prefer snapshot embedded in pending entry (stable at submission time)
+        const snapshot = entry.entryData?.payrollSnapshot;
+        if (snapshot) {
+          const paid = round2(snapshot.totalInstallmentsPaid || 0);
+          entry.salaryDetails = {
+            employeeName: snapshot.employeeName || entry.submittedByName || '',
+            employeeId: entry.entryData?.employeeId || snapshot.employeeId || null,
+            designation: snapshot.designation || '',
+            department: snapshot.department || '',
+            basicSalary: snapshot.basicSalary || 0,
+            allowance: snapshot.allowance || 0,
+            allowanceReason: snapshot.allowanceReason || '',
+            grossSalary: snapshot.grossSalary || 0,
+            loanDeduction: snapshot.loanDeduction || 0,
+            lopDeduction: snapshot.lopDeduction || 0,
+            otherDeduction: snapshot.otherDeduction || 0,
+            totalDeduction: snapshot.totalDeduction || 0,
+            netPayable: snapshot.netPayable || 0,
+            alreadyPaid: paid,
+            remainingPayable: Math.max(0, round2((snapshot.netPayable || 0) - paid)),
+            paymentStatus: snapshot.paymentStatus || 'PENDING_PAYMENT',
+            installments: snapshot.salaryInstallments || [],
+          };
+          return;
+        }
+
+        const payroll = payrollMap.get(String(entry.entryData?.payrollId));
+        if (!payroll) return;
+        const paid = round2(payroll.totalInstallmentsPaid || 0);
+        entry.salaryDetails = {
+          employeeName: payroll.employeeName,
+          employeeId: payroll.employeeId,
+          designation: payroll.designation,
+          department: payroll.department,
+          basicSalary: payroll.basicSalary || 0,
+          allowance: payroll.allowance || 0,
+          allowanceReason: payroll.allowanceReason || '',
+          grossSalary: payroll.grossSalary || 0,
+          loanDeduction: payroll.loanDeduction || 0,
+          lopDeduction: payroll.lopDeduction || 0,
+          otherDeduction: payroll.otherDeduction || 0,
+          totalDeduction: payroll.totalDeduction || 0,
+          netPayable: payroll.netPayable || 0,
+          alreadyPaid: paid,
+          remainingPayable: Math.max(0, round2((payroll.netPayable || 0) - paid)),
+          paymentStatus: payroll.paymentStatus,
+          installments: payroll.salaryInstallments || [],
+        };
+      });
+    }
+
     return apiSuccess(
       res,
       {

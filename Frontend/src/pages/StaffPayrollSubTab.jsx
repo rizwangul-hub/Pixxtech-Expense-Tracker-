@@ -16,6 +16,9 @@ import {
   AlertTriangle,
   BookOpen,
   FileText,
+  Maximize2,
+  Minimize2,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { payrollAPI, accountsAPI } from '../services/api.js';
 
@@ -36,6 +39,9 @@ export const StaffPayrollSubTab = () => {
   // Finance Integration State
   const [financeAccounts, setFinanceAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
+
+  // Full-screen mode for the Itemized Salary Sheet table
+  const [isFullScreen, setIsFullScreen] = useState(false);
   
   // Pay Single Modal
   const [payModalOpen, setPayModalOpen] = useState(false);
@@ -489,18 +495,60 @@ export const StaffPayrollSubTab = () => {
       </div>
 
       {/* Interactive Payroll Matrix Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h3 className="text-base font-black text-white flex items-center gap-2">
-            <Building2 size={16} className="text-purple-400" />
-            Itemized Employee Salary Sheet ({selectedMonth})
-          </h3>
-          <span className="text-xs text-slate-400 font-semibold">
-            {payrollRows.length} Employee Records
-          </span>
-        </div>
+      <div
+        className={
+          isFullScreen
+            ? 'fixed inset-0 z-50 bg-slate-950 flex flex-col'
+            : 'bg-slate-900 border border-slate-800 rounded-2xl shadow-sm'
+        }
+      >
+        {/* Full-screen top bar */}
+        {isFullScreen && (
+          <div className="shrink-0 flex items-center justify-between bg-slate-900 border-b border-slate-700 px-5 py-3 shadow-md">
+            <div className="flex items-center gap-3">
+              <Building2 size={18} className="text-purple-400" />
+              <div>
+                <span className="text-sm font-black text-white">Itemized Employee Salary Sheet</span>
+                <span className="ml-3 text-xs text-slate-400 font-mono">{selectedMonth}</span>
+                <span className="ml-3 text-xs text-slate-500 font-semibold">{payrollRows.length} Records</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsFullScreen(false)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition shadow"
+              title="Exit full screen and show sidebar"
+            >
+              <PanelLeftOpen size={15} />
+              Show Sidebar
+            </button>
+          </div>
+        )}
 
-        <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-950">
+        {/* Section header (shown only in normal mode) */}
+        {!isFullScreen && (
+          <div className="flex items-center justify-between border-b border-slate-800 px-5 pt-5 pb-3">
+            <h3 className="text-base font-black text-white flex items-center gap-2">
+              <Building2 size={16} className="text-purple-400" />
+              Itemized Employee Salary Sheet ({selectedMonth})
+            </h3>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-slate-400 font-semibold">
+                {payrollRows.length} Employee Records
+              </span>
+              <button
+                onClick={() => setIsFullScreen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-300 border border-slate-700 font-bold text-xs transition"
+                title="Open in full screen (hides sidebar for easier scrolling)"
+              >
+                <Maximize2 size={13} />
+                Full Screen
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Table wrapper — scrollable */}
+        <div className={`overflow-x-auto border border-slate-800 bg-slate-950 ${isFullScreen ? 'flex-1 overflow-y-auto mx-4 my-3 rounded-xl' : 'rounded-b-2xl mx-5 mb-5 mt-0 rounded-t-none'}`}>
           <table className="w-full min-w-[1900px] table-fixed text-left text-[10px] text-slate-300">
             <colgroup>
               <col className="w-[52px]" />
@@ -519,7 +567,7 @@ export const StaffPayrollSubTab = () => {
               <col className="w-[175px]" />
               <col className="w-[95px]" />
             </colgroup>
-            <thead className="bg-slate-900 text-slate-400 uppercase font-extrabold text-[10px] tracking-wider border-b border-slate-800">
+            <thead className="sticky top-0 bg-slate-900 text-slate-400 uppercase font-extrabold text-[10px] tracking-wider border-b border-slate-800 z-10">
               <tr>
                 <th className="py-3 px-2">Sr.</th>
                 <th className="py-3 px-2">Employee Name</th>
@@ -533,8 +581,8 @@ export const StaffPayrollSubTab = () => {
                 <th className="py-3 px-3 text-right">Loan Ded (PKR)</th>
                 <th className="py-3 px-3 text-right">Absent / LOP Ded (PKR)</th>
                 <th className="py-3 px-4 text-right">Net Payable</th>
-                <th className="py-3 px-4">Bank & IBAN</th>
-                <th className="py-3 px-4 text-center">Finance Status & Action</th>
+                <th className="py-3 px-4">Bank &amp; IBAN</th>
+                <th className="py-3 px-4 text-center">Finance Status &amp; Action</th>
                 <th className="py-3 px-4 text-center">Payslip</th>
               </tr>
             </thead>

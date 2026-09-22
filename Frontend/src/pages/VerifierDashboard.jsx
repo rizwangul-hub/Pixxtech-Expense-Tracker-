@@ -47,6 +47,35 @@ let verifierDataCache = {
   properties: [],
 };
 
+const SalaryBreakdown = ({ entry }) => {
+  const salary = entry?.salaryDetails;
+  if (entry?.entryType !== 'SALARY' || !salary) return null;
+
+  return (
+    <div className="mt-3 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-3 text-[11px] space-y-2">
+      <div className="font-bold text-emerald-300">Salary Breakdown — {salary.employeeName}</div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 text-slate-300">
+        <span>Basic: <b className="text-white">Rs. {formatPKR(salary.basicSalary)}</b></span>
+        <span>Allowance: <b className="text-white">Rs. {formatPKR(salary.allowance)}</b></span>
+        <span>Gross: <b className="text-white">Rs. {formatPKR(salary.grossSalary)}</b></span>
+        <span>Deduction: <b className="text-rose-300">Rs. {formatPKR(salary.totalDeduction)}</b></span>
+        <span>Loan Deduction: <b className="text-rose-300">Rs. {formatPKR(salary.loanDeduction)}</b></span>
+        <span>LOP Deduction: <b className="text-rose-300">Rs. {formatPKR(salary.lopDeduction)}</b></span>
+        <span>Other Deduction: <b className="text-rose-300">Rs. {formatPKR(salary.otherDeduction)}</b></span>
+        <span>Net Salary: <b className="text-emerald-300">Rs. {formatPKR(salary.netPayable)}</b></span>
+      </div>
+      {salary.allowanceReason && (
+        <div className="text-slate-400">Allowance Reason: <span className="text-slate-200">{salary.allowanceReason}</span></div>
+      )}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 border-t border-emerald-900/60 pt-2">
+        <span className="text-amber-300">Requested Now: <b>Rs. {formatPKR(entry.amount)}</b></span>
+        <span className="text-slate-300">Already Paid: <b>Rs. {formatPKR(salary.alreadyPaid)}</b></span>
+        <span className="text-amber-300">Remaining: <b>Rs. {formatPKR(salary.remainingPayable)}</b></span>
+      </div>
+    </div>
+  );
+};
+
 export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties }) => {
   const hasCache = verifierDataCache.pendingEntries !== null;
 

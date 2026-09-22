@@ -1223,6 +1223,7 @@ export const paySingleSalary = async (req, res) => {
       paymentNotes = '',
       paymentDate = new Date(),
       paymentAmount,
+      amount,
     } = req.body;
 
     if (!month || (!employeeId && !payrollId) || !paidFromAccountId) {
@@ -1244,25 +1245,23 @@ export const paySingleSalary = async (req, res) => {
     const remainingAmount = round2(Math.max(0, pDoc.netPayable - totalPaid));
 
     if (pDoc.paymentStatus === 'PAID' || remainingAmount <= 0) {
-      return apiError(res, `Salary for ${pDoc.employeeName} for ${month} is already marked PAID (Voucher: ${pDoc.voucherNo}).`, 400);
+      return apiError(res, `Salary for ${pDoc.employeeName} for ${month} is already fully PAID (Voucher: ${pDoc.voucherNo || 'N/A'}).`, 400);
     }
 
-    const requestedAmount = paymentAmount === undefined || paymentAmount === '' ? remainingAmount : round2(Number(paymentAmount));
+    const rawAmount = paymentAmount !== undefined && paymentAmount !== '' ? paymentAmount : amount;
+    const requestedAmount = rawAmount === undefined || rawAmount === '' ? remainingAmount : round2(Number(rawAmount));
     if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
       return apiError(res, 'Payment amount must be greater than zero.', 400);
     }
-    if (requestedAmount > remainingAmount) {
+    if (requestedAmount > remainingAmount + 0.01) {
       return apiError(
         res,
-        `Payment amount cannot exceed the remaining salary of Rs. ${formatPKR(remainingAmount)}.`,
+        `Payment amount of Rs. ${formatPKR(requestedAmount)} cannot exceed the remaining salary of Rs. ${formatPKR(remainingAmount)}.`,
         400
       );
     }
 
-    const netAmount = requestedAmount;
-    if (remainingAmount <= 0) {
-      return apiError(res, `Net payable for ${pDoc.employeeName} is Rs. 0. Payout not required.`, 400);
-    }
+    const netAmount = Math.min(requestedAmount, remainingAmount);
 
     const account = await Account.findById(paidFromAccountId);
     if (!account) {
@@ -1270,14 +1269,6 @@ export const paySingleSalary = async (req, res) => {
     }
     if (!account.isActive) {
       return apiError(res, `Account "${account.name}" is inactive.`, 400);
-    }
-
-    if (account.currentBalance < netAmount) {
-      return apiError(
-        res,
-        `Insufficient balance in "${account.name}". Current Balance: Rs. ${formatPKR(account.currentBalance)}, Required: Rs. ${formatPKR(netAmount)}.`,
-        400
-      );
     }
 
     const salariesCategory = await getOrCreateSalariesCategory();
@@ -1294,22 +1285,33 @@ export const paySingleSalary = async (req, res) => {
     }
 
     // Routing for Data Entry role (Sarfraz Khan): Create PendingEntry awaiting Khurshid's verification
-    if (req.user?.role !== 'SYSTEM') {
-      const existingPending = await PendingEntry.findOne({
+    if (req.user?.role === 'DATA_ENTRY') {
+      const pendingEntries = await PendingEntry.find({
         entryType: 'SALARY',
         status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
         'entryData.payrollId': pDoc._id,
       });
 
-      if (existingPending) {
+      const pendingSum = round2(pendingEntries.reduce((sum, item) => sum + (item.amount || 0), 0));
+      const unsubmittedRemaining = round2(Math.max(0, remainingAmount - pendingSum));
+
+      if (unsubmittedRemaining <= 0) {
         return apiError(
           res,
-          `Salary payout for ${pDoc.employeeName} for ${month} is already pending verification by Khurshid Anwar.`,
+          `A salary payout for ${pDoc.employeeName} of Rs. ${formatPKR(pendingSum)} is already awaiting verification by Khurshid Anwar. Please wait for verification before submitting another installment.`,
           400
         );
       }
 
-      const voucherNo = await suggestNextVoucherNumber('EXPENSE', pDate);
+      if (netAmount > unsubmittedRemaining + 0.01) {
+        return apiError(
+          res,
+          `Requested amount of Rs. ${formatPKR(netAmount)} exceeds the unsubmitted balance of Rs. ${formatPKR(unsubmittedRemaining)} (Rs. ${formatPKR(pendingSum)} is currently pending verification).`,
+          400
+        );
+      }
+
+      const voucherNo = await suggestNextVoucherNumber(pDate);
 
       const pending = await PendingEntry.create({
         entryType: 'SALARY',
@@ -1331,6 +1333,20 @@ export const paySingleSalary = async (req, res) => {
           paymentMethod,
           paymentNotes,
           paymentAmount: netAmount,
+          payrollSnapshot: {
+            basicSalary: pDoc.basicSalary || 0,
+            allowance: pDoc.allowance || 0,
+            allowanceReason: pDoc.allowanceReason || '',
+            grossSalary: pDoc.grossSalary || 0,
+            loanDeduction: pDoc.loanDeduction || 0,
+            lopDeduction: pDoc.lopDeduction || 0,
+            otherDeduction: pDoc.otherDeduction || 0,
+            totalDeduction: pDoc.totalDeduction || 0,
+            netPayable: pDoc.netPayable || 0,
+            totalInstallmentsPaid: pDoc.totalInstallmentsPaid || 0,
+            salaryInstallments: pDoc.salaryInstallments || [],
+            paymentStatus: pDoc.paymentStatus || 'PENDING_PAYMENT',
+          },
         },
         status: 'PENDING_VERIFICATION',
         submittedBy: req.user._id,
@@ -1347,24 +1363,32 @@ export const paySingleSalary = async (req, res) => {
         ],
       });
 
-      // Submission is not payment: leave the payroll payable until verification
-      // posts the transaction and the ledger updates the bank/cash balance.
       pDoc.paymentStatus = 'PENDING_PAYMENT';
       await pDoc.save();
 
       return apiSuccess(
         res,
         { pendingEntry: pending, isPending: true, status: 'PENDING_VERIFICATION' },
-        `Salary payout of Rs. ${formatPKR(netAmount)} for ${pDoc.employeeName} submitted to Verification Queue. Bank funds will be disbursed upon Khurshid Anwar's approval.`
+        `Salary payout installment of Rs. ${formatPKR(netAmount)} for ${pDoc.employeeName} submitted to Verification Queue. Bank funds will be disbursed upon Khurshid Anwar's approval.`,
+        201
       );
     }
 
-    const voucherNo = await suggestNextVoucherNumber('EXPENSE', pDate);
+    // Direct payout for Administrators (Khurshid Anwar / Fahad Sb)
+    if (account.currentBalance < netAmount) {
+      return apiError(
+        res,
+        `Insufficient balance in "${account.name}". Current Balance: Rs. ${formatPKR(account.currentBalance)}, Required: Rs. ${formatPKR(netAmount)}.`,
+        400
+      );
+    }
+
+    const voucherNo = await suggestNextVoucherNumber(pDate);
 
     const transaction = await createTransaction({
       date: pDate,
       voucherNo,
-      detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`,
+      detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}${paymentNotes ? '. ' + paymentNotes : ''}`,
       categoryId: salariesCategory._id,
       drAccountId: clearingAccount._id,
       crAccountId: account._id,
@@ -1378,9 +1402,10 @@ export const paySingleSalary = async (req, res) => {
     });
 
     const updatedTotalPaid = round2(totalPaid + netAmount);
+    const isFullyPaid = updatedTotalPaid >= round2(pDoc.netPayable) - 0.01;
     pDoc.totalInstallmentsPaid = updatedTotalPaid;
-    pDoc.paymentStatus = updatedTotalPaid >= pDoc.netPayable ? 'PAID' : 'PARTIAL_PAYMENT';
-    pDoc.status = pDoc.paymentStatus === 'PAID' ? 'PAID' : 'FINALIZED';
+    pDoc.paymentStatus = isFullyPaid ? 'PAID' : 'PARTIAL_PAYMENT';
+    pDoc.status = isFullyPaid ? 'PAID' : 'FINALIZED';
     pDoc.paidFromAccountId = account._id;
     pDoc.paidFromAccountName = account.name;
     pDoc.paymentDate = pDate;
@@ -1400,13 +1425,29 @@ export const paySingleSalary = async (req, res) => {
       voucherNo: transaction.voucherNo,
       transactionId: transaction._id,
       notes: paymentNotes,
-      paidBy: req.user?.name || 'System Operator',
+      paidBy: req.user?.name || 'Finance Manager',
+      createdAt: new Date(),
     });
     await pDoc.save();
 
+    // If an existing pending entry was waiting for this payroll record, mark it verified
+    const activePending = await PendingEntry.findOne({
+      entryType: 'SALARY',
+      status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
+      'entryData.payrollId': pDoc._id,
+    });
+    if (activePending) {
+      activePending.status = 'VERIFIED';
+      activePending.verifiedBy = req.user._id;
+      activePending.verifiedByName = req.user.name;
+      activePending.verifiedAt = new Date();
+      activePending.postedTransactionId = transaction._id;
+      await activePending.save();
+    }
+
     await StaffAuditLog.create({
       userId: req.user?._id || null,
-      userName: req.user?.name || 'System Operator',
+      userName: req.user?.name || 'Finance Manager',
       action: 'SALARY_PAID',
       recordId: pDoc._id.toString(),
       details: `Paid salary of Rs. ${formatPKR(netAmount)} to ${pDoc.employeeName} from ${account.name} (Voucher: ${transaction.voucherNo}).`,
@@ -1414,13 +1455,25 @@ export const paySingleSalary = async (req, res) => {
         amount: netAmount,
         account: account.name,
         voucherNo: transaction.voucherNo,
+        remainingBalance: Math.max(0, pDoc.netPayable - updatedTotalPaid),
       },
     });
 
     return apiSuccess(
       res,
-      { payroll: pDoc, transaction, updatedAccountBalance: account.currentBalance - netAmount },
-      `Salary of Rs. ${formatPKR(netAmount)} successfully paid to ${pDoc.employeeName} from ${account.name}.`
+      {
+        payroll: pDoc,
+        transaction,
+        voucherNo: transaction.voucherNo,
+        updatedAccountBalance: round2((account.currentBalance || 0) - netAmount),
+        isFullyPaid,
+        amountPaid: netAmount,
+        remainingBalance: round2(Math.max(0, pDoc.netPayable - updatedTotalPaid)),
+      },
+      isFullyPaid
+        ? `Salary of Rs. ${formatPKR(netAmount)} fully paid to ${pDoc.employeeName} from ${account.name}. Voucher: ${transaction.voucherNo}`
+        : `Partial salary payout of Rs. ${formatPKR(netAmount)} recorded for ${pDoc.employeeName}. Remaining: Rs. ${formatPKR(pDoc.netPayable - updatedTotalPaid)}. Voucher: ${transaction.voucherNo}`,
+      201
     );
   } catch (error) {
     console.error('[Pay Single Salary Error]:', error);
@@ -1463,7 +1516,7 @@ export const payBulkSalary = async (req, res) => {
       return apiError(res, 'No eligible unpaid payroll records found for payout.', 400);
     }
 
-    const totalRequired = round2(payrollDocs.reduce((sum, p) => sum + p.netPayable, 0));
+    const totalRequired = round2(payrollDocs.reduce((sum, p) => sum + (p.netPayable - (p.totalInstallmentsPaid || 0)), 0));
     if (account.currentBalance < totalRequired) {
       return apiError(
         res,
@@ -1486,12 +1539,12 @@ export const payBulkSalary = async (req, res) => {
     }
 
     // Routing for Data Entry role (Sarfraz Khan): Create PendingEntry for each unpaid salary record
-    if (req.user?.role !== 'SYSTEM') {
+    if (req.user?.role === 'DATA_ENTRY') {
       const pendingResults = [];
 
       for (const pDoc of payrollDocs) {
-        const netAmount = round2(pDoc.netPayable);
-        if (netAmount <= 0) continue;
+        const remaining = round2(pDoc.netPayable - (pDoc.totalInstallmentsPaid || 0));
+        if (remaining <= 0) continue;
 
         const existingPending = await PendingEntry.findOne({
           entryType: 'SALARY',
@@ -1501,10 +1554,10 @@ export const payBulkSalary = async (req, res) => {
 
         if (existingPending) continue;
 
-        const voucherNo = await suggestNextVoucherNumber('EXPENSE', pDate);
+        const voucherNo = await suggestNextVoucherNumber(pDate);
         const pending = await PendingEntry.create({
           entryType: 'SALARY',
-          amount: netAmount,
+          amount: remaining,
           date: pDate,
           voucherNo,
           rentMonth: month,
@@ -1542,7 +1595,7 @@ export const payBulkSalary = async (req, res) => {
 
         pendingResults.push({
           employeeName: pDoc.employeeName,
-          amount: netAmount,
+          amount: remaining,
           voucherNo,
           pendingEntryId: pending._id,
         });
@@ -1551,24 +1604,25 @@ export const payBulkSalary = async (req, res) => {
       return apiSuccess(
         res,
         { count: pendingResults.length, totalAmount: totalRequired, pendingList: pendingResults, isPending: true },
-        `Submitted ${pendingResults.length} salary payouts totaling Rs. ${formatPKR(totalRequired)} to Verification Queue for Khurshid Anwar's approval.`
+        `Submitted ${pendingResults.length} salary payouts totaling Rs. ${formatPKR(totalRequired)} to Verification Queue for Khurshid Anwar's approval.`,
+        201
       );
     }
 
     const results = [];
     for (const pDoc of payrollDocs) {
-      const netAmount = round2(pDoc.netPayable);
-      if (netAmount <= 0) continue;
+      const remaining = round2(pDoc.netPayable - (pDoc.totalInstallmentsPaid || 0));
+      if (remaining <= 0) continue;
 
-      const voucherNo = await suggestNextVoucherNumber('EXPENSE', pDate);
+      const voucherNo = await suggestNextVoucherNumber(pDate);
       const transaction = await createTransaction({
         date: pDate,
         voucherNo,
-        detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) â€” Month ${month}`,
+        detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`,
         categoryId: salariesCategory._id,
         drAccountId: clearingAccount._id,
         crAccountId: account._id,
-        amount: netAmount,
+        amount: remaining,
         transactionType: 'EXPENSE',
         expenseClassification: 'GENERAL_EXPENSE',
         reportCategory: 'Payments',
@@ -1579,6 +1633,7 @@ export const payBulkSalary = async (req, res) => {
 
       pDoc.status = 'PAID';
       pDoc.paymentStatus = 'PAID';
+      pDoc.totalInstallmentsPaid = round2((pDoc.totalInstallmentsPaid || 0) + remaining);
       pDoc.paidFromAccountId = account._id;
       pDoc.paidFromAccountName = account.name;
       pDoc.paymentDate = pDate;
@@ -1588,18 +1643,31 @@ export const payBulkSalary = async (req, res) => {
       pDoc.voucherNo = transaction.voucherNo;
       pDoc.paymentMethod = paymentMethod;
       pDoc.paymentNotes = paymentNotes;
+      pDoc.salaryInstallments = pDoc.salaryInstallments || [];
+      pDoc.salaryInstallments.push({
+        amount: remaining,
+        paymentDate: pDate,
+        paidFromAccountId: account._id,
+        paidFromAccountName: account.name,
+        paymentMethod,
+        voucherNo: transaction.voucherNo,
+        transactionId: transaction._id,
+        notes: paymentNotes || 'Bulk Payout',
+        paidBy: req.user?.name || 'Finance Manager',
+        createdAt: new Date(),
+      });
       await pDoc.save();
 
       results.push({
         employeeName: pDoc.employeeName,
-        amount: netAmount,
+        amount: remaining,
         voucherNo: transaction.voucherNo,
       });
     }
 
     await StaffAuditLog.create({
       userId: req.user?._id || null,
-      userName: req.user?.name || 'System Operator',
+      userName: req.user?.name || 'Finance Manager',
       action: 'BULK_SALARY_PAID',
       recordId: month,
       details: `Bulk paid ${results.length} employee salaries totaling Rs. ${formatPKR(totalRequired)} from ${account.name}.`,
@@ -1609,7 +1677,8 @@ export const payBulkSalary = async (req, res) => {
     return apiSuccess(
       res,
       { count: results.length, totalAmountPaid: totalRequired, paidList: results },
-      `Successfully disbursed ${results.length} employee salaries totaling Rs. ${formatPKR(totalRequired)} from ${account.name}.`
+      `Successfully disbursed ${results.length} employee salaries totaling Rs. ${formatPKR(totalRequired)} from ${account.name}.`,
+      201
     );
   } catch (error) {
     console.error('[Pay Bulk Salary Error]:', error);
@@ -1619,8 +1688,6 @@ export const payBulkSalary = async (req, res) => {
 
 /**
  * @desc    Reverse a paid salary transaction & restore bank/cash balance
- * @route   POST /api/staff/payroll/reverse
- * @access  Private
  */
 export const reverseSalaryPayment = async (req, res) => {
   try {
