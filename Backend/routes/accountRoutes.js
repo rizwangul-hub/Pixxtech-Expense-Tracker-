@@ -10,6 +10,7 @@ import {
   getActiveAccountsSummary,
   getCategories,
   createCategory,
+  updateCategory,
   deleteCategory,
   getProperties,
   recalculateAllBalances,
@@ -30,6 +31,7 @@ router.get('/properties-list', getProperties);
 
 // Data-entry & Admin users may add or delete expense heads
 router.post('/categories', authorize('ADMIN', 'ADMIN_PUBLISHER', 'DATA_ENTRY', 'VERIFIER'), createCategory);
+router.patch('/categories/:id', authorize('ADMIN', 'ADMIN_PUBLISHER', 'DATA_ENTRY', 'VERIFIER'), updateCategory);
 router.delete('/categories/:id', authorize('ADMIN', 'ADMIN_PUBLISHER', 'DATA_ENTRY', 'VERIFIER'), deleteCategory);
 
 // Admin-only: Reconcile account balances from actual transactions (fixes stored vs computed divergence)

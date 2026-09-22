@@ -40,6 +40,17 @@ const categorySchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    parentCategoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Category',
+      default: null,
+      index: true,
+    },
+    isMainHead: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     isRentalHead: {
       type: Boolean,
       default: false,

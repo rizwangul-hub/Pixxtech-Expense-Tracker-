@@ -189,6 +189,7 @@ export const getOrCreateCanonicalHead = async ({
     expenseClassification: classification,
     propertyId: propId,
     unitId: uId,
+    isMainHead: true,
   };
 
   let query = Category.findOne(queryFilter).sort({ createdAt: 1 });
@@ -217,8 +218,12 @@ export const getOrCreateCanonicalHead = async ({
   if (head) {
     if (head.name !== expectedName) {
       head.name = expectedName;
-      await head.save();
     }
+    if (!head.isMainHead || head.parentCategoryId) {
+      head.isMainHead = true;
+      head.parentCategoryId = null;
+    }
+    await head.save();
     return head;
   }
 
@@ -230,6 +235,7 @@ export const getOrCreateCanonicalHead = async ({
         expenseClassification: classification,
         propertyId: propId,
         unitId: uId,
+        isMainHead: true,
         isRentalHead: false,
       },
     ],
@@ -269,15 +275,27 @@ export const provisionStandardCategories = async () => {
         });
 
         if (!existing) {
+          const parent = await getOrCreateCanonicalHead({
+            expenseClassification: EXPENSE_CLASSIFICATIONS.PROPERTY_OWN,
+            propertyId: pId,
+          });
           await Category.create({
             name: expName,
             type: 'EXPENSE',
             expenseClassification: 'PROPERTY_OWN_EXPENSE',
             propertyId: pId,
             unitId: null,
+            parentCategoryId: parent._id,
             isRentalHead: false,
           });
           createdCount++;
+        } else if (!existing.parentCategoryId) {
+          const parent = await getOrCreateCanonicalHead({
+            expenseClassification: EXPENSE_CLASSIFICATIONS.PROPERTY_OWN,
+            propertyId: pId,
+          });
+          existing.parentCategoryId = parent._id;
+          await existing.save();
         }
       }
 
@@ -296,15 +314,29 @@ export const provisionStandardCategories = async () => {
             });
 
             if (!existing) {
+              const parent = await getOrCreateCanonicalHead({
+                expenseClassification: EXPENSE_CLASSIFICATIONS.UNIT,
+                propertyId: pId,
+                unitId: uId,
+              });
               await Category.create({
                 name: expName,
                 type: 'EXPENSE',
                 expenseClassification: 'UNIT_EXPENSE',
                 propertyId: pId,
                 unitId: uId,
+                parentCategoryId: parent._id,
                 isRentalHead: false,
               });
               createdCount++;
+            } else if (!existing.parentCategoryId) {
+              const parent = await getOrCreateCanonicalHead({
+                expenseClassification: EXPENSE_CLASSIFICATIONS.UNIT,
+                propertyId: pId,
+                unitId: uId,
+              });
+              existing.parentCategoryId = parent._id;
+              await existing.save();
             }
           }
         }

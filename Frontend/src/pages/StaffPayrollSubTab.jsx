@@ -42,6 +42,7 @@ export const StaffPayrollSubTab = () => {
 
   // Full-screen mode for the Itemized Salary Sheet table
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [modalError, setModalError] = useState('');
   
   // Pay Single Modal
   const [payModalOpen, setPayModalOpen] = useState(false);
@@ -289,6 +290,7 @@ export const StaffPayrollSubTab = () => {
     }
     setPayTargetRow(row);
     setPayNotes('');
+    setModalError('');
     setPayAmount(String(row.remainingPayable ?? row.netPayable ?? 0));
     setPayModalOpen(true);
   };
@@ -299,6 +301,7 @@ export const StaffPayrollSubTab = () => {
       setProcessingPay(true);
       setMsg({ type: '', text: '' });
 
+      setModalError('');
       const res = await payrollAPI.paySingleSalary({
         month: selectedMonth,
         payrollId: payTargetRow.payrollId,
@@ -307,6 +310,7 @@ export const StaffPayrollSubTab = () => {
         paymentMethod: payMethod,
         paymentNotes: payNotes,
         paymentAmount: Number(payAmount),
+        amount: Number(payAmount),
       });
 
       if (res?.success) {
@@ -318,7 +322,9 @@ export const StaffPayrollSubTab = () => {
         setTimeout(() => setMsg({ type: '', text: '' }), 4000);
       }
     } catch (err) {
-      setMsg({ type: 'error', text: err.response?.data?.message || 'Failed to disburse salary.' });
+      const errText = err.response?.data?.message || err.message || 'Failed to disburse salary.';
+      setModalError(errText);
+      setMsg({ type: 'error', text: errText });
     } finally {
       setProcessingPay(false);
     }
@@ -552,42 +558,42 @@ export const StaffPayrollSubTab = () => {
         )}
 
         {/* Table wrapper — scrollable */}
-        <div className={`overflow-x-auto border border-slate-800 bg-slate-950 ${isFullScreen ? 'flex-1 overflow-y-auto mx-4 my-3 rounded-xl' : 'rounded-b-2xl mx-5 mb-5 mt-0 rounded-t-none'}`}>
-          <table className="w-full min-w-[1900px] table-fixed text-left text-[10px] text-slate-300">
+        <div className={`border border-slate-800 bg-slate-950 ${isFullScreen ? 'flex-1 overflow-y-auto overflow-x-hidden mx-3 my-2 rounded-xl' : 'overflow-x-auto rounded-b-2xl mx-5 mb-5 mt-0 rounded-t-none'}`}>
+          <table className={`w-full table-fixed text-left text-[10px] text-slate-300 ${isFullScreen ? 'min-w-0' : 'min-w-[1300px]'}`}>
             <colgroup>
-              <col className="w-[52px]" />
-              <col className="w-[155px]" />
-              <col className="w-[115px]" />
-              <col className="w-[105px]" />
-              <col className="w-[125px]" />
-              <col className="w-[220px]" />
-              <col className="w-[115px]" />
-              <col className="w-[105px]" />
-              <col className="w-[105px]" />
-              <col className="w-[125px]" />
-              <col className="w-[145px]" />
-              <col className="w-[135px]" />
-              <col className="w-[155px]" />
-              <col className="w-[175px]" />
-              <col className="w-[95px]" />
+              <col style={{ width: '2.5%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '6%' }} />
+              <col style={{ width: '6.5%' }} />
+              <col style={{ width: '6.5%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '6.5%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '5.5%' }} />
+              <col style={{ width: '6%' }} />
+              <col style={{ width: '6%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '9.5%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
             </colgroup>
-            <thead className="sticky top-0 bg-slate-900 text-slate-400 uppercase font-extrabold text-[10px] tracking-wider border-b border-slate-800 z-10">
+            <thead className="sticky top-0 bg-slate-900 text-slate-400 uppercase font-extrabold text-[9px] tracking-wider border-b border-slate-800 z-10">
               <tr>
-                <th className="py-3 px-2">Sr.</th>
-                <th className="py-3 px-2">Employee Name</th>
-                <th className="py-3 px-3">Location</th>
-                <th className="py-3 px-3 text-right">Basic (PKR)</th>
-                <th className="py-3 px-3 text-right">Allowance (PKR)</th>
-                <th className="py-3 px-4">Reason of Allowance</th>
-                <th className="py-3 px-3 text-right">Gross (PKR)</th>
-                <th className="py-3 px-3 text-center">Attendance</th>
-                <th className="py-3 px-3 text-right">Loan Bal</th>
-                <th className="py-3 px-3 text-right">Loan Ded (PKR)</th>
-                <th className="py-3 px-3 text-right">Absent / LOP Ded (PKR)</th>
-                <th className="py-3 px-4 text-right">Net Payable</th>
-                <th className="py-3 px-4">Bank &amp; IBAN</th>
-                <th className="py-3 px-4 text-center">Finance Status &amp; Action</th>
-                <th className="py-3 px-4 text-center">Payslip</th>
+                <th className="py-2 px-1 text-center">Sr.</th>
+                <th className="py-2 px-1.5">Employee Name</th>
+                <th className="py-2 px-1">Location</th>
+                <th className="py-2 px-1 text-right">Basic</th>
+                <th className="py-2 px-1 text-right">Allowance</th>
+                <th className="py-2 px-1">Reason</th>
+                <th className="py-2 px-1 text-right">Gross</th>
+                <th className="py-2 px-1 text-center">Attendance</th>
+                <th className="py-2 px-1 text-right">Loan Bal</th>
+                <th className="py-2 px-1 text-right">Loan Ded</th>
+                <th className="py-2 px-1 text-right">LOP Ded</th>
+                <th className="py-2 px-1 text-right">Net Payable</th>
+                <th className="py-2 px-1.5">Bank &amp; IBAN</th>
+                <th className="py-2 px-1 text-center">Status &amp; Action</th>
+                <th className="py-2 px-1 text-center">Payslip</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 font-medium">
@@ -609,148 +615,143 @@ export const StaffPayrollSubTab = () => {
 
                   return (
                     <tr key={row.employeeId} className="hover:bg-slate-900/60 transition">
-                      <td className="py-3 px-2 font-mono font-bold text-slate-500">{idx + 1}</td>
-                      <td className="py-3 px-2">
-                        <div className="font-bold text-white text-sm">{row.name}</div>
-                        <div className="text-[10px] text-slate-400">{row.designation}</div>
+                      <td className="py-2 px-1 text-center font-mono font-bold text-slate-500 text-[10px]">{idx + 1}</td>
+                      <td className="py-2 px-1.5 min-w-0">
+                        <div className="font-bold text-white text-xs truncate" title={row.name}>{row.name}</div>
+                        <div className="text-[9px] text-slate-400 truncate" title={row.designation}>{row.designation}</div>
                       </td>
-                      <td className="py-3 px-3 font-bold text-purple-400">{row.department}</td>
-                      <td className="py-3 px-2 text-left font-mono text-slate-300 whitespace-nowrap">
+                      <td className="py-2 px-1 font-bold text-purple-400 text-[10px] truncate" title={row.department}>{row.department}</td>
+                      <td className="py-2 px-1 text-right font-mono text-slate-300 whitespace-nowrap text-[10px]">
                         {formatPKR(row.basicSalary)}
                       </td>
-                      <td className="py-3 px-2 text-left">
+                      <td className="py-2 px-1">
                         <input
                           type="number"
                           placeholder="0"
                           disabled={isPaid}
                           value={row.allowance !== undefined ? row.allowance : 0}
                           onChange={(e) => handleAllowanceChange(row.employeeId, e.target.value)}
-                          className="w-full max-w-[108px] bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-emerald-400 font-mono font-bold text-left focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-emerald-400 font-mono font-bold text-right focus:outline-none focus:border-emerald-500 disabled:opacity-50 text-[10px]"
                         />
                       </td>
-                      <td className="py-3 px-2">
+                      <td className="py-2 px-1">
                         <input
                           type="text"
-                          placeholder="Reason (e.g. Fuel, Mobile)"
+                          placeholder="Reason"
                           disabled={isPaid}
                           value={row.allowanceReason || ''}
                           onChange={(e) => handleAllowanceReasonChange(row.employeeId, e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 font-medium text-xs focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-slate-200 font-medium text-[10px] focus:outline-none focus:border-purple-500 disabled:opacity-50 truncate"
+                          title={row.allowanceReason || ''}
                         />
                       </td>
-                      <td className="py-3 px-3 text-right font-mono text-white font-bold">
+                      <td className="py-2 px-1 text-right font-mono text-white font-bold text-[10px] whitespace-nowrap">
                         {formatPKR(row.grossSalary)}
                       </td>
-                      <td className="py-3 px-3 text-center">
-                        <div className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-800/60 text-emerald-300 font-mono font-black text-xs">
-                          <span>{row.presentDays} Days</span>
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          {row.presentDays} / {row.totalDays} Total
+                      <td className="py-2 px-1 text-center">
+                        <div className="font-mono text-[10px] font-bold text-emerald-300 leading-tight">
+                          {row.presentDays}d / {row.totalDays}d
                         </div>
                         {row.lopDays > 0 && (
-                          <div className="text-[10px] text-rose-400 font-bold mt-0.5">{row.lopDays} LOP / Absent</div>
+                          <div className="text-[9px] text-rose-400 font-bold leading-tight mt-0.5">{row.lopDays} LOP</div>
                         )}
                         {row.lateDays > 0 && (
-                          <div className="text-[9px] text-amber-400 font-medium">({row.lateDays} Late)</div>
+                          <div className="text-[8px] text-amber-400 leading-tight">({row.lateDays} Late)</div>
                         )}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-rose-400">
+                      <td className="py-2 px-1 text-right font-mono font-bold text-rose-400 text-[10px] whitespace-nowrap">
                         {row.loanBalance > 0 ? formatPKR(row.loanBalance) : '—'}
                       </td>
-                      <td className="py-3 px-3 text-right">
+                      <td className="py-2 px-1">
                         <input
                           type="number"
                           placeholder="0"
                           disabled={isPaid}
                           value={row.loanDeduction !== undefined ? row.loanDeduction : 0}
                           onChange={(e) => handleLoanDeductionChange(row.employeeId, e.target.value)}
-                          className="w-24 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-rose-300 font-mono font-bold text-right focus:outline-none focus:border-rose-500 disabled:opacity-50"
-                          title="Loan deduction (reduces loan balance)"
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-rose-300 font-mono font-bold text-right focus:outline-none focus:border-rose-500 disabled:opacity-50 text-[10px]"
+                          title="Loan deduction"
                         />
                       </td>
-                      <td className="py-3 px-3 text-right">
+                      <td className="py-2 px-1">
                         <input
                           type="number"
                           placeholder="0"
                           disabled={isPaid}
                           value={row.lopDeduction !== undefined ? row.lopDeduction : 0}
                           onChange={(e) => handleLopDeductionChange(row.employeeId, e.target.value)}
-                          className="w-24 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-amber-300 font-mono font-bold text-right focus:outline-none focus:border-amber-500 disabled:opacity-50"
-                          title="Absent or Leave salary deduction (does not touch loan balance)"
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-amber-300 font-mono font-bold text-right focus:outline-none focus:border-amber-500 disabled:opacity-50 text-[10px]"
+                          title="Absent / Leave deduction"
                         />
                       </td>
-                      <td className="py-3 px-4 text-right font-mono font-black text-sm text-emerald-400">
+                      <td className="py-2 px-1 text-right font-mono font-black text-xs text-emerald-400 whitespace-nowrap">
                         Rs. {formatPKR(row.netPayable)}
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-slate-300 text-[11px] truncate max-w-[130px]">
+                      <td className="py-2 px-1.5 min-w-0">
+                        <div className="font-bold text-slate-300 text-[10px] truncate" title={row.accountTitle || row.name}>
                           {row.accountTitle || row.name}
                         </div>
-                        <div className="text-[10px] text-purple-400 font-mono truncate max-w-[130px]">
-                          {row.bankName} • {row.ibanNumber ? row.ibanNumber.slice(-8) : 'Cash'}
+                        <div className="text-[9px] text-purple-400 font-mono truncate" title={`${row.bankName} • ${row.ibanNumber || 'Cash'}`}>
+                          {row.bankName} • {row.ibanNumber ? row.ibanNumber.slice(-6) : 'Cash'}
                         </div>
                       </td>
 
                       {/* Finance Status & Action Cell */}
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-2 px-1 text-center">
                         {isPaid ? (
-                          <div className="space-y-1">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950 border border-emerald-800 text-emerald-300 font-bold text-[10px]">
-                              <ShieldCheck size={12} /> PAID
+                          <div className="space-y-0.5">
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-800 text-emerald-300 font-bold text-[9px]">
+                              <ShieldCheck size={10} /> PAID
                             </span>
-                            <div className="text-[10px] text-slate-400 font-mono">
+                            <div className="text-[9px] text-slate-400 font-mono truncate">
                               Vn: <span className="text-emerald-400 font-bold">{row.voucherNo}</span>
-                            </div>
-                            <div className="text-[9px] text-slate-500 truncate max-w-[120px]">
-                              {row.paidFromAccountName}
                             </div>
                             <button
                               onClick={() => openReverseModal(row)}
-                              className="text-[10px] text-rose-400 hover:text-rose-300 underline font-semibold transition"
+                              className="text-[9px] text-rose-400 hover:text-rose-300 underline font-semibold transition"
                             >
                               Reverse
                             </button>
                           </div>
                         ) : (
                           <div className="space-y-1">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/80 border border-amber-800/80 text-amber-400 font-bold text-[10px]">
-                              PENDING PAYMENT
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-800/80 text-amber-400 font-bold text-[9px]">
+                              PENDING
                             </span>
                             <div>
                               <button
                                 onClick={() => openPayModal(row)}
-                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1 rounded-lg text-[11px] shadow transition inline-flex items-center gap-1"
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-2 py-0.5 rounded text-[10px] shadow transition inline-flex items-center gap-0.5"
                               >
-                                <DollarSign size={13} /> Pay Salary
+                                <DollarSign size={11} /> Pay
                               </button>
                             </div>
                           </div>
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
+                      <td className="py-2 px-1 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => handleDownloadSalarySlip(row)}
-                            className="px-2 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 transition inline-flex items-center gap-1 font-bold text-[10px]"
+                            className="px-1.5 py-0.5 rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 transition inline-flex items-center gap-0.5 font-bold text-[9px]"
                             title="Download Official Salary Slip PDF"
                           >
-                            <Download size={12} /> Download
+                            <Download size={10} /> Slip
                           </button>
                           <button
                             onClick={() => handlePrintSalarySlip(row)}
-                            className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 border border-slate-700 transition inline-flex items-center gap-1 font-bold text-[10px]"
+                            className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 border border-slate-700 transition inline-flex items-center gap-0.5 font-bold text-[9px]"
                             title="Print Official Salary Slip"
                           >
-                            <Printer size={12} /> Print
+                            <Printer size={10} /> Print
                           </button>
                           <button
                             onClick={() => openEmployeeLedgerModal(row.employeeId)}
-                            className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-400 hover:text-purple-300 border border-slate-700 transition inline-flex items-center gap-1 font-bold text-[10px]"
-                            title="View Individual Employee Account Ledger Statement"
+                            className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-purple-400 hover:text-purple-300 border border-slate-700 transition inline-flex items-center gap-0.5 font-bold text-[9px]"
+                            title="View Employee Ledger"
                           >
-                            <BookOpen size={12} /> Ledger
+                            <BookOpen size={10} /> Ledger
                           </button>
                         </div>
                       </td>
@@ -766,7 +767,7 @@ export const StaffPayrollSubTab = () => {
       {/* CONFIRM PAYOUT MODAL */}
       {payModalOpen && payTargetRow && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <CreditCard className="text-emerald-400" size={20} />
@@ -779,6 +780,13 @@ export const StaffPayrollSubTab = () => {
                 <X size={18} />
               </button>
             </div>
+
+            {modalError && (
+              <div className="bg-rose-950/90 border border-rose-800 text-rose-200 px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2">
+                <AlertCircle size={16} className="text-rose-400 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
 
             {/* Employee Payout Details */}
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 text-xs">

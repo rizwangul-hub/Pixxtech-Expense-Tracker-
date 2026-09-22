@@ -791,6 +791,7 @@ export const getCategories = async (req, res) => {
 
     const categories = await Category.find(filter)
       .populate('propertyId', 'plazaName propertyName')
+      .populate('parentCategoryId', 'name type expenseClassification propertyId unitId isMainHead')
       .sort({ type: 1, name: 1 })
       .lean();
 
@@ -819,6 +820,11 @@ export const createCategory = async (req, res) => {
     const propertyId = req.body.propertyId && mongoose.Types.ObjectId.isValid(req.body.propertyId) ? req.body.propertyId : null;
     const unitId = req.body.unitId && mongoose.Types.ObjectId.isValid(req.body.unitId) ? req.body.unitId : null;
     let expenseClassification = req.body.expenseClassification;
+    const parentCategoryId =
+      req.body.parentCategoryId && mongoose.Types.ObjectId.isValid(req.body.parentCategoryId)
+        ? req.body.parentCategoryId
+        : null;
+    const isMainHead = Boolean(req.body.isMainHead);
 
     if (unitId) {
       expenseClassification = 'UNIT_EXPENSE';
@@ -830,6 +836,29 @@ export const createCategory = async (req, res) => {
 
     if (!rawName) {
       return apiError(res, 'Expense name is required (for example, Electricity Bill or Maintenance).', 400);
+    }
+
+    if (parentCategoryId) {
+      const parent = await Category.findOne({ _id: parentCategoryId, type: 'EXPENSE' });
+      if (!parent) return apiError(res, 'Selected main expense head was not found.', 400);
+      if (parent.parentCategoryId || !parent.isMainHead) return apiError(res, 'Selected category is not a main expense head.', 400);
+      if (
+        parent.expenseClassification !== expenseClassification ||
+        String(parent.propertyId || '') !== String(propertyId || '') ||
+        String(parent.unitId || '') !== String(unitId || '')
+      ) {
+        return apiError(res, 'The expense and main head must use the same property/unit scope.', 400);
+      }
+    }
+
+    let resolvedParentCategoryId = parentCategoryId;
+    if (!isMainHead && !resolvedParentCategoryId && (propertyId || unitId)) {
+      const canonicalHead = await getOrCreateCanonicalHead({
+        expenseClassification,
+        propertyId,
+        unitId,
+      });
+      resolvedParentCategoryId = canonicalHead._id;
     }
 
     const queryFilter = {
@@ -848,6 +877,8 @@ export const createCategory = async (req, res) => {
         expenseClassification,
         propertyId,
         unitId,
+        parentCategoryId: isMainHead ? null : resolvedParentCategoryId,
+        isMainHead,
         isRentalHead: !!req.body.isRentalHead,
       });
     }
@@ -913,6 +944,46 @@ export const createCategory = async (req, res) => {
 
     console.error('[Create Category Error]:', error);
     return apiError(res, error.message || 'Failed to resolve expense head.', 500);
+  }
+};
+
+export const updateCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return apiError(res, 'Invalid expense head ID.', 400);
+    const category = await Category.findOne({ _id: id, type: 'EXPENSE' });
+    if (!category) return apiError(res, 'Expense head not found.', 404);
+
+    const name = typeof req.body.name === 'string' ? req.body.name.trim() : category.name;
+    if (!name) return apiError(res, 'Expense head name is required.', 400);
+    if (req.body.parentCategoryId !== undefined) {
+      const parentId = req.body.parentCategoryId || null;
+      if (parentId && (!mongoose.Types.ObjectId.isValid(parentId) || String(parentId) === String(id))) {
+        return apiError(res, 'Invalid parent expense head.', 400);
+      }
+      if (parentId) {
+        const parent = await Category.findOne({ _id: parentId, type: 'EXPENSE', parentCategoryId: null, isMainHead: true });
+        if (!parent) return apiError(res, 'Selected main expense head was not found.', 400);
+        if (
+          parent.expenseClassification !== category.expenseClassification ||
+          String(parent.propertyId || '') !== String(category.propertyId || '') ||
+          String(parent.unitId || '') !== String(category.unitId || '')
+        ) {
+          return apiError(res, 'The expense and main head must use the same property/unit scope.', 400);
+        }
+        category.parentCategoryId = parentId;
+        category.isMainHead = false;
+      } else {
+        category.parentCategoryId = null;
+      }
+    }
+    category.name = name;
+    if (req.body.isMainHead !== undefined) category.isMainHead = Boolean(req.body.isMainHead);
+    await category.save();
+    return apiSuccess(res, { category }, `Expense head '${category.name}' updated successfully.`);
+  } catch (error) {
+    console.error('[Update Category Error]:', error);
+    return apiError(res, error.message || 'Failed to update expense head.', 500);
   }
 };
 
@@ -1083,6 +1154,7 @@ export default {
   getActiveAccountsSummary,
   getCategories,
   createCategory,
+  updateCategory,
   deleteCategory,
   getProperties,
 };

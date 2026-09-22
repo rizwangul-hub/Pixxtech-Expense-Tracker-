@@ -52,6 +52,8 @@ const initialExpenseCategory = {
   type: 'EXPENSE',
   propertyId: '',
   unitId: '',
+  parentCategoryId: '',
+  isMainHead: false,
   isRentalHead: false,
 };
 
@@ -87,13 +89,23 @@ export function ChartOfAccountsPage({ currentUser }) {
   const [selectedHeadForDetails, setSelectedHeadForDetails] = useState(null);
   const [headTransactions, setHeadTransactions] = useState([]);
   const [loadingHeadDetails, setLoadingHeadDetails] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
 
   const handleViewHeadDetails = async (category) => {
     setSelectedHeadForDetails(category);
     setLoadingHeadDetails(true);
     try {
-      const res = await vouchersAPI.getAllTransactions({ categoryId: category._id, limit: 200 });
-      const txs = res.transactions || res.data?.transactions || [];
+      const childIds = categoriesList
+        .filter((item) => String(item.parentCategoryId?._id || item.parentCategoryId) === String(category._id))
+        .map((item) => item._id);
+      const categoryIds = [category._id, ...childIds];
+      const responses = await Promise.all(
+        categoryIds.map((categoryId) => vouchersAPI.getAllTransactions({ categoryId, limit: 200 }))
+      );
+      const txs = responses
+        .flatMap((res) => res.transactions || res.data?.transactions || [])
+        .filter((tx, index, list) => list.findIndex((item) => item._id === tx._id) === index)
+        .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
       setHeadTransactions(txs);
     } catch (err) {
       console.error('Failed to load transactions for head:', err);
@@ -187,6 +199,8 @@ export function ChartOfAccountsPage({ currentUser }) {
         type: 'EXPENSE',
         propertyId: expenseCategory.propertyId || null,
         unitId: expenseCategory.unitId || null,
+        parentCategoryId: expenseCategory.parentCategoryId || null,
+        isMainHead: expenseCategory.isMainHead,
         isRentalHead: expenseCategory.isRentalHead,
       });
       const createdCat = res.data?.category || res.category;
@@ -197,6 +211,23 @@ export function ChartOfAccountsPage({ currentUser }) {
       notify('error', error.response?.data?.message || error.message || 'Failed to create expense head.');
     } finally {
       setSaving('');
+    }
+  };
+
+  const handleUpdateCategory = async (e) => {
+    e.preventDefault();
+    if (!editingCategory?.name?.trim()) return;
+    try {
+      await accountsAPI.updateCategory(editingCategory._id, {
+        name: editingCategory.name.trim(),
+        parentCategoryId: editingCategory.parentCategoryId || null,
+        isMainHead: editingCategory.isMainHead,
+      });
+      setEditingCategory(null);
+      notify('success', 'Expense head updated successfully.');
+      await loadChartData();
+    } catch (err) {
+      notify('error', err.response?.data?.message || err.message || 'Failed to update expense head.');
     }
   };
 
@@ -306,6 +337,7 @@ export function ChartOfAccountsPage({ currentUser }) {
   const safeIncomeHeads = Array.isArray(incomeHeadsList) ? incomeHeadsList : [];
 
   const filteredCategories = safeCategories.filter((c) => !q || c.name?.toLowerCase().includes(q));
+  const mainExpenseHeads = safeCategories.filter((c) => c.type === 'EXPENSE' && c.isMainHead);
   const filteredAccounts = safeAccounts.filter(
     (a) => !q || a.name?.toLowerCase().includes(q) || a.bankName?.toLowerCase().includes(q) || a.cashHolder?.toLowerCase().includes(q)
   );
@@ -501,6 +533,16 @@ export function ChartOfAccountsPage({ currentUser }) {
                   />
                 </div>
 
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={expenseCategory.isMainHead}
+                    onChange={(e) => setExpenseCategory({ ...expenseCategory, isMainHead: e.target.checked, parentCategoryId: '' })}
+                    className="accent-rose-700"
+                  />
+                  Create this as a main expense head (for example, IT Office or Rider Expenses)
+                </label>
+
                 {/* Head / Property & Unit Pickers */}
                 <div className="space-y-3 p-3 bg-white border border-slate-200 rounded-lg">
                   <div>
@@ -537,6 +579,26 @@ export function ChartOfAccountsPage({ currentUser }) {
                             {u.unitName || u.unitNumber || u.name || 'Unit'} {u.tenantName ? `(${u.tenantName})` : ''}
                           </option>
                         ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {!expenseCategory.isMainHead && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Main Expense Head (Optional)</label>
+                      <select
+                        value={expenseCategory.parentCategoryId}
+                        onChange={(e) => setExpenseCategory({ ...expenseCategory, parentCategoryId: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:border-rose-600"
+                      >
+                        <option value="">-- Legacy / ungrouped expense --</option>
+                        {mainExpenseHeads
+                          .filter((head) => {
+                            const sameProperty = String(head.propertyId?._id || head.propertyId || '') === String(expenseCategory.propertyId || '');
+                            const sameUnit = String(head.unitId?._id || head.unitId || '') === String(expenseCategory.unitId || '');
+                            return sameProperty && sameUnit;
+                          })
+                          .map((head) => <option key={head._id} value={head._id}>{head.name}</option>)}
                       </select>
                     </div>
                   )}
@@ -591,14 +653,15 @@ export function ChartOfAccountsPage({ currentUser }) {
                       const renderHeadItem = (c) => (
                         <div
                           key={c._id}
-                          className="p-2.5 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition shadow-2xs"
+                          className={`p-2.5 rounded-lg border hover:border-blue-400 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition shadow-2xs ${c.isMainHead ? 'bg-slate-50 border-slate-300' : 'border-slate-200 ml-4'}`}
                           onClick={() => handleViewHeadDetails(c)}
                         >
                           <div className="flex items-center gap-2.5">
-                            <Tag size={14} className="text-rose-600 shrink-0" />
+                            {c.isMainHead ? <Layers size={14} className="text-rose-700 shrink-0" /> : <Tag size={14} className="text-rose-600 shrink-0" />}
                             <div>
                               <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                                 <span>{c.name}</span>
+                                {c.isMainHead && <span className="text-[9px] uppercase text-rose-700 border border-rose-200 rounded px-1">Main Head</span>}
                                 <Eye size={12} className="text-blue-600 opacity-60" />
                               </div>
                               {c.propertyId && (
@@ -618,6 +681,13 @@ export function ChartOfAccountsPage({ currentUser }) {
                             </button>
                             <button
                               type="button"
+                              onClick={() => setEditingCategory({ ...c, parentCategoryId: c.parentCategoryId?._id || c.parentCategoryId || '' })}
+                              className="px-2 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded hover:bg-amber-100"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => handleDeleteCategory(c._id, c.name)}
                               disabled={deletingCatId === c._id}
                               className="p-1.5 text-rose-600 hover:text-rose-900 hover:bg-rose-50 rounded-md transition border border-rose-200 disabled:opacity-50"
@@ -629,6 +699,16 @@ export function ChartOfAccountsPage({ currentUser }) {
                         </div>
                       );
 
+                      const renderHierarchy = (group) => {
+                        const roots = group.filter((c) => !c.parentCategoryId || c.isMainHead);
+                        return roots.flatMap((root) => [
+                          renderHeadItem(root),
+                          ...group
+                            .filter((child) => String(child.parentCategoryId?._id || child.parentCategoryId) === String(root._id))
+                            .map(renderHeadItem),
+                        ]);
+                      };
+
                       return (
                         <div className="space-y-4">
                           {/* Section 1: General Expense Head */}
@@ -639,7 +719,7 @@ export function ChartOfAccountsPage({ currentUser }) {
                             </div>
                             <div className="space-y-1.5 pl-1">
                               {generalGroup.length > 0 ? (
-                                generalGroup.map(renderHeadItem)
+                                renderHierarchy(generalGroup)
                               ) : (
                                 <div className="text-xs text-slate-400 italic pl-2 py-1">No General Head found</div>
                               )}
@@ -655,7 +735,7 @@ export function ChartOfAccountsPage({ currentUser }) {
                             </div>
                             <div className="space-y-1.5 pl-1">
                               {propertyGroup.length > 0 ? (
-                                propertyGroup.map(renderHeadItem)
+                                renderHierarchy(propertyGroup)
                               ) : (
                                 <div className="text-xs text-slate-400 italic pl-2 py-1">No Property Heads found</div>
                               )}
@@ -671,7 +751,7 @@ export function ChartOfAccountsPage({ currentUser }) {
                             </div>
                             <div className="space-y-1.5 pl-1">
                               {unitGroup.length > 0 ? (
-                                unitGroup.map(renderHeadItem)
+                                renderHierarchy(unitGroup)
                               ) : (
                                 <div className="text-xs text-slate-400 italic pl-2 py-1">No Unit Heads found</div>
                               )}
@@ -1124,6 +1204,47 @@ export function ChartOfAccountsPage({ currentUser }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {editingCategory && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <form onSubmit={handleUpdateCategory} className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h2 className="text-base font-black text-slate-900">Edit Expense Head</h2>
+              <button type="button" onClick={() => setEditingCategory(null)} className="p-1 text-slate-400 hover:text-slate-800"><X size={18} /></button>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Expense Head Name</label>
+              <input
+                required
+                value={editingCategory.name || ''}
+                onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold"
+              />
+            </div>
+            {!editingCategory.isMainHead && (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Main Expense Head</label>
+                <select
+                  value={editingCategory.parentCategoryId || ''}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, parentCategoryId: e.target.value })}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold"
+                >
+                  <option value="">-- No main head --</option>
+                  {mainExpenseHeads.filter((head) =>
+                    head._id !== editingCategory._id &&
+                    String(head.propertyId?._id || head.propertyId || '') === String(editingCategory.propertyId?._id || editingCategory.propertyId || '') &&
+                    String(head.unitId?._id || head.unitId || '') === String(editingCategory.unitId?._id || editingCategory.unitId || '')
+                  ).map((head) => <option key={head._id} value={head._id}>{head.name}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setEditingCategory(null)} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded-lg bg-rose-700 text-white text-xs font-bold">Save Changes</button>
+            </div>
+          </form>
         </div>
       )}
     </div>

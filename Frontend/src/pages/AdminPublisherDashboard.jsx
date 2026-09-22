@@ -1206,19 +1206,34 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                 </div>
 
                 <div className="space-y-3">
-                  {headWiseData.heads?.map((h) => {
-                    const isExp = expandedHeads[h.categoryId] ?? true;
+                  {(headWiseData.mainHeads?.length
+                    ? headWiseData.mainHeads
+                    : (headWiseData.heads || []).map((head) => ({
+                        mainHeadId: head.categoryId,
+                        mainHeadName: head.headName,
+                        totalSpent: head.totalSpent,
+                        transactionCount: head.transactionCount,
+                        expenses: [head],
+                      }))).map((h) => {
+                    const isExp = expandedHeads[h.mainHeadId] ?? true;
+                    const childExpenses = h.expenses || [];
+                    const transactions = childExpenses.flatMap((expense) =>
+                      (expense.transactions || []).map((transaction) => ({
+                        ...transaction,
+                        expenseHeadName: expense.headName,
+                      }))
+                    );
 
                     return (
                       <div
-                        key={h.categoryId}
+                        key={h.mainHeadId}
                         className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow"
                       >
                         <button
                           onClick={() =>
                             setExpandedHeads((prev) => ({
                               ...prev,
-                              [h.categoryId]: !isExp,
+                              [h.mainHeadId]: !isExp,
                             }))
                           }
                           className="w-full px-4 py-3 bg-slate-950/70 hover:bg-slate-800/60 border-b border-slate-800 flex items-center justify-between text-left transition"
@@ -1231,7 +1246,7 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                             )}
                             <div>
                               <span className="font-bold text-sm text-white block">
-                                {h.headName}
+                                {h.mainHeadName}
                               </span>
                               <span className="text-xs text-slate-400">
                                 {h.transactionCount} transaction{h.transactionCount === 1 ? '' : 's'}
@@ -1251,13 +1266,14 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                                 <tr>
                                   <th className="py-2 px-3">Date</th>
                                   <th className="py-2 px-3">V.N</th>
+                                  <th className="py-2 px-3">Expense</th>
                                   <th className="py-2 px-3">Transaction Detail / Narration</th>
                                   <th className="py-2 px-3">Paid From (Cr)</th>
                                   <th className="py-2 px-3 text-right">Amount (PKR)</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-800/60 font-sans">
-                                {h.transactions?.map((t) => (
+                                {transactions.map((t) => (
                                   <tr key={t._id} className="hover:bg-slate-800/30 text-slate-300">
                                     <td className="py-2 px-3 font-mono text-slate-400">
                                       {t.date ? new Date(t.date).toISOString().split('T')[0] : '-'}
@@ -1266,6 +1282,7 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                                       #{t.voucherNo}
                                     </td>
                                     <td className="py-2 px-3 text-slate-200">{t.detail}</td>
+                                    <td className="py-2 px-3 text-purple-300">{t.expenseHeadName}</td>
                                     <td className="py-2 px-3 text-rose-300">{t.paidFromAccount}</td>
                                     <td className="py-2 px-3 text-right font-mono font-bold text-white">
                                       {formatPKR(t.amount)}

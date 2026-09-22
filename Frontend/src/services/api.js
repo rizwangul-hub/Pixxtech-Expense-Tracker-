@@ -392,6 +392,10 @@ export const accountsAPI = {
     const res = await api.post('/accounts/categories', data);
     return res.data;
   },
+  updateCategory: async (id, data) => {
+    const res = await api.patch(`/accounts/categories/${id}`, data);
+    return res.data;
+  },
   deleteCategory: async (id) => {
     const res = await api.delete(`/accounts/categories/${id}`);
     return res.data;

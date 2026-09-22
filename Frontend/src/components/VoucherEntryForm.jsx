@@ -42,6 +42,7 @@ export const VoucherEntryForm = ({
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [voucherNo, setVoucherNo] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [parentCategoryId, setParentCategoryId] = useState('');
   const [drAccountId, setDrAccountId] = useState('');
   const [crAccountId, setCrAccountId] = useState('');
   const [amount, setAmount] = useState('');
@@ -74,6 +75,9 @@ export const VoucherEntryForm = ({
   const cashAccounts = accounts.filter((a) => a.type === 'CASH');
   const selectedProperty = properties.find((property) => property._id === propertyId);
   const units = selectedProperty?.units || [];
+  const generalMainHeads = categories.filter(
+    (c) => c.type === 'EXPENSE' && c.isMainHead && !c.propertyId && !c.unitId
+  );
 
   // Fetch next sequential Voucher Number
   const fetchNextVn = async (targetDate = date) => {
@@ -97,6 +101,7 @@ export const VoucherEntryForm = ({
   useEffect(() => {
     const activeScopeCategories = categories.filter((c) => {
       if (c.type !== 'EXPENSE') return false;
+      if (c.isMainHead) return false;
       if (unitId) {
         const uId = c.unitId?._id || c.unitId;
         return c.expenseClassification === 'UNIT_EXPENSE' && String(uId) === String(unitId);
@@ -109,13 +114,16 @@ export const VoucherEntryForm = ({
     });
 
     if (activeScopeCategories.length > 0) {
-      if (!categoryId || !activeScopeCategories.some((c) => c._id === categoryId)) {
-        setCategoryId(activeScopeCategories[0]._id);
+      const scopedCategories = (!propertyId && !unitId && parentCategoryId)
+        ? activeScopeCategories.filter((c) => String(c.parentCategoryId?._id || c.parentCategoryId) === String(parentCategoryId))
+        : activeScopeCategories;
+      if (!categoryId || !scopedCategories.some((c) => c._id === categoryId)) {
+        setCategoryId(scopedCategories[0]?._id || '');
       }
     } else if (categoryId) {
       setCategoryId('');
     }
-  }, [propertyId, unitId, categories]);
+  }, [propertyId, unitId, parentCategoryId, categories]);
 
   const handleCreateCategory = async (e) => {
     e?.preventDefault();
@@ -157,6 +165,7 @@ export const VoucherEntryForm = ({
         name,
         propertyId: propertyId || null,
         unitId: unitId || null,
+        parentCategoryId: parentCategoryId || null,
       });
       const category = response.data?.category || response.category || response.data;
       if (category && category._id) {
@@ -214,6 +223,7 @@ export const VoucherEntryForm = ({
         voucherNo: voucherNo.trim(),
         detail: detail.trim(),
         categoryId,
+        parentCategoryId: parentCategoryId || null,
         ...(drAccountId ? { drAccountId } : {}),
         crAccountId,
         amount: numAmount,
@@ -361,6 +371,7 @@ export const VoucherEntryForm = ({
                   const val = e.target.value;
                   setPropertyId(val);
                   setUnitId('');
+                  setParentCategoryId('');
                   setCategoryId(''); // Reset head selection on scope change
                 }}
                 className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
@@ -384,6 +395,7 @@ export const VoucherEntryForm = ({
                   value={unitId}
                   onChange={(e) => {
                     setUnitId(e.target.value);
+                    setParentCategoryId('');
                     setCategoryId(''); // Reset head selection on scope change
                   }}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
@@ -431,6 +443,19 @@ export const VoucherEntryForm = ({
             <label className="block text-xs font-bold uppercase text-slate-700 mb-1 flex items-center gap-1">
               <Tag className="w-4 h-4 text-blue-600" /> Account Head / Category (Where Expense Goes)
             </label>
+            {!propertyId && !unitId && generalMainHeads.length > 0 && (
+              <select
+                value={parentCategoryId}
+                onChange={(e) => {
+                  setParentCategoryId(e.target.value);
+                  setCategoryId('');
+                }}
+                className="w-full mb-2 bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
+              >
+                <option value="">-- General Main Head --</option>
+                {generalMainHeads.map((head) => <option key={head._id} value={head._id}>{head.name}</option>)}
+              </select>
+            )}
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
@@ -449,8 +474,11 @@ export const VoucherEntryForm = ({
                     const pId = c.propertyId?._id || c.propertyId;
                     return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && String(pId) === String(propertyId);
                   }
-                  return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
+                  return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE') && !c.isMainHead;
                 });
+                const visibleCategories = (!propertyId && !unitId && parentCategoryId)
+                  ? activeScopeCategories.filter((c) => String(c.parentCategoryId?._id || c.parentCategoryId) === String(parentCategoryId))
+                  : activeScopeCategories;
 
                 const groupLabel = unitId
                   ? `Unit Expense Categories (${selectedProperty?.plazaName || 'Property'})`
@@ -460,9 +488,9 @@ export const VoucherEntryForm = ({
 
                 return (
                   <>
-                    {activeScopeCategories.length > 0 ? (
+                    {visibleCategories.length > 0 ? (
                       <optgroup label={groupLabel}>
-                        {activeScopeCategories.map((c) => (
+                        {visibleCategories.map((c) => (
                           <option key={c._id} value={c._id}>
                             {c.name} {c.isRentalHead ? '(Rental)' : ''}
                           </option>

@@ -290,7 +290,11 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
   }
 
   const transactions = await Transaction.find(query)
-    .populate('categoryId', 'name type isRentalHead')
+    .populate({
+      path: 'categoryId',
+      select: 'name type isRentalHead parentCategoryId isMainHead',
+      populate: { path: 'parentCategoryId', select: 'name' },
+    })
     .populate('propertyId', 'plazaName')
     .populate('drAccountId', 'name type')
     .populate('crAccountId', 'name type')
@@ -415,7 +419,11 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
     date: { $gte: startOfMonth, $lte: endOfMonth },
     status: { $ne: 'REVERSED' },
   })
-    .populate('categoryId', 'name type isRentalHead')
+    .populate({
+      path: 'categoryId',
+      select: 'name type isRentalHead parentCategoryId isMainHead',
+      populate: { path: 'parentCategoryId', select: 'name' },
+    })
     .populate('propertyId', 'plazaName')
     .lean();
 
@@ -551,7 +559,11 @@ export const getHeadWiseExpenseReport = async (year, month) => {
     categoryId: { $in: expenseCatIds },
     status: { $ne: 'REVERSED' },
   })
-    .populate('categoryId', 'name type isRentalHead')
+    .populate({
+      path: 'categoryId',
+      select: 'name type isRentalHead parentCategoryId isMainHead',
+      populate: { path: 'parentCategoryId', select: 'name' },
+    })
     .populate('crAccountId', 'name type')
     .populate('drAccountId', 'name type')
     .populate('propertyId', 'plazaName')
@@ -615,6 +627,8 @@ export const getHeadWiseExpenseReport = async (year, month) => {
       status: tx.status,
       checkedBy: tx.checkedBy,
     });
+    group.parentCategoryId = tx.categoryId?.parentCategoryId?._id || null;
+    group.parentHeadName = tx.categoryId?.parentCategoryId?.name || (tx.categoryId?.isMainHead ? tx.categoryId.name : null);
   }
 
   // Filter and sort heads: heads with spend first, then alphabetical
@@ -624,6 +638,25 @@ export const getHeadWiseExpenseReport = async (year, month) => {
     }
     return a.headName.localeCompare(b.headName);
   });
+
+  const mainHeadsMap = new Map();
+  for (const head of heads.filter((item) => item.transactionCount > 0)) {
+    const mainId = head.parentCategoryId?.toString() || head.categoryId?.toString();
+    const mainName = head.parentHeadName || head.headName;
+    if (!mainHeadsMap.has(mainId)) {
+      mainHeadsMap.set(mainId, {
+        mainHeadId: mainId,
+        mainHeadName: mainName,
+        totalSpent: 0,
+        transactionCount: 0,
+        expenses: [],
+      });
+    }
+    const main = mainHeadsMap.get(mainId);
+    main.totalSpent = round2(main.totalSpent + head.totalSpent);
+    main.transactionCount += head.transactionCount;
+    main.expenses.push(head);
+  }
 
   return {
     year,
@@ -636,6 +669,7 @@ export const getHeadWiseExpenseReport = async (year, month) => {
       unitExpenses: round2(unitExpenses),
     },
     heads,
+    mainHeads: Array.from(mainHeadsMap.values()).sort((a, b) => b.totalSpent - a.totalSpent),
   };
 };
 

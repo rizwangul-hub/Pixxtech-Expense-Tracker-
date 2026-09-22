@@ -305,7 +305,18 @@ export const updateTransactionMaster = async (req, res) => {
     if (date) tx.date = new Date(date);
     if (voucherNo) tx.voucherNo = voucherNo.trim();
     if (detail) tx.detail = detail.trim();
-    if (categoryId) tx.categoryId = categoryId;
+    if (categoryId) {
+      const category = await Category.findOne({ _id: categoryId, type: 'EXPENSE' }).lean();
+      if (!category) {
+        return res.status(400).json({ success: false, message: 'Selected expense head was not found.' });
+      }
+      tx.categoryId = categoryId;
+      if (tx.transactionType === 'EXPENSE') {
+        tx.expenseClassification = category.expenseClassification || 'GENERAL_EXPENSE';
+        if (propertyId === undefined) tx.propertyId = category.propertyId || null;
+        if (unitId === undefined) tx.unitId = category.unitId || null;
+      }
+    }
     if (drAccountId) tx.drAccountId = drAccountId;
     if (crAccountId) tx.crAccountId = crAccountId;
     tx.amount = newAmount;
