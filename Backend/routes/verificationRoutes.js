@@ -9,6 +9,7 @@ import {
   rejectEntry,
   deletePendingEntry,
   createPendingEntry,
+  downloadReceiptEvidencePDF,
 } from '../controllers/verificationController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -23,6 +24,9 @@ router.get('/summary', authorize('VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'A
 // Data Entry Submissions Query & Creation (Sarfraz)
 router.get('/my-submissions', getMySubmissions);
 router.post('/submit', authorize('DATA_ENTRY', 'VERIFIER', 'VERIFICATION_MANAGER', 'ADMIN', 'ADMIN_PUBLISHER'), createPendingEntry);
+
+// Receipt Evidence Slip PDF Download (Formatted voucher header on top + receipt image on bottom)
+router.get('/:id/receipt-pdf', downloadReceiptEvidencePDF);
 
 // Single Entry Details & Actions (Khurshid Anwar / Verifier)
 router.get('/:id', getPendingEntryById);

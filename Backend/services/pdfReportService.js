@@ -582,5 +582,65 @@ export const generateSingleVoucherPDF = async (printDetail) => {
   }
 };
 
-export default { generateMonthlyFundsReport, generateSingleVoucherPDF };
+/**
+ * Generate A4 Receipt Evidence Slip PDF Buffer
+ * Shows top voucher/entry metadata (date, voucher no, submitter, property, accounts, amount, narration)
+ * with the attached purchase/receipt image(s) prominently positioned below.
+ */
+export const generateReceiptEvidencePDF = async (evidenceData) => {
+  const templatePath = path.join(__dirname, '..', 'templates', 'receiptEvidenceTemplate.html');
+  const templateSource = fs.readFileSync(templatePath, 'utf8');
+  const compiledTemplate = handlebars.compile(templateSource);
+
+  const htmlContent = compiledTemplate({
+    ...evidenceData,
+    formattedDate: formatReportDate(evidenceData.date),
+    logoBase64,
+    sarfrazSignBase64,
+    khurshidSignBase64,
+    generatedDate: new Date().toLocaleString('en-GB'),
+  });
+
+  const chromium = (await import('@sparticuz/chromium')).default;
+  const puppeteer = (await import('puppeteer-core')).default;
+
+  const localExecutablePath = getBrowserExecutablePath();
+  const executablePath = localExecutablePath || (await chromium.executablePath());
+  const launchOptions = {
+    headless: true,
+    args: localExecutablePath
+      ? [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ]
+      : chromium.args,
+    executablePath,
+  };
+
+  const browser = await puppeteer.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: 30000 });
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '6mm',
+        right: '8mm',
+        bottom: '6mm',
+        left: '8mm',
+      },
+    });
+
+    return pdfBuffer;
+  } finally {
+    await browser.close();
+  }
+};
+
+export default { generateMonthlyFundsReport, generateSingleVoucherPDF, generateReceiptEvidencePDF };
+
 

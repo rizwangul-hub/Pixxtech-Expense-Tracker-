@@ -663,7 +663,50 @@ export const verificationAPI = {
     const res = await api.delete(`/verification/${id}`);
     return res.data;
   },
+  downloadReceiptEvidencePDF: async (id, voucherNo) => {
+    const res = await api.get(`/verification/${id}/receipt-pdf`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `Voucher_${voucherNo || id}_Receipt_Evidence.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+    return true;
+  },
+  printReceiptEvidencePDF: async (id) => {
+    const res = await api.get(`/verification/${id}/receipt-pdf`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.src = blobUrl;
+    document.body.appendChild(iframe);
+
+    iframe.onload = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        iframe.remove();
+        window.URL.revokeObjectURL(blobUrl);
+      }, 60000);
+    };
+    return true;
+  },
 };
+
 
 // Central Ledger API
 export const ledgersAPI = {

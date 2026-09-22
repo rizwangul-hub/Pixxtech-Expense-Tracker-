@@ -31,7 +31,12 @@ import { formatPKR } from '../utils/formatters.js';
 import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 import { RentCollectionModal } from '../components/RentCollectionModal.jsx';
 import { ReceiptViewerModal } from '../components/ReceiptViewerModal.jsx';
-import { downloadAllReceipts, downloadReceiptImage } from '../utils/downloadReceipt.js';
+import {
+  downloadAllReceipts,
+  downloadReceiptImage,
+  downloadReceiptEvidenceDocument,
+  downloadReceiptEvidenceImage,
+} from '../utils/downloadReceipt.js';
 
 // Persistent in-memory cache for instant tab switching without blocking loading screens
 let verifierDataCache = {
@@ -78,7 +83,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     return list.filter((a) => a && (typeof a === 'string' || a.url));
   };
 
-  // Instant download of attached purchase / receipt images
+  // Instant download of formatted receipt evidence document (top voucher details + bottom receipt photo)
   const handleQuickDownloadReceipts = async (e, entry) => {
     if (e && e.stopPropagation) e.stopPropagation();
     const atts = getEntryAttachments(entry);
@@ -86,17 +91,21 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
 
     try {
       setDownloadingEntryId(entry._id);
-      const vLabel = entry.voucherNo ? `Voucher_${entry.voucherNo}` : 'Receipt';
-      await downloadAllReceipts(atts, vLabel);
-      setFeedback({
-        message: `Downloaded ${atts.length} receipt image(s) for Voucher #${entry.voucherNo || entry._id}.`,
-        type: 'success',
-      });
+      const vLabel = entry.voucherNo ? `VN #${entry.voucherNo}` : 'Receipt';
+      const success = await downloadReceiptEvidenceDocument(entry);
+      if (success) {
+        setFeedback({
+          message: `Downloaded official Receipt Evidence Slip for ${vLabel} (voucher details on top + receipt image on bottom).`,
+          type: 'success',
+        });
+      } else {
+        setViewingReceiptEntry(entry);
+      }
       setTimeout(() => setFeedback({ message: '', type: '' }), 4000);
     } catch (err) {
-      console.error('Receipt download error:', err);
+      console.error('Receipt document download error:', err);
       setFeedback({
-        message: 'Download failed. Opening viewer to view or download image.',
+        message: 'Direct download failed. Opening receipt viewer with details.',
         type: 'error',
       });
       setViewingReceiptEntry(entry);
@@ -104,6 +113,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       setDownloadingEntryId(null);
     }
   };
+
 
   // Instant client-side memoized list for 0ms tab switching & filtering
   const filteredEntries = useMemo(() => {
@@ -849,7 +859,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                               onClick={(e) => handleQuickDownloadReceipts(e, entry)}
                               disabled={downloadingEntryId === entry._id}
                               className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shadow transition disabled:opacity-50"
-                              title="Download receipt to device"
+                              title="Download official receipt evidence document (voucher details on top + receipt image on bottom)"
                             >
                               <Download size={12} className={downloadingEntryId === entry._id ? 'animate-bounce' : ''} />
                               <span>{downloadingEntryId === entry._id ? 'Saving...' : 'Download'}</span>
@@ -1066,7 +1076,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                                 onClick={(e) => handleQuickDownloadReceipts(e, entry)}
                                 disabled={downloadingEntryId === entry._id}
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold transition cursor-pointer disabled:opacity-50"
-                                title="Download purchase / receipt image to device"
+                                title="Download official receipt evidence document (voucher details on top + receipt image on bottom)"
                               >
                                 <Download size={10} className={downloadingEntryId === entry._id ? 'animate-bounce text-emerald-400' : 'text-emerald-400'} />
                                 <span>{downloadingEntryId === entry._id ? 'Saving...' : 'Download'}</span>

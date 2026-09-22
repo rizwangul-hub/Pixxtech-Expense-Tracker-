@@ -16,6 +16,7 @@ import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.j
 import { getOrCreateSalariesCategory } from './payrollController.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { validateExpenseClassification } from '../services/expenseClassificationService.js';
+import { generateReceiptEvidencePDF } from '../services/pdfReportService.js';
 
 /**
  * Generate sequential Receipt Number for Rent
@@ -917,6 +918,195 @@ export const createPendingEntry = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Download Official Receipt Evidence Slip PDF
+ *          Generates formatted A4 PDF containing top voucher/entry details
+ *          (date, voucher no, submitter, property, accounts, amount, narration)
+ *          with attached purchase / receipt picture(s) positioned below.
+ * @route   GET /api/verification/:id/receipt-pdf
+ * @access  Private (Authenticated)
+ */
+export const downloadReceiptEvidencePDF = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return apiError(res, 'Invalid entry or transaction ID.', 400);
+    }
+
+    // 1. Try finding in PendingEntry
+    let entry = await PendingEntry.findById(id)
+      .populate('propertyId', 'plazaName propertyName propertyCode location address units')
+      .populate('tenantId', 'fullName tenantName name phone cnic')
+      .populate('agreementId', 'agreementNumber monthlyRent')
+      .populate('categoryId', 'name type isRentalHead')
+      .populate('drAccountId', 'name type bankName accountNumber cashHolder')
+      .populate('crAccountId', 'name type bankName accountNumber cashHolder')
+      .populate('receivingAccountId', 'name type bankName accountNumber cashHolder')
+      .populate('submittedBy', 'name email role')
+      .populate('verifiedBy', 'name email role')
+      .lean();
+
+    // 2. If not found in PendingEntry, try finding in Transaction
+    if (!entry) {
+      entry = await Transaction.findById(id)
+        .populate('propertyId', 'plazaName propertyName propertyCode location address units')
+        .populate('tenantId', 'fullName tenantName name phone cnic')
+        .populate('categoryId', 'name type isRentalHead')
+        .populate('drAccountId', 'name type bankName accountNumber cashHolder')
+        .populate('crAccountId', 'name type bankName accountNumber cashHolder')
+        .populate('createdBy', 'name email role')
+        .lean();
+    }
+
+    if (!entry) {
+      return apiError(res, 'Transaction or Pending Entry record not found.', 404);
+    }
+
+    // Extract attachments safely
+    const rawAttachments =
+      (entry.attachments && entry.attachments.length > 0)
+        ? entry.attachments
+        : (entry.entryData?.attachments && entry.entryData.attachments.length > 0)
+        ? entry.entryData.attachments
+        : [];
+
+    const attachments = rawAttachments
+      .map((att, idx) => {
+        const url = typeof att === 'string' ? att : att?.url;
+        if (!url) return null;
+        const caption = (typeof att === 'object' && att?.originalName)
+          ? att.originalName
+          : `Receipt Evidence Image #${idx + 1}`;
+        return {
+          url,
+          index: idx + 1,
+          caption,
+        };
+      })
+      .filter(Boolean);
+
+    if (attachments.length === 0) {
+      return apiError(res, 'No purchase or receipt image attachments found on this record.', 404);
+    }
+
+    // Resolve property & unit
+    let propertyName =
+      entry.propertyId?.plazaName ||
+      entry.propertyId?.propertyName ||
+      entry.entryData?.property?.plazaName ||
+      entry.entryData?.property?.name ||
+      '';
+    let unitName = '';
+    if (entry.propertyId?.units && entry.unitId) {
+      const u = entry.propertyId.units.find(
+        (un) => un._id?.toString() === entry.unitId?.toString()
+      );
+      if (u) unitName = u.unitName || u.unitNumber || '';
+    }
+    if (!unitName && entry.entryData?.unit?.unitName) {
+      unitName = entry.entryData.unit.unitName;
+    }
+
+    // Resolve tenant
+    const tenantName =
+      entry.tenantId?.fullName ||
+      entry.tenantId?.tenantName ||
+      entry.entryData?.tenant?.fullName ||
+      '';
+
+    // Resolve accounts & names
+    const submittedByName =
+      entry.submittedByName ||
+      entry.submittedBy?.name ||
+      entry.createdBy?.name ||
+      'Sarfraz';
+
+    const verifiedByName =
+      entry.verifiedByName ||
+      entry.verifiedBy?.name ||
+      entry.checkedBy ||
+      'Khurshid Anwar';
+
+    const categoryName =
+      entry.categoryId?.name ||
+      entry.entryData?.category?.name ||
+      'General';
+
+    let drAccountName =
+      entry.drAccountId?.name ||
+      entry.receivingAccountId?.name ||
+      entry.entryData?.drAccount?.name ||
+      '';
+    let crAccountName =
+      entry.crAccountId?.name ||
+      entry.entryData?.crAccount?.name ||
+      '';
+
+    if (entry.entryType === 'RENT') {
+      drAccountName = drAccountName || 'Receiving Account';
+      crAccountName = crAccountName || 'Rental Income / Clearing';
+    } else {
+      drAccountName = drAccountName || categoryName;
+      crAccountName = crAccountName || 'Payment Account (Bank/Cash)';
+    }
+
+    const isVerified =
+      entry.status === 'VERIFIED' ||
+      entry.status === 'POSTED' ||
+      Boolean(entry.verifiedAt);
+
+    const isRent =
+      entry.entryType === 'RENT' ||
+      entry.reportCategory === 'Rent' ||
+      entry.sourceModule === 'RENT_RECEIVED';
+
+    const documentTitle = isRent
+      ? 'OFFICIAL RENT RECEIPT EVIDENCE'
+      : entry.entryType === 'TRANSFER'
+      ? 'BANK / CASH TRANSFER EVIDENCE'
+      : 'OFFICIAL PURCHASE & EXPENSE RECEIPT EVIDENCE';
+
+    const voucherNo =
+      entry.voucherNo ||
+      entry.voucherNumber ||
+      id.toString().slice(-6).toUpperCase();
+
+    const evidenceData = {
+      _id: entry._id,
+      voucherNo,
+      date: entry.date || entry.submittedAt || new Date(),
+      documentTitle,
+      isVerified,
+      submittedByName,
+      submittedAtFormatted: entry.submittedAt ? new Date(entry.submittedAt).toLocaleString('en-PK') : '',
+      verifiedByName,
+      propertyName,
+      unitName,
+      tenantName,
+      rentMonth: entry.rentMonth || null,
+      categoryName,
+      drAccountName,
+      crAccountName,
+      referenceNumber: entry.referenceNumber || entry.reference || '',
+      paymentMethod: entry.paymentMethod || 'CASH',
+      detail: entry.detail || entry.entryData?.detail || 'Purchase / Expense Evidence',
+      amount: round2(entry.amount),
+      attachments,
+    };
+
+    const pdfBuffer = await generateReceiptEvidencePDF(evidenceData);
+    const cleanFilename = `Receipt_Evidence_VN${voucherNo}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${cleanFilename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.status(200).send(pdfBuffer);
+  } catch (error) {
+    console.error('[Download Receipt Evidence PDF Error]:', error);
+    return apiError(res, error.message || 'Failed to generate receipt evidence PDF.', 500);
+  }
+};
+
 export default {
   getPendingEntries,
   getVerificationSummary,
@@ -927,4 +1117,6 @@ export default {
   rejectEntry,
   deletePendingEntry,
   createPendingEntry,
+  downloadReceiptEvidencePDF,
 };
+
