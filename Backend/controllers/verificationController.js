@@ -1044,7 +1044,9 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
 
     if (entry.entryType === 'RENT') {
       drAccountName = drAccountName || 'Receiving Account';
-      crAccountName = crAccountName || 'Rental Income / Clearing';
+      // Rent evidence should identify the credited unit, not only the
+      // technical clearing account used by the ledger.
+      crAccountName = unitName || crAccountName || 'Rental Income / Clearing';
     } else {
       drAccountName = drAccountName || categoryName;
       crAccountName = crAccountName || 'Payment Account (Bank/Cash)';
@@ -1119,4 +1121,3 @@ export default {
   createPendingEntry,
   downloadReceiptEvidencePDF,
 };
-
