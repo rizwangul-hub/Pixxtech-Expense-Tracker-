@@ -1721,38 +1721,42 @@ export const reverseSalaryPayment = async (req, res) => {
       return apiError(res, `Salary for ${pDoc.employeeName} is not marked as PAID.`, 400);
     }
 
-    const transactionId = pDoc.transactionId;
-    const paidAccountId = pDoc.paidFromAccountId;
-    const paidAmount = round2(pDoc.netPayable);
+    const transactionIds = [
+      ...(pDoc.salaryInstallments || []).map((installment) => installment.transactionId).filter(Boolean),
+      pDoc.transactionId,
+    ].filter((id, index, ids) => ids.findIndex((item) => String(item) === String(id)) === index);
+    let paidAmount = 0;
 
-    if (transactionId) {
+    for (const transactionId of transactionIds) {
       const tx = await Transaction.findById(transactionId);
-      if (tx && tx.status !== 'REVERSED') {
-        tx.status = 'REVERSED';
-        await tx.save();
+      if (!tx || tx.status === 'REVERSED') continue;
 
-        if (tx.voucherId) {
-          await Voucher.findByIdAndUpdate(tx.voucherId, { status: 'REVERSED' });
-        }
+      const transactionAmount = round2(tx.amount);
+      paidAmount = round2(paidAmount + transactionAmount);
+      tx.status = 'REVERSED';
+      await tx.save();
 
-        if (paidAccountId) {
-          await Account.findByIdAndUpdate(paidAccountId, {
-            $inc: { currentBalance: paidAmount },
-          });
-        }
-
-        const clearingAcc = await getOrCreateOtherIncomeClearingAccount();
-        if (clearingAcc) {
-          await Account.findByIdAndUpdate(clearingAcc._id, {
-            $inc: { currentBalance: -paidAmount },
-          });
-        }
+      if (tx.voucherId) {
+        await Voucher.findByIdAndUpdate(tx.voucherId, { status: 'REVERSED' });
       }
+
+      await Promise.all([
+        Account.findByIdAndUpdate(tx.crAccountId, { $inc: { currentBalance: transactionAmount } }),
+        Account.findByIdAndUpdate(tx.drAccountId, { $inc: { currentBalance: -transactionAmount } }),
+      ]);
+    }
+
+    // Legacy payroll rows may not have installment transaction links. Keep the
+    // audit amount useful without changing balances a second time.
+    if (paidAmount <= 0) {
+      paidAmount = round2(pDoc.totalInstallmentsPaid || pDoc.netPayable);
     }
 
     const prevVoucher = pDoc.voucherNo;
     pDoc.status = 'FINALIZED';
     pDoc.paymentStatus = 'PENDING_PAYMENT';
+    pDoc.totalInstallmentsPaid = 0;
+    pDoc.salaryInstallments = [];
     pDoc.paidFromAccountId = null;
     pDoc.paidFromAccountName = '';
     pDoc.paymentDate = null;
