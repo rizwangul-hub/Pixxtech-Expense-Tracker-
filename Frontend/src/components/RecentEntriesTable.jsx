@@ -15,9 +15,15 @@ import {
   ShieldAlert,
   ShieldCheck,
   XCircle,
+  Paperclip,
+  Eye,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { transactionsAPI, vouchersAPI, verificationAPI } from '../services/api.js';
 import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
+import { ReceiptViewerModal } from './ReceiptViewerModal.jsx';
+import { downloadReceiptEvidenceDocument } from '../utils/downloadReceipt.js';
+
 
 const formatPKR = (val) => {
   return new Intl.NumberFormat('en-PK').format(Number(val) || 0);
@@ -63,6 +69,37 @@ export const RecentEntriesTable = ({
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState(null);
   const [deletingPendingId, setDeletingPendingId] = useState(null);
+
+  // Receipt Evidence States
+  const [selectedReceiptItem, setSelectedReceiptItem] = useState(null);
+  const [downloadingReceiptId, setDownloadingReceiptId] = useState(null);
+
+  const getItemAttachments = (item) => {
+    if (!item) return [];
+    const list =
+      item.attachments && item.attachments.length > 0
+        ? item.attachments
+        : item.entryData?.attachments && item.entryData.attachments.length > 0
+        ? item.entryData.attachments
+        : [];
+    return list.filter((a) => a && (typeof a === 'string' || a.url));
+  };
+
+  const handleDownloadReceiptEvidence = async (e, item) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    try {
+      setDownloadingReceiptId(item._id);
+      const success = await downloadReceiptEvidenceDocument(item);
+      if (!success) {
+        setSelectedReceiptItem(item);
+      }
+    } catch (err) {
+      console.error('Download receipt evidence error:', err);
+      setSelectedReceiptItem(item);
+    } finally {
+      setDownloadingReceiptId(null);
+    }
+  };
 
   // ─── Verified Entry Handlers ───────────────────────────────────────────────
 
@@ -296,8 +333,8 @@ export const RecentEntriesTable = ({
                       <td className="font-mono font-bold text-blue-700 whitespace-nowrap">
                         {entry.voucherNo ? `#${entry.voucherNo}` : '—'}
                       </td>
-                      <td className="max-w-xs truncate font-bold text-slate-900" title={entry.detail}>
-                        {entry.detail || '—'}
+                      <td className="max-w-xs font-bold text-slate-900" title={entry.detail}>
+                        <div className="truncate">{entry.detail || '—'}</div>
                         {entry.propertyId?.plazaName && (
                           <span className="block text-xs font-normal text-blue-600">{entry.propertyId.plazaName}</span>
                         )}
@@ -306,6 +343,31 @@ export const RecentEntriesTable = ({
                         )}
                         {entry.rentMonth && (
                           <span className="block text-[10px] font-semibold text-slate-500">{entry.rentMonth}</span>
+                        )}
+                        {/* Attached Purchase / Receipt Evidence */}
+                        {getItemAttachments(entry).length > 0 && (
+                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReceiptItem(entry)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-bold transition cursor-pointer"
+                              title="Click to view receipt evidence with voucher details"
+                            >
+                              <Paperclip size={10} className="text-blue-600" />
+                              <span>{getItemAttachments(entry).length} {getItemAttachments(entry).length === 1 ? 'Receipt' : 'Receipts'}</span>
+                              <Eye size={10} className="opacity-75" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleDownloadReceiptEvidence(e, entry)}
+                              disabled={downloadingReceiptId === entry._id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-[10px] font-bold transition cursor-pointer disabled:opacity-50"
+                              title="Download official receipt evidence slip (voucher details on top + receipt image on bottom)"
+                            >
+                              <Download size={10} className={downloadingReceiptId === entry._id ? 'animate-bounce text-emerald-600' : 'text-emerald-600'} />
+                              <span>{downloadingReceiptId === entry._id ? 'Saving...' : 'Download Slip'}</span>
+                            </button>
+                          </div>
                         )}
                       </td>
                       <td className="whitespace-nowrap">
@@ -324,6 +386,20 @@ export const RecentEntriesTable = ({
                       </td>
                       <td className="text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1">
+                          {getItemAttachments(entry).length > 0 && (
+                            <button
+                              onClick={(e) => handleDownloadReceiptEvidence(e, entry)}
+                              disabled={downloadingReceiptId === entry._id}
+                              className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition border border-emerald-300 disabled:opacity-50"
+                              title="Download Receipt Evidence Slip (voucher details on top + receipt photo on bottom)"
+                            >
+                              {downloadingReceiptId === entry._id ? (
+                                <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                              ) : (
+                                <ImageIcon className="w-4 h-4 text-emerald-600" />
+                              )}
+                            </button>
+                          )}
                           {canEdit && (
                             <button
                               onClick={() => openEditPending(entry)}
@@ -398,8 +474,8 @@ export const RecentEntriesTable = ({
                     <tr key={tx._id} className="hover:bg-slate-50 transition-colors">
                       <td className="font-mono text-slate-800 whitespace-nowrap">{formattedDate}</td>
                       <td className="font-mono font-bold text-blue-700 whitespace-nowrap">#{tx.voucherNo}</td>
-                      <td className="max-w-xs truncate font-bold text-slate-900" title={tx.detail}>
-                        {tx.detail}
+                      <td className="max-w-xs font-bold text-slate-900" title={tx.detail}>
+                        <div className="truncate">{tx.detail}</div>
                         {tx.propertyId?.plazaName && (
                           <span className="block text-xs font-normal text-blue-600">{tx.propertyId.plazaName}</span>
                         )}
@@ -416,6 +492,32 @@ export const RecentEntriesTable = ({
                             General
                           </span>
                         ) : null}
+
+                        {/* Attached Purchase / Receipt Evidence (Verified) */}
+                        {getItemAttachments(tx).length > 0 && (
+                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReceiptItem(tx)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-bold transition cursor-pointer"
+                              title="Click to view receipt evidence with voucher details"
+                            >
+                              <Paperclip size={10} className="text-blue-600" />
+                              <span>{getItemAttachments(tx).length} {getItemAttachments(tx).length === 1 ? 'Receipt' : 'Receipts'}</span>
+                              <Eye size={10} className="opacity-75" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleDownloadReceiptEvidence(e, tx)}
+                              disabled={downloadingReceiptId === tx._id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-[10px] font-bold transition cursor-pointer disabled:opacity-50"
+                              title="Download official receipt evidence slip (voucher details on top + receipt image on bottom)"
+                            >
+                              <Download size={10} className={downloadingReceiptId === tx._id ? 'animate-bounce text-emerald-600' : 'text-emerald-600'} />
+                              <span>{downloadingReceiptId === tx._id ? 'Saving...' : 'Download Slip'}</span>
+                            </button>
+                          </div>
+                        )}
                       </td>
                       <td className="whitespace-nowrap">
                         <span className="bg-slate-100 px-2.5 py-0.5 rounded-md text-slate-800 font-bold border border-slate-300 text-xs">
@@ -442,6 +544,20 @@ export const RecentEntriesTable = ({
                       </td>
                       <td className="text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1">
+                          {getItemAttachments(tx).length > 0 && (
+                            <button
+                              onClick={(e) => handleDownloadReceiptEvidence(e, tx)}
+                              disabled={downloadingReceiptId === tx._id}
+                              className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition border border-emerald-300 disabled:opacity-50"
+                              title="Download Receipt Evidence Slip (voucher details on top + receipt photo on bottom)"
+                            >
+                              {downloadingReceiptId === tx._id ? (
+                                <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                              ) : (
+                                <ImageIcon className="w-4 h-4 text-emerald-600" />
+                              )}
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDownloadPdf(tx)}
                             disabled={downloadingPdfId === tx._id}
@@ -477,6 +593,7 @@ export const RecentEntriesTable = ({
                           )}
                         </div>
                       </td>
+
                     </tr>
                   );
                 })
@@ -589,6 +706,24 @@ export const RecentEntriesTable = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Single Voucher Print Modal */}
+      {printingTx && (
+        <SingleVoucherPrintModal
+          transactionId={printingTx._id}
+          voucherId={printingTx.voucherId}
+          initialData={printingTx}
+          onClose={() => setPrintingTx(null)}
+        />
+      )}
+
+      {/* Attached Purchase / Receipt Evidence Viewer & Downloader Modal */}
+      {selectedReceiptItem && (
+        <ReceiptViewerModal
+          entry={selectedReceiptItem}
+          onClose={() => setSelectedReceiptItem(null)}
+        />
       )}
     </div>
   );

@@ -181,12 +181,12 @@ export const getMyEntries = async (req, res) => {
 
     const transactions = await Transaction.find(filter)
       .populate('categoryId', 'name type isRentalHead')
-      .populate('drAccountId', 'name type currentBalance')
-      .populate('crAccountId', 'name type currentBalance')
-      .populate('propertyId', 'plazaName')
+      .populate('drAccountId', 'name type currentBalance bankName cashHolder')
+      .populate('crAccountId', 'name type currentBalance bankName cashHolder')
+      .populate('propertyId', 'plazaName propertyName propertyCode location address units')
       .populate('createdBy', 'name email role')
       .sort({ createdAt: -1 })
-      .limit(30)
+      .limit(60)
       .lean();
 
     return res.status(200).json({

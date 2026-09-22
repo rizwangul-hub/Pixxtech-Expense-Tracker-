@@ -627,11 +627,13 @@ export const generateReceiptEvidencePDF = async (evidenceData) => {
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
+      preferCSSPageSize: true,
+      pageRanges: '1',
       margin: {
-        top: '6mm',
-        right: '8mm',
-        bottom: '6mm',
-        left: '8mm',
+        top: '4mm',
+        right: '6mm',
+        bottom: '4mm',
+        left: '6mm',
       },
     });
 

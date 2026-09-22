@@ -82,8 +82,16 @@ export function extractReceiptMetadata(entry) {
 
   const vNo = entry.voucherNo || entry.voucherNumber || (entry._id ? entry._id.slice(-6).toUpperCase() : 'N/A');
   const dateStr = entry.date ? formatDate(entry.date) : formatDate(entry.submittedAt || new Date());
-  const submitter = entry.submittedByName || entry.submittedBy?.name || 'Sarfraz (Data Entry)';
-  const verifier = entry.verifiedByName || entry.verifiedBy?.name || 'Khurshid Anwar (Auditor)';
+  const submitter =
+    entry.submittedByName ||
+    entry.submittedBy?.name ||
+    entry.createdBy?.name ||
+    'Sarfraz Khan';
+  const verifier =
+    entry.verifiedByName ||
+    entry.verifiedBy?.name ||
+    entry.checkedBy ||
+    'Khurshid Anwar';
 
   const propertyName =
     entry.propertyId?.plazaName ||
@@ -525,28 +533,29 @@ export function printReceiptEvidenceSlip(entry, attachmentIndex = 0) {
       <meta charset="utf-8">
       <title>Receipt Evidence - Voucher #${meta.vNo}</title>
       <style>
-        @page { size: A4 portrait; margin: 10mm; }
+        @page { size: A4 portrait; margin: 4mm 6mm; }
         * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        body { font-family: Arial, sans-serif; font-size: 9pt; color: #0f172a; margin: 0; padding: 12px; background: #fff; }
-        .box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; min-height: 270mm; display: flex; flex-direction: column; justify-content: space-between; }
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; }
-        .title { font-size: 16pt; font-weight: 900; margin: 0; }
-        .sub { font-size: 8pt; color: #475569; }
-        .vn { font-family: monospace; font-size: 12pt; font-weight: 900; background: #eff6ff; border: 1px solid #bfdbfe; padding: 4px 8px; border-radius: 4px; }
-        .banner { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; margin-bottom: 12px; font-weight: bold; }
-        .grid { display: flex; gap: 12px; margin-bottom: 12px; }
-        .card { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; font-size: 8.5pt; }
-        .card-t { font-size: 7.5pt; text-transform: uppercase; font-weight: 800; color: #64748b; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; margin-bottom: 6px; }
-        .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        html, body { height: 100%; font-family: Arial, sans-serif; font-size: 8.5pt; color: #0f172a; margin: 0; padding: 0; background: #fff; overflow: hidden; }
+        .box { border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; height: 283mm; max-height: 283mm; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; page-break-inside: avoid; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 5px; margin-bottom: 6px; }
+        .title { font-size: 13pt; font-weight: 900; margin: 0; }
+        .sub { font-size: 7pt; color: #475569; margin-top: 1px; }
+        .vn { font-family: monospace; font-size: 10pt; font-weight: 900; background: #eff6ff; border: 1px solid #bfdbfe; padding: 2px 8px; border-radius: 4px; }
+        .banner { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; padding: 4px 8px; display: flex; justify-content: space-between; margin-bottom: 6px; font-weight: bold; font-size: 8.5pt; }
+        .grid { display: flex; gap: 8px; margin-bottom: 6px; }
+        .card { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 5px; padding: 6px 8px; font-size: 7.5pt; }
+        .card-t { font-size: 6.5pt; text-transform: uppercase; font-weight: 800; color: #64748b; border-bottom: 1px solid #cbd5e1; padding-bottom: 2px; margin-bottom: 4px; }
+        .row { display: flex; justify-content: space-between; margin-bottom: 2px; }
         .row span:first-child { color: #64748b; font-weight: 600; }
         .row span:last-child { color: #0f172a; font-weight: 700; }
-        .narration { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-size: 8.5pt; margin-bottom: 12px; }
-        .narration-label { font-size: 7.5pt; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 3px; }
-        .total-box { background: #0f172a; color: #fff; padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-weight: 900; }
-        .total-amt { font-family: monospace; font-size: 15pt; color: #34d399; }
-        .img-container { flex: 1; text-align: center; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; padding: 10px; margin-bottom: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .receipt-photo { max-width: 100%; max-height: 120mm; object-fit: contain; border-radius: 4px; border: 1px solid #cbd5e1; }
-        .sigs { display: flex; justify-content: space-between; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 8pt; color: #475569; }
+        .narration { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; padding: 5px 8px; font-size: 7.5pt; margin-bottom: 6px; max-height: 32px; overflow: hidden; }
+        .narration-label { font-size: 6.5pt; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 2px; }
+        .total-box { background: #0f172a; color: #fff; padding: 5px 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-weight: 900; }
+        .total-amt { font-family: monospace; font-size: 13pt; color: #34d399; }
+        .img-container { flex: 1; min-height: 0; text-align: center; border: 1px solid #cbd5e1; border-radius: 5px; background: #f8fafc; padding: 6px; margin-bottom: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+        .receipt-photo { max-width: 100%; max-height: 108mm; object-fit: contain; border-radius: 3px; border: 1px solid #cbd5e1; }
+        .sigs-wrap { flex-shrink: 0; page-break-inside: avoid; }
+        .sigs { display: flex; justify-content: space-between; border-top: 1px solid #cbd5e1; padding-top: 5px; font-size: 7.5pt; color: #475569; }
       </style>
     </head>
     <body>
@@ -602,12 +611,12 @@ export function printReceiptEvidenceSlip(entry, attachmentIndex = 0) {
           <img src="${targetAtt.url}" alt="Receipt Evidence" class="receipt-photo" />
         </div>
 
-        <div>
+        <div class="sigs-wrap">
           <div class="sigs">
             <div><strong>Prepared By:</strong> ${meta.submitter}</div>
             <div><strong>Audited &amp; Approved By:</strong> ${meta.verifier}</div>
           </div>
-          <div style="text-align: center; font-size: 7pt; color: #94a3b8; margin-top: 6px;">
+          <div style="text-align: center; font-size: 6.5pt; color: #94a3b8; margin-top: 3px;">
             Pixx Technologies Financial Systems &bull; Printed on ${new Date().toLocaleString('en-PK')}
           </div>
         </div>

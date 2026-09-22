@@ -6,7 +6,7 @@
   <style>
     @page {
       size: A4 portrait;
-      margin: 8mm 10mm;
+      margin: 4mm 6mm;
     }
 
     * {
@@ -15,63 +15,69 @@
       print-color-adjust: exact;
     }
 
-    body {
+    html, body {
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 9pt;
-      line-height: 1.3;
+      font-size: 8.5pt;
+      line-height: 1.25;
       color: #0f172a;
       background: #ffffff;
       margin: 0;
       padding: 0;
+      height: 100%;
+      overflow: hidden;
     }
 
     .voucher-container {
       border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      padding: 18px 20px;
-      min-height: 275mm;
+      border-radius: 6px;
+      padding: 10px 14px;
+      height: 283mm;
+      max-height: 283mm;
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       background: #ffffff;
+      overflow: hidden;
+      page-break-inside: avoid;
     }
 
-    /* Header */
+    /* 1. Header */
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       border-bottom: 2px solid #0f172a;
-      padding-bottom: 10px;
-      margin-bottom: 12px;
+      padding-bottom: 5px;
+      margin-bottom: 7px;
     }
 
     .header-logo {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .logo-img {
-      height: 48px;
+      height: 38px;
       width: auto;
       object-fit: contain;
     }
 
     .company-name {
-      font-size: 15pt;
+      font-size: 13pt;
       font-weight: 900;
       color: #0f172a;
       margin: 0;
-      letter-spacing: -0.5px;
+      letter-spacing: -0.3px;
       text-transform: uppercase;
     }
 
     .company-sub {
-      font-size: 8pt;
+      font-size: 7pt;
       font-weight: 700;
       color: #475569;
-      margin-top: 2px;
+      margin-top: 1px;
     }
 
     .voucher-badge-box {
@@ -79,40 +85,40 @@
     }
 
     .voucher-badge-box .subtitle {
-      font-size: 7.5pt;
+      font-size: 6.5pt;
       text-transform: uppercase;
       font-weight: 800;
       color: #64748b;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.3px;
     }
 
     .voucher-number {
       font-family: 'Consolas', monospace;
-      font-size: 11pt;
+      font-size: 10pt;
       font-weight: 900;
       color: #1e3a8a;
       background-color: #eff6ff;
       border: 1.5px solid #bfdbfe;
-      padding: 4px 10px;
-      border-radius: 6px;
-      margin-top: 3px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-top: 2px;
       display: inline-block;
     }
 
-    /* Document Title & Status Banner */
+    /* 2. Document Title & Status Banner */
     .status-banner {
       display: flex;
       justify-content: space-between;
       align-items: center;
       background-color: #f8fafc;
       border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      padding: 8px 12px;
-      margin-bottom: 12px;
+      border-radius: 5px;
+      padding: 5px 10px;
+      margin-bottom: 7px;
     }
 
     .doc-title {
-      font-size: 10.5pt;
+      font-size: 9pt;
       font-weight: 900;
       color: #0f172a;
       text-transform: uppercase;
@@ -120,18 +126,17 @@
     }
 
     .doc-date {
-      font-size: 8pt;
+      font-size: 7.5pt;
       color: #475569;
-      margin-top: 1px;
     }
 
     .status-pill {
-      font-size: 7.5pt;
+      font-size: 7pt;
       font-weight: 800;
       text-transform: uppercase;
-      padding: 3px 8px;
-      border-radius: 4px;
-      letter-spacing: 0.3px;
+      padding: 2px 7px;
+      border-radius: 3px;
+      letter-spacing: 0.2px;
     }
 
     .status-verified {
@@ -146,37 +151,37 @@
       border: 1px solid #fcd34d;
     }
 
-    /* Grid Info Cards */
+    /* 3. Grid Info Cards */
     .grid-cards {
       display: flex;
-      gap: 10px;
-      margin-bottom: 10px;
+      gap: 8px;
+      margin-bottom: 7px;
     }
 
     .card {
       flex: 1;
       background-color: #f8fafc;
       border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 10px 12px;
+      border-radius: 5px;
+      padding: 6px 10px;
     }
 
     .card-title {
-      font-size: 7.5pt;
+      font-size: 6.5pt;
       text-transform: uppercase;
       font-weight: 800;
       color: #475569;
       border-bottom: 1px solid #cbd5e1;
-      padding-bottom: 3px;
-      margin-bottom: 6px;
+      padding-bottom: 2px;
+      margin-bottom: 4px;
     }
 
     .info-row {
-      margin-bottom: 4px;
-      font-size: 8.5pt;
+      margin-bottom: 2.5px;
+      font-size: 7.5pt;
       display: flex;
       justify-content: space-between;
-      gap: 8px;
+      gap: 6px;
     }
 
     .info-label {
@@ -196,67 +201,72 @@
       font-family: 'Consolas', monospace;
     }
 
-    /* Narration Box */
+    /* 4. Narration Box */
     .narration-box {
-      margin-bottom: 10px;
+      margin-bottom: 7px;
     }
 
     .narration-label {
-      font-size: 7.5pt;
+      font-size: 6.5pt;
       text-transform: uppercase;
       font-weight: 800;
       color: #475569;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
 
     .narration-text {
       background-color: #f8fafc;
       border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      padding: 8px 10px;
-      font-size: 8.5pt;
+      border-radius: 5px;
+      padding: 5px 8px;
+      font-size: 7.5pt;
       font-weight: 600;
       color: #0f172a;
-      line-height: 1.35;
+      line-height: 1.25;
+      max-height: 32px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    /* Total Amount Banner */
+    /* 5. Total Amount Banner */
     .total-banner {
       background-color: #f1f5f9;
       border: 1.5px solid #0f172a;
-      border-radius: 6px;
-      padding: 8px 12px;
+      border-radius: 5px;
+      padding: 5px 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 7px;
     }
 
     .total-label {
-      font-size: 8.5pt;
+      font-size: 7.5pt;
       font-weight: 900;
       color: #0f172a;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.3px;
     }
 
     .total-amount {
       font-family: 'Consolas', monospace;
-      font-size: 15pt;
+      font-size: 13pt;
       font-weight: 900;
       color: #0f172a;
     }
 
-    /* Attached Receipt Section */
+    /* 6. Attached Receipt Section (Fills remaining space cleanly on single page) */
     .receipt-section {
       flex: 1;
+      min-height: 0;
       display: flex;
       flex-direction: column;
-      margin-bottom: 12px;
+      margin-bottom: 6px;
       background: #f8fafc;
       border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      padding: 10px;
+      border-radius: 5px;
+      padding: 6px 8px;
+      overflow: hidden;
     }
 
     .receipt-section-header {
@@ -264,12 +274,13 @@
       justify-content: space-between;
       align-items: center;
       border-bottom: 1px solid #cbd5e1;
-      padding-bottom: 4px;
-      margin-bottom: 8px;
+      padding-bottom: 3px;
+      margin-bottom: 5px;
+      flex-shrink: 0;
     }
 
     .receipt-section-title {
-      font-size: 8pt;
+      font-size: 7pt;
       text-transform: uppercase;
       font-weight: 800;
       color: #1e3a8a;
@@ -277,7 +288,7 @@
     }
 
     .receipt-section-count {
-      font-size: 7.5pt;
+      font-size: 6.5pt;
       font-weight: 700;
       color: #64748b;
     }
@@ -285,48 +296,65 @@
     .receipt-images-container {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 6px;
       align-items: center;
       justify-content: center;
       flex: 1;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .receipt-image-card {
       border: 1px solid #e2e8f0;
-      border-radius: 6px;
+      border-radius: 5px;
       background: #ffffff;
-      padding: 6px;
+      padding: 4px;
       text-align: center;
       max-width: 100%;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      max-height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
       page-break-inside: avoid;
+      overflow: hidden;
     }
 
     .receipt-img {
       max-width: 100%;
-      max-height: 125mm;
+      max-height: 108mm;
       object-fit: contain;
-      border-radius: 4px;
+      border-radius: 3px;
       display: block;
       margin: 0 auto;
     }
 
     .receipt-img-caption {
-      font-size: 7pt;
+      font-size: 6.5pt;
       color: #64748b;
-      margin-top: 4px;
+      margin-top: 2px;
       font-family: 'Consolas', monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
     }
 
-    /* Signatures & Footer */
+    /* 7. Signatures & Footer (Guaranteed to stay on single page) */
+    .signatures-and-footer {
+      flex-shrink: 0;
+      page-break-inside: avoid;
+    }
+
     .signatures-row {
       display: flex;
-      gap: 20px;
+      gap: 16px;
       border: 1px solid #cbd5e1;
-      border-radius: 6px;
+      border-radius: 5px;
       background-color: #f8fafc;
-      padding: 8px 16px;
-      margin-bottom: 6px;
+      padding: 5px 12px;
+      margin-bottom: 4px;
     }
 
     .sig-box {
@@ -335,17 +363,17 @@
     }
 
     .sig-title {
-      font-size: 7.5pt;
+      font-size: 6.5pt;
       text-transform: uppercase;
       font-weight: 800;
       color: #64748b;
       border-bottom: 1px solid #e2e8f0;
       padding-bottom: 2px;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
     .sig-img {
-      height: 36px;
+      height: 26px;
       width: auto;
       object-fit: contain;
       margin: 0 auto;
@@ -353,23 +381,24 @@
     }
 
     .sig-name {
-      font-size: 8pt;
+      font-size: 7.5pt;
       font-weight: 900;
       color: #0f172a;
-      margin-top: 2px;
+      margin-top: 1px;
     }
 
     .sig-role {
-      font-size: 7pt;
+      font-size: 6.5pt;
       color: #64748b;
       font-weight: 600;
     }
 
     .footer-note {
       text-align: center;
-      font-size: 7pt;
+      font-size: 6.5pt;
       color: #64748b;
       font-weight: 600;
+      margin-top: 1px;
     }
   </style>
 </head>
@@ -377,7 +406,7 @@
 
   <div class="voucher-container">
     <!-- Top Details Section -->
-    <div>
+    <div style="flex-shrink: 0;">
       <!-- 1. Header -->
       <div class="header">
         <div class="header-logo">
@@ -455,7 +484,7 @@
 
         <!-- Accounts Involved Card -->
         <div class="card">
-          <div class="card-title">Accounts Involved &amp; Category</div>
+          <div class="card-title">Accounts Involved &amp; Head</div>
           <div class="info-row">
             <span class="info-label">Category Head:</span>
             <span class="info-val">{{categoryName}}</span>
@@ -496,7 +525,7 @@
       </div>
     </div>
 
-    <!-- 6. Attached Purchase / Receipt Evidence (The "Down" / Bottom Section) -->
+    <!-- 6. Attached Purchase / Receipt Evidence (Center/Bottom Section) -->
     <div class="receipt-section">
       <div class="receipt-section-header">
         <span class="receipt-section-title">Attached Purchase / Receipt Picture Evidence</span>
@@ -515,8 +544,8 @@
       </div>
     </div>
 
-    <!-- 7. Bottom Signatures & Footer -->
-    <div>
+    <!-- 7. Bottom Signatures & Footer (Always tightly bound on page 1) -->
+    <div class="signatures-and-footer">
       <div class="signatures-row">
         <div class="sig-box">
           <div class="sig-title">Prepared By</div>
