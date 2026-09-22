@@ -13,7 +13,11 @@ import Employee from '../models/Employee.js';
 import StaffLoan from '../models/StaffLoan.js';
 import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
-import { getOrCreateSalariesCategory } from './payrollController.js';
+import {
+  getOrCreateEmployeeSalaryCategory,
+  getOrCreateSalaryExpenseAccount,
+  getOrCreateSalariesCategory,
+} from './payrollController.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { validateExpenseClassification } from '../services/expenseClassificationService.js';
 import { generateReceiptEvidencePDF } from '../services/pdfReportService.js';
@@ -672,6 +676,11 @@ export const verifyEntry = async (req, res) => {
       entry.postedTransactionId = postedTransaction._id;
     } else if (entry.entryType === 'SALARY') {
       const salariesCategory = await getOrCreateSalariesCategory();
+      const salaryCategory = await getOrCreateEmployeeSalaryCategory(
+        entry.salaryDetails?.employeeName || entry.entryData?.payrollSnapshot?.employeeName,
+        salariesCategory
+      );
+      const salaryExpenseAccount = await getOrCreateSalaryExpenseAccount();
       const paidFromAccountId = entry.crAccountId;
       const netAmount = round2(entry.amount);
 
@@ -707,8 +716,8 @@ export const verifyEntry = async (req, res) => {
         date: entry.date || new Date(),
         voucherNo: entry.voucherNo,
         detail: entry.detail || `Salary Payout to Employee — Month ${entry.rentMonth}`,
-        categoryId: salariesCategory._id,
-        drAccountId: entry.drAccountId,
+        categoryId: salaryCategory._id,
+        drAccountId: salaryExpenseAccount._id,
         crAccountId: paidFromAccountId,
         amount: netAmount,
         transactionType: 'EXPENSE',

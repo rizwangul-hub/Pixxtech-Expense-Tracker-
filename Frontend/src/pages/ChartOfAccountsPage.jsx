@@ -84,6 +84,8 @@ export function ChartOfAccountsPage({ currentUser }) {
   const [saving, setSaving] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
   const [searchQuery, setSearchQuery] = useState('');
+  const [expenseHeadSearch, setExpenseHeadSearch] = useState('');
+  const [expenseHeadFilterType, setExpenseHeadFilterType] = useState('ALL');
 
   // Head drill-down details modal state
   const [selectedHeadForDetails, setSelectedHeadForDetails] = useState(null);
@@ -336,7 +338,31 @@ export function ChartOfAccountsPage({ currentUser }) {
   const safeProperties = Array.isArray(propertiesList) ? propertiesList : [];
   const safeIncomeHeads = Array.isArray(incomeHeadsList) ? incomeHeadsList : [];
 
-  const filteredCategories = safeCategories.filter((c) => !q || c.name?.toLowerCase().includes(q));
+  const headSearchTrimmed = expenseHeadSearch.toLowerCase().trim();
+  const filteredCategories = safeCategories.filter((c) => {
+    if (q && !c.name?.toLowerCase().includes(q)) return false;
+    if (headSearchTrimmed) {
+      const matchName = c.name?.toLowerCase().includes(headSearchTrimmed);
+      const matchProp = (c.propertyId?.plazaName || c.propertyId?.propertyName || '').toLowerCase().includes(headSearchTrimmed);
+      const matchClass = (c.expenseClassification || '').toLowerCase().includes(headSearchTrimmed);
+      if (!matchName && !matchProp && !matchClass) return false;
+    }
+    if (expenseHeadFilterType === 'GENERAL') {
+      return !c.propertyId && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
+    }
+    if (expenseHeadFilterType === 'PROPERTY') {
+      return c.expenseClassification === 'PROPERTY_OWN_EXPENSE';
+    }
+    if (expenseHeadFilterType === 'UNIT') {
+      return c.expenseClassification === 'UNIT_EXPENSE';
+    }
+    return true;
+  });
+
+  const countAllHeads = safeCategories.filter((c) => !q || c.name?.toLowerCase().includes(q)).length;
+  const countGeneralHeads = safeCategories.filter((c) => (!q || c.name?.toLowerCase().includes(q)) && (!c.propertyId && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE'))).length;
+  const countPropertyHeads = safeCategories.filter((c) => (!q || c.name?.toLowerCase().includes(q)) && (c.expenseClassification === 'PROPERTY_OWN_EXPENSE')).length;
+  const countUnitHeads = safeCategories.filter((c) => (!q || c.name?.toLowerCase().includes(q)) && (c.expenseClassification === 'UNIT_EXPENSE')).length;
   const mainExpenseHeads = safeCategories.filter((c) => c.type === 'EXPENSE' && c.isMainHead);
   const filteredAccounts = safeAccounts.filter(
     (a) => !q || a.name?.toLowerCase().includes(q) || a.bankName?.toLowerCase().includes(q) || a.cashHolder?.toLowerCase().includes(q)
@@ -633,11 +659,121 @@ export function ChartOfAccountsPage({ currentUser }) {
               </form>
 
               {/* Directory List Column */}
-              <div className="lg:col-span-7">
-                <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider mb-3">Active Expense Heads Directory (Click head to view expenses)</h3>
+              <div className="lg:col-span-7 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                  <div>
+                    <h3 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider">
+                      Active Expense Heads Directory
+                    </h3>
+                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                      Click any head to view itemized expenses
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full self-start sm:self-auto">
+                    {filteredCategories.length} / {countAllHeads} Heads
+                  </span>
+                </div>
+
+                {/* Filter and Search Bar for Expense Heads */}
+                <div className="space-y-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search expense head by name or property..."
+                      value={expenseHeadSearch}
+                      onChange={(e) => setExpenseHeadSearch(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-rose-600 font-semibold shadow-2xs"
+                    />
+                    {expenseHeadSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setExpenseHeadSearch('')}
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-0.5"
+                        title="Clear search"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setExpenseHeadFilterType('ALL')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 ${
+                        expenseHeadFilterType === 'ALL'
+                          ? 'bg-slate-800 text-white shadow-2xs'
+                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>All</span>
+                      <span className="text-[10px] opacity-75">({countAllHeads})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpenseHeadFilterType('GENERAL')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 ${
+                        expenseHeadFilterType === 'GENERAL'
+                          ? 'bg-rose-700 text-white shadow-2xs'
+                          : 'bg-white text-rose-700 border border-rose-200 hover:bg-rose-50'
+                      }`}
+                    >
+                      <span>🌐 General</span>
+                      <span className="text-[10px] opacity-75">({countGeneralHeads})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpenseHeadFilterType('PROPERTY')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 ${
+                        expenseHeadFilterType === 'PROPERTY'
+                          ? 'bg-emerald-700 text-white shadow-2xs'
+                          : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
+                      }`}
+                    >
+                      <Building2 size={12} />
+                      <span>Properties</span>
+                      <span className="text-[10px] opacity-75">({countPropertyHeads})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpenseHeadFilterType('UNIT')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 ${
+                        expenseHeadFilterType === 'UNIT'
+                          ? 'bg-blue-700 text-white shadow-2xs'
+                          : 'bg-white text-blue-700 border border-blue-200 hover:bg-blue-50'
+                      }`}
+                    >
+                      <Layers size={12} />
+                      <span>Units</span>
+                      <span className="text-[10px] opacity-75">({countUnitHeads})</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Directory List Box */}
                 <div className="max-h-[420px] overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-200 bg-white p-3 space-y-4">
                   {filteredCategories.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-slate-500 font-semibold">No expense heads matching filter.</div>
+                    <div className="p-6 text-center space-y-2">
+                      <div className="text-xs text-slate-500 font-semibold">
+                        {expenseHeadSearch
+                          ? `No expense heads found matching "${expenseHeadSearch}".`
+                          : 'No expense heads matching selected filter.'}
+                      </div>
+                      {(expenseHeadSearch || expenseHeadFilterType !== 'ALL') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpenseHeadSearch('');
+                            setExpenseHeadFilterType('ALL');
+                          }}
+                          className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs"
+                        >
+                          Clear Filters
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     (() => {
                       const generalGroup = filteredCategories.filter(
@@ -700,63 +836,85 @@ export function ChartOfAccountsPage({ currentUser }) {
                       );
 
                       const renderHierarchy = (group) => {
+                        // When searching, show all matching heads immediately without filtering out children whose parents don't match
+                        if (headSearchTrimmed) {
+                          return group.map(renderHeadItem);
+                        }
                         const roots = group.filter((c) => !c.parentCategoryId || c.isMainHead);
-                        return roots.flatMap((root) => [
-                          renderHeadItem(root),
-                          ...group
+                        const renderedIds = new Set();
+                        const result = [];
+                        roots.forEach((root) => {
+                          result.push(renderHeadItem(root));
+                          renderedIds.add(String(root._id));
+                          group
                             .filter((child) => String(child.parentCategoryId?._id || child.parentCategoryId) === String(root._id))
-                            .map(renderHeadItem),
-                        ]);
+                            .forEach((child) => {
+                              result.push(renderHeadItem(child));
+                              renderedIds.add(String(child._id));
+                            });
+                        });
+                        group.forEach((item) => {
+                          if (!renderedIds.has(String(item._id))) {
+                            result.push(renderHeadItem(item));
+                          }
+                        });
+                        return result;
                       };
 
                       return (
                         <div className="space-y-4">
                           {/* Section 1: General Expense Head */}
-                          <div>
-                            <div className="text-[11px] font-extrabold uppercase text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md mb-2 flex items-center gap-1.5">
-                              <span>🌐 General Expense</span>
-                              <span className="text-[10px] font-normal text-slate-600">({generalGroup.length})</span>
+                          {(expenseHeadFilterType === 'ALL' || expenseHeadFilterType === 'GENERAL') && (
+                            <div>
+                              <div className="text-[11px] font-extrabold uppercase text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md mb-2 flex items-center gap-1.5">
+                                <span>🌐 General Expense</span>
+                                <span className="text-[10px] font-normal text-slate-600">({generalGroup.length})</span>
+                              </div>
+                              <div className="space-y-1.5 pl-1">
+                                {generalGroup.length > 0 ? (
+                                  renderHierarchy(generalGroup)
+                                ) : (
+                                  <div className="text-xs text-slate-400 italic pl-2 py-1">No General Head found</div>
+                                )}
+                              </div>
                             </div>
-                            <div className="space-y-1.5 pl-1">
-                              {generalGroup.length > 0 ? (
-                                renderHierarchy(generalGroup)
-                              ) : (
-                                <div className="text-xs text-slate-400 italic pl-2 py-1">No General Head found</div>
-                              )}
-                            </div>
-                          </div>
+                          )}
 
                           {/* Section 2: Property Expense Heads */}
-                          <div>
-                            <div className="text-[11px] font-extrabold uppercase text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 mb-2 flex items-center gap-1.5">
-                              <Building2 size={14} />
-                              <span>🏢 Properties</span>
-                              <span className="text-[10px] font-normal text-emerald-700">({propertyGroup.length})</span>
+                          {(expenseHeadFilterType === 'ALL' || expenseHeadFilterType === 'PROPERTY') && (
+                            <div>
+                              <div className="text-[11px] font-extrabold uppercase text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 mb-2 flex items-center gap-1.5">
+                                <Building2 size={14} />
+                                <span>🏢 Properties</span>
+                                <span className="text-[10px] font-normal text-emerald-700">({propertyGroup.length})</span>
+                              </div>
+                              <div className="space-y-1.5 pl-1">
+                                {propertyGroup.length > 0 ? (
+                                  renderHierarchy(propertyGroup)
+                                ) : (
+                                  <div className="text-xs text-slate-400 italic pl-2 py-1">No Property Heads found</div>
+                                )}
+                              </div>
                             </div>
-                            <div className="space-y-1.5 pl-1">
-                              {propertyGroup.length > 0 ? (
-                                renderHierarchy(propertyGroup)
-                              ) : (
-                                <div className="text-xs text-slate-400 italic pl-2 py-1">No Property Heads found</div>
-                              )}
-                            </div>
-                          </div>
+                          )}
 
                           {/* Section 3: Unit Expense Heads */}
-                          <div>
-                            <div className="text-[11px] font-extrabold uppercase text-blue-800 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200 mb-2 flex items-center gap-1.5">
-                              <Layers size={14} />
-                              <span>🚪 Units</span>
-                              <span className="text-[10px] font-normal text-blue-700">({unitGroup.length})</span>
+                          {(expenseHeadFilterType === 'ALL' || expenseHeadFilterType === 'UNIT') && (
+                            <div>
+                              <div className="text-[11px] font-extrabold uppercase text-blue-800 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200 mb-2 flex items-center gap-1.5">
+                                <Layers size={14} />
+                                <span>🚪 Units</span>
+                                <span className="text-[10px] font-normal text-blue-700">({unitGroup.length})</span>
+                              </div>
+                              <div className="space-y-1.5 pl-1">
+                                {unitGroup.length > 0 ? (
+                                  renderHierarchy(unitGroup)
+                                ) : (
+                                  <div className="text-xs text-slate-400 italic pl-2 py-1">No Unit Heads found</div>
+                                )}
+                              </div>
                             </div>
-                            <div className="space-y-1.5 pl-1">
-                              {unitGroup.length > 0 ? (
-                                renderHierarchy(unitGroup)
-                              ) : (
-                                <div className="text-xs text-slate-400 italic pl-2 py-1">No Unit Heads found</div>
-                              )}
-                            </div>
-                          </div>
+                          )}
                         </div>
                       );
                     })()

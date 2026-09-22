@@ -13,7 +13,6 @@ import StaffAuditLog from '../models/StaffAuditLog.js';
 import PendingEntry from '../models/PendingEntry.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
-import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
 
 /**
  * Helper to ensure canonical Salaries category head exists
@@ -21,22 +20,81 @@ import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.j
 export const getOrCreateSalariesCategory = async () => {
   let category = await Category.findOne({
     type: 'EXPENSE',
-    name: { $regex: /^Salaries$/i },
+    name: { $regex: /^Salar(?:y|ies)$/i },
     expenseClassification: 'GENERAL_EXPENSE',
   });
 
   if (!category) {
     category = await Category.create({
-      name: 'Salaries',
+      name: 'Salary',
       type: 'EXPENSE',
       expenseClassification: 'GENERAL_EXPENSE',
       propertyId: null,
       unitId: null,
+      parentCategoryId: null,
+      isMainHead: true,
+      isRentalHead: false,
+    });
+  } else if (!category.isMainHead || category.parentCategoryId) {
+    category.parentCategoryId = null;
+    category.isMainHead = true;
+    await category.save();
+  }
+  if (category.name !== 'Salary') {
+    category.name = 'Salary';
+    await category.save();
+  }
+
+  return category;
+};
+
+export const getOrCreateEmployeeSalaryCategory = async (employeeName, salariesCategory = null) => {
+  const parent = salariesCategory || await getOrCreateSalariesCategory();
+  const normalizedName = String(employeeName || '').trim();
+  if (!normalizedName) throw new Error('Employee name is required for the salary expense head.');
+
+  let category = await Category.findOne({
+    type: 'EXPENSE',
+    name: normalizedName,
+    expenseClassification: 'GENERAL_EXPENSE',
+    propertyId: null,
+    unitId: null,
+    parentCategoryId: parent._id,
+  });
+
+  if (!category) {
+    category = await Category.create({
+      name: normalizedName,
+      type: 'EXPENSE',
+      expenseClassification: 'GENERAL_EXPENSE',
+      propertyId: null,
+      unitId: null,
+      parentCategoryId: parent._id,
+      isMainHead: false,
       isRentalHead: false,
     });
   }
 
   return category;
+};
+
+export const getOrCreateSalaryExpenseAccount = async () => {
+  let account = await Account.findOne({ name: { $regex: /^Salaries Expense$/i } });
+  if (!account) {
+    account = await Account.create({
+      name: 'Salaries Expense',
+      accountName: 'Salaries Expense',
+      type: 'CASH',
+      accountType: 'CASH',
+      cashHolder: 'Payroll Expense',
+      openingBalance: 0,
+      currentBalance: 0,
+      isClearing: true,
+      isActive: true,
+      notes: 'Dedicated debit account for all employee salary payouts.',
+    });
+  }
+  return account;
 };
 
 /**
@@ -1279,7 +1337,8 @@ export const paySingleSalary = async (req, res) => {
     }
 
     const salariesCategory = await getOrCreateSalariesCategory();
-    const clearingAccount = await getOrCreateOtherIncomeClearingAccount();
+    const salaryCategory = await getOrCreateEmployeeSalaryCategory(pDoc.employeeName, salariesCategory);
+    const clearingAccount = await getOrCreateSalaryExpenseAccount();
 
     const [yStr, mStr] = month.split('-');
     const year = parseInt(yStr, 10);
@@ -1330,6 +1389,7 @@ export const paySingleSalary = async (req, res) => {
         rentMonth: month,
         crAccountId: account._id,
         drAccountId: clearingAccount._id,
+        categoryId: salaryCategory._id,
         receivingAccountId: account._id,
         detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`.trim(),
         tenantId: pDoc.employeeId,
@@ -1402,7 +1462,7 @@ export const paySingleSalary = async (req, res) => {
       date: pDate,
       voucherNo,
       detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}${paymentNotes ? '. ' + paymentNotes : ''}`,
-      categoryId: salariesCategory._id,
+      categoryId: salaryCategory._id,
       drAccountId: clearingAccount._id,
       crAccountId: account._id,
       amount: netAmount,
@@ -1539,7 +1599,7 @@ export const payBulkSalary = async (req, res) => {
     }
 
     const salariesCategory = await getOrCreateSalariesCategory();
-    const clearingAccount = await getOrCreateOtherIncomeClearingAccount();
+    const clearingAccount = await getOrCreateSalaryExpenseAccount();
     
     const [yStr, mStr] = month.split('-');
     const year = parseInt(yStr, 10);
@@ -1576,6 +1636,7 @@ export const payBulkSalary = async (req, res) => {
           rentMonth: month,
           crAccountId: account._id,
           drAccountId: clearingAccount._id,
+          categoryId: (await getOrCreateEmployeeSalaryCategory(pDoc.employeeName, salariesCategory))._id,
           receivingAccountId: account._id,
           detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`.trim(),
           tenantId: pDoc.employeeId,
@@ -1632,7 +1693,7 @@ export const payBulkSalary = async (req, res) => {
         date: pDate,
         voucherNo,
         detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`,
-        categoryId: salariesCategory._id,
+        categoryId: (await getOrCreateEmployeeSalaryCategory(payroll.employeeName, salariesCategory))._id,
         drAccountId: clearingAccount._id,
         crAccountId: account._id,
         amount: remaining,
