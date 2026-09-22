@@ -42,6 +42,7 @@ export const StaffPayrollSubTab = () => {
   const [payTargetRow, setPayTargetRow] = useState(null);
   const [payMethod, setPayMethod] = useState('BANK_TRANSFER');
   const [payNotes, setPayNotes] = useState('');
+  const [payAmount, setPayAmount] = useState('');
   const [processingPay, setProcessingPay] = useState(false);
 
   // Reverse Modal
@@ -278,6 +279,7 @@ export const StaffPayrollSubTab = () => {
   const openPayModal = (row) => {
     setPayTargetRow(row);
     setPayNotes('');
+    setPayAmount(String(row.remainingPayable ?? row.netPayable ?? 0));
     setPayModalOpen(true);
   };
 
@@ -294,6 +296,7 @@ export const StaffPayrollSubTab = () => {
         paidFromAccountId: selectedAccountId,
         paymentMethod: payMethod,
         paymentNotes: payNotes,
+        paymentAmount: Number(payAmount),
       });
 
       if (res?.success) {
@@ -740,9 +743,36 @@ export const StaffPayrollSubTab = () => {
                 <span className="text-slate-300 font-mono font-bold">{selectedMonth}</span>
               </div>
               <div className="flex justify-between items-center border-t border-slate-800/80 pt-2 text-sm">
-                <span className="text-slate-300 font-bold">Net Salary Disbursing Amount:</span>
-                <span className="text-emerald-400 font-mono font-black text-base">Rs. {formatPKR(payTargetRow.netPayable)}</span>
+                <span className="text-slate-300 font-bold">Net Salary:</span>
+                <span className="text-white font-mono font-black">Rs. {formatPKR(payTargetRow.netPayable)}</span>
               </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-400 font-semibold">Already Paid:</span>
+                <span className="text-slate-300 font-mono font-bold">Rs. {formatPKR(payTargetRow.totalInstallmentsPaid)}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-amber-300 font-bold">Remaining:</span>
+                <span className="text-amber-300 font-mono font-black">Rs. {formatPKR(payTargetRow.remainingPayable ?? payTargetRow.netPayable)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 text-xs">
+              <label className="text-slate-300 font-bold">This Payment Amount:</label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                max={payTargetRow.remainingPayable ?? payTargetRow.netPayable}
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 text-emerald-300 font-mono font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500"
+              />
+              <p className="text-slate-500">You can pay the remaining salary in one payment or multiple installments.</p>
+              {payTargetRow.salaryInstallments?.length > 0 && (
+                <div className="text-slate-400">
+                  Previous installments: {payTargetRow.salaryInstallments.map((item) => `Rs. ${formatPKR(item.amount)}`).join(' + ')}
+                </div>
+              )}
             </div>
 
             {/* Disbursing Finance Account Selector */}
@@ -772,11 +802,11 @@ export const StaffPayrollSubTab = () => {
                 </div>
                 <div className="flex justify-between text-rose-400">
                   <span>Salary Outflow (-):</span>
-                  <span className="font-bold">- Rs. {formatPKR(payTargetRow.netPayable)}</span>
+                  <span className="font-bold">- Rs. {formatPKR(Number(payAmount) || 0)}</span>
                 </div>
                 <div className="flex justify-between text-emerald-400 font-black border-t border-emerald-900/80 pt-1.5 text-sm">
                   <span>Balance After Payout:</span>
-                  <span>Rs. {formatPKR(currentDisbursingAccount.currentBalance - payTargetRow.netPayable)}</span>
+                  <span>Rs. {formatPKR(currentDisbursingAccount.currentBalance - (Number(payAmount) || 0))}</span>
                 </div>
               </div>
             )}

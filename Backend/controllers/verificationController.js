@@ -657,8 +657,11 @@ export const verifyEntry = async (req, res) => {
       }
 
       if (pDoc) {
-        pDoc.status = 'PAID';
-        pDoc.paymentStatus = 'PAID';
+        const totalPaid = round2(pDoc.totalInstallmentsPaid || 0);
+        const updatedTotalPaid = round2(totalPaid + netAmount);
+        pDoc.totalInstallmentsPaid = updatedTotalPaid;
+        pDoc.status = updatedTotalPaid >= pDoc.netPayable ? 'PAID' : 'FINALIZED';
+        pDoc.paymentStatus = updatedTotalPaid >= pDoc.netPayable ? 'PAID' : 'PARTIAL_PAYMENT';
         pDoc.paidFromAccountId = account._id;
         pDoc.paidFromAccountName = account.name;
         pDoc.paymentDate = entry.date || new Date();
@@ -667,6 +670,18 @@ export const verifyEntry = async (req, res) => {
         pDoc.voucherNo = entry.voucherNo;
         pDoc.paymentMethod = entry.paymentMethod || 'BANK_TRANSFER';
         pDoc.paymentNotes = entry.detail;
+        pDoc.salaryInstallments = pDoc.salaryInstallments || [];
+        pDoc.salaryInstallments.push({
+          amount: netAmount,
+          paymentDate: entry.date || new Date(),
+          paidFromAccountId: account._id,
+          paidFromAccountName: account.name,
+          paymentMethod: entry.entryData?.paymentMethod || 'BANK_TRANSFER',
+          voucherNo: entry.voucherNo,
+          transactionId: postedTransaction._id,
+          notes: entry.detail,
+          paidBy: req.user?.name || 'Verifier',
+        });
         await pDoc.save();
 
         // 3. Process Loan Deductions if present

@@ -228,6 +228,9 @@ export const getMonthlyPayroll = async (req, res) => {
         bankName: saved ? saved.bankName : emp.bankName || '',
         status: saved ? saved.status : 'DRAFT',
         paymentStatus: saved?.paymentStatus || (saved ? 'PENDING_PAYMENT' : 'DRAFT'),
+        totalInstallmentsPaid: round2(saved?.totalInstallmentsPaid || 0),
+        remainingPayable: round2(Math.max(0, netPayable - (saved?.totalInstallmentsPaid || 0))),
+        salaryInstallments: saved?.salaryInstallments || [],
         paidFromAccountId: saved?.paidFromAccountId || null,
         paidFromAccountName: saved?.paidFromAccountName || '',
         paymentDate: saved?.paymentDate || null,
@@ -1194,6 +1197,7 @@ export const paySingleSalary = async (req, res) => {
       paymentMethod = 'BANK_TRANSFER',
       paymentNotes = '',
       paymentDate = new Date(),
+      paymentAmount,
     } = req.body;
 
     if (!month || (!employeeId && !payrollId) || !paidFromAccountId) {
@@ -1211,12 +1215,27 @@ export const paySingleSalary = async (req, res) => {
       return apiError(res, 'Payroll record not found. Please calculate and save payroll first.', 404);
     }
 
-    if (pDoc.paymentStatus === 'PAID') {
+    const totalPaid = round2(pDoc.totalInstallmentsPaid || 0);
+    const remainingAmount = round2(Math.max(0, pDoc.netPayable - totalPaid));
+
+    if (pDoc.paymentStatus === 'PAID' || remainingAmount <= 0) {
       return apiError(res, `Salary for ${pDoc.employeeName} for ${month} is already marked PAID (Voucher: ${pDoc.voucherNo}).`, 400);
     }
 
-    const netAmount = round2(pDoc.netPayable);
-    if (netAmount <= 0) {
+    const requestedAmount = paymentAmount === undefined || paymentAmount === '' ? remainingAmount : round2(Number(paymentAmount));
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+      return apiError(res, 'Payment amount must be greater than zero.', 400);
+    }
+    if (requestedAmount > remainingAmount) {
+      return apiError(
+        res,
+        `Payment amount cannot exceed the remaining salary of Rs. ${formatPKR(remainingAmount)}.`,
+        400
+      );
+    }
+
+    const netAmount = requestedAmount;
+    if (remainingAmount <= 0) {
       return apiError(res, `Net payable for ${pDoc.employeeName} is Rs. 0. Payout not required.`, 400);
     }
 
@@ -1286,6 +1305,7 @@ export const paySingleSalary = async (req, res) => {
           paidFromAccountId: account._id,
           paymentMethod,
           paymentNotes,
+          paymentAmount: netAmount,
         },
         status: 'PENDING_VERIFICATION',
         submittedBy: req.user._id,
@@ -1297,12 +1317,12 @@ export const paySingleSalary = async (req, res) => {
             performedBy: req.user?.name || 'Sarfraz Khan',
             performedById: req.user._id,
             timestamp: new Date(),
-            notes: `Salary payout entry submitted by Data Entry Operator. Awaiting review and verification by Khurshid Anwar.`,
+            notes: `Salary installment of Rs. ${formatPKR(netAmount)} submitted by Data Entry Operator. Awaiting review and verification by Khurshid Anwar.`,
           },
         ],
       });
 
-      pDoc.paymentStatus = 'PENDING_VERIFICATION';
+      pDoc.paymentStatus = totalPaid + netAmount >= pDoc.netPayable ? 'PENDING_VERIFICATION' : 'PARTIAL_PAYMENT';
       await pDoc.save();
 
       return apiSuccess(
@@ -1330,8 +1350,10 @@ export const paySingleSalary = async (req, res) => {
       createdBy: req.user?._id || null,
     });
 
-    pDoc.status = 'PAID';
-    pDoc.paymentStatus = 'PAID';
+    const updatedTotalPaid = round2(totalPaid + netAmount);
+    pDoc.totalInstallmentsPaid = updatedTotalPaid;
+    pDoc.paymentStatus = updatedTotalPaid >= pDoc.netPayable ? 'PAID' : 'PARTIAL_PAYMENT';
+    pDoc.status = pDoc.paymentStatus === 'PAID' ? 'PAID' : 'FINALIZED';
     pDoc.paidFromAccountId = account._id;
     pDoc.paidFromAccountName = account.name;
     pDoc.paymentDate = pDate;
@@ -1341,6 +1363,18 @@ export const paySingleSalary = async (req, res) => {
     pDoc.voucherNo = transaction.voucherNo;
     pDoc.paymentMethod = paymentMethod;
     pDoc.paymentNotes = paymentNotes;
+    pDoc.salaryInstallments = pDoc.salaryInstallments || [];
+    pDoc.salaryInstallments.push({
+      amount: netAmount,
+      paymentDate: pDate,
+      paidFromAccountId: account._id,
+      paidFromAccountName: account.name,
+      paymentMethod,
+      voucherNo: transaction.voucherNo,
+      transactionId: transaction._id,
+      notes: paymentNotes,
+      paidBy: req.user?.name || 'System Operator',
+    });
     await pDoc.save();
 
     await StaffAuditLog.create({
@@ -2330,5 +2364,3 @@ export const getEmployeeLedger = async (req, res) => {
     return apiError(res, error.message || 'Failed to fetch employee ledger.', 500);
   }
 };
-
-

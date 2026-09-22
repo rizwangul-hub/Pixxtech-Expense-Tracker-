@@ -123,10 +123,11 @@ const payrollSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ['DRAFT', 'CALCULATED', 'APPROVED', 'PENDING_PAYMENT', 'PAID'],
+      enum: ['DRAFT', 'CALCULATED', 'APPROVED', 'PENDING_PAYMENT', 'PARTIAL_PAYMENT', 'PAID'],
       default: 'PENDING_PAYMENT',
       index: true,
     },
+    // Legacy single-payment fields (kept for backward compatibility)
     paidFromAccountId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Account',
@@ -173,6 +174,38 @@ const payrollSchema = new mongoose.Schema(
     notes: {
       type: String,
       default: '',
+    },
+    // Partial payment installments — each payment chunk is stored here
+    salaryInstallments: [
+      {
+        amount: { type: Number, required: true },
+        paymentDate: { type: Date, required: true },
+        paidFromAccountId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Account',
+          default: null,
+        },
+        paidFromAccountName: { type: String, default: '' },
+        paymentMethod: {
+          type: String,
+          enum: ['BANK_TRANSFER', 'CASH', 'CHEQUE'],
+          default: 'BANK_TRANSFER',
+        },
+        voucherNo: { type: String, default: '' },
+        transactionId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Transaction',
+          default: null,
+        },
+        notes: { type: String, default: '' },
+        paidBy: { type: String, default: '' },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    // Running total of all installments paid (auto-computed, stored for quick access)
+    totalInstallmentsPaid: {
+      type: Number,
+      default: 0,
     },
   },
   {
