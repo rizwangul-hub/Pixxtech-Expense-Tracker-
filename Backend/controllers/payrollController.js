@@ -851,6 +851,9 @@ export const generateSalarySlipPDF = async (req, res) => {
     // Convert Net Payable to Words
     const { numberToWords } = await import('../services/staffPayrollService.js');
     const amountInWords = numberToWords(netPayable);
+    const totalPaid = round2(savedPayroll?.totalInstallmentsPaid || 0);
+    const remainingPayable = round2(Math.max(0, netPayable - totalPaid));
+    const installmentRows = savedPayroll?.salaryInstallments || [];
 
     // Base64 Asset Images
     const logoBase64 = getAssetBase64('logo.png');
@@ -1117,10 +1120,32 @@ export const generateSalarySlipPDF = async (req, res) => {
 
       <!-- NET PAYOUT BOX -->
       <div class="payout">
-        <div class="payout-lbl">NET PAYABLE SALARY DISBURSED</div>
+        <div class="payout-lbl">NET PAYABLE SALARY</div>
         <div class="payout-amt">PKR ${formatPKR(netPayable)}</div>
         <div class="payout-words">&ldquo;${amountInWords}&rdquo;</div>
       </div>
+      <table class="info-tbl" style="margin-top:8px;">
+        <tr>
+          <td class="lbl">Verified / Paid</td>
+          <td class="val" style="color:#15803d;font-weight:800;">PKR ${formatPKR(totalPaid)}</td>
+          <td class="lbl">Remaining Balance</td>
+          <td class="val" style="color:${remainingPayable > 0 ? '#b45309' : '#15803d'};font-weight:800;">PKR ${formatPKR(remainingPayable)}</td>
+        </tr>
+      </table>
+      ${installmentRows.length > 0 ? `
+      <div style="margin-top:10px;font-size:10px;font-weight:800;color:#334155;">VERIFIED PAYMENT INSTALLMENTS</div>
+      <table class="info-tbl" style="margin-top:3px;">
+        <tr>
+          <td class="lbl">Date</td><td class="lbl">Voucher</td><td class="lbl">Account</td><td class="lbl">Amount</td>
+        </tr>
+        ${installmentRows.map((item) => `
+        <tr>
+          <td class="val">${item.paymentDate ? new Date(item.paymentDate).toLocaleDateString('en-GB') : '—'}</td>
+          <td class="val" style="font-family:monospace;">${item.voucherNo || '—'}</td>
+          <td class="val">${item.paidFromAccountName || '—'}</td>
+          <td class="val" style="font-weight:800;">PKR ${formatPKR(item.amount)}</td>
+        </tr>`).join('')}
+      </table>` : ''}
 
       <!-- SIGNATURES -->
       <table class="sign-tbl">
@@ -1269,7 +1294,7 @@ export const paySingleSalary = async (req, res) => {
     }
 
     // Routing for Data Entry role (Sarfraz Khan): Create PendingEntry awaiting Khurshid's verification
-    if (req.user?.role === 'DATA_ENTRY') {
+    if (req.user?.role !== 'SYSTEM') {
       const existingPending = await PendingEntry.findOne({
         entryType: 'SALARY',
         status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
@@ -1322,7 +1347,9 @@ export const paySingleSalary = async (req, res) => {
         ],
       });
 
-      pDoc.paymentStatus = totalPaid + netAmount >= pDoc.netPayable ? 'PENDING_VERIFICATION' : 'PARTIAL_PAYMENT';
+      // Submission is not payment: leave the payroll payable until verification
+      // posts the transaction and the ledger updates the bank/cash balance.
+      pDoc.paymentStatus = 'PENDING_PAYMENT';
       await pDoc.save();
 
       return apiSuccess(
@@ -1459,7 +1486,7 @@ export const payBulkSalary = async (req, res) => {
     }
 
     // Routing for Data Entry role (Sarfraz Khan): Create PendingEntry for each unpaid salary record
-    if (req.user?.role === 'DATA_ENTRY') {
+    if (req.user?.role !== 'SYSTEM') {
       const pendingResults = [];
 
       for (const pDoc of payrollDocs) {
@@ -1510,7 +1537,7 @@ export const payBulkSalary = async (req, res) => {
           ],
         });
 
-        pDoc.paymentStatus = 'PENDING_VERIFICATION';
+        pDoc.paymentStatus = 'PENDING_PAYMENT';
         await pDoc.save();
 
         pendingResults.push({

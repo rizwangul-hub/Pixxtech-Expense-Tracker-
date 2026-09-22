@@ -625,6 +625,21 @@ export const verifyEntry = async (req, res) => {
         );
       }
 
+      const payrollForValidation = entry.entryData?.payrollId
+        ? await Payroll.findById(entry.entryData.payrollId)
+        : null;
+      if (payrollForValidation) {
+        const alreadyPaid = round2(payrollForValidation.totalInstallmentsPaid || 0);
+        const remainingPayable = round2(Math.max(0, payrollForValidation.netPayable - alreadyPaid));
+        if (netAmount > remainingPayable) {
+          return apiError(
+            res,
+            `This salary installment exceeds the remaining payable amount of Rs. ${remainingPayable.toFixed(2)}.`,
+            400
+          );
+        }
+      }
+
       // 1. Create Transaction in Central Ledger
       postedTransaction = await createTransaction({
         date: entry.date || new Date(),
@@ -649,8 +664,8 @@ export const verifyEntry = async (req, res) => {
       const employeeId = entry.tenantId || entry.entryData?.employeeId;
       const month = entry.rentMonth || entry.entryData?.month;
 
-      let pDoc = null;
-      if (payrollId) {
+      let pDoc = payrollForValidation;
+      if (!pDoc && payrollId) {
         pDoc = await Payroll.findById(payrollId);
       } else if (employeeId && month) {
         pDoc = await Payroll.findOne({ employeeId, payrollMonth: month });
