@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Printer, Download, X, CheckCircle2, AlertTriangle, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Printer, Download, X, CheckCircle2, AlertTriangle, ShieldCheck, RefreshCw, Paperclip, Image as ImageIcon } from 'lucide-react';
 import { vouchersAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
+import { downloadReceiptImage, downloadAllReceipts } from '../utils/downloadReceipt.js';
 
 // Image assets
 import pixxLogo from '../assets/image/logo.png';
@@ -130,6 +131,16 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
               <Printer size={14} />
               {printingPdf ? 'Printing...' : 'Print'}
             </button>
+            {data.attachments && data.attachments.length > 0 && (
+              <button
+                onClick={() => downloadAllReceipts(data.attachments, `Voucher_${data.voucherNo}_Receipt`)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition"
+                title="Download attached purchase / receipt images"
+              >
+                <Download size={14} />
+                <span>Receipt ({data.attachments.length})</span>
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-1.5 sm:p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
@@ -331,6 +342,49 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
                   {formatPKR(data.amount)}
                 </span>
               </div>
+
+              {/* Attached Purchase / Receipt Images (On-Screen Evidence) */}
+              {data.attachments && data.attachments.length > 0 && (
+                <div className="no-print p-3 bg-slate-50 border border-slate-300 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                    <span className="flex items-center gap-1.5 text-blue-700">
+                      <Paperclip size={13} /> Attached Purchase / Receipt Evidence ({data.attachments.length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => downloadAllReceipts(data.attachments, `Voucher_${data.voucherNo}_Receipt`)}
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download size={12} /> Download All Receipts
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 overflow-x-auto pt-1">
+                    {data.attachments.map((att, idx) => {
+                      const url = typeof att === 'string' ? att : att.url;
+                      const name = typeof att === 'object' && att.originalName ? att.originalName : `Receipt_${idx + 1}.jpg`;
+                      return (
+                        <div key={idx} className="relative group shrink-0">
+                          <img
+                            src={url}
+                            alt={`Receipt ${idx + 1}`}
+                            className="w-16 h-16 rounded object-cover border border-slate-300 hover:border-blue-500 cursor-pointer transition"
+                            onClick={() => downloadReceiptImage(url, name)}
+                            title="Click to download receipt"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => downloadReceiptImage(url, name)}
+                            className="absolute bottom-1 right-1 p-1 rounded bg-black/80 hover:bg-emerald-600 text-white transition shadow cursor-pointer"
+                            title="Download this receipt"
+                          >
+                            <Download size={10} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bottom Content Section: Signatures & Footer */}

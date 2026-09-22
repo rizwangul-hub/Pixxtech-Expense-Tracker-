@@ -22,11 +22,16 @@ import {
   PlusCircle,
   Sparkles,
   ExternalLink,
+  Download,
+  Image as ImageIcon,
+  Paperclip,
 } from 'lucide-react';
 import { verificationAPI, accountsAPI, propertiesAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
 import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 import { RentCollectionModal } from '../components/RentCollectionModal.jsx';
+import { ReceiptViewerModal } from '../components/ReceiptViewerModal.jsx';
+import { downloadAllReceipts, downloadReceiptImage } from '../utils/downloadReceipt.js';
 
 // Persistent in-memory cache for instant tab switching without blocking loading screens
 let verifierDataCache = {
@@ -57,6 +62,48 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   const [filterType, setFilterType] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('PENDING_VERIFICATION');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Receipt Evidence Viewer & Downloader state
+  const [viewingReceiptEntry, setViewingReceiptEntry] = useState(null);
+  const [downloadingEntryId, setDownloadingEntryId] = useState(null);
+
+  // Helper to extract attachments safely from entry or nested entryData
+  const getEntryAttachments = (entry) => {
+    const list =
+      entry?.attachments && entry.attachments.length > 0
+        ? entry.attachments
+        : entry?.entryData?.attachments && entry.entryData.attachments.length > 0
+        ? entry.entryData.attachments
+        : [];
+    return list.filter((a) => a && (typeof a === 'string' || a.url));
+  };
+
+  // Instant download of attached purchase / receipt images
+  const handleQuickDownloadReceipts = async (e, entry) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const atts = getEntryAttachments(entry);
+    if (!atts || atts.length === 0) return;
+
+    try {
+      setDownloadingEntryId(entry._id);
+      const vLabel = entry.voucherNo ? `Voucher_${entry.voucherNo}` : 'Receipt';
+      await downloadAllReceipts(atts, vLabel);
+      setFeedback({
+        message: `Downloaded ${atts.length} receipt image(s) for Voucher #${entry.voucherNo || entry._id}.`,
+        type: 'success',
+      });
+      setTimeout(() => setFeedback({ message: '', type: '' }), 4000);
+    } catch (err) {
+      console.error('Receipt download error:', err);
+      setFeedback({
+        message: 'Download failed. Opening viewer to view or download image.',
+        type: 'error',
+      });
+      setViewingReceiptEntry(entry);
+    } finally {
+      setDownloadingEntryId(null);
+    }
+  };
 
   // Instant client-side memoized list for 0ms tab switching & filtering
   const filteredEntries = useMemo(() => {
@@ -680,6 +727,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 const isPending = entry.status === 'PENDING_VERIFICATION' || entry.status === 'EDITED';
                 const isVerified = entry.status === 'VERIFIED';
                 const isRejected = entry.status === 'REJECTED';
+                const entryAttachments = getEntryAttachments(entry);
 
                 return (
                   <div
@@ -767,6 +815,63 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                         </div>
                       )}
                     </div>
+
+                    {/* Attached Purchase / Receipt Evidence (Uploaded by Sarfraz) */}
+                    {entryAttachments.length > 0 && (
+                      <div className="p-3 bg-slate-900/90 rounded-xl border border-blue-900/50 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="p-1.5 rounded-lg bg-blue-950 border border-blue-800 text-blue-400 shrink-0">
+                              <ImageIcon size={14} />
+                            </span>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-blue-200 truncate">
+                                {entryAttachments.length} Purchase / Receipt {entryAttachments.length === 1 ? 'Image' : 'Images'}
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate">
+                                {(typeof entryAttachments[0] !== 'string' && entryAttachments[0].originalName) || 'Attached receipt voucher'}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setViewingReceiptEntry(entry)}
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-300 text-xs font-bold border border-slate-700 flex items-center gap-1 transition"
+                              title="Preview receipt in viewer"
+                            >
+                              <Eye size={12} />
+                              <span>View</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleQuickDownloadReceipts(e, entry)}
+                              disabled={downloadingEntryId === entry._id}
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shadow transition disabled:opacity-50"
+                              title="Download receipt to device"
+                            >
+                              <Download size={12} className={downloadingEntryId === entry._id ? 'animate-bounce' : ''} />
+                              <span>{downloadingEntryId === entry._id ? 'Saving...' : 'Download'}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Thumbnail Row */}
+                        <div className="flex items-center gap-2 overflow-x-auto pt-1">
+                          {entryAttachments.map((att, idx) => (
+                            <img
+                              key={idx}
+                              src={typeof att === 'string' ? att : att.url}
+                              alt={`Receipt ${idx + 1}`}
+                              className="w-12 h-12 rounded-lg object-cover border border-slate-700 hover:border-blue-500 cursor-pointer transition shrink-0"
+                              onClick={() => setViewingReceiptEntry(entry)}
+                              title="Click to view full receipt"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Accounts Involved */}
                     <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-800/60 text-xs space-y-1">
@@ -876,6 +981,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                     const isPending = entry.status === 'PENDING_VERIFICATION' || entry.status === 'EDITED';
                     const isVerified = entry.status === 'VERIFIED';
                     const isRejected = entry.status === 'REJECTED';
+                    const entryAttachments = getEntryAttachments(entry);
 
                     return (
                       <tr key={entry._id} className="hover:bg-slate-800/40 transition">
@@ -939,6 +1045,32 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           {entry.categoryId?.name && (
                             <div className="text-[10px] text-amber-400 font-mono truncate mt-0.5" title={entry.categoryId.name}>
                               Head: {entry.categoryId.name}
+                            </div>
+                          )}
+
+                          {/* Attached Purchase / Receipt Images (Sarfraz Data Entry) */}
+                          {entryAttachments.length > 0 && (
+                            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => setViewingReceiptEntry(entry)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-700/60 text-[10px] font-bold transition cursor-pointer"
+                                title="Click to view attached purchase / receipt evidence image(s)"
+                              >
+                                <Paperclip size={10} className="text-blue-400" />
+                                <span>{entryAttachments.length} {entryAttachments.length === 1 ? 'Receipt' : 'Receipts'}</span>
+                                <Eye size={10} className="opacity-75" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => handleQuickDownloadReceipts(e, entry)}
+                                disabled={downloadingEntryId === entry._id}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold transition cursor-pointer disabled:opacity-50"
+                                title="Download purchase / receipt image to device"
+                              >
+                                <Download size={10} className={downloadingEntryId === entry._id ? 'animate-bounce text-emerald-400' : 'text-emerald-400'} />
+                                <span>{downloadingEntryId === entry._id ? 'Saving...' : 'Download'}</span>
+                              </button>
                             </div>
                           )}
                         </td>
@@ -1048,11 +1180,35 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                               >
                                 <Trash2 size={13} />
                               </button>
+
+                              {entryAttachments.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingReceiptEntry(entry)}
+                                  className="p-1.5 rounded-lg bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-700/60 transition"
+                                  title="View & Download Attached Receipt Image"
+                                >
+                                  <ImageIcon size={13} />
+                                </button>
+                              )}
                             </div>
                           ) : (
                             <div className="text-[10px] text-slate-500">
                               {isVerified ? (
-                                <span>Verified by {entry.verifiedByName || 'Khurshid'}</span>
+                                <div>
+                                  <div>Verified by {entry.verifiedByName || 'Khurshid'}</div>
+                                  {entryAttachments.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewingReceiptEntry(entry)}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 mt-1 rounded bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-700/60 text-[10px] font-bold transition"
+                                      title="View & Download Attached Receipt"
+                                    >
+                                      <ImageIcon size={11} />
+                                      <span>Receipt ({entryAttachments.length})</span>
+                                    </button>
+                                  )}
+                                </div>
                               ) : (
                                 <span>Rejected</span>
                               )}
@@ -1345,6 +1501,54 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </div>
               )}
 
+              {/* Attached Purchase / Receipt Images Preview in Edit Modal */}
+              {editingEntry && getEntryAttachments(editingEntry).length > 0 && (
+                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                    <span className="flex items-center gap-1.5 text-blue-400">
+                      <Paperclip size={13} />
+                      Attached Receipts ({getEntryAttachments(editingEntry).length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleQuickDownloadReceipts(e, editingEntry)}
+                      disabled={downloadingEntryId === editingEntry._id}
+                      className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                    >
+                      <Download size={12} className={downloadingEntryId === editingEntry._id ? 'animate-bounce' : ''} />
+                      <span>{downloadingEntryId === editingEntry._id ? 'Saving...' : 'Download All'}</span>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 overflow-x-auto pt-1">
+                    {getEntryAttachments(editingEntry).map((att, idx) => (
+                      <div key={idx} className="relative group shrink-0">
+                        <img
+                          src={typeof att === 'string' ? att : att.url}
+                          alt="Receipt"
+                          className="w-14 h-14 rounded-lg object-cover border border-slate-700 cursor-pointer hover:border-blue-500 transition"
+                          onClick={() => setViewingReceiptEntry(editingEntry)}
+                          title="Click to view full receipt"
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadReceiptImage(
+                              typeof att === 'string' ? att : att.url,
+                              (typeof att !== 'string' && att.originalName) || `Receipt_${idx + 1}.jpg`
+                            );
+                          }}
+                          className="absolute bottom-1 right-1 p-1 rounded bg-black/80 hover:bg-emerald-600 text-white transition shadow"
+                          title="Download this image"
+                        >
+                          <Download size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-slate-400 font-semibold mb-1">Edit Notes / Reason for Correction</label>
                 <input
@@ -1432,6 +1636,14 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
             </form>
           </div>
         </div>
+      )}
+
+      {/* Attached Purchase / Receipt Evidence Viewer & Downloader Modal */}
+      {viewingReceiptEntry && (
+        <ReceiptViewerModal
+          entry={viewingReceiptEntry}
+          onClose={() => setViewingReceiptEntry(null)}
+        />
       )}
     </div>
   );

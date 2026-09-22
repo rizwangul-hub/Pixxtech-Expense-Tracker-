@@ -384,6 +384,7 @@ export const getVoucherPrintDetail = async (req, res) => {
       },
       preparedBy: tx.createdBy?.name || 'Sarfraz',
       checkedBy: tx.checkedBy || 'Khurshid Anwar',
+      attachments: tx.attachments || [],
     };
 
     return apiSuccess(res, printDetail, 'Print voucher detail retrieved successfully.');

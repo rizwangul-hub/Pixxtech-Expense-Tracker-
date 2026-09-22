@@ -23,14 +23,18 @@ import {
   X,
   Sparkles,
   ChevronLeft,
-  ChevronRight,
   ExternalLink,
   Printer,
+  Download,
+  Paperclip,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { vouchersAPI, accountsAPI } from '../services/api.js';
 import { formatPKR, formatDate } from '../utils/formatters.js';
 import { isAdmin } from '../utils/permissions.js';
 import { SingleVoucherPrintModal } from '../components/SingleVoucherPrintModal.jsx';
+import { ReceiptViewerModal } from '../components/ReceiptViewerModal.jsx';
+import { downloadAllReceipts } from '../utils/downloadReceipt.js';
 
 export function TransactionsPage({ user }) {
   const userIsAdmin = isAdmin(user);
@@ -75,6 +79,7 @@ export function TransactionsPage({ user }) {
   const [showReverseModal, setShowReverseModal] = useState(false);
   const [reverseReason, setReverseReason] = useState('');
   const [reversing, setReversing] = useState(false);
+  const [selectedReceiptTx, setSelectedReceiptTx] = useState(null);
 
   // New Voucher Form State
   const [voucherForm, setVoucherForm] = useState({
@@ -750,6 +755,32 @@ export function TransactionsPage({ user }) {
                           <span>{tx.propertyId.plazaName}</span>
                         </div>
                       )}
+                      {tx.attachments && tx.attachments.length > 0 && (
+                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedReceiptTx(tx)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-700/60 text-[10px] font-bold transition cursor-pointer"
+                            title="View attached purchase / receipt evidence image(s)"
+                          >
+                            <Paperclip size={10} className="text-blue-400" />
+                            <span>{tx.attachments.length} {tx.attachments.length === 1 ? 'Receipt' : 'Receipts'}</span>
+                            <Eye size={10} className="opacity-75" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              downloadAllReceipts(tx.attachments, `Voucher_${tx.voucherNo}_Receipt`);
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold transition cursor-pointer"
+                            title="Download purchase / receipt image(s)"
+                          >
+                            <Download size={10} className="text-emerald-400" />
+                            <span>Download</span>
+                          </button>
+                        </div>
+                      )}
                     </td>
 
                     {/* 4. Account Head */}
@@ -1378,6 +1409,14 @@ export function TransactionsPage({ user }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Attached Receipt Evidence Viewer Modal */}
+      {selectedReceiptTx && (
+        <ReceiptViewerModal
+          entry={selectedReceiptTx}
+          onClose={() => setSelectedReceiptTx(null)}
+        />
       )}
     </div>
   );
