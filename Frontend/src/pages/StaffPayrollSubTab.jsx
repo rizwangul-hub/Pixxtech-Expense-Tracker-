@@ -379,6 +379,29 @@ export const StaffPayrollSubTab = () => {
 
   return (
     <div className="space-y-6">
+      {isFullScreen && msg.text && (
+        <div
+          role="alert"
+          className={`fixed top-4 right-4 z-[100] max-w-md px-4 py-3 rounded-xl border shadow-2xl text-xs font-bold ${
+            msg.type === 'success'
+              ? 'bg-emerald-950 border-emerald-700 text-emerald-200'
+              : 'bg-rose-950 border-rose-700 text-rose-200'
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            {msg.type === 'success' ? <CheckCircle size={16} className="text-emerald-400 shrink-0" /> : <AlertCircle size={16} className="text-rose-400 shrink-0" />}
+            <span>{msg.text}</span>
+            <button
+              type="button"
+              onClick={() => setMsg({ type: '', text: '' })}
+              className="ml-2 text-current/70 hover:text-current"
+              aria-label="Dismiss notification"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
       {/* Top Banner & Controls */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
