@@ -28,7 +28,7 @@ export function AccountLedgerPage({
   const [ledgerData, setLedgerData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('2026-08');
+  const [selectedMonth, setSelectedMonth] = useState('ALL');
   const [searchFilter, setSearchFilter] = useState('');
 
   const fetchLedger = async () => {
@@ -200,7 +200,18 @@ export function AccountLedgerPage({
                       : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
                   }`}
                 >
-                  All
+                  All Time
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonth('2026-09')}
+                  className={`text-xs px-2.5 py-1 rounded font-semibold transition ${
+                    selectedMonth === '2026-09'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  Sep 2026
                 </button>
                 <button
                   type="button"
@@ -292,13 +303,19 @@ export function AccountLedgerPage({
           {/* Period Closing Balance */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 col-span-2 sm:col-span-1">
             <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-              Period Closing Balance
+              {selectedMonth === 'ALL' ? 'Real-Time Current Balance' : 'Period Closing Balance'}
             </div>
             <div className="text-base sm:text-lg font-black font-mono text-emerald-400 mt-1">
               {formatPKR(summary.closingBalance ?? 0)}
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5">
-              Live DB: <strong className="text-slate-300 font-mono">{formatPKR(summary.currentBalance ?? 0)}</strong>
+              {selectedMonth === 'ALL' ? (
+                <span className="text-emerald-400/90 font-medium">✓ In sync with Accounts directory</span>
+              ) : (
+                <span>
+                  Current: <strong className="text-slate-300 font-mono">{formatPKR(summary.currentBalance ?? 0)}</strong>
+                </span>
+              )}
             </div>
           </div>
         </div>

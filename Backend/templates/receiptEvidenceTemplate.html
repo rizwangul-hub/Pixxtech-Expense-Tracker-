@@ -238,6 +238,7 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 7px;
+      white-space: nowrap;
     }
 
     .total-label {
@@ -250,12 +251,50 @@
 
     .total-amount {
       font-family: 'Consolas', monospace;
-      font-size: 13pt;
+      font-size: 15pt;
       font-weight: 900;
       color: #0f172a;
     }
 
-    /* 6. Attached Receipt Section (Fills remaining space cleanly on single page) */
+    /* 6. Double-entry summary */
+    .accounting-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 7px;
+      border: 1px solid #cbd5e1;
+    }
+
+    .accounting-table th,
+    .accounting-table td {
+      padding: 4px 7px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 7.5pt;
+    }
+
+    .accounting-table th {
+      background: #e2e8f0;
+      color: #334155;
+      text-transform: uppercase;
+      font-weight: 800;
+      text-align: left;
+    }
+
+    .accounting-table td {
+      font-weight: 700;
+    }
+
+    .accounting-table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .accounting-amount {
+      text-align: right;
+      white-space: nowrap;
+      font-family: 'Consolas', monospace;
+      font-weight: 900;
+    }
+
+    /* 7. Attached Receipt Section (Fills remaining space cleanly on single page) */
     .receipt-section {
       flex: 1;
       min-height: 0;
@@ -323,7 +362,7 @@
 
     .receipt-img {
       max-width: 100%;
-      max-height: 108mm;
+      max-height: 165mm;
       object-fit: contain;
       border-radius: 3px;
       display: block;
@@ -341,7 +380,7 @@
       max-width: 100%;
     }
 
-    /* 7. Signatures & Footer (Guaranteed to stay on single page) */
+    /* 8. Signatures & Footer (Guaranteed to stay on single page) */
     .signatures-and-footer {
       flex-shrink: 0;
       page-break-inside: avoid;
@@ -373,7 +412,7 @@
     }
 
     .sig-img {
-      height: 26px;
+      height: 44px;
       width: auto;
       object-fit: contain;
       margin: 0 auto;
@@ -523,9 +562,35 @@
         <span class="total-label">Total Voucher Amount (PKR)</span>
         <span class="total-amount">{{formatPKR amount}}</span>
       </div>
+
+      <!-- 6. Clear two-line double-entry summary -->
+      <table class="accounting-table">
+        <thead>
+          <tr>
+            <th>Account / Bank or Cash Memo</th>
+            <th>Memo</th>
+            <th class="accounting-amount">Debit (Dr.)</th>
+            <th class="accounting-amount">Credit (Cr.)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{drAccountName}}</td>
+            <td>{{categoryName}}</td>
+            <td class="accounting-amount">{{formatPKR amount}}</td>
+            <td class="accounting-amount">-</td>
+          </tr>
+          <tr>
+            <td>{{crAccountName}}</td>
+            <td>{{categoryName}}</td>
+            <td class="accounting-amount">-</td>
+            <td class="accounting-amount">{{formatPKR amount}}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <!-- 6. Attached Purchase / Receipt Evidence (Center/Bottom Section) -->
+    <!-- 7. Attached Purchase / Receipt Evidence (Center/Bottom Section) -->
     <div class="receipt-section">
       <div class="receipt-section-header">
         <span class="receipt-section-title">Attached Purchase / Receipt Picture Evidence</span>

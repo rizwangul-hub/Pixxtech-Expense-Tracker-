@@ -554,6 +554,13 @@ export const getAccountLedger = async (req, res) => {
       };
     });
 
+    // Self-healing: When viewing all history with no date bounds, runningBalance IS the real-time balance.
+    // If the cached Account.currentBalance ever diverged, reconcile it immediately.
+    if (!month && !startDate && !endDate && Math.abs(round2(runningBalance) - round2(account.currentBalance || 0)) > 0.001) {
+      await Account.findByIdAndUpdate(id, { currentBalance: round2(runningBalance) });
+      account.currentBalance = round2(runningBalance);
+    }
+
     const summary = {
       openingBalance: round2(openingBalance),
       totalMoneyIn: round2(totalMoneyIn),
