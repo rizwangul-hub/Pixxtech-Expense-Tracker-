@@ -163,7 +163,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
         if (r.employeeId === empId) {
           const newTotDed = numDed + (Number(r.lopDeduction) || 0) + (Number(r.otherDeduction) || 0);
           const newNet = Math.max(0, (r.grossSalary || 0) - newTotDed);
-          const alreadyPaid = Number(r.totalInstallmentsPaid || 0);
+          const alreadyPaid = Number(r.totalPaidOrPending ?? (Number(r.totalInstallmentsPaid || 0) + Number(r.pendingPaidAmount || 0)));
           return {
             ...r,
             loanDeduction: val,
@@ -184,7 +184,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
         if (r.employeeId === empId) {
           const newTotDed = (Number(r.loanDeduction) || 0) + numDed + (Number(r.otherDeduction) || 0);
           const newNet = Math.max(0, (r.grossSalary || 0) - newTotDed);
-          const alreadyPaid = Number(r.totalInstallmentsPaid || 0);
+          const alreadyPaid = Number(r.totalPaidOrPending ?? (Number(r.totalInstallmentsPaid || 0) + Number(r.pendingPaidAmount || 0)));
           return {
             ...r,
             lopDeduction: val,
@@ -318,11 +318,12 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
         setSaving(false);
       }
     }
-    const alreadyPaid = Number(row.totalInstallmentsPaid || 0);
+    const alreadyPaidOrPending = Number(row.totalPaidOrPending ?? (Number(row.totalInstallmentsPaid || 0) + Number(row.pendingPaidAmount || 0)));
     const net = Number(row.netPayable || 0);
-    const exactRemaining = Math.max(0, net - alreadyPaid);
+    const exactRemaining = Math.max(0, net - alreadyPaidOrPending);
     const updatedRow = {
       ...row,
+      totalPaidOrPending: alreadyPaidOrPending,
       remainingPayable: exactRemaining,
     };
     setPayTargetRow(updatedRow);
@@ -684,9 +685,12 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
               ) : (
                 payrollRows.map((row, idx) => {
                   const isPaid = row.paymentStatus === 'PAID';
-                  const isPartial = row.paymentStatus === 'PARTIAL_PAYMENT';
-                  const totalInstPaid = row.totalInstallmentsPaid || 0;
-                  const remainingPay = row.remainingPayable ?? Math.max(0, (row.netPayable || 0) - totalInstPaid);
+                  const totalInstPaid = Number(row.totalInstallmentsPaid || 0);
+                  const pendingPaid = Number(row.pendingPaidAmount || 0);
+                  const totalPaidOrPending = Number(row.totalPaidOrPending ?? (totalInstPaid + pendingPaid));
+                  const remainingPay = Number(row.remainingPayable ?? Math.max(0, (row.netPayable || 0) - totalPaidOrPending));
+                  const isPendingApproval = (row.paymentStatus === 'PENDING_VERIFICATION') || (row.hasPendingVerification && remainingPay <= 0.01);
+                  const isPartial = (row.paymentStatus === 'PARTIAL_PAYMENT' || row.paymentStatus === 'PARTIAL_PENDING' || totalPaidOrPending > 0) && !isPaid && !isPendingApproval;
 
                   return (
                     <tr key={row.employeeId} className="hover:bg-slate-900/60 transition">
@@ -703,7 +707,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                         <input
                           type="number"
                           placeholder="0"
-                          disabled={isPaid}
+                          disabled={isPaid || isPendingApproval}
                           value={row.allowance !== undefined ? row.allowance : 0}
                           onChange={(e) => handleAllowanceChange(row.employeeId, e.target.value)}
                           className="w-full bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-emerald-400 font-mono font-bold text-right focus:outline-none focus:border-emerald-500 disabled:opacity-50 text-[10px]"
@@ -713,7 +717,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                         <input
                           type="text"
                           placeholder="Reason"
-                          disabled={isPaid}
+                          disabled={isPaid || isPendingApproval}
                           value={row.allowanceReason || ''}
                           onChange={(e) => handleAllowanceReasonChange(row.employeeId, e.target.value)}
                           className="w-full bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-slate-200 font-medium text-[10px] focus:outline-none focus:border-purple-500 disabled:opacity-50 truncate"
@@ -741,7 +745,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                         <input
                           type="number"
                           placeholder="0"
-                          disabled={isPaid}
+                          disabled={isPaid || isPendingApproval}
                           value={row.loanDeduction !== undefined ? row.loanDeduction : 0}
                           onChange={(e) => handleLoanDeductionChange(row.employeeId, e.target.value)}
                           className="w-full bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-rose-300 font-mono font-bold text-right focus:outline-none focus:border-rose-500 disabled:opacity-50 text-[10px]"
@@ -752,7 +756,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                         <input
                           type="number"
                           placeholder="0"
-                          disabled={isPaid}
+                          disabled={isPaid || isPendingApproval}
                           value={row.lopDeduction !== undefined ? row.lopDeduction : 0}
                           onChange={(e) => handleLopDeductionChange(row.employeeId, e.target.value)}
                           className="w-full bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-amber-300 font-mono font-bold text-right focus:outline-none focus:border-amber-500 disabled:opacity-50 text-[10px]"
@@ -760,7 +764,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                         />
                       </td>
                       <td className="py-2 px-1 text-right font-mono font-black text-xs text-emerald-400 whitespace-nowrap">
-                        Rs. {formatPKR(row.netPayable)}
+                        {formatPKR(row.netPayable)}
                       </td>
                       <td className="py-2 px-1.5 min-w-0">
                         <div className="font-bold text-slate-300 text-[10px] truncate" title={row.accountTitle || row.name}>
@@ -788,36 +792,52 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                               Reverse
                             </button>
                           </div>
+                        ) : isPendingApproval ? (
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-950 border border-blue-700 text-blue-300 font-bold text-[9px] shadow-sm">
+                              ⏳ PAID (Pending Approval)
+                            </span>
+                            <div className="text-[9px] text-blue-300 font-mono">
+                              Submitted: {formatPKR(pendingPaid || row.netPayable)}
+                            </div>
+                            <div className="text-[8px] text-slate-400 font-medium">
+                              Awaiting Admin OK
+                            </div>
+                          </div>
                         ) : isPartial ? (
                           <div className="space-y-0.5">
                             <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-950 border border-amber-700 text-amber-300 font-bold text-[9px]">
-                              ◑ PARTIAL
+                              ◑ PARTIAL {pendingPaid > 0 ? '(In Review)' : ''}
                             </span>
                             <div className="text-[9px] text-emerald-400 font-mono">
-                              Paid: Rs. {formatPKR(totalInstPaid)}
+                              {totalInstPaid > 0 && <span>Paid: {formatPKR(totalInstPaid)} </span>}
+                              {pendingPaid > 0 && <span className="text-blue-300 font-semibold">({totalInstPaid > 0 ? '+' : ''}Pending {formatPKR(pendingPaid)})</span>}
                             </div>
-                            <div className="text-[9px] text-amber-400 font-mono">
-                              Left: Rs. {formatPKR(remainingPay)}
+                            <div className="text-[9px] text-amber-400 font-mono font-bold">
+                              Left: {formatPKR(remainingPay)}
                             </div>
-                            <button
-                              onClick={() => openReverseModal(row)}
-                              className="text-[9px] text-rose-400 hover:text-rose-300 underline font-semibold transition"
-                            >
-                              Reverse Paid Amount
-                            </button>
+                            {totalInstPaid > 0 && (
+                              <button
+                                onClick={() => openReverseModal(row)}
+                                className="text-[9px] text-rose-400 hover:text-rose-300 underline font-semibold transition"
+                              >
+                                Reverse
+                              </button>
+                            )}
                             <div>
                               <button
                                 onClick={() => openPayModal(row)}
                                 className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-2 py-0.5 rounded text-[10px] shadow transition inline-flex items-center gap-0.5"
+                                title={`Pay remaining ${formatPKR(remainingPay)}`}
                               >
-                                <DollarSign size={11} /> Pay More
+                                <DollarSign size={11} /> Pay Next ({formatPKR(remainingPay)})
                               </button>
                             </div>
                           </div>
                         ) : (
                           <div className="space-y-1">
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 font-bold text-[9px]">
-                              PENDING
+                              UNPAID
                             </span>
                             <div>
                               <button
@@ -907,37 +927,43 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
               <div className="border-t border-slate-800/80 pt-2 space-y-1">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400 font-semibold">Gross Salary:</span>
-                  <span className="text-slate-300 font-mono font-bold">Rs. {formatPKR(payTargetRow.grossSalary)}</span>
+                  <span className="text-slate-300 font-mono font-bold">{formatPKR(payTargetRow.grossSalary)}</span>
                 </div>
                 {Number(payTargetRow.loanDeduction) > 0 && (
                   <div className="flex justify-between">
                     <span className="text-orange-400 font-semibold">Loan Deduction (this month):</span>
-                    <span className="text-orange-400 font-mono font-bold">− Rs. {formatPKR(payTargetRow.loanDeduction)}</span>
+                    <span className="text-orange-400 font-mono font-bold">− {formatPKR(payTargetRow.loanDeduction)}</span>
                   </div>
                 )}
                 {Number(payTargetRow.lopDeduction) > 0 && (
                   <div className="flex justify-between">
                     <span className="text-rose-400 font-semibold">Absent / LOP Deduction:</span>
-                    <span className="text-rose-400 font-mono font-bold">− Rs. {formatPKR(payTargetRow.lopDeduction)}</span>
+                    <span className="text-rose-400 font-mono font-bold">− {formatPKR(payTargetRow.lopDeduction)}</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center border-t border-slate-700 pt-1 text-sm">
                   <span className="text-white font-bold">Net Payable:</span>
-                  <span className="text-white font-mono font-black">Rs. {formatPKR(payTargetRow.netPayable)}</span>
+                  <span className="text-white font-mono font-black">{formatPKR(payTargetRow.netPayable)}</span>
                 </div>
               </div>
               {/* Payment progress */}
               <div className="border-t border-slate-800/80 pt-2 space-y-1">
                 {Number(payTargetRow.totalInstallmentsPaid) > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-emerald-400 font-semibold">Already Paid:</span>
-                    <span className="text-emerald-400 font-mono font-bold">Rs. {formatPKR(payTargetRow.totalInstallmentsPaid)}</span>
+                    <span className="text-emerald-400 font-semibold">Already Paid (Verified):</span>
+                    <span className="text-emerald-400 font-mono font-bold">{formatPKR(payTargetRow.totalInstallmentsPaid)}</span>
+                  </div>
+                )}
+                {Number(payTargetRow.pendingPaidAmount) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-400 font-semibold">Awaiting Verification:</span>
+                    <span className="text-blue-300 font-mono font-bold">{formatPKR(payTargetRow.pendingPaidAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-amber-300 font-bold">Remaining to Pay:</span>
                   <span className="text-amber-300 font-mono font-black">
-                    Rs. {formatPKR(Math.max(0, (Number(payTargetRow.netPayable) || 0) - (Number(payTargetRow.totalInstallmentsPaid) || 0)))}
+                    {formatPKR(payTargetRow.remainingPayable)}
                   </span>
                 </div>
               </div>
@@ -948,7 +974,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                   {payTargetRow.salaryInstallments.map((item, i) => (
                     <div key={i} className="flex justify-between text-slate-500">
                       <span>Installment {i + 1} ({item.paidFromAccountName || 'Bank'}):</span>
-                      <span className="font-mono">Rs. {formatPKR(item.amount)}</span>
+                      <span className="font-mono">{formatPKR(item.amount)}</span>
                     </div>
                   ))}
                 </div>
@@ -961,48 +987,50 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                 type="number"
                 min="0.01"
                 step="0.01"
-                max={Math.max(0, (Number(payTargetRow.netPayable) || 0) - (Number(payTargetRow.totalInstallmentsPaid) || 0))}
+                max={payTargetRow.remainingPayable}
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-700 text-emerald-300 font-mono font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500"
               />
-              <p className="text-slate-500">You can pay the remaining salary in one payment or multiple installments.</p>
+              <p className="text-slate-500">
+                Remaining balance is {formatPKR(payTargetRow.remainingPayable)}. You can pay in full or enter an installment amount.
+              </p>
             </div>
 
             {/* Live payment preview */}
             {Number(payAmount) > 0 && (() => {
               const thisPayment = Number(payAmount) || 0;
-              const prevPaid = Number(payTargetRow.totalInstallmentsPaid) || 0;
+              const prevPaid = Number(payTargetRow.totalPaidOrPending ?? (Number(payTargetRow.totalInstallmentsPaid || 0) + Number(payTargetRow.pendingPaidAmount || 0)));
               const netPayable = Number(payTargetRow.netPayable) || 0;
               const remainingToPay = Math.max(0, netPayable - prevPaid);
               const totalAfter = prevPaid + thisPayment;
               const remainingAfter = Math.max(0, remainingToPay - thisPayment);
               const isOver = thisPayment > remainingToPay + 0.01;
-              const isFullySettled = (remainingAfter <= 0 && !isOver);
+              const isFullySettled = (remainingAfter <= 0.01 && !isOver);
 
               return (
                 <div className={`p-3 rounded-xl border text-xs font-mono space-y-1 ${isOver ? 'bg-rose-950/60 border-rose-800' : 'bg-slate-950 border-slate-800'}`}>
                   <p className="text-slate-400 font-bold mb-1">Payment Preview:</p>
                   {prevPaid > 0 && (
                     <div className="flex justify-between text-slate-400">
-                      <span>Previously paid:</span>
-                      <span>Rs. {formatPKR(prevPaid)}</span>
+                      <span>Previously Paid / Pending:</span>
+                      <span>{formatPKR(prevPaid)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-emerald-400">
                     <span>This payment:</span>
-                    <span>+ Rs. {formatPKR(thisPayment)}</span>
+                    <span>+ {formatPKR(thisPayment)}</span>
                   </div>
                   <div className="flex justify-between text-white border-t border-slate-800 pt-1">
                     <span>Total paid after:</span>
-                    <span className="font-black">Rs. {formatPKR(totalAfter)}</span>
+                    <span className="font-black">{formatPKR(totalAfter)}</span>
                   </div>
                   <div className={`flex justify-between font-black ${isOver ? 'text-rose-400' : isFullySettled ? 'text-emerald-400' : 'text-amber-400'}`}>
                     <span>Remaining after:</span>
-                    <span>{isFullySettled ? 'Rs. 0 (Fully Settled)' : `Rs. ${formatPKR(remainingAfter)}`}</span>
+                    <span>{isFullySettled ? 'Rs. 0.00 (Fully Settled)' : formatPKR(remainingAfter)}</span>
                   </div>
                   {isOver && (
-                    <p className="text-rose-400 font-bold mt-1">⚠ Exceeds remaining net salary of Rs. {formatPKR(remainingToPay)}</p>
+                    <p className="text-rose-400 font-bold mt-1">⚠ Exceeds remaining net salary of {formatPKR(remainingToPay)}</p>
                   )}
                   {isFullySettled && (
                     <p className="text-emerald-400 font-bold mt-1">✓ Full salary settled (Gross = Loan Deduction + Net Payout). No remaining balance.</p>
@@ -1010,7 +1038,6 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                 </div>
               );
             })()}
-
 
             {/* Disbursing Finance Account Selector */}
             <div className="space-y-1.5 text-xs">
@@ -1024,7 +1051,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
               >
                 {financeAccounts.map((acc) => (
                   <option key={acc._id} value={acc._id}>
-                    {acc.name} ({acc.type}) — Current Bal: Rs. {formatPKR(acc.currentBalance)}
+                    {acc.name} ({acc.type}) — Current Bal: {formatPKR(acc.currentBalance)}
                   </option>
                 ))}
               </select>
@@ -1035,15 +1062,15 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
               <div className="bg-emerald-950/40 border border-emerald-900/60 p-3.5 rounded-xl space-y-1.5 text-xs font-mono">
                 <div className="flex justify-between text-slate-300">
                   <span>Current Account Balance:</span>
-                  <span className="font-bold text-white">Rs. {formatPKR(currentDisbursingAccount.currentBalance)}</span>
+                  <span className="font-bold text-white">{formatPKR(currentDisbursingAccount.currentBalance)}</span>
                 </div>
                 <div className="flex justify-between text-rose-400">
                   <span>Salary Outflow (-):</span>
-                  <span className="font-bold">- Rs. {formatPKR(Number(payAmount) || 0)}</span>
+                  <span className="font-bold">- {formatPKR(Number(payAmount) || 0)}</span>
                 </div>
                 <div className="flex justify-between text-emerald-400 font-black border-t border-emerald-900/80 pt-1.5 text-sm">
                   <span>Balance After Payout:</span>
-                  <span>Rs. {formatPKR(currentDisbursingAccount.currentBalance - (Number(payAmount) || 0))}</span>
+                  <span>{formatPKR(currentDisbursingAccount.currentBalance - (Number(payAmount) || 0))}</span>
                 </div>
               </div>
             )}

@@ -194,6 +194,30 @@ export const getPendingEntries = async (req, res) => {
         : [];
       const payrollMap = new Map(payrollDocs.map((doc) => [doc._id.toString(), doc]));
 
+      // Also look up by employeeId + payrollMonth for any salary entry without payrollId or missing in map
+      const missingEntries = salaryEntries.filter((e) => !payrollMap.has(String(e.entryData?.payrollId)));
+      if (missingEntries.length > 0) {
+        const orConditions = missingEntries
+          .map((e) => {
+            const empId = e.tenantId || e.entryData?.employeeId || e.entryData?.payrollSnapshot?.employeeId;
+            const month = e.rentMonth || e.entryData?.month;
+            if (empId && month && mongoose.Types.ObjectId.isValid(empId)) {
+              return { employeeId: empId, payrollMonth: month };
+            }
+            return null;
+          })
+          .filter(Boolean);
+        if (orConditions.length > 0) {
+          const extraDocs = await Payroll.find({ $or: orConditions })
+            .select('employeeName employeeId designation department basicSalary allowance allowanceReason grossSalary loanDeduction lopDeduction otherDeduction totalDeduction netPayable totalInstallmentsPaid salaryInstallments paymentStatus')
+            .lean();
+          extraDocs.forEach((doc) => {
+            payrollMap.set(doc._id.toString(), doc);
+            payrollMap.set(`${doc.employeeId.toString()}_${doc.payrollMonth}`, doc);
+          });
+        }
+      }
+
       const empIds = salaryEntries
         .map((e) => e.tenantId || e.entryData?.employeeId || e.entryData?.payrollSnapshot?.employeeId)
         .filter((id) => id && mongoose.Types.ObjectId.isValid(id));
@@ -205,58 +229,55 @@ export const getPendingEntries = async (req, res) => {
       entries.forEach((entry) => {
         if (entry.entryType !== 'SALARY') return;
         const snapshot = entry.entryData?.payrollSnapshot;
-        const payroll = payrollMap.get(String(entry.entryData?.payrollId));
-        const empId = entry.tenantId || entry.entryData?.employeeId || snapshot?.employeeId || payroll?.employeeId;
+        const pIdStr = String(entry.entryData?.payrollId || '');
+        const empId = entry.tenantId || entry.entryData?.employeeId || snapshot?.employeeId;
+        const month = entry.rentMonth || entry.entryData?.month;
+        const payroll = payrollMap.get(pIdStr) || payrollMap.get(`${String(empId)}_${month}`);
         const emp = empMap.get(String(empId));
         const currentLoanBalance = emp ? (emp.loanBalance || 0) : 0;
 
-        if (snapshot) {
-          const paid = round2(snapshot.totalInstallmentsPaid || 0);
-          const loanDed = Number(snapshot.loanDeduction ?? entry.entryData?.loanDeduction ?? 0);
-          entry.salaryDetails = {
-            employeeName: snapshot.employeeName || entry.submittedByName || '',
-            employeeId: empId,
-            designation: snapshot.designation || '',
-            department: snapshot.department || '',
-            basicSalary: snapshot.basicSalary || 0,
-            allowance: snapshot.allowance || 0,
-            allowanceReason: snapshot.allowanceReason || '',
-            grossSalary: snapshot.grossSalary || 0,
-            loanDeduction: loanDed,
-            lopDeduction: snapshot.lopDeduction || 0,
-            otherDeduction: snapshot.otherDeduction || 0,
-            totalDeduction: snapshot.totalDeduction || 0,
-            netPayable: snapshot.netPayable || 0,
-            alreadyPaid: paid,
-            remainingPayable: Math.max(0, round2((snapshot.netPayable || 0) - paid)),
-            paymentStatus: snapshot.paymentStatus || 'PENDING_PAYMENT',
-            installments: snapshot.salaryInstallments || [],
-            currentLoanBalance,
-          };
-          return;
-        }
+        const employeeName = snapshot?.employeeName || payroll?.employeeName || entry.submittedByName || '';
+        const designation = snapshot?.designation || payroll?.designation || '';
+        const department = snapshot?.department || payroll?.department || '';
+        const basicSalary = Number(snapshot?.basicSalary ?? payroll?.basicSalary ?? 0);
+        const allowance = Number(snapshot?.allowance ?? payroll?.allowance ?? 0);
+        const allowanceReason = snapshot?.allowanceReason || payroll?.allowanceReason || '';
+        const grossSalary = Number(snapshot?.grossSalary ?? payroll?.grossSalary ?? 0);
+        const loanDed = Number(snapshot?.loanDeduction ?? entry.entryData?.loanDeduction ?? payroll?.loanDeduction ?? 0);
+        const lopDed = Number(snapshot?.lopDeduction ?? payroll?.lopDeduction ?? 0);
+        const otherDed = Number(snapshot?.otherDeduction ?? payroll?.otherDeduction ?? 0);
+        const totalDed = Number(snapshot?.totalDeduction ?? (loanDed + lopDed + otherDed));
+        const netPayable = Number(snapshot?.netPayable ?? payroll?.netPayable ?? Math.max(0, grossSalary - totalDed));
 
-        if (!payroll) return;
-        const paid = round2(payroll.totalInstallmentsPaid || 0);
-        const loanDed = Number(entry.entryData?.loanDeduction ?? payroll.loanDeduction ?? 0);
+        // LIVE alreadyPaid from actual Payroll document in MongoDB
+        const alreadyPaid = round2(payroll ? (payroll.totalInstallmentsPaid || 0) : (snapshot?.totalInstallmentsPaid || 0));
+        const thisPayout = round2(entry.amount || 0);
+        const totalPaidAfterThis = round2(alreadyPaid + thisPayout);
+        const remainingAfterThis = Math.max(0, round2(netPayable - totalPaidAfterThis));
+        const isFullySettled = (remainingAfterThis <= 0.01);
+
         entry.salaryDetails = {
-          employeeName: payroll.employeeName,
-          employeeId: payroll.employeeId,
-          designation: payroll.designation,
-          department: payroll.department,
-          basicSalary: payroll.basicSalary || 0,
-          allowance: payroll.allowance || 0,
-          allowanceReason: payroll.allowanceReason || '',
-          grossSalary: payroll.grossSalary || 0,
+          employeeName,
+          employeeId: empId,
+          designation,
+          department,
+          basicSalary,
+          allowance,
+          allowanceReason,
+          grossSalary,
           loanDeduction: loanDed,
-          lopDeduction: payroll.lopDeduction || 0,
-          otherDeduction: payroll.otherDeduction || 0,
-          totalDeduction: payroll.totalDeduction || 0,
-          netPayable: payroll.netPayable || 0,
-          alreadyPaid: paid,
-          remainingPayable: Math.max(0, round2((payroll.netPayable || 0) - paid)),
-          paymentStatus: payroll.paymentStatus,
-          installments: payroll.salaryInstallments || [],
+          lopDeduction: lopDed,
+          otherDeduction: otherDed,
+          totalDeduction: totalDed,
+          netPayable,
+          alreadyPaid,
+          thisPayout,
+          totalPaidAfterThis,
+          remainingAfterThis,
+          remainingPayable: remainingAfterThis, // for compatibility
+          isFullySettled,
+          paymentStatus: payroll?.paymentStatus || snapshot?.paymentStatus || 'PENDING_PAYMENT',
+          installments: payroll?.salaryInstallments || snapshot?.salaryInstallments || [],
           currentLoanBalance,
         };
       });
@@ -427,11 +448,12 @@ export const updatePendingEntry = async (req, res) => {
       return apiError(res, 'Cannot edit an entry that has already been verified and posted.', 400);
     }
 
-    // Once-only edit enforcement: block further edits after first admin edit
-    if (entry.isEdited) {
+    // Once-only edit enforcement: block further edits after first edit (exempt ADMIN and ADMIN_PUBLISHER)
+    const isAdmin = ['ADMIN', 'ADMIN_PUBLISHER'].includes(req.user?.role);
+    if (entry.isEdited && !isAdmin) {
       return apiError(
         res,
-        'This entry has already been edited once by an admin and is now locked from further edits. You may verify or delete it.',
+        'This entry has already been edited once and is now locked from further edits. You may verify or delete it.',
         403
       );
     }
@@ -450,6 +472,7 @@ export const updatePendingEntry = async (req, res) => {
       drAccountId: entry.drAccountId,
       crAccountId: entry.crAccountId,
       receivingAccountId: entry.receivingAccountId,
+      entryData: entry.entryData,
     };
 
     const updates = req.body;
@@ -483,6 +506,59 @@ export const updatePendingEntry = async (req, res) => {
       entry.expenseClassification = classification.expenseClassification;
       entry.propertyId = classification.propertyId;
       entry.unitId = classification.unitId;
+    } else if (entry.entryType === 'SALARY') {
+      const grossSalary = updates.grossSalary !== undefined ? round2(Number(updates.grossSalary)) : undefined;
+      const loanDeduction = updates.loanDeduction !== undefined ? round2(Number(updates.loanDeduction)) : undefined;
+      const lopDeduction = updates.lopDeduction !== undefined ? round2(Number(updates.lopDeduction)) : undefined;
+      const otherDeduction = updates.otherDeduction !== undefined ? round2(Number(updates.otherDeduction)) : undefined;
+
+      const currentGross = grossSalary !== undefined ? grossSalary : Number(entry.entryData?.payrollSnapshot?.grossSalary ?? entry.amount ?? 0);
+      const currentLoan = loanDeduction !== undefined ? loanDeduction : Number(entry.entryData?.loanDeduction ?? entry.entryData?.payrollSnapshot?.loanDeduction ?? 0);
+      const currentLop = lopDeduction !== undefined ? lopDeduction : Number(entry.entryData?.payrollSnapshot?.lopDeduction ?? 0);
+      const currentOther = otherDeduction !== undefined ? otherDeduction : Number(entry.entryData?.payrollSnapshot?.otherDeduction ?? 0);
+
+      const totalDed = round2(currentLoan + currentLop + currentOther);
+      const calculatedNetPayable = round2(Math.max(0, currentGross - totalDed));
+      const netPayable = updates.netPayable !== undefined ? round2(Number(updates.netPayable)) : calculatedNetPayable;
+
+      if (!entry.entryData) entry.entryData = {};
+      if (!entry.entryData.payrollSnapshot) entry.entryData.payrollSnapshot = {};
+
+      if (grossSalary !== undefined) entry.entryData.payrollSnapshot.grossSalary = grossSalary;
+      if (loanDeduction !== undefined) {
+        entry.entryData.loanDeduction = loanDeduction;
+        entry.entryData.payrollSnapshot.loanDeduction = loanDeduction;
+      }
+      if (lopDeduction !== undefined) entry.entryData.payrollSnapshot.lopDeduction = lopDeduction;
+      if (otherDeduction !== undefined) entry.entryData.payrollSnapshot.otherDeduction = otherDeduction;
+      entry.entryData.payrollSnapshot.totalDeduction = totalDed;
+      entry.entryData.payrollSnapshot.netPayable = netPayable;
+      entry.markModified('entryData');
+
+      if (updates.amount !== undefined) {
+        entry.amount = round2(Number(updates.amount));
+      }
+
+      // Also sync to linked Payroll document
+      const payrollId = entry.entryData?.payrollId;
+      const employeeId = entry.tenantId || entry.entryData?.employeeId;
+      const month = entry.rentMonth || entry.entryData?.month;
+      let pDoc = null;
+      if (payrollId && mongoose.Types.ObjectId.isValid(payrollId)) {
+        pDoc = await Payroll.findById(payrollId);
+      }
+      if (!pDoc && employeeId && month) {
+        pDoc = await Payroll.findOne({ employeeId, payrollMonth: month });
+      }
+      if (pDoc) {
+        if (grossSalary !== undefined) pDoc.grossSalary = grossSalary;
+        if (loanDeduction !== undefined) pDoc.loanDeduction = loanDeduction;
+        if (lopDeduction !== undefined) pDoc.lopDeduction = lopDeduction;
+        if (otherDeduction !== undefined) pDoc.otherDeduction = otherDeduction;
+        pDoc.totalDeduction = totalDed;
+        pDoc.netPayable = netPayable;
+        await pDoc.save();
+      }
     }
 
     entry.status = 'EDITED';

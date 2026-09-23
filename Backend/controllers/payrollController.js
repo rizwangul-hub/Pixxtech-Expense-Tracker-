@@ -175,6 +175,27 @@ export const getMonthlyPayroll = async (req, res) => {
     const existingMap = new Map();
     existingPayroll.forEach((p) => existingMap.set(String(p.employeeId), p));
 
+    // Fetch pending salary entries currently awaiting verification in review queue
+    const pendingSalaryEntries = await PendingEntry.find({
+      entryType: 'SALARY',
+      rentMonth: month,
+      status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
+    }).lean();
+
+    const pendingMap = new Map();
+    pendingSalaryEntries.forEach((entry) => {
+      const empIdStr = String(entry.tenantId || entry.entryData?.employeeId || entry.entryData?.payrollSnapshot?.employeeId || '');
+      const pIdStr = String(entry.entryData?.payrollId || '');
+      if (empIdStr) {
+        if (!pendingMap.has(empIdStr)) pendingMap.set(empIdStr, []);
+        pendingMap.get(empIdStr).push(entry);
+      }
+      if (pIdStr) {
+        if (!pendingMap.has(pIdStr)) pendingMap.set(pIdStr, []);
+        pendingMap.get(pIdStr).push(entry);
+      }
+    });
+
     // Fetch active employees
     const empQuery = { isActive: true };
     if (department && department !== 'ALL') empQuery.department = department;
@@ -258,6 +279,32 @@ export const getMonthlyPayroll = async (req, res) => {
       grandLoanDeductions += loanDeduction;
       grandNetPayable += netPayable;
 
+      const pIdStr = saved ? String(saved._id) : '';
+      const rawPending = [
+        ...(pendingMap.get(empIdStr) || []),
+        ...(pIdStr ? (pendingMap.get(pIdStr) || []) : []),
+      ];
+      const uniquePending = Array.from(new Map(rawPending.map((e) => [String(e._id), e])).values());
+      const pendingPaidAmount = round2(uniquePending.reduce((sum, item) => sum + (item.amount || 0), 0));
+      const hasPendingVerification = uniquePending.length > 0;
+
+      const verifiedPaidAmount = round2(saved?.totalInstallmentsPaid || 0);
+      const totalPaidOrPending = round2(verifiedPaidAmount + pendingPaidAmount);
+      const remainingPayable = round2(Math.max(0, netPayable - totalPaidOrPending));
+
+      let paymentStatus = saved?.paymentStatus || (saved ? 'PENDING_PAYMENT' : 'DRAFT');
+      if (verifiedPaidAmount >= netPayable - 0.01 && netPayable > 0) {
+        paymentStatus = 'PAID';
+      } else if (hasPendingVerification && remainingPayable <= 0.01) {
+        paymentStatus = 'PENDING_VERIFICATION';
+      } else if (totalPaidOrPending > 0) {
+        paymentStatus = (hasPendingVerification && verifiedPaidAmount === 0) ? 'PARTIAL_PENDING' : 'PARTIAL_PAYMENT';
+      } else if (saved) {
+        paymentStatus = 'PENDING_PAYMENT';
+      } else {
+        paymentStatus = 'DRAFT';
+      }
+
       return {
         payrollId: saved?._id || null,
         employeeId: emp._id,
@@ -285,16 +332,20 @@ export const getMonthlyPayroll = async (req, res) => {
         ibanNumber: saved ? saved.ibanNumber : emp.ibanNumber || '',
         bankName: saved ? saved.bankName : emp.bankName || '',
         status: saved ? saved.status : 'DRAFT',
-        paymentStatus: saved?.paymentStatus || (saved ? 'PENDING_PAYMENT' : 'DRAFT'),
-        totalInstallmentsPaid: round2(saved?.totalInstallmentsPaid || 0),
-        remainingPayable: round2(Math.max(0, netPayable - (saved?.totalInstallmentsPaid || 0))),
+        paymentStatus,
+        totalInstallmentsPaid: verifiedPaidAmount,
+        pendingPaidAmount,
+        totalPaidOrPending,
+        remainingPayable,
+        hasPendingVerification,
+        pendingVoucherNos: uniquePending.map((e) => e.voucherNo).filter(Boolean),
         salaryInstallments: saved?.salaryInstallments || [],
         paidFromAccountId: saved?.paidFromAccountId || null,
         paidFromAccountName: saved?.paidFromAccountName || '',
         paymentDate: saved?.paymentDate || null,
         transactionId: saved?.transactionId || null,
         voucherId: saved?.voucherId || null,
-        voucherNo: saved?.voucherNo || '',
+        voucherNo: saved?.voucherNo || (uniquePending[0]?.voucherNo || ''),
         paymentMethod: saved?.paymentMethod || 'BANK_TRANSFER',
         paymentNotes: saved?.paymentNotes || '',
       };
@@ -1377,7 +1428,11 @@ export const paySingleSalary = async (req, res) => {
       const pendingEntries = await PendingEntry.find({
         entryType: 'SALARY',
         status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
-        'entryData.payrollId': pDoc._id,
+        $or: [
+          { 'entryData.payrollId': pDoc._id },
+          { tenantId: pDoc.employeeId, rentMonth: month },
+          { 'entryData.employeeId': pDoc.employeeId, rentMonth: month },
+        ],
       });
 
       const pendingSum = round2(pendingEntries.reduce((sum, item) => sum + (item.amount || 0), 0));
@@ -1386,7 +1441,7 @@ export const paySingleSalary = async (req, res) => {
       if (unsubmittedRemaining <= 0) {
         return apiError(
           res,
-          `A salary payout for ${pDoc.employeeName} of Rs. ${formatPKR(pendingSum)} is already awaiting verification by Khurshid Anwar. Please wait for verification before submitting another installment.`,
+          `Full salary payout for ${pDoc.employeeName} (Rs. ${formatPKR(pendingSum)}) has already been submitted and is awaiting verification by Khurshid Anwar.`,
           400
         );
       }
@@ -1394,7 +1449,7 @@ export const paySingleSalary = async (req, res) => {
       if (netAmount > unsubmittedRemaining + 0.01) {
         return apiError(
           res,
-          `Requested amount of Rs. ${formatPKR(netAmount)} exceeds the unsubmitted balance of Rs. ${formatPKR(unsubmittedRemaining)} (Rs. ${formatPKR(pendingSum)} is currently pending verification).`,
+          `Requested amount of Rs. ${formatPKR(netAmount)} exceeds the remaining unsubmitted salary of Rs. ${formatPKR(unsubmittedRemaining)} (Rs. ${formatPKR(pendingSum)} is currently awaiting verification).`,
           400
         );
       }

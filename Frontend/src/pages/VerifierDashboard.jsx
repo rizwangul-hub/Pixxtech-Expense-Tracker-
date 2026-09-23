@@ -52,88 +52,97 @@ const SalaryBreakdown = ({ entry }) => {
   if (entry?.entryType !== 'SALARY' || !salary) return null;
 
   const gross = Number(salary.grossSalary || 0);
-  const loanDed = Number(salary.loanDeduction || 0);
+  const loanDed = Number(salary.loanDeduction ?? entry.entryData?.loanDeduction ?? 0);
   const lopDed = Number(salary.lopDeduction || 0);
   const otherDed = Number(salary.otherDeduction || 0);
-  const netPay = Number(salary.netPayable || 0);
+  const netPay = Number(salary.netPayable || Math.max(0, gross - (loanDed + lopDed + otherDed)));
   const paidNow = Number(entry.amount || 0);
-  const alreadyPaid = Number(salary.alreadyPaid || salary.totalInstallmentsPaid || 0);
+  const alreadyPaid = Number(salary.alreadyPaid || 0);
   const totalPaidAfter = alreadyPaid + paidNow;
   const remaining = Math.max(0, netPay - totalPaidAfter);
-  const isFullySettled = (remaining === 0) || (loanDed + paidNow >= gross && remaining <= 0.01);
+  const isFullySettled = (remaining <= 0.01) || Boolean(salary.isFullySettled);
   const currentLoanBal = Number(salary.currentLoanBalance || 0);
 
   return (
-    <div className="mt-2.5 rounded-xl border border-emerald-800/70 bg-emerald-950/30 p-3 text-xs space-y-2">
-      <div className="flex items-center justify-between border-b border-emerald-800/40 pb-1.5 flex-wrap gap-1">
-        <span className="font-bold text-emerald-300 flex items-center gap-1.5">
-          💼 Salary Breakdown — <strong className="text-white">{salary.employeeName || 'Staff Member'}</strong>
+    <div className="mt-2 pt-2 border-t border-slate-700/60 text-xs space-y-1.5">
+      {/* Staff identity inline */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-950/80 border border-indigo-700/70 text-indigo-300 font-bold text-[11px]">
+          💼 {salary.employeeName || 'Staff Member'}
         </span>
-        <span className="text-[10px] text-purple-300 font-mono font-semibold">
-          {salary.designation ? `${salary.designation} (${salary.department || 'Staff'})` : ''}
-        </span>
+        {salary.designation && (
+          <span className="text-[10px] text-slate-400 font-mono">
+            {salary.designation}{salary.department ? ` (${salary.department})` : ''}
+          </span>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-300 pt-0.5">
-        <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-          <span className="text-slate-400 block text-[10px]">Gross Salary</span>
-          <span className="text-white font-mono font-bold">Rs. {formatPKR(gross)}</span>
-        </div>
-        <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-          <span className="text-orange-400 block text-[10px]">Loan Deduction</span>
-          <span className="text-orange-300 font-mono font-bold">
-            {loanDed > 0 ? `− Rs. ${formatPKR(loanDed)}` : 'Rs. 0'}
+      {/* Clean inline chips */}
+      <div className="flex items-center flex-wrap gap-1.5 text-[11px] font-mono">
+        <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">
+          Gross: <b className="text-white">{formatPKR(gross)}</b>
+        </span>
+
+        {loanDed > 0 && (
+          <span className="px-2 py-0.5 rounded bg-orange-950/70 border border-orange-800/70 text-orange-300">
+            Loan Ded: <b className="text-orange-200">−{formatPKR(loanDed)}</b>
           </span>
-        </div>
-        {lopDed > 0 ? (
-          <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-            <span className="text-rose-400 block text-[10px]">Absent / LOP</span>
-            <span className="text-rose-300 font-mono font-bold">− Rs. {formatPKR(lopDed)}</span>
-          </div>
-        ) : otherDed > 0 ? (
-          <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-            <span className="text-rose-400 block text-[10px]">Other Deduction</span>
-            <span className="text-rose-300 font-mono font-bold">− Rs. {formatPKR(otherDed)}</span>
-          </div>
-        ) : null}
-        <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-          <span className="text-emerald-400 block text-[10px]">Net Payable</span>
-          <span className="text-white font-mono font-black">Rs. {formatPKR(netPay)}</span>
-        </div>
+        )}
+
+        {lopDed > 0 && (
+          <span className="px-2 py-0.5 rounded bg-rose-950/70 border border-rose-800/70 text-rose-300">
+            Absent: <b className="text-rose-200">−{formatPKR(lopDed)}</b>
+          </span>
+        )}
+
+        {otherDed > 0 && (
+          <span className="px-2 py-0.5 rounded bg-rose-950/70 border border-rose-800/70 text-rose-300">
+            Other Ded: <b className="text-rose-200">−{formatPKR(otherDed)}</b>
+          </span>
+        )}
+
+        <span className="px-2 py-0.5 rounded bg-emerald-950/70 border border-emerald-800/70 text-emerald-300">
+          Net Payable: <b className="text-white">{formatPKR(netPay)}</b>
+        </span>
+
+        {alreadyPaid > 0 && (
+          <span className="px-2 py-0.5 rounded bg-sky-950/70 border border-sky-800/70 text-sky-300">
+            Prev Paid: <b className="text-sky-200">{formatPKR(alreadyPaid)}</b>
+          </span>
+        )}
+
+        <span className="px-2 py-0.5 rounded bg-blue-950/70 border border-blue-800/70 text-blue-300">
+          This Payout: <b className="text-white">{formatPKR(paidNow)}</b>
+        </span>
+
+        {/* Dynamic Remaining Salary: shows remaining only if not fully settled */}
+        {isFullySettled ? (
+          <span className="px-2 py-0.5 rounded bg-emerald-900/90 border border-emerald-500/80 text-emerald-200 font-bold inline-flex items-center gap-1 shadow-sm">
+            ✓ Full Salary Settled
+          </span>
+        ) : (
+          <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-800/80 text-amber-300 font-bold">
+            Remaining: {formatPKR(remaining)}
+          </span>
+        )}
       </div>
 
       {loanDed > 0 && (
-        <div className="text-[11px] text-orange-300 bg-orange-950/60 border border-orange-800/60 p-2 rounded-lg flex items-center justify-between flex-wrap gap-1">
-          <span>
-            📉 <strong>Loan Recovery:</strong> Rs. {formatPKR(loanDed)} will be deducted from {salary.employeeName}'s loan upon verification.
-          </span>
+        <div className="text-[10px] text-orange-300/90 flex items-center gap-2 pt-0.5 flex-wrap">
+          <span>📉 Loan recovery: −{formatPKR(loanDed)} will be deducted from {salary.employeeName}'s loan upon verification</span>
           {currentLoanBal > 0 && (
-            <span className="font-mono text-slate-300 text-[10px]">
-              Bal: Rs. {formatPKR(currentLoanBal)} → <strong className="text-white">Rs. {formatPKR(Math.max(0, currentLoanBal - loanDed))}</strong>
+            <span className="text-slate-400">
+              (Current Bal: {formatPKR(currentLoanBal)} → <strong className="text-white">{formatPKR(Math.max(0, currentLoanBal - loanDed))}</strong>)
             </span>
           )}
         </div>
       )}
-
-      <div className="flex items-center justify-between border-t border-emerald-800/40 pt-2 flex-wrap gap-2 text-[11px]">
-        <span className="text-emerald-300 font-mono">
-          Payout to Bank/Cash: <b className="text-white font-bold">Rs. {formatPKR(paidNow)}</b>
-        </span>
-        {isFullySettled ? (
-          <span className="text-emerald-400 font-bold bg-emerald-950/90 border border-emerald-600/60 px-2.5 py-0.5 rounded text-[11px] inline-flex items-center gap-1 shadow-sm">
-            ✓ Full Salary Settled (No Remaining)
-          </span>
-        ) : (
-          <span className="text-amber-300 font-mono font-bold bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded text-[11px]">
-            Remaining Salary: Rs. {formatPKR(remaining)}
-          </span>
-        )}
-      </div>
     </div>
   );
 };
 
 export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties }) => {
+  const isAdmin = ['ADMIN', 'ADMIN_PUBLISHER'].includes(user?.role);
   const hasCache = verifierDataCache.pendingEntries !== null;
 
   const [pendingEntries, setPendingEntries] = useState(verifierDataCache.pendingEntries || []);
@@ -402,6 +411,15 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     const crAcc = entry.crAccountId?._id || entry.crAccountId || '';
     const recAcc = entry.receivingAccountId?._id || entry.receivingAccountId || drAcc;
 
+    const isSalary = entry.entryType === 'SALARY';
+    const salary = entry.salaryDetails || entry.entryData?.payrollSnapshot || {};
+    const gross = Number(salary.grossSalary ?? (isSalary ? entry.amount : 0));
+    const loanDed = Number(salary.loanDeduction ?? entry.entryData?.loanDeduction ?? 0);
+    const lopDed = Number(salary.lopDeduction || 0);
+    const otherDed = Number(salary.otherDeduction || 0);
+    const totalDed = loanDed + lopDed + otherDed;
+    const netPayable = Number(salary.netPayable ?? Math.max(0, gross - totalDed));
+
     setEditForm({
       amount: entry.amount || '',
       detail: entry.detail || '',
@@ -416,6 +434,29 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       drAccountId: drAcc,
       receivingAccountId: recAcc,
       editNotes: '',
+      // Salary-specific fields
+      grossSalary: gross,
+      loanDeduction: loanDed,
+      lopDeduction: lopDed,
+      otherDeduction: otherDed,
+      netPayable: netPayable,
+      employeeName: salary.employeeName || entry.submittedByName || 'Staff Member',
+      currentLoanBalance: Number(salary.currentLoanBalance || 0),
+      alreadyPaid: Number(salary.alreadyPaid || 0),
+    });
+  };
+
+  const handleSalaryFieldChange = (field, value) => {
+    setEditForm((prev) => {
+      const updated = { ...prev, [field]: value };
+      const g = Number(updated.grossSalary || 0);
+      const loan = Number(updated.loanDeduction || 0);
+      const lop = Number(updated.lopDeduction || 0);
+      const other = Number(updated.otherDeduction || 0);
+      const totalDed = loan + lop + other;
+      const net = Math.max(0, g - totalDed);
+      updated.netPayable = net;
+      return updated;
     });
   };
 
@@ -448,6 +489,19 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                   date: editForm.date ? new Date(editForm.date).toISOString() : e.date,
                   detail: editForm.detail ?? e.detail,
                   rentMonth: editForm.rentMonth || e.rentMonth,
+                  crAccountId: accounts.find((a) => String(a._id) === String(editForm.crAccountId)) || e.crAccountId,
+                  salaryDetails: e.entryType === 'SALARY' ? {
+                    ...(e.salaryDetails || {}),
+                    grossSalary: Number(editForm.grossSalary) || e.salaryDetails?.grossSalary,
+                    loanDeduction: Number(editForm.loanDeduction) ?? e.salaryDetails?.loanDeduction,
+                    lopDeduction: Number(editForm.lopDeduction) ?? e.salaryDetails?.lopDeduction,
+                    otherDeduction: Number(editForm.otherDeduction) ?? e.salaryDetails?.otherDeduction,
+                    totalDeduction: (Number(editForm.loanDeduction) || 0) + (Number(editForm.lopDeduction) || 0) + (Number(editForm.otherDeduction) || 0),
+                    netPayable: Number(editForm.netPayable) || e.salaryDetails?.netPayable,
+                    thisPayout: Number(editForm.amount) || e.amount,
+                    remainingAfterThis: Math.max(0, (Number(editForm.netPayable) || 0) - ((e.salaryDetails?.alreadyPaid || 0) + (Number(editForm.amount) || 0))),
+                    isFullySettled: Math.max(0, (Number(editForm.netPayable) || 0) - ((e.salaryDetails?.alreadyPaid || 0) + (Number(editForm.amount) || 0))) <= 0.01,
+                  } : e.salaryDetails,
                 }
               : e
           )
@@ -1034,7 +1088,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           <span>Verify / OK</span>
                         </button>
 
-                        {!entry.isEdited && (
+                        {(!entry.isEdited || isAdmin) && (
                           <button
                             onClick={() => handleOpenEdit(entry)}
                             disabled={savingEntryId === entry._id}
@@ -1273,7 +1327,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                                 <span>Verify / OK</span>
                               </button>
 
-                              {!entry.isEdited && (
+                              {(!entry.isEdited || isAdmin) && (
                                 <button
                                   onClick={() => handleOpenEdit(entry)}
                                   disabled={savingEntryId === entry._id}
@@ -1364,22 +1418,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+              {editingEntry?.entryType === 'SALARY' ? (
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Amount (PKR)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    value={editForm.amount}
-                    onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
-                    required
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Date</label>
+                  <label className="block text-slate-400 font-semibold mb-1">Payout Date</label>
                   <input
                     type="date"
                     value={editForm.date}
@@ -1388,9 +1429,35 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
                   />
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">Amount (PKR)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="1"
+                      value={editForm.amount}
+                      onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+                      required
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                    />
+                  </div>
 
-              {(editingEntry?.entryType === 'EXPENSE' || editingEntry?.entryType === 'RENT') && (
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={editForm.date}
+                      onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                      required
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {(editingEntry?.entryType === 'EXPENSE' || editingEntry?.entryType === 'RENT' || editingEntry?.entryType === 'SALARY') && (
                 <div>
                   <label className="block text-slate-400 font-semibold mb-1">
                     Narration / Description
@@ -1398,11 +1465,13 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                   <textarea
                     value={editForm.detail}
                     onChange={(e) => setEditForm({ ...editForm, detail: e.target.value })}
-                    rows={3}
+                    rows={2}
                     maxLength={1000}
                     placeholder={
                       editingEntry.entryType === 'RENT'
                         ? 'Enter the rent receipt narration or description'
+                        : editingEntry.entryType === 'SALARY'
+                        ? 'Enter salary payout narration or notes'
                         : 'Enter the expense narration or description'
                     }
                     className="w-full resize-y bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white leading-relaxed"
@@ -1428,7 +1497,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Rent Month (YYYY-MM)</label>
+                  <label className="block text-slate-400 font-semibold mb-1">
+                    {editingEntry?.entryType === 'SALARY' ? 'Salary Month (YYYY-MM)' : 'Rent Month (YYYY-MM)'}
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. 2026-08"
@@ -1539,7 +1610,120 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </div>
               )}
 
-              {editingEntry?.entryType === 'EXPENSE' ? (
+              {editingEntry?.entryType === 'SALARY' ? (
+                <div className="p-3.5 bg-slate-950/90 border border-slate-800 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2 flex-wrap gap-1">
+                    <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                      💼 Edit Salary Breakdown — <strong className="text-indigo-400">{editForm.employeeName}</strong>
+                    </span>
+                    {editForm.currentLoanBalance > 0 && (
+                      <span className="text-[10px] text-orange-400 font-mono bg-orange-950/60 border border-orange-800/60 px-2 py-0.5 rounded">
+                        Active Loan Bal: {formatPKR(editForm.currentLoanBalance)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">Gross Salary</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editForm.grossSalary}
+                        onChange={(e) => handleSalaryFieldChange('grossSalary', e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] text-orange-400 font-semibold mb-1">Loan Deduction</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editForm.loanDeduction}
+                        onChange={(e) => handleSalaryFieldChange('loanDeduction', e.target.value)}
+                        className="w-full bg-slate-900 border border-orange-800/60 rounded-lg px-2.5 py-1.5 text-orange-300 font-mono text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] text-rose-400 font-semibold mb-1">Absent / LOP Ded</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editForm.lopDeduction}
+                        onChange={(e) => handleSalaryFieldChange('lopDeduction', e.target.value)}
+                        className="w-full bg-slate-900 border border-rose-800/60 rounded-lg px-2.5 py-1.5 text-rose-300 font-mono text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] text-rose-400 font-semibold mb-1">Other Ded</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editForm.otherDeduction}
+                        onChange={(e) => handleSalaryFieldChange('otherDeduction', e.target.value)}
+                        className="w-full bg-slate-900 border border-rose-800/60 rounded-lg px-2.5 py-1.5 text-rose-300 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/70">
+                    <div>
+                      <label className="block text-[11px] text-emerald-400 font-semibold mb-1">
+                        Net Payable (Gross − Ded)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editForm.netPayable}
+                        onChange={(e) => setEditForm({ ...editForm, netPayable: e.target.value })}
+                        className="w-full bg-slate-900 border border-emerald-700/60 rounded-lg px-2.5 py-1.5 text-emerald-300 font-mono font-bold text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] text-blue-400 font-semibold mb-1">
+                        This Payout Amount (Installment)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="1"
+                        value={editForm.amount}
+                        onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+                        required
+                        className="w-full bg-slate-900 border border-blue-700/60 rounded-lg px-2.5 py-1.5 text-blue-200 font-mono font-bold text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                      Paid From (Cr. Bank / Cash Account)
+                    </label>
+                    <select
+                      value={editForm.crAccountId}
+                      onChange={(e) => setEditForm({ ...editForm, crAccountId: e.target.value })}
+                      required
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium text-xs"
+                    >
+                      <option value="">-- Select Disbursing Bank / Cash Account --</option>
+                      {accounts.map((a) => (
+                        <option key={a._id} value={a._id}>
+                          {a.name} ({a.type}) — Bal: {formatPKR(a.currentBalance || 0)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : editingEntry?.entryType === 'EXPENSE' ? (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-slate-400 font-semibold mb-1">
