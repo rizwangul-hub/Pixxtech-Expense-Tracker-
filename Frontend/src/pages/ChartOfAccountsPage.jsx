@@ -229,6 +229,8 @@ export function ChartOfAccountsPage({ currentUser }) {
     try {
       await accountsAPI.updateCategory(editingCategory._id, {
         name: editingCategory.name.trim(),
+        propertyId: editingCategory.propertyId || null,
+        unitId: editingCategory.unitId || null,
         parentCategoryId: editingCategory.parentCategoryId || null,
         isMainHead: editingCategory.isMainHead,
       });
@@ -824,7 +826,14 @@ export function ChartOfAccountsPage({ currentUser }) {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setEditingCategory({ ...c, parentCategoryId: c.parentCategoryId?._id || c.parentCategoryId || '' })}
+                              onClick={() =>
+                                setEditingCategory({
+                                  ...c,
+                                  propertyId: c.propertyId?._id || c.propertyId || '',
+                                  unitId: c.unitId?._id || c.unitId || '',
+                                  parentCategoryId: c.parentCategoryId?._id || c.parentCategoryId || '',
+                                })
+                              }
                               className="px-2 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded hover:bg-amber-100"
                             >
                               Edit
@@ -1388,23 +1397,101 @@ export function ChartOfAccountsPage({ currentUser }) {
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold"
               />
             </div>
-            {!editingCategory.isMainHead && (
+
+            {/* Property Head Picker */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Select Property Head (Optional)</label>
+              <select
+                value={editingCategory.propertyId || ''}
+                onChange={(e) => {
+                  const pId = e.target.value;
+                  setEditingCategory({
+                    ...editingCategory,
+                    propertyId: pId,
+                    unitId: '', // Reset unit if property changed
+                    parentCategoryId: pId ? '' : editingCategory.parentCategoryId,
+                  });
+                }}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold bg-white"
+              >
+                <option value="">-- None (General Expense Head) --</option>
+                {safeProperties.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.plazaName || p.propertyName} ({p.city || 'Lahore'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Unit Head Picker - Only if Property is selected */}
+            {editingCategory.propertyId && (
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Main Expense Head</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Select Unit Head (Optional)</label>
+                <select
+                  value={editingCategory.unitId || ''}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, unitId: e.target.value })}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold bg-white"
+                >
+                  <option value="">-- None (Property Own Expense Head) --</option>
+                  {(
+                    safeProperties.find((p) => p._id === editingCategory.propertyId)?.units || []
+                  ).map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.unitName || u.unitNumber || u.name || 'Unit'} {u.tenantName ? `(${u.tenantName})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                  {editingCategory.unitId
+                    ? 'Unit Expense: Head belongs to this specific unit.'
+                    : 'Property Own Expense: Head belongs to the whole property/plaza.'}
+                </p>
+              </div>
+            )}
+
+            {/* Main Expense Head / Office - Shown when No Property is selected */}
+            {!editingCategory.isMainHead && !editingCategory.propertyId && (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Main Expense Head / Office (Optional)
+                </label>
                 <select
                   value={editingCategory.parentCategoryId || ''}
                   onChange={(e) => setEditingCategory({ ...editingCategory, parentCategoryId: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold bg-white"
                 >
-                  <option value="">-- No main head --</option>
-                  {mainExpenseHeads.filter((head) =>
-                    head._id !== editingCategory._id &&
-                    String(head.propertyId?._id || head.propertyId || '') === String(editingCategory.propertyId?._id || editingCategory.propertyId || '') &&
-                    String(head.unitId?._id || head.unitId || '') === String(editingCategory.unitId?._id || editingCategory.unitId || '')
-                  ).map((head) => <option key={head._id} value={head._id}>{head.name}</option>)}
+                  <option value="">-- Standalone / General Head (No office) --</option>
+                  {mainExpenseHeads
+                    .filter((head) => head._id !== editingCategory._id && !head.propertyId && !head.unitId)
+                    .map((head) => (
+                      <option key={head._id} value={head._id}>
+                        {head.name}
+                      </option>
+                    ))}
                 </select>
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                  Group under an office like IT Office Expenses, Bahria Town Office Expenses, etc.
+                </p>
               </div>
             )}
+
+            {/* Derived Scope Badge Preview */}
+            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs font-bold">
+              <span className="text-slate-600">Assigned Scope:</span>
+              {!editingCategory.propertyId ? (
+                <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 text-[11px]">
+                  🌐 General Expense {editingCategory.parentCategoryId ? `(${mainExpenseHeads.find(h => h._id === editingCategory.parentCategoryId)?.name})` : ''}
+                </span>
+              ) : !editingCategory.unitId ? (
+                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px]">
+                  🏢 Property Own ({safeProperties.find(p => p._id === editingCategory.propertyId)?.plazaName})
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-800 text-[11px]">
+                  🚪 Unit Expense ({safeProperties.find(p => p._id === editingCategory.propertyId)?.plazaName} - {(safeProperties.find(p => p._id === editingCategory.propertyId)?.units || []).find(u => u._id === editingCategory.unitId)?.unitName || 'Unit'})
+                </span>
+              )}
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setEditingCategory(null)} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded-lg bg-rose-700 text-white text-xs font-bold">Save Changes</button>

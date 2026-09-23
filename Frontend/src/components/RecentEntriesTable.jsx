@@ -22,6 +22,7 @@ import {
   ImagePlus,
   Sparkles,
   RotateCcw,
+  Building2,
 } from 'lucide-react';
 import { transactionsAPI, vouchersAPI, verificationAPI, uploadAPI } from '../services/api.js';
 import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
@@ -52,6 +53,9 @@ const ENTRY_TYPE_COLORS = {
 export const RecentEntriesTable = ({
   entries = [],
   pendingEntries = [],
+  properties = [],
+  categories = [],
+  accounts = [],
   loading = false,
   onRefresh,
   onEntryUpdated,
@@ -70,6 +74,10 @@ export const RecentEntriesTable = ({
   const [editDetail, setEditDetail] = useState('');
   const [editVoucherNo, setEditVoucherNo] = useState('');
   const [editDate, setEditDate] = useState('');
+  const [editPropertyId, setEditPropertyId] = useState('');
+  const [editUnitId, setEditUnitId] = useState('');
+  const [editParentCategoryId, setEditParentCategoryId] = useState('');
+  const [editCategoryId, setEditCategoryId] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState(null);
   const [deletingPendingId, setDeletingPendingId] = useState(null);
@@ -145,6 +153,24 @@ export const RecentEntriesTable = ({
     setEditDetail(entry.detail || '');
     setEditVoucherNo(entry.voucherNo || '');
     setEditDate(entry.date ? new Date(entry.date).toISOString().split('T')[0] : '');
+
+    const propId = entry.propertyId?._id || entry.propertyId || '';
+    const unitId = entry.unitId?._id || entry.unitId || '';
+    const catId = entry.categoryId?._id || entry.categoryId || '';
+    const currentCat = categories.find((c) => String(c._id) === String(catId));
+    const parentId =
+      entry.parentCategoryId?._id ||
+      entry.parentCategoryId ||
+      entry.entryData?.parentCategoryId ||
+      currentCat?.parentCategoryId?._id ||
+      currentCat?.parentCategoryId ||
+      '';
+
+    setEditPropertyId(propId);
+    setEditUnitId(unitId);
+    setEditParentCategoryId(parentId);
+    setEditCategoryId(catId);
+
     setEditAttachments(getItemAttachments(entry) || []);
     setEditNewFiles([]);
     setUploadingEvidence(false);
@@ -157,6 +183,10 @@ export const RecentEntriesTable = ({
     setEditDetail('');
     setEditVoucherNo('');
     setEditDate('');
+    setEditPropertyId('');
+    setEditUnitId('');
+    setEditParentCategoryId('');
+    setEditCategoryId('');
     setEditAttachments([]);
     setEditNewFiles([]);
     setUploadingEvidence(false);
@@ -170,6 +200,27 @@ export const RecentEntriesTable = ({
   const handleRemoveNewFile = (indexToRemove) => {
     setEditNewFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
+
+  // Compute active categories filtered by scope for the edit pending modal
+  const activeScopeCategories = categories.filter((c) => {
+    if (c.type !== 'EXPENSE') return false;
+    if (c.isMainHead) return false;
+    if (editUnitId) {
+      const uId = c.unitId?._id || c.unitId;
+      return c.expenseClassification === 'UNIT_EXPENSE' && (!uId || String(uId) === String(editUnitId));
+    }
+    if (editPropertyId) {
+      const pId = c.propertyId?._id || c.propertyId;
+      return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && (!pId || String(pId) === String(editPropertyId));
+    }
+    const isGeneral = !c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
+    if (!isGeneral) return false;
+    if (editParentCategoryId) {
+      const parentId = c.parentCategoryId?._id || c.parentCategoryId;
+      return String(parentId) === String(editParentCategoryId);
+    }
+    return true;
+  });
 
   const handleSavePendingEdit = async (e) => {
     e.preventDefault();
@@ -196,13 +247,32 @@ export const RecentEntriesTable = ({
         setUploadingEvidence(false);
       }
 
-      await verificationAPI.updatePending(editingPending._id, {
+      const payload = {
         amount: Number(editAmount),
         detail: editDetail.trim(),
         voucherNo: editVoucherNo.trim(),
         date: editDate,
         attachments: finalAttachments,
-      });
+      };
+
+      if (editingPending.entryType === 'EXPENSE') {
+        const classification = editUnitId
+          ? 'UNIT_EXPENSE'
+          : editPropertyId
+          ? 'PROPERTY_OWN_EXPENSE'
+          : 'GENERAL_EXPENSE';
+        payload.propertyId = editPropertyId || null;
+        payload.unitId = editUnitId || null;
+        payload.expenseClassification = classification;
+        if (editCategoryId) {
+          payload.categoryId = editCategoryId;
+        }
+        if (editParentCategoryId) {
+          payload.parentCategoryId = editParentCategoryId;
+        }
+      }
+
+      await verificationAPI.updatePending(editingPending._id, payload);
       closeEditPending();
       if (onEntryUpdated) onEntryUpdated();
     } catch (err) {
@@ -718,6 +788,167 @@ export const RecentEntriesTable = ({
                   />
                 </div>
               </div>
+
+              {editingPending?.entryType === 'EXPENSE' && (
+                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-lg space-y-3">
+                  <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Building2 size={14} className="text-amber-400" />
+                      Property & Unit Allocation (Derives Scope)
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950/80 border border-amber-800/60 px-2 py-0.5 rounded">
+                      Scope: {editUnitId ? 'UNIT EXPENSE' : editPropertyId ? 'PROPERTY OWN' : editParentCategoryId ? `GENERAL (${categories.find((c) => String(c._id) === String(editParentCategoryId))?.name || 'OFFICE'})` : 'GENERAL EXPENSE'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">Select Property (Optional)</label>
+                      <select
+                        value={editPropertyId}
+                        onChange={(e) => {
+                          const pId = e.target.value;
+                          const newUnitId = pId ? editUnitId : '';
+                          const newParentCatId = pId ? '' : editParentCategoryId;
+                          const nextCats = categories.filter((c) => {
+                            if (c.type !== 'EXPENSE') return false;
+                            if (c.isMainHead) return false;
+                            if (newUnitId && pId) {
+                              const uId = c.unitId?._id || c.unitId;
+                              return c.expenseClassification === 'UNIT_EXPENSE' && (!uId || String(uId) === String(newUnitId));
+                            }
+                            if (pId) {
+                              const propId = c.propertyId?._id || c.propertyId;
+                              return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && (!propId || String(propId) === String(pId));
+                            }
+                            const isGeneral = !c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
+                            if (!isGeneral) return false;
+                            if (newParentCatId) {
+                              const parId = c.parentCategoryId?._id || c.parentCategoryId;
+                              return String(parId) === String(newParentCatId);
+                            }
+                            return true;
+                          });
+                          const isCurrentValid = nextCats.some((c) => String(c._id) === String(editCategoryId));
+                          setEditPropertyId(pId);
+                          setEditUnitId(newUnitId);
+                          setEditParentCategoryId(newParentCatId);
+                          if (!isCurrentValid) {
+                            setEditCategoryId(nextCats[0]?._id || '');
+                          }
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200"
+                      >
+                        <option value="">-- None (General Expense) --</option>
+                        {properties.map((p) => (
+                          <option key={p._id} value={p._id}>
+                            {p.plazaName || p.propertyName || p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {editPropertyId ? (
+                      <div>
+                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Select Unit (Optional)</label>
+                        <select
+                          value={editUnitId}
+                          onChange={(e) => {
+                            const uId = e.target.value;
+                            const nextCats = categories.filter((c) => {
+                              if (c.type !== 'EXPENSE') return false;
+                              if (c.isMainHead) return false;
+                              if (uId) {
+                                const unitIdVal = c.unitId?._id || c.unitId;
+                                return c.expenseClassification === 'UNIT_EXPENSE' && (!unitIdVal || String(unitIdVal) === String(uId));
+                              }
+                              if (editPropertyId) {
+                                const propId = c.propertyId?._id || c.propertyId;
+                                return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && (!propId || String(propId) === String(editPropertyId));
+                              }
+                              return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
+                            });
+                            const isCurrentValid = nextCats.some((c) => String(c._id) === String(editCategoryId));
+                            setEditUnitId(uId);
+                            if (!isCurrentValid) {
+                              setEditCategoryId(nextCats[0]?._id || '');
+                            }
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono"
+                        >
+                          <option value="">-- None (Property Own Expense) --</option>
+                          {(properties.find((p) => p._id === editPropertyId)?.units || []).map((u) => (
+                            <option key={u._id || u.unitName || u} value={u._id || u.unitName || u}>
+                              {u.unitName || u.unitNumber || u.name || u} {u.tenantName ? `(${u.tenantName})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Main Head / Office (Optional)</label>
+                        <select
+                          value={editParentCategoryId}
+                          onChange={(e) => {
+                            const pCatId = e.target.value;
+                            const nextCats = categories.filter((c) => {
+                              if (c.type !== 'EXPENSE') return false;
+                              if (c.isMainHead) return false;
+                              if (c.propertyId || (c.expenseClassification && c.expenseClassification !== 'GENERAL_EXPENSE')) return false;
+                              if (pCatId) {
+                                const parId = c.parentCategoryId?._id || c.parentCategoryId;
+                                return String(parId) === String(pCatId);
+                              }
+                              return true;
+                            });
+                            const isCurrentValid = nextCats.some((c) => String(c._id) === String(editCategoryId));
+                            setEditParentCategoryId(pCatId);
+                            if (!isCurrentValid) {
+                              setEditCategoryId(nextCats[0]?._id || '');
+                            }
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200"
+                        >
+                          <option value="">-- All General Heads / Offices --</option>
+                          {categories
+                            .filter(
+                              (c) =>
+                                c.type === 'EXPENSE' &&
+                                (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE') &&
+                                (c.isMainHead || !c.parentCategoryId)
+                            )
+                            .map((c) => (
+                              <option key={c._id} value={c._id}>
+                                🏢 {c.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                      Expense Head / Sub-Category
+                      <span className="text-[10px] font-mono text-amber-400 ml-1">
+                        ({activeScopeCategories.length} available)
+                      </span>
+                    </label>
+                    <select
+                      value={editCategoryId}
+                      onChange={(e) => setEditCategoryId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200"
+                    >
+                      <option value="">-- Select Expense Category --</option>
+                      {activeScopeCategories.map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-slate-400 mb-1 font-semibold">Amount (PKR) *</label>

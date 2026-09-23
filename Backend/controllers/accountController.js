@@ -63,6 +63,23 @@ export const getAccounts = async (req, res) => {
       .limit(limitNum)
       .lean();
 
+    // Derive balances from active ledger transactions so reversals are
+    // immediately reflected even if a legacy cached balance is stale.
+    const activeTransactions = await Transaction.find({ status: { $ne: 'REVERSED' } })
+      .select('drAccountId crAccountId amount')
+      .lean();
+    const netMovementByAccount = new Map();
+    activeTransactions.forEach((tx) => {
+      const amount = Number(tx.amount) || 0;
+      const drId = tx.drAccountId?.toString();
+      const crId = tx.crAccountId?.toString();
+      if (drId) netMovementByAccount.set(drId, (netMovementByAccount.get(drId) || 0) + amount);
+      if (crId) netMovementByAccount.set(crId, (netMovementByAccount.get(crId) || 0) - amount);
+    });
+
+    const getLiveBalance = (account) =>
+      round2((account.openingBalance || 0) + (netMovementByAccount.get(account._id.toString()) || 0));
+
     // Calculate portfolio liquidity totals from all active bank & cash accounts
     const activeAccounts = await Account.find({ isActive: true, isClearing: { $ne: true } }).lean();
     let totalCompanyLiquidity = 0;
@@ -72,7 +89,7 @@ export const getAccounts = async (req, res) => {
     let cashCount = 0;
 
     activeAccounts.forEach((acc) => {
-      const bal = acc.currentBalance || 0;
+      const bal = getLiveBalance(acc);
       totalCompanyLiquidity += bal;
       if (acc.type === 'BANK') {
         bankTotal += bal;
@@ -91,7 +108,7 @@ export const getAccounts = async (req, res) => {
             acc.name?.toLowerCase().includes(k.toLowerCase())
           ));
 
-      const curBal = acc.currentBalance ?? 0;
+      const curBal = getLiveBalance(acc);
       return {
         ...acc,
         currentBalance: curBal,
@@ -155,6 +172,7 @@ export const getAccountById = async (req, res) => {
     // Fetch recent 10 transactions for quick preview
     const recentTransactions = await Transaction.find({
       $or: [{ drAccountId: id }, { crAccountId: id }],
+      status: { $ne: 'REVERSED' },
     })
       .sort({ date: -1, createdAt: -1 })
       .limit(10)
@@ -490,6 +508,7 @@ export const getAccountLedger = async (req, res) => {
     // 2. Fetch transactions in the period
     const txQuery = {
       $or: [{ drAccountId: id }, { crAccountId: id }],
+      status: { $ne: 'REVERSED' },
     };
 
     if (periodStart && periodEnd) {
@@ -516,9 +535,8 @@ export const getAccountLedger = async (req, res) => {
       .populate('categoryId', 'name type isRentalHead')
       .lean();
 
-    // 3. Compute running balance sequentially
-    // REVERSED transactions are shown in the ledger for audit trail, but
-    // they must NOT affect the running balance or totals.
+    // 3. Compute running balance sequentially. Reversed transactions are
+    // excluded above from normal account statements.
     let runningBalance = openingBalance;
     let totalMoneyIn = 0;
     let totalMoneyOut = 0;
@@ -526,11 +544,8 @@ export const getAccountLedger = async (req, res) => {
     const ledgerEntries = transactions.map((tx) => {
       const isDr = tx.drAccountId?._id?.toString() === id.toString();
       const isCr = tx.crAccountId?._id?.toString() === id.toString();
-      const isReversed = tx.status === 'REVERSED';
-
-      // REVERSED transactions: show the row but do NOT affect balance
-      const debit = (isDr && !isReversed) ? tx.amount : 0;
-      const credit = (isCr && !isReversed) ? tx.amount : 0;
+      const debit = isDr ? tx.amount : 0;
+      const credit = isCr ? tx.amount : 0;
 
       runningBalance = round2(runningBalance + debit - credit);
       totalMoneyIn += debit;
@@ -546,11 +561,11 @@ export const getAccountLedger = async (req, res) => {
         crAccount: tx.crAccountId?.name || 'Account',
         categoryName: tx.categoryId?.name || 'General',
         // Show original amounts in the row for audit trail visibility
-        debit: isReversed ? 0 : round2(isDr ? tx.amount : 0),
-        credit: isReversed ? 0 : round2(isCr ? tx.amount : 0),
+        debit: round2(isDr ? tx.amount : 0),
+        credit: round2(isCr ? tx.amount : 0),
         balance: round2(runningBalance),
         status: tx.status,
-        originalAmount: isReversed ? tx.amount : null,
+        originalAmount: null,
       };
     });
 
@@ -956,6 +971,35 @@ export const updateCategory = async (req, res) => {
 
     const name = typeof req.body.name === 'string' ? req.body.name.trim() : category.name;
     if (!name) return apiError(res, 'Expense head name is required.', 400);
+
+    // Update Property & Unit links if provided
+    let propertyId = category.propertyId;
+    let unitId = category.unitId;
+
+    if (req.body.propertyId !== undefined) {
+      propertyId = req.body.propertyId && mongoose.Types.ObjectId.isValid(req.body.propertyId) ? req.body.propertyId : null;
+      // If property was removed, also reset unit
+      if (!propertyId) {
+        unitId = null;
+      }
+    }
+
+    if (req.body.unitId !== undefined) {
+      unitId = req.body.unitId && propertyId && mongoose.Types.ObjectId.isValid(req.body.unitId) ? req.body.unitId : null;
+    }
+
+    // Derive correct classification
+    let expenseClassification = 'GENERAL_EXPENSE';
+    if (unitId) {
+      expenseClassification = 'UNIT_EXPENSE';
+    } else if (propertyId) {
+      expenseClassification = 'PROPERTY_OWN_EXPENSE';
+    }
+
+    category.propertyId = propertyId;
+    category.unitId = unitId;
+    category.expenseClassification = expenseClassification;
+
     if (req.body.parentCategoryId !== undefined) {
       const parentId = req.body.parentCategoryId || null;
       if (parentId && (!mongoose.Types.ObjectId.isValid(parentId) || String(parentId) === String(id))) {
@@ -980,7 +1024,13 @@ export const updateCategory = async (req, res) => {
     category.name = name;
     if (req.body.isMainHead !== undefined) category.isMainHead = Boolean(req.body.isMainHead);
     await category.save();
-    return apiSuccess(res, { category }, `Expense head '${category.name}' updated successfully.`);
+
+    const populated = await Category.findById(category._id)
+      .populate('propertyId', 'plazaName propertyName city')
+      .populate('parentCategoryId', 'name')
+      .lean();
+
+    return apiSuccess(res, { category: populated || category }, `Expense head '${category.name}' updated successfully.`);
   } catch (error) {
     console.error('[Update Category Error]:', error);
     return apiError(res, error.message || 'Failed to update expense head.', 500);

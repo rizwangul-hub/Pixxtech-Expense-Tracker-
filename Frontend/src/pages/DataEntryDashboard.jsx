@@ -624,6 +624,9 @@ export const DataEntryDashboard = ({ user }) => {
         <RecentEntriesTable
           entries={recentEntries}
           pendingEntries={pendingEntries}
+          properties={properties}
+          categories={categories}
+          accounts={accounts}
           loading={refreshingEntries || loadingData}
           onRefresh={refreshEntries}
           onEntryUpdated={refreshEntries}

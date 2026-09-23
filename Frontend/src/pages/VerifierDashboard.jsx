@@ -431,6 +431,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     setEditNewFiles([]);
     setEditUploading(false);
 
+    const currentCat = categories.find((c) => String(c._id) === String(entry.categoryId?._id || entry.categoryId));
+    const initialParentId = entry.parentCategoryId?._id || entry.parentCategoryId || entry.entryData?.parentCategoryId || currentCat?.parentCategoryId?._id || currentCat?.parentCategoryId || '';
+
     setEditForm({
       amount: entry.amount || '',
       detail: entry.detail || '',
@@ -440,6 +443,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       expenseClassification: entry.expenseClassification || 'GENERAL_EXPENSE',
       propertyId: entry.propertyId?._id || entry.propertyId || '',
       unitId: entry.unitId || '',
+      parentCategoryId: initialParentId,
       categoryId: entry.categoryId?._id || entry.categoryId || '',
       crAccountId: crAcc,
       drAccountId: drAcc,
@@ -644,6 +648,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   // Compute active categories filtered by scope for the edit modal
   const activeScopeCategories = categories.filter((c) => {
     if (c.type !== 'EXPENSE') return false;
+    if (c.isMainHead) return false;
     if (editForm.unitId) {
       const uId = c.unitId?._id || c.unitId;
       return c.expenseClassification === 'UNIT_EXPENSE' && (!uId || String(uId) === String(editForm.unitId));
@@ -652,7 +657,13 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       const pId = c.propertyId?._id || c.propertyId;
       return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && (!pId || String(pId) === String(editForm.propertyId));
     }
-    return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
+    const isGeneral = !c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
+    if (!isGeneral) return false;
+    if (editForm.parentCategoryId) {
+      const parentId = c.parentCategoryId?._id || c.parentCategoryId;
+      return String(parentId) === String(editForm.parentCategoryId);
+    }
+    return true;
   });
 
   return (
@@ -1630,8 +1641,10 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           const pId = e.target.value;
                           const classification = pId ? (editForm.unitId ? 'UNIT_EXPENSE' : 'PROPERTY_OWN_EXPENSE') : 'GENERAL_EXPENSE';
                           const newUnitId = pId ? editForm.unitId : '';
+                          const newParentCatId = pId ? '' : editForm.parentCategoryId;
                           const nextCats = categories.filter((c) => {
                             if (c.type !== 'EXPENSE') return false;
+                            if (c.isMainHead) return false;
                             if (newUnitId && pId) {
                               const uId = c.unitId?._id || c.unitId;
                               return c.expenseClassification === 'UNIT_EXPENSE' && (!uId || String(uId) === String(newUnitId));
@@ -1640,7 +1653,13 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                               const propId = c.propertyId?._id || c.propertyId;
                               return c.expenseClassification === 'PROPERTY_OWN_EXPENSE' && (!propId || String(propId) === String(pId));
                             }
-                            return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
+                            const isGeneral = !c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
+                            if (!isGeneral) return false;
+                            if (newParentCatId) {
+                              const parId = c.parentCategoryId?._id || c.parentCategoryId;
+                              return String(parId) === String(newParentCatId);
+                            }
+                            return true;
                           });
                           const isCurrentValid = nextCats.some((c) => String(c._id) === String(editForm.categoryId));
                           const newCatId = isCurrentValid ? editForm.categoryId : (nextCats[0]?._id || '');
@@ -1649,6 +1668,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                             ...editForm,
                             propertyId: pId,
                             unitId: newUnitId,
+                            parentCategoryId: newParentCatId,
                             expenseClassification: classification,
                             categoryId: newCatId,
                           });
@@ -1664,7 +1684,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                       </select>
                     </div>
 
-                    {editForm.propertyId && (
+                    {editForm.propertyId ? (
                       <div>
                         <label className="block text-[11px] text-slate-400 font-semibold mb-1">Select Unit (Optional)</label>
                         <select
@@ -1674,6 +1694,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                             const classification = uId ? 'UNIT_EXPENSE' : 'PROPERTY_OWN_EXPENSE';
                             const nextCats = categories.filter((c) => {
                               if (c.type !== 'EXPENSE') return false;
+                              if (c.isMainHead) return false;
                               if (uId) {
                                 const unitIdVal = c.unitId?._id || c.unitId;
                                 return c.expenseClassification === 'UNIT_EXPENSE' && (!unitIdVal || String(unitIdVal) === String(uId));
@@ -1702,6 +1723,49 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                               {u.unitName || u.unitNumber || u.name || u} {u.tenantName ? `(${u.tenantName})` : ''}
                             </option>
                           ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Main Head / Office (Optional)</label>
+                        <select
+                          value={editForm.parentCategoryId || ''}
+                          onChange={(e) => {
+                            const pCatId = e.target.value;
+                            const nextCats = categories.filter((c) => {
+                              if (c.type !== 'EXPENSE') return false;
+                              if (c.isMainHead) return false;
+                              if (c.propertyId || (c.expenseClassification && c.expenseClassification !== 'GENERAL_EXPENSE')) return false;
+                              if (pCatId) {
+                                const parId = c.parentCategoryId?._id || c.parentCategoryId;
+                                return String(parId) === String(pCatId);
+                              }
+                              return true;
+                            });
+                            const isCurrentValid = nextCats.some((c) => String(c._id) === String(editForm.categoryId));
+                            const newCatId = isCurrentValid ? editForm.categoryId : (nextCats[0]?._id || '');
+
+                            setEditForm({
+                              ...editForm,
+                              parentCategoryId: pCatId,
+                              categoryId: newCatId,
+                            });
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                        >
+                          <option value="">-- All General Heads / Offices --</option>
+                          {categories
+                            .filter(
+                              (c) =>
+                                c.type === 'EXPENSE' &&
+                                (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE') &&
+                                (c.isMainHead || !c.parentCategoryId)
+                            )
+                            .map((c) => (
+                              <option key={c._id} value={c._id}>
+                                🏢 {c.name}
+                              </option>
+                            ))}
                         </select>
                       </div>
                     )}

@@ -1898,11 +1898,14 @@ export const reverseSalaryPayment = async (req, res) => {
       pDoc.transactionId,
     ].filter((id, index, ids) => ids.findIndex((item) => String(item) === String(id)) === index);
     let paidAmount = 0;
+    const affectedAccountIds = new Set();
 
     for (const transactionId of transactionIds) {
       const tx = await Transaction.findById(transactionId);
       if (!tx || tx.status === 'REVERSED') continue;
 
+      if (tx.crAccountId) affectedAccountIds.add(tx.crAccountId.toString());
+      if (tx.drAccountId) affectedAccountIds.add(tx.drAccountId.toString());
       const transactionAmount = round2(tx.amount);
       paidAmount = round2(paidAmount + transactionAmount);
       tx.status = 'REVERSED';
@@ -1916,6 +1919,25 @@ export const reverseSalaryPayment = async (req, res) => {
         Account.findByIdAndUpdate(tx.crAccountId, { $inc: { currentBalance: transactionAmount } }),
         Account.findByIdAndUpdate(tx.drAccountId, { $inc: { currentBalance: -transactionAmount } }),
       ]);
+    }
+
+    // Rebuild affected bank/cash balances from the non-reversed ledger. This
+    // corrects legacy cached balances as well as the transactions reversed now.
+    for (const accountId of affectedAccountIds) {
+      const account = await Account.findById(accountId).lean();
+      if (!account) continue;
+      const activeTransactions = await Transaction.find({
+        status: { $ne: 'REVERSED' },
+        $or: [{ drAccountId: accountId }, { crAccountId: accountId }],
+      })
+        .select('drAccountId crAccountId amount')
+        .lean();
+      let balance = Number(account.openingBalance) || 0;
+      activeTransactions.forEach((tx) => {
+        if (tx.drAccountId?.toString() === accountId) balance += Number(tx.amount) || 0;
+        if (tx.crAccountId?.toString() === accountId) balance -= Number(tx.amount) || 0;
+      });
+      await Account.findByIdAndUpdate(accountId, { currentBalance: round2(balance) });
     }
 
     // Legacy payroll rows may not have installment transaction links. Keep the
