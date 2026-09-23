@@ -21,6 +21,7 @@ import {
   Upload,
   ImagePlus,
   Sparkles,
+  RotateCcw,
 } from 'lucide-react';
 import { transactionsAPI, vouchersAPI, verificationAPI, uploadAPI } from '../services/api.js';
 import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
@@ -229,7 +230,17 @@ export const RecentEntriesTable = ({
 
   const q = searchTerm.toLowerCase();
 
-  const filteredPending = pendingEntries.filter((e) =>
+  // Separate any pending entries in entries prop so they never appear under 'Verified & Posted'
+  const pendingFromEntries = entries.filter((tx) => tx.status === 'PENDING');
+  const verifiedOnlyEntries = entries.filter((tx) => tx.status !== 'PENDING');
+
+  // Combine pendingEntries prop with any pending entries from entries prop (avoiding duplicate IDs)
+  const combinedPending = [
+    ...pendingEntries,
+    ...pendingFromEntries.filter((tx) => !pendingEntries.some((p) => p._id?.toString() === tx._id?.toString())),
+  ];
+
+  const filteredPending = combinedPending.filter((e) =>
     !q ||
     e.voucherNo?.toLowerCase().includes(q) ||
     e.detail?.toLowerCase().includes(q) ||
@@ -237,7 +248,7 @@ export const RecentEntriesTable = ({
     (e.categoryId?.name || e.categoryId || '').toString().toLowerCase().includes(q)
   );
 
-  const filteredVerified = entries.filter((tx) =>
+  const filteredVerified = verifiedOnlyEntries.filter((tx) =>
     !q ||
     tx.voucherNo?.toLowerCase().includes(q) ||
     tx.detail?.toLowerCase().includes(q) ||
@@ -507,7 +518,6 @@ export const RecentEntriesTable = ({
                 </tr>
               ) : (
                 filteredVerified.map((tx) => {
-                  const isVerified = tx.status === 'VERIFIED';
                   const formattedDate = tx.date
                     ? new Date(tx.date).toISOString().split('T')[0]
                     : 'N/A';
@@ -572,15 +582,20 @@ export const RecentEntriesTable = ({
                         {formatPKR(tx.amount)}
                       </td>
                       <td className="text-center whitespace-nowrap">
-                        {isVerified ? (
+                        {tx.status === 'REVERSED' ? (
+                          <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-800 border border-rose-300 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                            <RotateCcw className="w-3.5 h-3.5 text-rose-700" />
+                            Reversed
+                          </span>
+                        ) : tx.status === 'VOID' ? (
+                          <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-800 border border-slate-300 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                            <XCircle className="w-3.5 h-3.5 text-slate-600" />
+                            Void
+                          </span>
+                        ) : (
                           <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full text-xs font-bold">
                             <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
                             Verified
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-0.5 rounded-full text-xs font-bold">
-                            <Clock className="w-3.5 h-3.5 text-amber-700" />
-                            Pending
                           </span>
                         )}
                       </td>

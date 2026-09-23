@@ -179,6 +179,13 @@ export const getMyEntries = async (req, res) => {
       filter.createdBy = req.user._id;
     }
 
+    if (req.query.status && req.query.status !== 'ALL') {
+      filter.status = req.query.status;
+    } else if (!req.query.status) {
+      // Return official verified or posted ledger transactions by default
+      filter.status = { $in: ['VERIFIED', 'POSTED'] };
+    }
+
     const transactions = await Transaction.find(filter)
       .populate('categoryId', 'name type isRentalHead')
       .populate('drAccountId', 'name type currentBalance bankName cashHolder')

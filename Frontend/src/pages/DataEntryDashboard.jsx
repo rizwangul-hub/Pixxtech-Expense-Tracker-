@@ -92,11 +92,16 @@ export const DataEntryDashboard = ({ user }) => {
       const accs = accRes.accounts || accRes.data?.accounts || [];
       const custs = accRes.grouped?.custodians || [];
       const cats = catRes.categories || catRes.data?.categories || [];
-      const props = propRes.properties || propRes.data?.properties || [];
-      const recents = entriesRes.transactions || entriesRes.data?.transactions || [];
+      const rawRecents = entriesRes.transactions || entriesRes.data?.transactions || [];
+      const recents = rawRecents.filter((tx) => tx.status !== 'PENDING');
+      const pendingFromTx = rawRecents.filter((tx) => tx.status === 'PENDING');
       const heads = headsRes?.data?.heads || headsRes?.heads || [];
       // pending entries: unverified submissions by this user
-      const pendings = (pendingRes?.data || []).filter(e => e.status !== 'VERIFIED');
+      const rawPendings = (pendingRes?.data || []).filter(e => e.status !== 'VERIFIED');
+      const pendings = [
+        ...rawPendings,
+        ...pendingFromTx.filter((pt) => !rawPendings.some((rp) => rp._id?.toString() === pt._id?.toString())),
+      ];
 
       setAccounts(accs);
       setCustodians(custs);
@@ -132,8 +137,14 @@ export const DataEntryDashboard = ({ user }) => {
         accountsAPI.getActiveSummary(),
         verificationAPI.getMySubmissions().catch(() => ({ data: [] })),
       ]);
-      const recents = entriesRes.transactions || [];
-      const pendings = (pendingRes?.data || []).filter(e => e.status !== 'VERIFIED');
+      const rawRecents = entriesRes.transactions || [];
+      const recents = rawRecents.filter((tx) => tx.status !== 'PENDING');
+      const pendingFromTx = rawRecents.filter((tx) => tx.status === 'PENDING');
+      const rawPendings = (pendingRes?.data || []).filter(e => e.status !== 'VERIFIED');
+      const pendings = [
+        ...rawPendings,
+        ...pendingFromTx.filter((pt) => !rawPendings.some((rp) => rp._id?.toString() === pt._id?.toString())),
+      ];
       setRecentEntries(recents);
       setPendingEntries(pendings);
       setAccounts(accRes.accounts || accRes.data?.accounts || []);
