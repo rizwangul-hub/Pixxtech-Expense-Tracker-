@@ -1166,17 +1166,15 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           <span>Verify / OK</span>
                         </button>
 
-                        {(!entry.isEdited || isAdmin) && (
-                          <button
-                            onClick={() => handleOpenEdit(entry)}
-                            disabled={savingEntryId === entry._id}
-                            className="p-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 transition disabled:opacity-50 flex items-center gap-1 text-xs font-bold"
-                            title="Edit Entry"
-                          >
-                            <Edit3 size={15} />
-                            <span>Edit</span>
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleOpenEdit(entry)}
+                          disabled={savingEntryId === entry._id}
+                          className="p-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 transition disabled:opacity-50 flex items-center gap-1 text-xs font-bold"
+                          title="Edit Entry"
+                        >
+                          <Edit3 size={15} />
+                          <span>Edit</span>
+                        </button>
 
                         <button
                           onClick={() => handleOpenReject(entry)}
@@ -1430,16 +1428,14 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                                 <span>Verify / OK</span>
                               </button>
 
-                              {(!entry.isEdited || isAdmin) && (
-                                <button
-                                  onClick={() => handleOpenEdit(entry)}
-                                  disabled={savingEntryId === entry._id}
-                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 transition disabled:opacity-50"
-                                  title="Edit Entry"
-                                >
-                                  <Edit3 size={13} />
-                                </button>
-                              )}
+                              <button
+                                onClick={() => handleOpenEdit(entry)}
+                                disabled={savingEntryId === entry._id}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 transition disabled:opacity-50"
+                                title="Edit Entry"
+                              >
+                                <Edit3 size={13} />
+                              </button>
 
                               <button
                                 onClick={() => handleOpenReject(entry)}

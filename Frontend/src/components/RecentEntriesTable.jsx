@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   FileText,
   Clock,
@@ -18,11 +18,14 @@ import {
   Paperclip,
   Eye,
   Image as ImageIcon,
+  Upload,
+  ImagePlus,
+  Sparkles,
 } from 'lucide-react';
-import { transactionsAPI, vouchersAPI, verificationAPI } from '../services/api.js';
+import { transactionsAPI, vouchersAPI, verificationAPI, uploadAPI } from '../services/api.js';
 import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
 import { ReceiptViewerModal } from './ReceiptViewerModal.jsx';
-import { downloadReceiptEvidenceDocument } from '../utils/downloadReceipt.js';
+import { downloadReceiptEvidenceDocument, downloadReceiptImage } from '../utils/downloadReceipt.js';
 
 
 const formatPKR = (val) => {
@@ -69,6 +72,10 @@ export const RecentEntriesTable = ({
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState(null);
   const [deletingPendingId, setDeletingPendingId] = useState(null);
+  const [editAttachments, setEditAttachments] = useState([]);
+  const [editNewFiles, setEditNewFiles] = useState([]);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const editFileInputRef = useRef(null);
 
   // Receipt Evidence States
   const [selectedReceiptItem, setSelectedReceiptItem] = useState(null);
@@ -137,6 +144,9 @@ export const RecentEntriesTable = ({
     setEditDetail(entry.detail || '');
     setEditVoucherNo(entry.voucherNo || '');
     setEditDate(entry.date ? new Date(entry.date).toISOString().split('T')[0] : '');
+    setEditAttachments(getItemAttachments(entry) || []);
+    setEditNewFiles([]);
+    setUploadingEvidence(false);
     setEditError(null);
   };
 
@@ -146,7 +156,18 @@ export const RecentEntriesTable = ({
     setEditDetail('');
     setEditVoucherNo('');
     setEditDate('');
+    setEditAttachments([]);
+    setEditNewFiles([]);
+    setUploadingEvidence(false);
     setEditError(null);
+  };
+
+  const handleRemoveExistingAttachment = (indexToRemove) => {
+    setEditAttachments((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleRemoveNewFile = (indexToRemove) => {
+    setEditNewFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   const handleSavePendingEdit = async (e) => {
@@ -155,11 +176,31 @@ export const RecentEntriesTable = ({
     try {
       setSavingEdit(true);
       setEditError(null);
+
+      let finalAttachments = [...editAttachments];
+      if (editNewFiles.length > 0) {
+        setUploadingEvidence(true);
+        try {
+          const uploadRes = await uploadAPI.images(editNewFiles);
+          if (uploadRes?.images?.length) {
+            finalAttachments = [...finalAttachments, ...uploadRes.images];
+          }
+        } catch (uploadErr) {
+          console.error('Evidence upload error:', uploadErr);
+          setEditError('Failed to upload evidence images. Please check the files and try again.');
+          setSavingEdit(false);
+          setUploadingEvidence(false);
+          return;
+        }
+        setUploadingEvidence(false);
+      }
+
       await verificationAPI.updatePending(editingPending._id, {
         amount: Number(editAmount),
         detail: editDetail.trim(),
         voucherNo: editVoucherNo.trim(),
         date: editDate,
+        attachments: finalAttachments,
       });
       closeEditPending();
       if (onEntryUpdated) onEntryUpdated();
@@ -167,6 +208,7 @@ export const RecentEntriesTable = ({
       setEditError(err.response?.data?.message || err.message || 'Failed to update entry.');
     } finally {
       setSavingEdit(false);
+      setUploadingEvidence(false);
     }
   };
 
@@ -320,7 +362,7 @@ export const RecentEntriesTable = ({
                       ? { label: 'Edited / Re-pending', cls: 'bg-blue-100 text-blue-800 border-blue-300', Icon: Edit3 }
                       : { label: 'Awaiting Verification', cls: 'bg-amber-100 text-amber-800 border-amber-300', Icon: Clock };
 
-                  const canEdit = entry.status !== 'REJECTED' && !entry.isEdited;
+                  const canEdit = entry.status !== 'REJECTED' && entry.status !== 'VERIFIED';
 
                   return (
                     <tr key={entry._id} className="hover:bg-amber-50/40 transition-colors">
@@ -615,7 +657,7 @@ export const RecentEntriesTable = ({
       {/* Edit Pending Entry Modal */}
       {editingPending && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 shadow-2xl">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-lg w-full p-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
@@ -684,6 +726,153 @@ export const RecentEntriesTable = ({
                   className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 resize-none"
                   required
                 />
+              </div>
+
+              {/* Evidence & Purchase / Receipt Images Section */}
+              <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-lg space-y-2.5">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-300 flex-wrap gap-2">
+                  <div className="flex items-center gap-1.5 text-amber-400">
+                    <ImagePlus className="w-4 h-4" />
+                    <span>Evidence / Receipt Images</span>
+                    <span className="text-[10px] text-slate-400 font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                      {editAttachments.length + editNewFiles.length} files
+                    </span>
+                  </div>
+
+                  <div>
+                    <input
+                      ref={editFileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      disabled={savingEdit || uploadingEvidence}
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length) {
+                          setEditNewFiles((prev) => [...prev, ...files].slice(0, 10));
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={savingEdit || uploadingEvidence}
+                      onClick={() => editFileInputRef.current?.click()}
+                      className="px-2 py-1 rounded bg-amber-600/80 hover:bg-amber-600 text-white font-semibold text-[11px] flex items-center gap-1 transition shadow disabled:opacity-50"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Attach Images</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Existing Attachments */}
+                {editAttachments.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-semibold text-slate-400 flex items-center justify-between">
+                      <span>Currently Attached ({editAttachments.length}):</span>
+                      <span className="text-slate-500">Click to view • Click × to remove</span>
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-1">
+                      {editAttachments.map((att, idx) => {
+                        const imgUrl = typeof att === 'string' ? att : att.url;
+                        const origName = (typeof att !== 'string' && att.originalName) || `Receipt #${idx + 1}`;
+                        return (
+                          <div key={idx} className="relative group shrink-0">
+                            <img
+                              src={imgUrl}
+                              alt={origName}
+                              className="w-14 h-14 rounded-lg object-cover border border-slate-700 cursor-pointer hover:border-amber-500 transition"
+                              onClick={() => setSelectedReceiptItem({ attachments: [att], voucherNo: editVoucherNo, detail: editDetail })}
+                              title={`Click to preview: ${origName}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveExistingAttachment(idx)}
+                              className="absolute -top-1.5 -right-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full p-0.5 shadow-md transition opacity-80 group-hover:opacity-100"
+                              title="Remove this receipt"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                downloadReceiptImage(imgUrl, origName);
+                              }}
+                              className="absolute bottom-1 right-1 p-0.5 rounded bg-black/80 hover:bg-emerald-600 text-white transition shadow"
+                              title="Download image"
+                            >
+                              <Download className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Newly Selected Files */}
+                {editNewFiles.length > 0 && (
+                  <div className="space-y-1 pt-1.5 border-t border-slate-800">
+                    <div className="text-[10px] font-semibold text-emerald-400 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        New Images to Upload ({editNewFiles.length}):
+                      </span>
+                      <span className="text-slate-500">Will upload upon clicking Save</span>
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-1">
+                      {editNewFiles.map((file, idx) => {
+                        const previewUrl = URL.createObjectURL(file);
+                        return (
+                          <div key={`${file.name}-${idx}`} className="relative group shrink-0">
+                            <img
+                              src={previewUrl}
+                              alt={file.name}
+                              className="w-14 h-14 rounded-lg object-cover border-2 border-emerald-500/70"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveNewFile(idx)}
+                              className="absolute -top-1.5 -right-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full p-0.5 shadow-md transition"
+                              title="Unselect"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                            <div className="text-[9px] text-emerald-300 truncate max-w-[56px] mt-0.5 font-mono" title={file.name}>
+                              {file.name}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {editAttachments.length === 0 && editNewFiles.length === 0 && (
+                  <div
+                    onClick={() => editFileInputRef.current?.click()}
+                    className="border border-dashed border-slate-800 hover:border-amber-500/60 bg-slate-900/50 hover:bg-slate-900/80 rounded-lg p-2.5 text-center cursor-pointer transition space-y-0.5"
+                  >
+                    <div className="flex items-center justify-center gap-1.5 text-slate-400 text-xs">
+                      <Upload className="w-3.5 h-3.5 text-amber-400" />
+                      <span>No images attached. Click here to attach evidence / receipt photo.</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      Supports JPG, PNG, WEBP, GIF
+                    </p>
+                  </div>
+                )}
+
+                {uploadingEvidence && (
+                  <div className="flex items-center gap-1.5 text-amber-300 text-[11px] font-medium py-0.5">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>Uploading new images to storage...</span>
+                  </div>
+                )}
               </div>
 
               <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
