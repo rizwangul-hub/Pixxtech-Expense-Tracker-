@@ -981,7 +981,13 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                       {entry.entryType === 'SALARY' && <SalaryBreakdown entry={entry} />}
                     </div>
 
-                    {/* Attached Purchase / Receipt Evidence (Uploaded by Sarfraz) */}
+                    {/* Attached Evidence (Uploaded by Sarfraz / Admin) */}
+                    {entryAttachments.length === 0 && entry.entryType === 'SALARY' && (
+                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-amber-950/30 border border-amber-800/40 text-[10px] text-amber-400/70 font-medium mt-1">
+                        <ImageIcon size={11} className="shrink-0" />
+                        <span>No payment evidence uploaded — Admin can add via Edit</span>
+                      </div>
+                    )}
                     {entryAttachments.length > 0 && (
                       <div className="p-3 bg-slate-900/90 rounded-xl border border-blue-900/50 space-y-2">
                         <div className="flex items-center justify-between gap-2">
@@ -991,10 +997,12 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                             </span>
                             <div className="min-w-0">
                               <div className="text-xs font-bold text-blue-200 truncate">
-                                {entryAttachments.length} Purchase / Receipt {entryAttachments.length === 1 ? 'Image' : 'Images'}
+                                {entry.entryType === 'SALARY'
+                                  ? `${entryAttachments.length} Payment Evidence ${entryAttachments.length === 1 ? 'File' : 'Files'}`
+                                  : `${entryAttachments.length} Purchase / Receipt ${entryAttachments.length === 1 ? 'Image' : 'Images'}`}
                               </div>
                               <div className="text-[10px] text-slate-400 truncate">
-                                {(typeof entryAttachments[0] !== 'string' && entryAttachments[0].originalName) || 'Attached receipt voucher'}
+                                {(typeof entryAttachments[0] !== 'string' && entryAttachments[0].originalName) || (entry.entryType === 'SALARY' ? 'Salary payment proof' : 'Attached receipt voucher')}
                               </div>
                             </div>
                           </div>
@@ -1223,17 +1231,17 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           )}
                           {entry.entryType === 'SALARY' && <SalaryBreakdown entry={entry} />}
 
-                          {/* Attached Purchase / Receipt Images (Sarfraz Data Entry) */}
+                          {/* Attached Evidence (Sarfraz / Admin) */}
                           {entryAttachments.length > 0 && (
                             <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                               <button
                                 type="button"
                                 onClick={() => setViewingReceiptEntry(entry)}
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-700/60 text-[10px] font-bold transition cursor-pointer"
-                                title="Click to view attached purchase / receipt evidence image(s)"
+                                title={entry.entryType === 'SALARY' ? 'Click to view payment evidence' : 'Click to view attached purchase / receipt evidence image(s)'}
                               >
                                 <Paperclip size={10} className="text-blue-400" />
-                                <span>{entryAttachments.length} {entryAttachments.length === 1 ? 'Receipt' : 'Receipts'}</span>
+                                <span>{entryAttachments.length} {entry.entryType === 'SALARY' ? (entryAttachments.length === 1 ? 'Evidence' : 'Evidence') : (entryAttachments.length === 1 ? 'Receipt' : 'Receipts')}</span>
                                 <Eye size={10} className="opacity-75" />
                               </button>
                               <button
@@ -1241,7 +1249,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                                 onClick={(e) => handleQuickDownloadReceipts(e, entry)}
                                 disabled={downloadingEntryId === entry._id}
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold transition cursor-pointer disabled:opacity-50"
-                                title="Download official receipt evidence document (voucher details on top + receipt image on bottom)"
+                                title={entry.entryType === 'SALARY' ? 'Download payment evidence' : 'Download official receipt evidence document'}
                               >
                                 <Download size={10} className={downloadingEntryId === entry._id ? 'animate-bounce text-emerald-400' : 'text-emerald-400'} />
                                 <span>{downloadingEntryId === entry._id ? 'Saving...' : 'Download'}</span>

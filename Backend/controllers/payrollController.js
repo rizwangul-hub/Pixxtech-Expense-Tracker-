@@ -1349,6 +1349,7 @@ export const paySingleSalary = async (req, res) => {
       otherDeduction,
       totalDeduction,
       netPayable,
+      attachments = [],
     } = req.body;
 
     if (!month || (!employeeId && !payrollId) || !paidFromAccountId) {
@@ -1456,6 +1457,11 @@ export const paySingleSalary = async (req, res) => {
 
       const voucherNo = await suggestNextVoucherNumber(pDate);
 
+      // Normalize & validate evidence attachments (must have url + publicId)
+      const validAttachments = Array.isArray(attachments)
+        ? attachments.filter((a) => a && typeof a.url === 'string' && a.url && typeof a.publicId === 'string' && a.publicId)
+        : [];
+
       const pending = await PendingEntry.create({
         entryType: 'SALARY',
         amount: netAmount,
@@ -1468,6 +1474,7 @@ export const paySingleSalary = async (req, res) => {
         receivingAccountId: account._id,
         detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`.trim(),
         tenantId: pDoc.employeeId,
+        attachments: validAttachments,
         entryData: {
           payrollId: pDoc._id,
           employeeId: pDoc.employeeId,
@@ -1506,7 +1513,7 @@ export const paySingleSalary = async (req, res) => {
             performedBy: req.user?.name || 'Sarfraz Khan',
             performedById: req.user._id,
             timestamp: new Date(),
-            notes: `Salary installment of Rs. ${formatPKR(netAmount)} submitted by Data Entry Operator. Awaiting review and verification by Khurshid Anwar.`,
+            notes: `Salary installment of Rs. ${formatPKR(netAmount)} submitted by Data Entry Operator${validAttachments.length > 0 ? ` with ${validAttachments.length} evidence file(s) attached` : ''}. Awaiting review and verification by Khurshid Anwar.`,
           },
         ],
       });

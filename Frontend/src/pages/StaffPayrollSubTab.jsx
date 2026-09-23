@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FileSpreadsheet,
   Printer,
@@ -19,8 +19,11 @@ import {
   Maximize2,
   Minimize2,
   PanelLeftOpen,
+  Upload,
+  ImagePlus,
+  Eye,
 } from 'lucide-react';
-import { payrollAPI, accountsAPI } from '../services/api.js';
+import { payrollAPI, accountsAPI, uploadAPI } from '../services/api.js';
 
 const formatPKR = (val) => {
   return new Intl.NumberFormat('en-PK', {
@@ -51,6 +54,12 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
   const [payNotes, setPayNotes] = useState('');
   const [payAmount, setPayAmount] = useState('');
   const [processingPay, setProcessingPay] = useState(false);
+
+  // Evidence upload state (for the payout modal)
+  const [evidenceFiles, setEvidenceFiles] = useState([]);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const [evidencePreview, setEvidencePreview] = useState(null); // URL for lightbox preview
+  const evidenceInputRef = useRef(null);
 
   // Reverse Modal
   const [reverseModalOpen, setReverseModalOpen] = useState(false);
@@ -330,6 +339,8 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
     setPayNotes('');
     setModalError('');
     setPayAmount(String(exactRemaining));
+    setEvidenceFiles([]);
+    setEvidencePreview(null);
     setPayModalOpen(true);
   };
 
@@ -338,8 +349,25 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
     try {
       setProcessingPay(true);
       setMsg({ type: '', text: '' });
-
       setModalError('');
+
+      // Step 1: Upload evidence files to Cloudinary (if any selected)
+      let uploadedAttachments = [];
+      if (evidenceFiles.length > 0) {
+        setUploadingEvidence(true);
+        try {
+          const uploadRes = await uploadAPI.images(evidenceFiles);
+          uploadedAttachments = uploadRes?.images || [];
+        } catch (uploadErr) {
+          setModalError('Failed to upload evidence files. Please try again or submit without evidence.');
+          setUploadingEvidence(false);
+          setProcessingPay(false);
+          return;
+        }
+        setUploadingEvidence(false);
+      }
+
+      // Step 2: Submit the salary payout with evidence attachments
       const res = await payrollAPI.paySingleSalary({
         month: selectedMonth,
         payrollId: payTargetRow.payrollId,
@@ -358,12 +386,15 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
         otherDeduction: Number(payTargetRow.otherDeduction) || 0,
         totalDeduction: Number(payTargetRow.totalDeduction) || 0,
         netPayable: Number(payTargetRow.netPayable) || 0,
+        attachments: uploadedAttachments,
       });
 
       if (res?.success) {
         setMsg({ type: 'success', text: res.message || 'Salary paid successfully!' });
         setPayModalOpen(false);
         setPayTargetRow(null);
+        setEvidenceFiles([]);
+        setEvidencePreview(null);
         fetchPayroll();
         fetchAccounts();
         onRefreshEmployees?.();
@@ -375,6 +406,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
       setMsg({ type: 'error', text: errText });
     } finally {
       setProcessingPay(false);
+      setUploadingEvidence(false);
     }
   };
 
@@ -1101,24 +1133,151 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
               </div>
             </div>
 
+            {/* ── Evidence Upload Section ─────────────────────────────── */}
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ImagePlus size={15} className="text-blue-400" />
+                  <span className="text-slate-300 font-bold">Payment Evidence <span className="text-slate-500 font-normal">(Optional)</span></span>
+                </div>
+                <span className="text-slate-500 text-[10px]">{evidenceFiles.length}/3 files</span>
+              </div>
+
+              <p className="text-slate-500 text-[10px] leading-snug">
+                Attach a bank transfer screenshot, payment receipt or cash voucher photo. Admin (Khurshid) will see this when verifying.
+              </p>
+
+              {/* File input button */}
+              <input
+                ref={evidenceInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                className="hidden"
+                disabled={processingPay || evidenceFiles.length >= 3}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.files || []);
+                  setEvidenceFiles((prev) => [...prev, ...selected].slice(0, 3));
+                  e.target.value = '';
+                }}
+              />
+
+              <button
+                type="button"
+                disabled={processingPay || evidenceFiles.length >= 3}
+                onClick={() => evidenceInputRef.current?.click()}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-blue-700/60 bg-blue-950/30 hover:bg-blue-950/60 text-blue-300 font-semibold text-[11px] w-full justify-center transition disabled:opacity-40"
+              >
+                <Upload size={13} />
+                {evidenceFiles.length === 0 ? 'Select Evidence Image(s)' : 'Add More Images'}
+              </button>
+
+              {/* Thumbnail previews */}
+              {evidenceFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {evidenceFiles.map((file, idx) => {
+                    const previewUrl = URL.createObjectURL(file);
+                    return (
+                      <div key={`${file.name}-${idx}`} className="relative group">
+                        <img
+                          src={previewUrl}
+                          alt={file.name}
+                          className="w-16 h-16 object-cover rounded-lg border border-slate-700 cursor-pointer hover:border-blue-500 transition"
+                          onClick={() => setEvidencePreview(previewUrl)}
+                          title={`Click to preview: ${file.name}`}
+                        />
+                        {/* Remove button */}
+                        <button
+                          type="button"
+                          onClick={() => setEvidenceFiles((prev) => prev.filter((_, i) => i !== idx))}
+                          className="absolute -top-1.5 -right-1.5 bg-rose-600 hover:bg-rose-500 rounded-full p-0.5 text-white opacity-0 group-hover:opacity-100 transition shadow-lg"
+                          title="Remove this file"
+                          disabled={processingPay}
+                        >
+                          <X size={10} />
+                        </button>
+                        {/* Preview eye button */}
+                        <button
+                          type="button"
+                          onClick={() => setEvidencePreview(previewUrl)}
+                          className="absolute bottom-0.5 right-0.5 bg-slate-900/80 rounded px-1 py-0.5 text-[8px] text-blue-300 opacity-0 group-hover:opacity-100 transition"
+                          title="Preview"
+                        >
+                          <Eye size={9} />
+                        </button>
+                        <div className="text-[8px] text-slate-500 truncate mt-0.5 max-w-[64px]" title={file.name}>{file.name}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Upload progress indicator */}
+              {uploadingEvidence && (
+                <div className="flex items-center gap-2 text-blue-300 text-[11px] font-semibold">
+                  <RefreshCw size={12} className="animate-spin" />
+                  Uploading evidence to secure cloud storage...
+                </div>
+              )}
+            </div>
+
+            {/* Evidence Lightbox Preview */}
+            {evidencePreview && (
+              <div
+                className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4"
+                onClick={() => setEvidencePreview(null)}
+              >
+                <div className="relative max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+                  <img
+                    src={evidencePreview}
+                    alt="Evidence Preview"
+                    className="w-full max-h-[80vh] object-contain rounded-xl shadow-2xl border border-slate-700"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEvidencePreview(null)}
+                    className="absolute top-2 right-2 bg-slate-900/90 hover:bg-slate-800 text-white rounded-full p-1.5 shadow-lg"
+                  >
+                    <X size={16} />
+                  </button>
+                  <p className="text-center text-slate-400 text-xs mt-2">Click anywhere outside to close</p>
+                </div>
+              </div>
+            )}
+
             {/* Actions */}
-            <div className="flex items-center justify-end gap-3 border-t border-slate-800 pt-4">
-              <button
-                type="button"
-                onClick={() => setPayModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmPayout}
-                disabled={processingPay || !selectedAccountId}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg disabled:opacity-50"
-              >
-                <CheckCircle size={15} />
-                {processingPay ? 'Processing Payout...' : 'Disburse & Record Payout'}
-              </button>
+            <div className="flex items-center justify-between border-t border-slate-800 pt-4">
+              <div className="text-[10px] text-slate-500 font-medium">
+                {evidenceFiles.length > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-950 border border-blue-800 text-blue-300 font-semibold">
+                    <ImagePlus size={9} />
+                    {evidenceFiles.length} evidence {evidenceFiles.length === 1 ? 'file' : 'files'} attached
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setPayModalOpen(false); setEvidenceFiles([]); setEvidencePreview(null); }}
+                  disabled={processingPay}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmPayout}
+                  disabled={processingPay || !selectedAccountId}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg disabled:opacity-50"
+                >
+                  <CheckCircle size={15} />
+                  {uploadingEvidence
+                    ? 'Uploading Evidence...'
+                    : processingPay
+                    ? 'Processing Payout...'
+                    : 'Disburse & Record Payout'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
