@@ -1289,6 +1289,15 @@ export const paySingleSalary = async (req, res) => {
       paymentDate = new Date(),
       paymentAmount,
       amount,
+      basicSalary,
+      allowance,
+      allowanceReason,
+      grossSalary,
+      loanDeduction,
+      lopDeduction,
+      otherDeduction,
+      totalDeduction,
+      netPayable,
     } = req.body;
 
     if (!month || (!employeeId && !payrollId) || !paidFromAccountId) {
@@ -1305,6 +1314,17 @@ export const paySingleSalary = async (req, res) => {
     if (!pDoc) {
       return apiError(res, 'Payroll record not found. Please calculate and save payroll first.', 404);
     }
+
+    // Sync any updated salary / deduction metrics passed from client
+    if (loanDeduction !== undefined) pDoc.loanDeduction = Number(loanDeduction) || 0;
+    if (lopDeduction !== undefined) pDoc.lopDeduction = Number(lopDeduction) || 0;
+    if (otherDeduction !== undefined) pDoc.otherDeduction = Number(otherDeduction) || 0;
+    if (grossSalary !== undefined) pDoc.grossSalary = Number(grossSalary) || pDoc.grossSalary;
+    if (totalDeduction !== undefined) pDoc.totalDeduction = Number(totalDeduction) || pDoc.totalDeduction;
+    if (netPayable !== undefined) pDoc.netPayable = Number(netPayable) || pDoc.netPayable;
+    if (basicSalary !== undefined) pDoc.basicSalary = Number(basicSalary) || pDoc.basicSalary;
+    if (allowance !== undefined) pDoc.allowance = Number(allowance) || pDoc.allowance;
+    if (allowanceReason !== undefined) pDoc.allowanceReason = allowanceReason;
 
     const totalPaid = round2(pDoc.totalInstallmentsPaid || 0);
     const remainingAmount = round2(Math.max(0, pDoc.netPayable - totalPaid));
@@ -1516,6 +1536,35 @@ export const paySingleSalary = async (req, res) => {
       activePending.verifiedAt = new Date();
       activePending.postedTransactionId = transaction._id;
       await activePending.save();
+    }
+
+    // Process loan deduction if specified and not already recorded for this month
+    if (pDoc.loanDeduction > 0) {
+      const emp = await Employee.findById(pDoc.employeeId);
+      if (emp) {
+        const existingLoanRec = await StaffLoan.findOne({
+          employeeId: emp._id,
+          payrollMonth: month,
+          type: 'REPAYMENT',
+        });
+        if (!existingLoanRec) {
+          const prevBal = emp.loanBalance || 0;
+          const newBal = Math.max(0, prevBal - pDoc.loanDeduction);
+          emp.loanBalance = newBal;
+          await emp.save();
+
+          await StaffLoan.create({
+            employeeId: emp._id,
+            type: 'REPAYMENT',
+            amount: pDoc.loanDeduction,
+            previousBalance: prevBal,
+            newBalance: newBal,
+            payrollMonth: month,
+            description: `Salary Loan Deduction for ${month} (Paid by ${req.user?.name || 'Finance Manager'})`,
+            createdBy: req.user?._id || null,
+          });
+        }
+      }
     }
 
     await StaffAuditLog.create({
@@ -2445,13 +2494,36 @@ export const getEmployeeLedger = async (req, res) => {
       return apiError(res, 'Employee record not found.', 404);
     }
 
-    const payrollDocs = await Payroll.find({ employeeId }).sort({ payrollMonth: 1 }).lean();
+    const payrollDocs = await Payroll.find({ employeeId })
+      .sort({ payrollMonth: 1, updatedAt: -1, createdAt: -1 })
+      .lean();
+
+    // The schema requires one payroll record per employee/month, but older
+    // records may predate that unique index. Never show duplicate accruals in
+    // the employee statement; retain the most recently updated record so a
+    // reversal is reflected instead of an older stale copy.
+    const payrollByMonth = new Map();
+    for (const payroll of payrollDocs) {
+      const existing = payrollByMonth.get(payroll.payrollMonth);
+      if (!existing) {
+        payrollByMonth.set(payroll.payrollMonth, payroll);
+        continue;
+      }
+
+      const existingUpdated = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+      const currentUpdated = new Date(payroll.updatedAt || payroll.createdAt || 0).getTime();
+      if (currentUpdated > existingUpdated) payrollByMonth.set(payroll.payrollMonth, payroll);
+    }
+
+    const uniquePayrollDocs = Array.from(payrollByMonth.values()).sort(
+      (a, b) => String(a.payrollMonth).localeCompare(String(b.payrollMonth))
+    );
 
     const rawLedgerEntries = [];
     let totalAccrued = 0;
     let totalPaid = 0;
 
-    for (const p of payrollDocs) {
+    for (const p of uniquePayrollDocs) {
       const netPay = round2(p.netPayable);
       if (netPay <= 0) continue;
 
@@ -2582,4 +2654,3 @@ export const getEmployeeLedger = async (req, res) => {
     return apiError(res, error.message || 'Failed to fetch employee ledger.', 500);
   }
 };
-

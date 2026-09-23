@@ -182,31 +182,47 @@ export const getPendingEntries = async (req, res) => {
       PendingEntry.countDocuments(query),
     ]);
 
-    const salaryIds = entries
-      .filter((entry) => entry.entryType === 'SALARY')
-      .map((entry) => entry.entryData?.payrollId)
-      .filter((id) => id && mongoose.Types.ObjectId.isValid(id));
-    if (salaryIds.length > 0) {
-      const payrollDocs = await Payroll.find({ _id: { $in: salaryIds } })
-        .select('employeeName employeeId designation department basicSalary allowance allowanceReason grossSalary loanDeduction lopDeduction otherDeduction totalDeduction netPayable totalInstallmentsPaid salaryInstallments paymentStatus')
-        .lean();
+    const salaryEntries = entries.filter((entry) => entry.entryType === 'SALARY');
+    if (salaryEntries.length > 0) {
+      const salaryIds = salaryEntries
+        .map((entry) => entry.entryData?.payrollId)
+        .filter((id) => id && mongoose.Types.ObjectId.isValid(id));
+      const payrollDocs = salaryIds.length > 0
+        ? await Payroll.find({ _id: { $in: salaryIds } })
+            .select('employeeName employeeId designation department basicSalary allowance allowanceReason grossSalary loanDeduction lopDeduction otherDeduction totalDeduction netPayable totalInstallmentsPaid salaryInstallments paymentStatus')
+            .lean()
+        : [];
       const payrollMap = new Map(payrollDocs.map((doc) => [doc._id.toString(), doc]));
+
+      const empIds = salaryEntries
+        .map((e) => e.tenantId || e.entryData?.employeeId || e.entryData?.payrollSnapshot?.employeeId)
+        .filter((id) => id && mongoose.Types.ObjectId.isValid(id));
+      const empDocs = empIds.length > 0
+        ? await Employee.find({ _id: { $in: empIds } }).select('name loanBalance designation department').lean()
+        : [];
+      const empMap = new Map(empDocs.map((e) => [e._id.toString(), e]));
+
       entries.forEach((entry) => {
         if (entry.entryType !== 'SALARY') return;
-        // Prefer snapshot embedded in pending entry (stable at submission time)
         const snapshot = entry.entryData?.payrollSnapshot;
+        const payroll = payrollMap.get(String(entry.entryData?.payrollId));
+        const empId = entry.tenantId || entry.entryData?.employeeId || snapshot?.employeeId || payroll?.employeeId;
+        const emp = empMap.get(String(empId));
+        const currentLoanBalance = emp ? (emp.loanBalance || 0) : 0;
+
         if (snapshot) {
           const paid = round2(snapshot.totalInstallmentsPaid || 0);
+          const loanDed = Number(snapshot.loanDeduction ?? entry.entryData?.loanDeduction ?? 0);
           entry.salaryDetails = {
             employeeName: snapshot.employeeName || entry.submittedByName || '',
-            employeeId: entry.entryData?.employeeId || snapshot.employeeId || null,
+            employeeId: empId,
             designation: snapshot.designation || '',
             department: snapshot.department || '',
             basicSalary: snapshot.basicSalary || 0,
             allowance: snapshot.allowance || 0,
             allowanceReason: snapshot.allowanceReason || '',
             grossSalary: snapshot.grossSalary || 0,
-            loanDeduction: snapshot.loanDeduction || 0,
+            loanDeduction: loanDed,
             lopDeduction: snapshot.lopDeduction || 0,
             otherDeduction: snapshot.otherDeduction || 0,
             totalDeduction: snapshot.totalDeduction || 0,
@@ -215,13 +231,14 @@ export const getPendingEntries = async (req, res) => {
             remainingPayable: Math.max(0, round2((snapshot.netPayable || 0) - paid)),
             paymentStatus: snapshot.paymentStatus || 'PENDING_PAYMENT',
             installments: snapshot.salaryInstallments || [],
+            currentLoanBalance,
           };
           return;
         }
 
-        const payroll = payrollMap.get(String(entry.entryData?.payrollId));
         if (!payroll) return;
         const paid = round2(payroll.totalInstallmentsPaid || 0);
+        const loanDed = Number(entry.entryData?.loanDeduction ?? payroll.loanDeduction ?? 0);
         entry.salaryDetails = {
           employeeName: payroll.employeeName,
           employeeId: payroll.employeeId,
@@ -231,7 +248,7 @@ export const getPendingEntries = async (req, res) => {
           allowance: payroll.allowance || 0,
           allowanceReason: payroll.allowanceReason || '',
           grossSalary: payroll.grossSalary || 0,
-          loanDeduction: payroll.loanDeduction || 0,
+          loanDeduction: loanDed,
           lopDeduction: payroll.lopDeduction || 0,
           otherDeduction: payroll.otherDeduction || 0,
           totalDeduction: payroll.totalDeduction || 0,
@@ -240,6 +257,7 @@ export const getPendingEntries = async (req, res) => {
           remainingPayable: Math.max(0, round2((payroll.netPayable || 0) - paid)),
           paymentStatus: payroll.paymentStatus,
           installments: payroll.salaryInstallments || [],
+          currentLoanBalance,
         };
       });
     }
@@ -743,6 +761,19 @@ export const verifyEntry = async (req, res) => {
       }
 
       if (pDoc) {
+        // Sync payroll metrics from snapshot if submitted via data entry
+        const snapshot = entry.entryData?.payrollSnapshot;
+        if (snapshot) {
+          if (snapshot.grossSalary) pDoc.grossSalary = Number(snapshot.grossSalary);
+          if (snapshot.loanDeduction !== undefined) pDoc.loanDeduction = Number(snapshot.loanDeduction);
+          if (snapshot.lopDeduction !== undefined) pDoc.lopDeduction = Number(snapshot.lopDeduction);
+          if (snapshot.otherDeduction !== undefined) pDoc.otherDeduction = Number(snapshot.otherDeduction);
+          if (snapshot.totalDeduction !== undefined) pDoc.totalDeduction = Number(snapshot.totalDeduction);
+          if (snapshot.netPayable) pDoc.netPayable = Number(snapshot.netPayable);
+        } else if (entry.entryData?.loanDeduction !== undefined) {
+          pDoc.loanDeduction = Number(entry.entryData.loanDeduction);
+        }
+
         const totalPaid = round2(pDoc.totalInstallmentsPaid || 0);
         const updatedTotalPaid = round2(totalPaid + netAmount);
         pDoc.totalInstallmentsPaid = updatedTotalPaid;
@@ -770,8 +801,8 @@ export const verifyEntry = async (req, res) => {
         });
         await pDoc.save();
 
-        // 3. Process Loan Deductions if present
-        const loanDed = pDoc.loanDeduction || Number(entry.entryData?.loanDeduction) || 0;
+        // 3. Process Loan Deductions — decreases employee loan balance
+        const loanDed = Number(pDoc.loanDeduction ?? entry.entryData?.loanDeduction ?? 0);
         if (loanDed > 0) {
           const emp = await Employee.findById(pDoc.employeeId);
           if (emp) {
@@ -797,6 +828,17 @@ export const verifyEntry = async (req, res) => {
                 description: `Salary Loan Deduction for ${month} (Verified by ${req.user.name})`,
                 createdBy: req.user._id,
               });
+            } else if (existingLoanRec.amount !== loanDed) {
+              const diff = loanDed - (existingLoanRec.amount || 0);
+              const prevBal = emp.loanBalance || 0;
+              const newBal = Math.max(0, prevBal - diff);
+              emp.loanBalance = newBal;
+              await emp.save();
+
+              existingLoanRec.amount = loanDed;
+              existingLoanRec.newBalance = newBal;
+              existingLoanRec.description = `Salary Loan Deduction for ${month} (Verified by ${req.user.name})`;
+              await existingLoanRec.save();
             }
           }
         }

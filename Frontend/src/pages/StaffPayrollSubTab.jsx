@@ -123,13 +123,16 @@ export const StaffPayrollSubTab = () => {
       prev.map((r) => {
         if (r.employeeId === empId) {
           const newGross = (r.basicSalary || 0) + numAllow;
-          const totDed = (r.loanDeduction || 0) + (r.lopDeduction || 0) + (r.otherDeduction || 0);
+          const totDed = (Number(r.loanDeduction) || 0) + (Number(r.lopDeduction) || 0) + (Number(r.otherDeduction) || 0);
           const newNet = Math.max(0, newGross - totDed);
+          const alreadyPaid = Number(r.totalInstallmentsPaid || 0);
           return {
             ...r,
             allowance: val,
             grossSalary: newGross,
+            totalDeduction: totDed,
             netPayable: newNet,
+            remainingPayable: Math.max(0, newNet - alreadyPaid),
           };
         }
         return r;
@@ -157,12 +160,14 @@ export const StaffPayrollSubTab = () => {
       prev.map((r) => {
         if (r.employeeId === empId) {
           const newTotDed = numDed + (Number(r.lopDeduction) || 0) + (Number(r.otherDeduction) || 0);
-          const newNet = Math.max(0, r.grossSalary - newTotDed);
+          const newNet = Math.max(0, (r.grossSalary || 0) - newTotDed);
+          const alreadyPaid = Number(r.totalInstallmentsPaid || 0);
           return {
             ...r,
             loanDeduction: val,
             totalDeduction: newTotDed,
             netPayable: newNet,
+            remainingPayable: Math.max(0, newNet - alreadyPaid),
           };
         }
         return r;
@@ -176,12 +181,14 @@ export const StaffPayrollSubTab = () => {
       prev.map((r) => {
         if (r.employeeId === empId) {
           const newTotDed = (Number(r.loanDeduction) || 0) + numDed + (Number(r.otherDeduction) || 0);
-          const newNet = Math.max(0, r.grossSalary - newTotDed);
+          const newNet = Math.max(0, (r.grossSalary || 0) - newTotDed);
+          const alreadyPaid = Number(r.totalInstallmentsPaid || 0);
           return {
             ...r,
             lopDeduction: val,
             totalDeduction: newTotDed,
             netPayable: newNet,
+            remainingPayable: Math.max(0, newNet - alreadyPaid),
           };
         }
         return r;
@@ -288,10 +295,17 @@ export const StaffPayrollSubTab = () => {
       setMsg({ type: 'error', text: 'Please click "Finalize & Save Payroll" before submitting this salary for payout.' });
       return;
     }
-    setPayTargetRow(row);
+    const alreadyPaid = Number(row.totalInstallmentsPaid || 0);
+    const net = Number(row.netPayable || 0);
+    const exactRemaining = Math.max(0, net - alreadyPaid);
+    const updatedRow = {
+      ...row,
+      remainingPayable: exactRemaining,
+    };
+    setPayTargetRow(updatedRow);
     setPayNotes('');
     setModalError('');
-    setPayAmount(String(row.remainingPayable ?? row.netPayable ?? 0));
+    setPayAmount(String(exactRemaining));
     setPayModalOpen(true);
   };
 
@@ -311,6 +325,15 @@ export const StaffPayrollSubTab = () => {
         paymentNotes: payNotes,
         paymentAmount: Number(payAmount),
         amount: Number(payAmount),
+        basicSalary: Number(payTargetRow.basicSalary) || 0,
+        allowance: Number(payTargetRow.allowance) || 0,
+        allowanceReason: payTargetRow.allowanceReason || '',
+        grossSalary: Number(payTargetRow.grossSalary) || 0,
+        loanDeduction: Number(payTargetRow.loanDeduction) || 0,
+        lopDeduction: Number(payTargetRow.lopDeduction) || 0,
+        otherDeduction: Number(payTargetRow.otherDeduction) || 0,
+        totalDeduction: Number(payTargetRow.totalDeduction) || 0,
+        netPayable: Number(payTargetRow.netPayable) || 0,
       });
 
       if (res?.success) {
@@ -882,7 +905,9 @@ export const StaffPayrollSubTab = () => {
                 )}
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-amber-300 font-bold">Remaining to Pay:</span>
-                  <span className="text-amber-300 font-mono font-black">Rs. {formatPKR(payTargetRow.remainingPayable ?? payTargetRow.netPayable)}</span>
+                  <span className="text-amber-300 font-mono font-black">
+                    Rs. {formatPKR(Math.max(0, (Number(payTargetRow.netPayable) || 0) - (Number(payTargetRow.totalInstallmentsPaid) || 0)))}
+                  </span>
                 </div>
               </div>
               {/* Previous installment breakdown */}
@@ -905,7 +930,7 @@ export const StaffPayrollSubTab = () => {
                 type="number"
                 min="0.01"
                 step="0.01"
-                max={payTargetRow.remainingPayable ?? payTargetRow.netPayable}
+                max={Math.max(0, (Number(payTargetRow.netPayable) || 0) - (Number(payTargetRow.totalInstallmentsPaid) || 0))}
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-700 text-emerald-300 font-mono font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500"
@@ -918,10 +943,12 @@ export const StaffPayrollSubTab = () => {
               const thisPayment = Number(payAmount) || 0;
               const prevPaid = Number(payTargetRow.totalInstallmentsPaid) || 0;
               const netPayable = Number(payTargetRow.netPayable) || 0;
-              const remaining = Number(payTargetRow.remainingPayable ?? netPayable);
+              const remainingToPay = Math.max(0, netPayable - prevPaid);
               const totalAfter = prevPaid + thisPayment;
-              const remainingAfter = Math.max(0, remaining - thisPayment);
-              const isOver = thisPayment > remaining + 0.01;
+              const remainingAfter = Math.max(0, remainingToPay - thisPayment);
+              const isOver = thisPayment > remainingToPay + 0.01;
+              const isFullySettled = (remainingAfter <= 0 && !isOver);
+
               return (
                 <div className={`p-3 rounded-xl border text-xs font-mono space-y-1 ${isOver ? 'bg-rose-950/60 border-rose-800' : 'bg-slate-950 border-slate-800'}`}>
                   <p className="text-slate-400 font-bold mb-1">Payment Preview:</p>
@@ -939,15 +966,15 @@ export const StaffPayrollSubTab = () => {
                     <span>Total paid after:</span>
                     <span className="font-black">Rs. {formatPKR(totalAfter)}</span>
                   </div>
-                  <div className={`flex justify-between font-black ${isOver ? 'text-rose-400' : remainingAfter === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  <div className={`flex justify-between font-black ${isOver ? 'text-rose-400' : isFullySettled ? 'text-emerald-400' : 'text-amber-400'}`}>
                     <span>Remaining after:</span>
-                    <span>Rs. {formatPKR(remainingAfter)}</span>
+                    <span>{isFullySettled ? 'Rs. 0 (Fully Settled)' : `Rs. ${formatPKR(remainingAfter)}`}</span>
                   </div>
                   {isOver && (
-                    <p className="text-rose-400 font-bold mt-1">⚠ Exceeds remaining salary of Rs. {formatPKR(remaining)}</p>
+                    <p className="text-rose-400 font-bold mt-1">⚠ Exceeds remaining net salary of Rs. {formatPKR(remainingToPay)}</p>
                   )}
-                  {remainingAfter === 0 && !isOver && (
-                    <p className="text-emerald-400 font-bold mt-1">✓ This will fully settle the salary.</p>
+                  {isFullySettled && (
+                    <p className="text-emerald-400 font-bold mt-1">✓ Full salary settled (Gross = Loan Deduction + Net Payout). No remaining balance.</p>
                   )}
                 </div>
               );

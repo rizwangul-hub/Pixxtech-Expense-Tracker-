@@ -48,29 +48,86 @@ let verifierDataCache = {
 };
 
 const SalaryBreakdown = ({ entry }) => {
-  const salary = entry?.salaryDetails;
+  const salary = entry?.salaryDetails || entry?.entryData?.payrollSnapshot;
   if (entry?.entryType !== 'SALARY' || !salary) return null;
 
+  const gross = Number(salary.grossSalary || 0);
+  const loanDed = Number(salary.loanDeduction || 0);
+  const lopDed = Number(salary.lopDeduction || 0);
+  const otherDed = Number(salary.otherDeduction || 0);
+  const netPay = Number(salary.netPayable || 0);
+  const paidNow = Number(entry.amount || 0);
+  const alreadyPaid = Number(salary.alreadyPaid || salary.totalInstallmentsPaid || 0);
+  const totalPaidAfter = alreadyPaid + paidNow;
+  const remaining = Math.max(0, netPay - totalPaidAfter);
+  const isFullySettled = (remaining === 0) || (loanDed + paidNow >= gross && remaining <= 0.01);
+  const currentLoanBal = Number(salary.currentLoanBalance || 0);
+
   return (
-    <div className="mt-3 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-3 text-[11px] space-y-2">
-      <div className="font-bold text-emerald-300">Salary Breakdown — {salary.employeeName}</div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 text-slate-300">
-        <span>Basic: <b className="text-white">Rs. {formatPKR(salary.basicSalary)}</b></span>
-        <span>Allowance: <b className="text-white">Rs. {formatPKR(salary.allowance)}</b></span>
-        <span>Gross: <b className="text-white">Rs. {formatPKR(salary.grossSalary)}</b></span>
-        <span>Deduction: <b className="text-rose-300">Rs. {formatPKR(salary.totalDeduction)}</b></span>
-        <span>Loan Deduction: <b className="text-rose-300">Rs. {formatPKR(salary.loanDeduction)}</b></span>
-        <span>LOP Deduction: <b className="text-rose-300">Rs. {formatPKR(salary.lopDeduction)}</b></span>
-        <span>Other Deduction: <b className="text-rose-300">Rs. {formatPKR(salary.otherDeduction)}</b></span>
-        <span>Net Salary: <b className="text-emerald-300">Rs. {formatPKR(salary.netPayable)}</b></span>
+    <div className="mt-2.5 rounded-xl border border-emerald-800/70 bg-emerald-950/30 p-3 text-xs space-y-2">
+      <div className="flex items-center justify-between border-b border-emerald-800/40 pb-1.5 flex-wrap gap-1">
+        <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+          💼 Salary Breakdown — <strong className="text-white">{salary.employeeName || 'Staff Member'}</strong>
+        </span>
+        <span className="text-[10px] text-purple-300 font-mono font-semibold">
+          {salary.designation ? `${salary.designation} (${salary.department || 'Staff'})` : ''}
+        </span>
       </div>
-      {salary.allowanceReason && (
-        <div className="text-slate-400">Allowance Reason: <span className="text-slate-200">{salary.allowanceReason}</span></div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-300 pt-0.5">
+        <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
+          <span className="text-slate-400 block text-[10px]">Gross Salary</span>
+          <span className="text-white font-mono font-bold">Rs. {formatPKR(gross)}</span>
+        </div>
+        <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
+          <span className="text-orange-400 block text-[10px]">Loan Deduction</span>
+          <span className="text-orange-300 font-mono font-bold">
+            {loanDed > 0 ? `− Rs. ${formatPKR(loanDed)}` : 'Rs. 0'}
+          </span>
+        </div>
+        {lopDed > 0 ? (
+          <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
+            <span className="text-rose-400 block text-[10px]">Absent / LOP</span>
+            <span className="text-rose-300 font-mono font-bold">− Rs. {formatPKR(lopDed)}</span>
+          </div>
+        ) : otherDed > 0 ? (
+          <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
+            <span className="text-rose-400 block text-[10px]">Other Deduction</span>
+            <span className="text-rose-300 font-mono font-bold">− Rs. {formatPKR(otherDed)}</span>
+          </div>
+        ) : null}
+        <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
+          <span className="text-emerald-400 block text-[10px]">Net Payable</span>
+          <span className="text-white font-mono font-black">Rs. {formatPKR(netPay)}</span>
+        </div>
+      </div>
+
+      {loanDed > 0 && (
+        <div className="text-[11px] text-orange-300 bg-orange-950/60 border border-orange-800/60 p-2 rounded-lg flex items-center justify-between flex-wrap gap-1">
+          <span>
+            📉 <strong>Loan Recovery:</strong> Rs. {formatPKR(loanDed)} will be deducted from {salary.employeeName}'s loan upon verification.
+          </span>
+          {currentLoanBal > 0 && (
+            <span className="font-mono text-slate-300 text-[10px]">
+              Bal: Rs. {formatPKR(currentLoanBal)} → <strong className="text-white">Rs. {formatPKR(Math.max(0, currentLoanBal - loanDed))}</strong>
+            </span>
+          )}
+        </div>
       )}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 border-t border-emerald-900/60 pt-2">
-        <span className="text-amber-300">Requested Now: <b>Rs. {formatPKR(entry.amount)}</b></span>
-        <span className="text-slate-300">Already Paid: <b>Rs. {formatPKR(salary.alreadyPaid)}</b></span>
-        <span className="text-amber-300">Remaining: <b>Rs. {formatPKR(salary.remainingPayable)}</b></span>
+
+      <div className="flex items-center justify-between border-t border-emerald-800/40 pt-2 flex-wrap gap-2 text-[11px]">
+        <span className="text-emerald-300 font-mono">
+          Payout to Bank/Cash: <b className="text-white font-bold">Rs. {formatPKR(paidNow)}</b>
+        </span>
+        {isFullySettled ? (
+          <span className="text-emerald-400 font-bold bg-emerald-950/90 border border-emerald-600/60 px-2.5 py-0.5 rounded text-[11px] inline-flex items-center gap-1 shadow-sm">
+            ✓ Full Salary Settled (No Remaining)
+          </span>
+        ) : (
+          <span className="text-amber-300 font-mono font-bold bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded text-[11px]">
+            Remaining Salary: Rs. {formatPKR(remaining)}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -294,7 +351,16 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
 
   // Verify / Approve Entry (Atomic post to Ledger)
   const handleVerify = async (entry) => {
-    if (!window.confirm(`Are you sure you want to verify and post this ${entry.entryType} of ${formatPKR(entry.amount)} into the official system?`)) {
+    if (entry.entryType === 'SALARY') {
+      const snap = entry.salaryDetails || entry.entryData?.payrollSnapshot || {};
+      const empName = snap.employeeName || entry.submittedByName || 'Employee';
+      const gross = snap.grossSalary || entry.amount;
+      const loanDed = snap.loanDeduction || entry.entryData?.loanDeduction || 0;
+      const confirmMsg = loanDed > 0
+        ? `Confirm Salary Payout Verification for ${empName}:\n\n• Gross Salary: Rs. ${formatPKR(gross)}\n• Loan Deduction: − Rs. ${formatPKR(loanDed)} (Will decrease staff loan balance)\n• Net Bank Payout: Rs. ${formatPKR(entry.amount)}\n\nProceed to verify and disburse from ${entry.crAccountId?.name || 'Bank Account'}?`
+        : `Confirm Salary Payout Verification for ${empName}:\n\n• Net Bank Payout: Rs. ${formatPKR(entry.amount)}\n\nProceed to verify and disburse from ${entry.crAccountId?.name || 'Bank Account'}?`;
+      if (!window.confirm(confirmMsg)) return;
+    } else if (!window.confirm(`Are you sure you want to verify and post this ${entry.entryType} of ${formatPKR(entry.amount)} into the official system?`)) {
       return;
     }
 
@@ -674,6 +740,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
               { id: 'ALL', label: 'All Types' },
               { id: 'RENT', label: 'Rent Receipts' },
               { id: 'EXPENSE', label: 'Expense Vouchers' },
+              { id: 'SALARY', label: '💼 Staff Salaries' },
               { id: 'TRANSFER', label: 'Internal Transfers' },
             ].map((t) => (
               <button
@@ -785,6 +852,10 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-purple-950/80 text-purple-300 border border-purple-700/60">
                               <ArrowLeftRight size={12} /> Transfer
                             </span>
+                          ) : entry.entryType === 'SALARY' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60">
+                              <DollarSign size={12} /> Salary Payout
+                            </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-rose-950/80 text-rose-300 border border-rose-700/60">
                               <DollarSign size={12} /> Expense
@@ -853,6 +924,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           )}
                         </div>
                       )}
+                      {entry.entryType === 'SALARY' && <SalaryBreakdown entry={entry} />}
                     </div>
 
                     {/* Attached Purchase / Receipt Evidence (Uploaded by Sarfraz) */}
@@ -1049,6 +1121,15 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950/70 text-purple-300 border border-purple-700/50">
                               <ArrowLeftRight size={11} /> Transfer
                             </span>
+                          ) : entry.entryType === 'SALARY' ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/70 text-emerald-300 border border-emerald-700/50">
+                                💼 Salary
+                              </span>
+                              <span className="text-[9px] font-mono font-semibold text-emerald-400 bg-slate-950 px-1 py-0.2 rounded border border-slate-800">
+                                Staff Payroll
+                              </span>
+                            </div>
                           ) : (
                             <div className="flex flex-col gap-0.5">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950/70 text-rose-300 border border-rose-700/50">
@@ -1074,9 +1155,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           </div>
                         </td>
 
-                        <td className="py-2.5 px-3.5 max-w-[280px] lg:max-w-[320px] align-middle">
+                        <td className="py-2.5 px-3.5 max-w-[280px] lg:max-w-[340px] align-middle">
                           <div
-                            className="text-slate-200 font-medium text-xs leading-snug line-clamp-2"
+                            className="text-slate-200 font-medium text-xs leading-snug"
                             title={entry.detail}
                           >
                             {entry.detail || '—'}
@@ -1086,6 +1167,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                               Head: {entry.categoryId.name}
                             </div>
                           )}
+                          {entry.entryType === 'SALARY' && <SalaryBreakdown entry={entry} />}
 
                           {/* Attached Purchase / Receipt Images (Sarfraz Data Entry) */}
                           {entryAttachments.length > 0 && (
