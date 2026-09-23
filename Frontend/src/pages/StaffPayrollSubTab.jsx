@@ -774,6 +774,12 @@ export const StaffPayrollSubTab = () => {
                             <div className="text-[9px] text-amber-400 font-mono">
                               Left: Rs. {formatPKR(remainingPay)}
                             </div>
+                            <button
+                              onClick={() => openReverseModal(row)}
+                              className="text-[9px] text-rose-400 hover:text-rose-300 underline font-semibold transition"
+                            >
+                              Reverse Paid Amount
+                            </button>
                             <div>
                               <button
                                 onClick={() => openPayModal(row)}
@@ -1084,9 +1090,9 @@ export const StaffPayrollSubTab = () => {
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              Are you sure you want to reverse the paid salary of{' '}
+              Are you sure you want to reverse all recorded salary payments for{' '}
               <strong className="text-white">{reverseTargetRow.name}</strong> (Rs.{' '}
-              {formatPKR(reverseTargetRow.netPayable)})?
+              {formatPKR(reverseTargetRow.totalInstallmentsPaid || reverseTargetRow.netPayable)})?
             </p>
 
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs space-y-1 font-mono">
@@ -1094,8 +1100,13 @@ export const StaffPayrollSubTab = () => {
               <div className="text-slate-400">Paid Account: <span className="text-white font-bold">{reverseTargetRow.paidFromAccountName}</span></div>
             </div>
 
-            <div className="text-xs text-rose-300 bg-rose-950/60 p-3 rounded-xl border border-rose-900/60">
-              Reversing will restore Rs. {formatPKR(reverseTargetRow.netPayable)} back to the disbursing account balance and reverse the Finance Voucher.
+            <div className="text-xs text-rose-300 bg-rose-950/60 p-3 rounded-xl border border-rose-900/60 space-y-1">
+              <div>• Every linked salary transaction will be marked REVERSED and its payment amount will be restored to the original bank/cash account.</div>
+              {Number(reverseTargetRow.loanDeduction) > 0 && (
+                <div className="text-amber-300 font-semibold">
+                  • Rs. {formatPKR(reverseTargetRow.loanDeduction)} deducted for staff loan will be reversed and restored back to {reverseTargetRow.name}&apos;s loan balance.
+                </div>
+              )}
             </div>
 
             <div className="text-xs space-y-1">

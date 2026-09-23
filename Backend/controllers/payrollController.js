@@ -1827,8 +1827,8 @@ export const reverseSalaryPayment = async (req, res) => {
       return apiError(res, 'Payroll record not found.', 404);
     }
 
-    if (pDoc.paymentStatus !== 'PAID') {
-      return apiError(res, `Salary for ${pDoc.employeeName} is not marked as PAID.`, 400);
+    if (!['PAID', 'PARTIAL_PAYMENT'].includes(pDoc.paymentStatus)) {
+      return apiError(res, `Salary for ${pDoc.employeeName} has no recorded payout to reverse.`, 400);
     }
 
     const transactionIds = [
@@ -1862,6 +1862,42 @@ export const reverseSalaryPayment = async (req, res) => {
       paidAmount = round2(pDoc.totalInstallmentsPaid || pDoc.netPayable);
     }
 
+    // Reverse any loan repayments / deductions processed for this employee and payroll month
+    const loanRepayments = await StaffLoan.find({
+      employeeId: pDoc.employeeId,
+      payrollMonth: pDoc.payrollMonth,
+      type: 'REPAYMENT',
+    });
+
+    let totalLoanRestored = 0;
+    if (loanRepayments.length > 0) {
+      for (const rec of loanRepayments) {
+        totalLoanRestored = round2(totalLoanRestored + (rec.amount || 0));
+      }
+      await StaffLoan.deleteMany({
+        employeeId: pDoc.employeeId,
+        payrollMonth: pDoc.payrollMonth,
+        type: 'REPAYMENT',
+      });
+    } else if (pDoc.loanDeduction > 0) {
+      totalLoanRestored = round2(pDoc.loanDeduction);
+    }
+
+    if (totalLoanRestored > 0) {
+      const emp = await Employee.findById(pDoc.employeeId);
+      if (emp) {
+        const prevBal = emp.loanBalance || 0;
+        emp.loanBalance = round2(prevBal + totalLoanRestored);
+        await emp.save();
+      }
+    }
+
+    // Also cancel any pending entries linked to this payroll
+    await PendingEntry.updateMany(
+      { 'entryData.payrollId': pDoc._id, status: { $in: ['PENDING_VERIFICATION', 'EDITED', 'VERIFIED'] } },
+      { $set: { status: 'REJECTED', rejectionReason: `Salary payout reversed: ${reason || 'Payment Reversed'}` } }
+    );
+
     const prevVoucher = pDoc.voucherNo;
     pDoc.status = 'FINALIZED';
     pDoc.paymentStatus = 'PENDING_PAYMENT';
@@ -1883,13 +1919,20 @@ export const reverseSalaryPayment = async (req, res) => {
       userName: req.user?.name || 'System Operator',
       action: 'SALARY_PAYMENT_REVERSED',
       recordId: pDoc._id.toString(),
-      details: `Reversed salary payment of Rs. ${formatPKR(paidAmount)} for ${pDoc.employeeName} (Voucher ${prevVoucher}). Reason: ${reason || 'N/A'}.`,
+      details: `Reversed salary payment of Rs. ${formatPKR(paidAmount)} for ${pDoc.employeeName} (Voucher ${prevVoucher})${totalLoanRestored > 0 ? `. Restored Rs. ${formatPKR(totalLoanRestored)} to employee loan balance.` : ''}. Reason: ${reason || 'N/A'}.`,
+      newValue: {
+        paidAmount,
+        totalLoanRestored,
+        reason,
+      },
     });
 
     return apiSuccess(
       res,
-      { payroll: pDoc },
-      `Salary payment for ${pDoc.employeeName} reversed successfully. Disbursing account balance restored.`
+      { payroll: pDoc, totalLoanRestored },
+      totalLoanRestored > 0
+        ? `Salary payment for ${pDoc.employeeName} reversed successfully. Disbursing account balance restored and Rs. ${formatPKR(totalLoanRestored)} restored to employee loan balance.`
+        : `Salary payment for ${pDoc.employeeName} reversed successfully. Disbursing account balance restored.`
     );
   } catch (error) {
     console.error('[Reverse Salary Payment Error]:', error);
