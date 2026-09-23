@@ -72,6 +72,7 @@ export const DataEntryDashboard = ({ user }) => {
     description: '',
   });
   const [submittingTransfer, setSubmittingTransfer] = useState(false);
+  const [transferEvidenceFiles, setTransferEvidenceFiles] = useState([]);
 
   // Load active accounts and metadata
   const loadMasterData = async (showLoading = false) => {
@@ -205,12 +206,19 @@ export const DataEntryDashboard = ({ user }) => {
       if (transferForm.fromAccountId === transferForm.toAccountId) {
         throw new Error('Source and destination accounts must be different.');
       }
+      const uploadedImages = transferEvidenceFiles.length
+        ? (await uploadAPI.images(transferEvidenceFiles)).images
+        : [];
       const res = await transfersAPI.executeTransfer({
         ...transferForm,
         amount: Number(transferForm.amount),
+        attachments: uploadedImages,
       });
       if (res.success) {
-        setActionMessage({ text: 'Internal transfer completed successfully.', type: 'success' });
+        setActionMessage({
+          text: res.message || (res.data?.isPending ? 'Internal transfer submitted to Admin Verification Queue.' : 'Internal transfer completed successfully.'),
+          type: 'success',
+        });
         setTransferForm({
           fromAccountId: '',
           toAccountId: '',
@@ -219,6 +227,7 @@ export const DataEntryDashboard = ({ user }) => {
           reference: '',
           description: '',
         });
+        setTransferEvidenceFiles([]);
         await refreshEntries();
       }
     } catch (err) {
@@ -567,6 +576,23 @@ export const DataEntryDashboard = ({ user }) => {
                     required
                     className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 font-semibold"
                   />
+                </div>
+
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] uppercase font-bold text-slate-700">
+                      Transfer Evidence / Supporting Document (Optional)
+                    </label>
+                    <span className="text-[10px] text-slate-500">{transferEvidenceFiles.length}/3 files</span>
+                  </div>
+                  <EvidenceImageUpload
+                    files={transferEvidenceFiles}
+                    onChange={setTransferEvidenceFiles}
+                    disabled={submittingTransfer}
+                  />
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Upload bank slips, deposit slips, cheque images, or other proof for Admin verification.
+                  </p>
                 </div>
 
                 <div className="flex justify-end">

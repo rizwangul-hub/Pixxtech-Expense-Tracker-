@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Account from '../models/Account.js';
 import Transaction from '../models/Transaction.js';
 import Category from '../models/Category.js';
+import PendingEntry from '../models/PendingEntry.js';
 import { createTransaction, round2 } from '../services/ledgerService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
@@ -30,7 +31,7 @@ const getOrCreateTransferCategory = async () => {
  */
 export const executeTransfer = async (req, res) => {
   try {
-    const { fromAccountId, toAccountId, date, reference, voucherNo } = req.body;
+    const { fromAccountId, toAccountId, date, reference, voucherNo, attachments = [] } = req.body;
     const amount = req.transferAmount;
     const detail = req.transferNarration;
 
@@ -45,7 +46,60 @@ export const executeTransfer = async (req, res) => {
       reference ||
       `TRF-${dateStr}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    // 3. Double-entry transaction:
+    // 3. If submitted by DATA_ENTRY (Sarfraz), stage as PendingEntry awaiting Khurshid / Admin verification
+    if (req.user?.role === 'DATA_ENTRY') {
+      const validAttachments = Array.isArray(attachments)
+        ? attachments.filter((a) => a && typeof a.url === 'string' && a.url && typeof a.publicId === 'string' && a.publicId)
+        : [];
+
+      const pending = await PendingEntry.create({
+        entryType: 'TRANSFER',
+        amount,
+        date: transferDate,
+        voucherNo: vNo,
+        detail,
+        categoryId: transferCategory._id,
+        drAccountId: toAccountId,
+        crAccountId: fromAccountId,
+        receivingAccountId: toAccountId,
+        attachments: validAttachments,
+        referenceNumber: reference || '',
+        entryData: {
+          ...req.body,
+          amount,
+          detail,
+          fromAccountId,
+          toAccountId,
+          voucherNo: vNo,
+        },
+        status: 'PENDING_VERIFICATION',
+        submittedBy: req.user._id,
+        submittedByName: req.user.name || 'Sarfraz Khan',
+        submittedAt: new Date(),
+        auditLog: [
+          {
+            action: 'SUBMITTED',
+            performedBy: req.user.name || 'Sarfraz Khan',
+            performedById: req.user._id,
+            timestamp: new Date(),
+            notes: `Internal funds transfer of Rs. ${amount.toLocaleString('en-PK')} submitted by Data Entry Operator. Awaiting review and verification by Admin before funds move.`,
+          },
+        ],
+      });
+
+      return apiSuccess(
+        res,
+        {
+          pendingEntry: pending,
+          isPending: true,
+          status: 'PENDING_VERIFICATION',
+        },
+        `Transfer #${vNo} (Rs. ${amount.toLocaleString('en-PK')}) submitted to Verification Queue. Account balances will update upon Admin approval.`,
+        201
+      );
+    }
+
+    // 4. Double-entry transaction for ADMIN / VERIFIER roles:
     // Debit (drAccountId) increases receiving account (toAccountId)
     // Credit (crAccountId) decreases disbursing account (fromAccountId)
     const transaction = await createTransaction({
@@ -62,7 +116,7 @@ export const executeTransfer = async (req, res) => {
       createdBy: req.user?._id,
     });
 
-    // 4. Fetch updated balances for both accounts
+    // 5. Fetch updated balances for both accounts
     const [updatedSource, updatedDest] = await Promise.all([
       Account.findById(fromAccountId).lean(),
       Account.findById(toAccountId).lean(),

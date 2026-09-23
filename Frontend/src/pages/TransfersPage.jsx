@@ -121,7 +121,7 @@ export function TransfersPage({ currentUser, onSelectAccount }) {
       const res = await transfersAPI.executeTransfer(payload);
       if (res?.success) {
         setSuccessMsg(
-          `Transfer of ${formatPKR(numAmount)} executed successfully between accounts.`
+          res?.message || `Transfer of ${formatPKR(numAmount)} executed successfully between accounts.`
         );
         setIsModalOpen(false);
         fetchTransfersAndAccounts();
