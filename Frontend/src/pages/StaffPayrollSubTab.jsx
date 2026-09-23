@@ -350,11 +350,14 @@ export const StaffPayrollSubTab = () => {
       });
 
       if (res?.success) {
+        const reversedEmployeeId = reverseTargetRow.employeeId;
         setMsg({ type: 'success', text: res.message || 'Salary payment reversed successfully.' });
         setReverseModalOpen(false);
         setReverseTargetRow(null);
-        fetchPayroll();
-        fetchAccounts();
+        await Promise.all([fetchPayroll(), fetchAccounts()]);
+        if (ledgerModalOpen && reversedEmployeeId) {
+          await openEmployeeLedgerModal(reversedEmployeeId);
+        }
         setTimeout(() => setMsg({ type: '', text: '' }), 4000);
       }
     } catch (err) {
