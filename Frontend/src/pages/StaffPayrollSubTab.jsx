@@ -101,7 +101,9 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
       if (res?.success && res.data) {
         setPayrollRows(res.data.payroll || []);
         setSummary(res.data.summary || null);
+        return res.data.payroll || [];
       }
+      return [];
     } catch (err) {
       console.error('Failed to load payroll:', err);
     } finally {
@@ -290,10 +292,31 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
   };
 
   // Finance Payout Handlers
-  const openPayModal = (row) => {
+  const openPayModal = async (row) => {
     if (!row.payrollId) {
-      setMsg({ type: 'error', text: 'Please click "Finalize & Save Payroll" before submitting this salary for payout.' });
-      return;
+      try {
+        setSaving(true);
+        setMsg({ type: '', text: '' });
+        await payrollAPI.savePayroll({
+          month: selectedMonth,
+          payrollRecords: [row],
+        });
+        const refreshedRows = await fetchPayroll();
+        const savedRow = refreshedRows.find((item) => item.employeeId === row.employeeId) || row;
+        setMsg({
+          type: 'success',
+          text: `${row.name}'s payroll was saved automatically. You can now continue to the salary payout.`,
+        });
+        row = savedRow;
+      } catch (err) {
+        setMsg({
+          type: 'error',
+          text: err.response?.data?.message || err.message || 'Failed to save payroll before payout.',
+        });
+        return;
+      } finally {
+        setSaving(false);
+      }
     }
     const alreadyPaid = Number(row.totalInstallmentsPaid || 0);
     const net = Number(row.netPayable || 0);
