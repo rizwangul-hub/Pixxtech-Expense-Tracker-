@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   DollarSign,
   Plus,
@@ -8,6 +8,7 @@ import {
   CreditCard,
   History,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import { staffAPI } from '../services/api.js';
 
@@ -18,6 +19,10 @@ const formatPKR = (val) => {
 };
 
 export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
+  useEffect(() => {
+    onRefresh?.();
+  }, []);
+
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loanType, setLoanType] = useState('DISBURSEMENT'); // DISBURSEMENT or REPAYMENT
@@ -104,11 +109,19 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
             </h2>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="bg-slate-950 px-4 py-2 rounded-xl border border-slate-800 flex items-center gap-3">
               <span className="text-xs font-semibold text-slate-400">Total Outstanding Loan Pool:</span>
               <span className="font-mono text-base font-black text-rose-400">Rs. {formatPKR(totalLoanBalance)}</span>
             </div>
+            <button
+              type="button"
+              onClick={() => onRefresh?.()}
+              className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition"
+              title="Refresh Loan Balances"
+            >
+              <RefreshCw size={15} />
+            </button>
           </div>
         </div>
 

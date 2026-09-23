@@ -45,7 +45,7 @@ export function StaffPage({ currentUser }) {
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+  }, [activeTab]);
 
   return (
     <div className="space-y-6">
@@ -196,7 +196,7 @@ export function StaffPage({ currentUser }) {
       )}
 
       {activeTab === 'payroll' && (
-        <StaffPayrollSubTab />
+        <StaffPayrollSubTab onRefreshEmployees={fetchEmployees} />
       )}
 
       {activeTab === 'locations' && (
