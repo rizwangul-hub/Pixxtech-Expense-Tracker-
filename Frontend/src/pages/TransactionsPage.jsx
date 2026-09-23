@@ -23,6 +23,7 @@ import {
   X,
   Sparkles,
   ChevronLeft,
+  ChevronRight,
   ExternalLink,
   Printer,
   Download,

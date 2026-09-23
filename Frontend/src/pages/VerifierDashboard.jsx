@@ -1308,6 +1308,29 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </div>
               </div>
 
+              {(editingEntry?.entryType === 'EXPENSE' || editingEntry?.entryType === 'RENT') && (
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">
+                    Narration / Description
+                  </label>
+                  <textarea
+                    value={editForm.detail}
+                    onChange={(e) => setEditForm({ ...editForm, detail: e.target.value })}
+                    rows={3}
+                    maxLength={1000}
+                    placeholder={
+                      editingEntry.entryType === 'RENT'
+                        ? 'Enter the rent receipt narration or description'
+                        : 'Enter the expense narration or description'
+                    }
+                    className="w-full resize-y bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white leading-relaxed"
+                  />
+                  <div className="mt-1 text-right text-[10px] text-slate-500">
+                    {editForm.detail.length}/1000
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-400 font-semibold mb-1">

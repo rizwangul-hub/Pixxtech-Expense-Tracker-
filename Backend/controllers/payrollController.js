@@ -2460,46 +2460,91 @@ export const getEmployeeLedger = async (req, res) => {
       const monthNum = parseInt(mStr, 10);
       const accrualDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
 
-      // 1. Accrual Entry (Credit / Salary Due to Employee)
+      // Correct status label — PARTIAL_PAYMENT must not show as PENDING
+      let accrualStatus = 'PENDING';
+      if (p.paymentStatus === 'PAID') accrualStatus = 'PAID';
+      else if (p.paymentStatus === 'PARTIAL_PAYMENT') accrualStatus = 'PARTIAL';
+
+      // 1. ONE Accrual Entry per salary period (the salary obligation — never duplicated)
       rawLedgerEntries.push({
         date: accrualDate,
         month: p.payrollMonth,
         type: 'SALARY_ACCRUAL',
-        voucherNo: p.voucherNo || `ACCRUAL-${p.payrollMonth}`,
-        detail: `Monthly Salary Accrual â€” ${p.payrollMonth}`,
+        voucherNo: `ACCRUAL-${p.payrollMonth}`,
+        detail: `Monthly Salary Accrual \u2014 ${p.payrollMonth}${p.loanDeduction > 0 ? ` (Loan Ded: Rs. ${formatPKR(p.loanDeduction)})` : ''}`,
         accruedAmount: netPay,
         paidAmount: 0,
-        status: p.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
-        paidFromAccount: p.paidFromAccountName || '-',
+        status: accrualStatus,
+        paidFromAccount: '-',
         payrollId: p._id,
+        grossSalary: p.grossSalary || 0,
+        loanDeduction: p.loanDeduction || 0,
+        netPayable: netPay,
+        totalInstallmentsPaid: round2(p.totalInstallmentsPaid || 0),
       });
 
       totalAccrued += netPay;
 
-      // 2. Disbursal Entry (Debit / Salary Paid to Employee)
-      if (p.paymentStatus === 'PAID') {
+      // 2. ONE Disbursal Entry PER INSTALLMENT (handles partial payments correctly)
+      const installments = Array.isArray(p.salaryInstallments) ? p.salaryInstallments : [];
+
+      if (installments.length > 0) {
+        installments.forEach((inst, idx) => {
+          const instAmount = round2(inst.amount || 0);
+          if (instAmount <= 0) return;
+
+          const instDate = inst.paymentDate ? new Date(inst.paymentDate) : accrualDate;
+          const installmentLabel = installments.length > 1
+            ? ` (Installment ${idx + 1}/${installments.length})`
+            : '';
+
+          rawLedgerEntries.push({
+            date: instDate,
+            month: p.payrollMonth,
+            type: 'SALARY_DISBURSAL',
+            voucherNo: inst.voucherNo || p.voucherNo || `PAY-${p.payrollMonth}-${idx + 1}`,
+            detail: `Salary Payment${installmentLabel} via ${inst.paidFromAccountName || p.paidFromAccountName || 'Finance Account'} \u2014 ${p.payrollMonth}`,
+            accruedAmount: 0,
+            paidAmount: instAmount,
+            status: 'PAID',
+            paidFromAccount: inst.paidFromAccountName || p.paidFromAccountName || 'Finance Account',
+            payrollId: p._id,
+            paymentMethod: inst.paymentMethod || p.paymentMethod || 'BANK_TRANSFER',
+            paidBy: inst.paidBy || '',
+          });
+
+          totalPaid += instAmount;
+        });
+      } else if ((p.paymentStatus === 'PAID' || p.totalInstallmentsPaid > 0) && p.totalInstallmentsPaid > 0) {
+        // Fallback: legacy fully-paid record with no installments array populated
         const payoutDate = p.paymentDate || p.paidDate || accrualDate;
         rawLedgerEntries.push({
           date: payoutDate,
           month: p.payrollMonth,
           type: 'SALARY_DISBURSAL',
           voucherNo: p.voucherNo || 'PAID',
-          detail: `Salary Disbursal via ${p.paidFromAccountName || 'Finance Bank/Cash'} (Voucher: ${p.voucherNo})`,
+          detail: `Salary Disbursal via ${p.paidFromAccountName || 'Finance Account'} (Voucher: ${p.voucherNo || 'N/A'})`,
           accruedAmount: 0,
-          paidAmount: netPay,
+          paidAmount: round2(p.totalInstallmentsPaid),
           status: 'PAID',
           paidFromAccount: p.paidFromAccountName || 'Finance Account',
           payrollId: p._id,
         });
 
-        totalPaid += netPay;
+        totalPaid += round2(p.totalInstallmentsPaid);
       }
     }
 
-    // Sort entries chronologically: Date ASC
-    rawLedgerEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
+    // Sort chronologically; on same date, accrual comes before disbursal
+    rawLedgerEntries.sort((a, b) => {
+      const dateDiff = new Date(a.date) - new Date(b.date);
+      if (dateDiff !== 0) return dateDiff;
+      if (a.type === 'SALARY_ACCRUAL' && b.type === 'SALARY_DISBURSAL') return -1;
+      if (a.type === 'SALARY_DISBURSAL' && b.type === 'SALARY_ACCRUAL') return 1;
+      return 0;
+    });
 
-    // Calculate running pending liability balance
+    // Running pending liability balance
     let runningPendingBalance = 0;
     const ledger = rawLedgerEntries.map((entry) => {
       runningPendingBalance = round2(runningPendingBalance + entry.accruedAmount - entry.paidAmount);
@@ -2521,6 +2566,7 @@ export const getEmployeeLedger = async (req, res) => {
           designation: employee.designation,
           department: employee.department,
           basicSalary: employee.basicSalary,
+          loanBalance: employee.loanBalance || 0,
         },
         summary: {
           totalAccrued: round2(totalAccrued),
@@ -2536,3 +2582,4 @@ export const getEmployeeLedger = async (req, res) => {
     return apiError(res, error.message || 'Failed to fetch employee ledger.', 500);
   }
 };
+

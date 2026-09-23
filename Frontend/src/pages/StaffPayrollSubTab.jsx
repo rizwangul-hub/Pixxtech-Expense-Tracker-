@@ -369,11 +369,9 @@ export const StaffPayrollSubTab = () => {
   const dynamicGrandLoanDed = payrollRows.reduce((sum, r) => sum + (Number(r.loanDeduction) || 0), 0);
   const dynamicGrandNetPay = payrollRows.reduce((sum, r) => sum + (r.netPayable || 0), 0);
 
-  const totalPaidAmount = payrollRows
-    .filter((r) => r.paymentStatus === 'PAID')
-    .reduce((sum, r) => sum + (r.netPayable || 0), 0);
-
-  const totalPendingAmount = dynamicGrandNetPay - totalPaidAmount;
+  // Sum actual installments paid (includes PARTIAL_PAYMENT — not just fully PAID employees)
+  const totalPaidAmount = payrollRows.reduce((sum, r) => sum + (r.totalInstallmentsPaid || 0), 0);
+  const totalPendingAmount = payrollRows.reduce((sum, r) => sum + (r.remainingPayable ?? Math.max(0, (r.netPayable || 0) - (r.totalInstallmentsPaid || 0))), 0);
 
   const currentDisbursingAccount = financeAccounts.find((a) => a._id === selectedAccountId);
 
@@ -635,6 +633,9 @@ export const StaffPayrollSubTab = () => {
               ) : (
                 payrollRows.map((row, idx) => {
                   const isPaid = row.paymentStatus === 'PAID';
+                  const isPartial = row.paymentStatus === 'PARTIAL_PAYMENT';
+                  const totalInstPaid = row.totalInstallmentsPaid || 0;
+                  const remainingPay = row.remainingPayable ?? Math.max(0, (row.netPayable || 0) - totalInstPaid);
 
                   return (
                     <tr key={row.employeeId} className="hover:bg-slate-900/60 transition">
@@ -736,9 +737,29 @@ export const StaffPayrollSubTab = () => {
                               Reverse
                             </button>
                           </div>
+                        ) : isPartial ? (
+                          <div className="space-y-0.5">
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-950 border border-amber-700 text-amber-300 font-bold text-[9px]">
+                              ◑ PARTIAL
+                            </span>
+                            <div className="text-[9px] text-emerald-400 font-mono">
+                              Paid: Rs. {formatPKR(totalInstPaid)}
+                            </div>
+                            <div className="text-[9px] text-amber-400 font-mono">
+                              Left: Rs. {formatPKR(remainingPay)}
+                            </div>
+                            <div>
+                              <button
+                                onClick={() => openPayModal(row)}
+                                className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-2 py-0.5 rounded text-[10px] shadow transition inline-flex items-center gap-0.5"
+                              >
+                                <DollarSign size={11} /> Pay More
+                              </button>
+                            </div>
+                          </div>
                         ) : (
                           <div className="space-y-1">
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-800/80 text-amber-400 font-bold text-[9px]">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 font-bold text-[9px]">
                               PENDING
                             </span>
                             <div>
@@ -811,8 +832,8 @@ export const StaffPayrollSubTab = () => {
               </div>
             )}
 
-            {/* Employee Payout Details */}
-            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
+            {/* Full Salary Breakdown */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1.5 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-400 font-semibold">Employee Name:</span>
                 <span className="text-white font-bold text-sm">{payTargetRow.name}</span>
@@ -825,18 +846,54 @@ export const StaffPayrollSubTab = () => {
                 <span className="text-slate-400 font-semibold">Payroll Month:</span>
                 <span className="text-slate-300 font-mono font-bold">{selectedMonth}</span>
               </div>
-              <div className="flex justify-between items-center border-t border-slate-800/80 pt-2 text-sm">
-                <span className="text-slate-300 font-bold">Net Payable After Deductions:</span>
-                <span className="text-white font-mono font-black">Rs. {formatPKR(payTargetRow.netPayable)}</span>
+              {/* Salary breakdown */}
+              <div className="border-t border-slate-800/80 pt-2 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 font-semibold">Gross Salary:</span>
+                  <span className="text-slate-300 font-mono font-bold">Rs. {formatPKR(payTargetRow.grossSalary)}</span>
+                </div>
+                {Number(payTargetRow.loanDeduction) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-orange-400 font-semibold">Loan Deduction (this month):</span>
+                    <span className="text-orange-400 font-mono font-bold">− Rs. {formatPKR(payTargetRow.loanDeduction)}</span>
+                  </div>
+                )}
+                {Number(payTargetRow.lopDeduction) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-rose-400 font-semibold">Absent / LOP Deduction:</span>
+                    <span className="text-rose-400 font-mono font-bold">− Rs. {formatPKR(payTargetRow.lopDeduction)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center border-t border-slate-700 pt-1 text-sm">
+                  <span className="text-white font-bold">Net Payable:</span>
+                  <span className="text-white font-mono font-black">Rs. {formatPKR(payTargetRow.netPayable)}</span>
+                </div>
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-400 font-semibold">Already Paid:</span>
-                <span className="text-slate-300 font-mono font-bold">Rs. {formatPKR(payTargetRow.totalInstallmentsPaid)}</span>
+              {/* Payment progress */}
+              <div className="border-t border-slate-800/80 pt-2 space-y-1">
+                {Number(payTargetRow.totalInstallmentsPaid) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-emerald-400 font-semibold">Already Paid:</span>
+                    <span className="text-emerald-400 font-mono font-bold">Rs. {formatPKR(payTargetRow.totalInstallmentsPaid)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-amber-300 font-bold">Remaining to Pay:</span>
+                  <span className="text-amber-300 font-mono font-black">Rs. {formatPKR(payTargetRow.remainingPayable ?? payTargetRow.netPayable)}</span>
+                </div>
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-amber-300 font-bold">Remaining:</span>
-                <span className="text-amber-300 font-mono font-black">Rs. {formatPKR(payTargetRow.remainingPayable ?? payTargetRow.netPayable)}</span>
-              </div>
+              {/* Previous installment breakdown */}
+              {payTargetRow.salaryInstallments?.length > 0 && (
+                <div className="border-t border-slate-800/80 pt-2">
+                  <p className="text-slate-500 font-semibold mb-1">Previous installments:</p>
+                  {payTargetRow.salaryInstallments.map((item, i) => (
+                    <div key={i} className="flex justify-between text-slate-500">
+                      <span>Installment {i + 1} ({item.paidFromAccountName || 'Bank'}):</span>
+                      <span className="font-mono">Rs. {formatPKR(item.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5 text-xs">
@@ -851,12 +908,48 @@ export const StaffPayrollSubTab = () => {
                 className="w-full bg-slate-950 border border-slate-700 text-emerald-300 font-mono font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500"
               />
               <p className="text-slate-500">You can pay the remaining salary in one payment or multiple installments.</p>
-              {payTargetRow.salaryInstallments?.length > 0 && (
-                <div className="text-slate-400">
-                  Previous installments: {payTargetRow.salaryInstallments.map((item) => `Rs. ${formatPKR(item.amount)}`).join(' + ')}
-                </div>
-              )}
             </div>
+
+            {/* Live payment preview */}
+            {Number(payAmount) > 0 && (() => {
+              const thisPayment = Number(payAmount) || 0;
+              const prevPaid = Number(payTargetRow.totalInstallmentsPaid) || 0;
+              const netPayable = Number(payTargetRow.netPayable) || 0;
+              const remaining = Number(payTargetRow.remainingPayable ?? netPayable);
+              const totalAfter = prevPaid + thisPayment;
+              const remainingAfter = Math.max(0, remaining - thisPayment);
+              const isOver = thisPayment > remaining + 0.01;
+              return (
+                <div className={`p-3 rounded-xl border text-xs font-mono space-y-1 ${isOver ? 'bg-rose-950/60 border-rose-800' : 'bg-slate-950 border-slate-800'}`}>
+                  <p className="text-slate-400 font-bold mb-1">Payment Preview:</p>
+                  {prevPaid > 0 && (
+                    <div className="flex justify-between text-slate-400">
+                      <span>Previously paid:</span>
+                      <span>Rs. {formatPKR(prevPaid)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-emerald-400">
+                    <span>This payment:</span>
+                    <span>+ Rs. {formatPKR(thisPayment)}</span>
+                  </div>
+                  <div className="flex justify-between text-white border-t border-slate-800 pt-1">
+                    <span>Total paid after:</span>
+                    <span className="font-black">Rs. {formatPKR(totalAfter)}</span>
+                  </div>
+                  <div className={`flex justify-between font-black ${isOver ? 'text-rose-400' : remainingAfter === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    <span>Remaining after:</span>
+                    <span>Rs. {formatPKR(remainingAfter)}</span>
+                  </div>
+                  {isOver && (
+                    <p className="text-rose-400 font-bold mt-1">⚠ Exceeds remaining salary of Rs. {formatPKR(remaining)}</p>
+                  )}
+                  {remainingAfter === 0 && !isOver && (
+                    <p className="text-emerald-400 font-bold mt-1">✓ This will fully settle the salary.</p>
+                  )}
+                </div>
+              );
+            })()}
+
 
             {/* Disbursing Finance Account Selector */}
             <div className="space-y-1.5 text-xs">
@@ -1049,7 +1142,7 @@ export const StaffPayrollSubTab = () => {
               ) : selectedLedgerData ? (
                 <>
                   {/* Summary Metric Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
                       <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                         Total Salary Accrued
@@ -1057,17 +1150,17 @@ export const StaffPayrollSubTab = () => {
                       <div className="text-lg font-black text-purple-400 font-mono mt-1">
                         Rs. {formatPKR(selectedLedgerData.summary?.totalAccrued)}
                       </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">Total payroll earnings due</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">Total payroll obligation</div>
                     </div>
 
                     <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
                       <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        Total Salary Disbursed
+                        Total Disbursed
                       </div>
                       <div className="text-lg font-black text-emerald-400 font-mono mt-1">
                         Rs. {formatPKR(selectedLedgerData.summary?.totalPaid)}
                       </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">Paid via Bank / Cash Accounts</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">Paid via Bank / Cash</div>
                     </div>
 
                     <div className={`p-4 rounded-xl border text-center ${
@@ -1076,7 +1169,7 @@ export const StaffPayrollSubTab = () => {
                         : 'bg-emerald-950/40 border-emerald-800/80'
                     }`}>
                       <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        Current Pending Liability
+                        Salary Remaining
                       </div>
                       <div className={`text-lg font-black font-mono mt-1 ${
                         selectedLedgerData.summary?.pendingBalance > 0 ? 'text-amber-400' : 'text-emerald-400'
@@ -1084,9 +1177,21 @@ export const StaffPayrollSubTab = () => {
                         Rs. {formatPKR(selectedLedgerData.summary?.pendingBalance)}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
-                        {selectedLedgerData.summary?.pendingBalance > 0 ? 'Outstanding Unpaid Amount' : 'FULLY PAID (Rs. 0)'}
+                        {selectedLedgerData.summary?.pendingBalance > 0 ? 'Outstanding Unpaid' : 'FULLY PAID ✓'}
                       </div>
                     </div>
+
+                    {(selectedLedgerData.employee?.loanBalance ?? 0) > 0 && (
+                      <div className="bg-orange-950/40 border border-orange-800/60 p-4 rounded-xl text-center">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                          Outstanding Loan
+                        </div>
+                        <div className="text-lg font-black text-orange-400 font-mono mt-1">
+                          Rs. {formatPKR(selectedLedgerData.employee?.loanBalance)}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">Loan / Advance balance</div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Ledger Table */}
@@ -1113,8 +1218,9 @@ export const StaffPayrollSubTab = () => {
                           </tr>
                         ) : (
                           selectedLedgerData.ledger?.map((entry, i) => {
+                            const isAccrual = entry.type === 'SALARY_ACCRUAL';
                             return (
-                              <tr key={i} className="hover:bg-slate-900/40 transition">
+                              <tr key={i} className={`hover:bg-slate-900/40 transition ${isAccrual ? 'bg-slate-950' : 'bg-slate-900/20'}`}>
                                 <td className="py-2.5 px-3 font-mono text-slate-300">
                                   {new Date(entry.date).toLocaleDateString('en-PK')}
                                 </td>
@@ -1125,10 +1231,16 @@ export const StaffPayrollSubTab = () => {
                                   {entry.voucherNo}
                                 </td>
                                 <td className="py-2.5 px-3 text-white">
-                                  <div>{entry.detail}</div>
-                                  {entry.paidFromAccount !== '-' && (
+                                  <div className={isAccrual ? 'font-bold' : ''}>{entry.detail}</div>
+                                  {!isAccrual && entry.paidFromAccount && entry.paidFromAccount !== '-' && (
                                     <div className="text-[10px] text-slate-400 font-mono">
-                                      Disbursed from: {entry.paidFromAccount}
+                                      Account: {entry.paidFromAccount}
+                                      {entry.paidBy ? ` • By: ${entry.paidBy}` : ''}
+                                    </div>
+                                  )}
+                                  {isAccrual && entry.loanDeduction > 0 && (
+                                    <div className="text-[10px] text-orange-400 font-mono">
+                                      Gross: Rs. {formatPKR(entry.grossSalary)} − Loan Ded: Rs. {formatPKR(entry.loanDeduction)}
                                     </div>
                                   )}
                                 </td>
@@ -1145,9 +1257,11 @@ export const StaffPayrollSubTab = () => {
                                   <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${
                                     entry.status === 'PAID'
                                       ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                                      : 'bg-amber-950 text-amber-300 border border-amber-800'
+                                      : entry.status === 'PARTIAL'
+                                      ? 'bg-amber-950 text-amber-300 border border-amber-700'
+                                      : 'bg-slate-800 text-slate-400 border border-slate-700'
                                   }`}>
-                                    {entry.status}
+                                    {entry.status === 'PARTIAL' ? 'PARTIAL' : entry.status}
                                   </span>
                                 </td>
                               </tr>
@@ -1158,6 +1272,7 @@ export const StaffPayrollSubTab = () => {
                     </table>
                   </div>
                 </>
+
               ) : null}
             </div>
 

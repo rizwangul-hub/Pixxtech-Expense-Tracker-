@@ -340,15 +340,24 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
                               <span className="text-[10px] text-slate-500 font-mono">{timeStr}</span>
                             </td>
                             <td className="py-2.5 px-3 whitespace-nowrap">
-                              <span
-                                className={`text-[10px] font-extrabold px-2 py-0.5 rounded border inline-block ${
-                                  isDisbursement
-                                    ? 'bg-rose-950/80 text-rose-300 border-rose-800/60'
-                                    : 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60'
-                                }`}
-                              >
-                                {isDisbursement ? 'ADVANCE DISBURSED' : 'REPAYMENT / DEDUCTION'}
-                              </span>
+                              {isDisbursement ? (
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded border inline-block bg-rose-950/80 text-rose-300 border-rose-800/60">
+                                  📤 ADVANCE ISSUED
+                                </span>
+                              ) : log.payrollMonth ? (
+                                <div className="space-y-0.5">
+                                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded border inline-block bg-amber-950/80 text-amber-300 border-amber-700/60">
+                                    📋 SALARY DEDUCTION
+                                  </span>
+                                  <div className="text-[9px] text-purple-400 font-semibold">
+                                    Month: {log.payrollMonth}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded border inline-block bg-emerald-950/80 text-emerald-300 border-emerald-800/60">
+                                  💵 CASH REPAYMENT
+                                </span>
+                              )}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-black whitespace-nowrap">
                               <span className={isDisbursement ? 'text-rose-400' : 'text-emerald-400'}>
@@ -359,12 +368,7 @@ export const StaffLoansSubTab = ({ employees = [], onRefresh }) => {
                               Rs. {formatPKR(log.previousBalance)} → <strong className="text-white">Rs. {formatPKR(log.newBalance)}</strong>
                             </td>
                             <td className="py-2.5 px-3 text-slate-300 max-w-xs truncate">
-                              {log.description || (isDisbursement ? 'Advance Salary' : 'Salary Deduction')}
-                              {log.payrollMonth && (
-                                <span className="ml-1.5 text-[10px] text-purple-400 font-semibold bg-purple-950/60 border border-purple-800/40 px-1.5 py-0.5 rounded">
-                                  {log.payrollMonth}
-                                </span>
-                              )}
+                              {log.description || (isDisbursement ? 'Advance Salary' : 'Loan Recovery')}
                             </td>
                             <td className="py-2.5 px-3 whitespace-nowrap">
                               <span className="text-[11px] font-bold text-slate-300 bg-slate-950 px-2 py-1 rounded border border-slate-800">

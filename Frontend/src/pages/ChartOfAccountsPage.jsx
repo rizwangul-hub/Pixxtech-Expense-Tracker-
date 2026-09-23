@@ -206,7 +206,14 @@ export function ChartOfAccountsPage({ currentUser }) {
         isRentalHead: expenseCategory.isRentalHead,
       });
       const createdCat = res.data?.category || res.category;
-      setExpenseCategory(initialExpenseCategory);
+      setExpenseCategory(
+        createdCat?.isMainHead && !createdCat.propertyId && !createdCat.unitId
+          ? {
+              ...initialExpenseCategory,
+              parentCategoryId: createdCat._id,
+            }
+          : initialExpenseCategory
+      );
       notify('success', `Expense head "${createdCat?.name || expenseCategory.name.trim()}" created successfully.`);
       await loadChartData();
     } catch (error) {
