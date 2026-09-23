@@ -14,7 +14,8 @@ import {
   ShieldCheck,
   RefreshCw,
 } from 'lucide-react';
-import { transfersAPI, accountsAPI } from '../services/api.js';
+import { transfersAPI, accountsAPI, uploadAPI } from '../services/api.js';
+import { EvidenceImageUpload } from '../components/EvidenceImageUpload.jsx';
 import { formatPKR, formatDate } from '../utils/formatters.js';
 
 export function TransfersPage({ currentUser, onSelectAccount }) {
@@ -31,6 +32,7 @@ export function TransfersPage({ currentUser, onSelectAccount }) {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [evidenceFiles, setEvidenceFiles] = useState([]);
 
   // Transfer Form
   const [formData, setFormData] = useState({
@@ -85,6 +87,7 @@ export function TransfersPage({ currentUser, onSelectAccount }) {
       voucherNo: '',
       detail: '',
     });
+    setEvidenceFiles([]);
     setErrorMsg('');
     setIsModalOpen(true);
   };
@@ -109,6 +112,11 @@ export function TransfersPage({ currentUser, onSelectAccount }) {
         throw new Error('Please provide a transfer description / reason.');
       }
 
+      // Upload evidence files if provided
+      const uploadedImages = evidenceFiles.length
+        ? (await uploadAPI.images(evidenceFiles)).images
+        : [];
+
       const payload = {
         fromAccountId: formData.fromAccountId,
         toAccountId: formData.toAccountId,
@@ -116,6 +124,7 @@ export function TransfersPage({ currentUser, onSelectAccount }) {
         date: formData.date,
         voucherNo: formData.voucherNo.trim() || undefined,
         detail: formData.detail.trim(),
+        attachments: uploadedImages,
       };
 
       const res = await transfersAPI.executeTransfer(payload);
@@ -124,6 +133,7 @@ export function TransfersPage({ currentUser, onSelectAccount }) {
           res?.message || `Transfer of ${formatPKR(numAmount)} executed successfully between accounts.`
         );
         setIsModalOpen(false);
+        setEvidenceFiles([]);
         fetchTransfersAndAccounts();
         setTimeout(() => setSuccessMsg(''), 5000);
       } else {
@@ -583,6 +593,24 @@ export function TransfersPage({ currentUser, onSelectAccount }) {
                   </div>
                 </div>
               )}
+
+              {/* Transfer Evidence Upload */}
+              <div className="border-t border-slate-800 pt-3">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] uppercase font-bold text-slate-400">
+                    Transfer Evidence / Supporting Document (Optional)
+                  </label>
+                  <span className="text-[10px] text-slate-500">{evidenceFiles.length}/3 files</span>
+                </div>
+                <EvidenceImageUpload
+                  files={evidenceFiles}
+                  onChange={setEvidenceFiles}
+                  disabled={submitting}
+                />
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Upload bank slips, deposit receipts, cheque photos, or online transfer screenshots for Admin review.
+                </p>
+              </div>
 
               {/* Modal Buttons */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">

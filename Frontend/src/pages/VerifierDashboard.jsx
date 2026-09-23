@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -25,8 +25,11 @@ import {
   Download,
   Image as ImageIcon,
   Paperclip,
+  Upload,
+  X,
+  ImagePlus,
 } from 'lucide-react';
-import { verificationAPI, accountsAPI, propertiesAPI } from '../services/api.js';
+import { verificationAPI, accountsAPI, propertiesAPI, uploadAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
 import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 import { RentCollectionModal } from '../components/RentCollectionModal.jsx';
@@ -251,7 +254,11 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     date: '',
     rentMonth: '',
     editNotes: '',
+    attachments: [],
   });
+  const [editNewFiles, setEditNewFiles] = useState([]);
+  const [editUploading, setEditUploading] = useState(false);
+  const editFileInputRef = useRef(null);
 
   // Rejection Modal State
   const [rejectingEntry, setRejectingEntry] = useState(null);
@@ -420,6 +427,10 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     const totalDed = loanDed + lopDed + otherDed;
     const netPayable = Number(salary.netPayable ?? Math.max(0, gross - totalDed));
 
+    const existingAtts = getEntryAttachments(entry) || [];
+    setEditNewFiles([]);
+    setEditUploading(false);
+
     setEditForm({
       amount: entry.amount || '',
       detail: entry.detail || '',
@@ -434,6 +445,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       drAccountId: drAcc,
       receivingAccountId: recAcc,
       editNotes: '',
+      attachments: existingAtts,
       // Salary-specific fields
       grossSalary: gross,
       loanDeduction: loanDed,
@@ -444,6 +456,17 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       currentLoanBalance: Number(salary.currentLoanBalance || 0),
       alreadyPaid: Number(salary.alreadyPaid || 0),
     });
+  };
+
+  const handleRemoveExistingAttachment = (indexToRemove) => {
+    setEditForm((prev) => ({
+      ...prev,
+      attachments: (prev.attachments || []).filter((_, idx) => idx !== indexToRemove),
+    }));
+  };
+
+  const handleRemoveNewFile = (indexToRemove) => {
+    setEditNewFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   const handleSalaryFieldChange = (field, value) => {
@@ -468,14 +491,42 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     const entryId = editingEntry._id;
     try {
       setSavingEntryId(entryId);
-      const res = await verificationAPI.updatePending(entryId, editForm);
+
+      let finalAttachments = [...(editForm.attachments || [])];
+      if (editNewFiles.length > 0) {
+        setEditUploading(true);
+        try {
+          const uploadRes = await uploadAPI.images(editNewFiles);
+          if (uploadRes?.images?.length) {
+            finalAttachments = [...finalAttachments, ...uploadRes.images];
+          }
+        } catch (uploadErr) {
+          console.error('Evidence upload error:', uploadErr);
+          setFeedback({
+            message: 'Failed to upload new evidence images. Please check the files and try again.',
+            type: 'error',
+          });
+          setSavingEntryId(null);
+          setEditUploading(false);
+          return;
+        }
+        setEditUploading(false);
+      }
+
+      const payload = {
+        ...editForm,
+        attachments: finalAttachments,
+      };
+
+      const res = await verificationAPI.updatePending(entryId, payload);
       if (res.success) {
         setFeedback({
-          message: 'Entry details corrected successfully. You can now verify it.',
+          message: 'Entry details and evidence updated successfully. You can now verify it.',
           type: 'success',
         });
         // Close modal immediately
         setEditingEntry(null);
+        setEditNewFiles([]);
         // Optimistically mark entry as edited in local state so the Edit button
         // disappears right away without waiting for the background refetch
         setPendingEntries((prev) =>
@@ -485,6 +536,11 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                   ...e,
                   isEdited: true,
                   status: 'EDITED',
+                  attachments: finalAttachments,
+                  entryData: {
+                    ...(e.entryData || {}),
+                    attachments: finalAttachments,
+                  },
                   amount: Number(editForm.amount) || e.amount,
                   date: editForm.date ? new Date(editForm.date).toISOString() : e.date,
                   detail: editForm.detail ?? e.detail,
@@ -516,6 +572,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       });
     } finally {
       setSavingEntryId(null);
+      setEditUploading(false);
     }
   };
 
@@ -982,10 +1039,16 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                     </div>
 
                     {/* Attached Evidence (Uploaded by Sarfraz / Admin) */}
-                    {entryAttachments.length === 0 && entry.entryType === 'SALARY' && (
-                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-amber-950/30 border border-amber-800/40 text-[10px] text-amber-400/70 font-medium mt-1">
-                        <ImageIcon size={11} className="shrink-0" />
-                        <span>No payment evidence uploaded — Admin can add via Edit</span>
+                    {entryAttachments.length === 0 && (
+                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-amber-950/20 border border-amber-800/30 text-[10px] text-amber-400/80 font-medium mt-1">
+                        <ImageIcon size={11} className="shrink-0 text-amber-400/60" />
+                        <span>
+                          {entry.entryType === 'SALARY'
+                            ? 'No salary payment evidence attached — Admin can add via Edit'
+                            : entry.entryType === 'TRANSFER'
+                            ? 'No transfer evidence attached — Admin can add via Edit'
+                            : 'No receipt evidence attached — Admin can add via Edit'}
+                        </span>
                       </div>
                     )}
                     {entryAttachments.length > 0 && (
@@ -999,10 +1062,17 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                               <div className="text-xs font-bold text-blue-200 truncate">
                                 {entry.entryType === 'SALARY'
                                   ? `${entryAttachments.length} Payment Evidence ${entryAttachments.length === 1 ? 'File' : 'Files'}`
+                                  : entry.entryType === 'TRANSFER'
+                                  ? `${entryAttachments.length} Transfer Evidence ${entryAttachments.length === 1 ? 'File' : 'Files'}`
                                   : `${entryAttachments.length} Purchase / Receipt ${entryAttachments.length === 1 ? 'Image' : 'Images'}`}
                               </div>
                               <div className="text-[10px] text-slate-400 truncate">
-                                {(typeof entryAttachments[0] !== 'string' && entryAttachments[0].originalName) || (entry.entryType === 'SALARY' ? 'Salary payment proof' : 'Attached receipt voucher')}
+                                {(typeof entryAttachments[0] !== 'string' && entryAttachments[0].originalName) ||
+                                  (entry.entryType === 'SALARY'
+                                    ? 'Salary payment proof'
+                                    : entry.entryType === 'TRANSFER'
+                                    ? 'Transfer supporting document'
+                                    : 'Attached receipt voucher')}
                               </div>
                             </div>
                           </div>
@@ -1232,16 +1302,35 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           {entry.entryType === 'SALARY' && <SalaryBreakdown entry={entry} />}
 
                           {/* Attached Evidence (Sarfraz / Admin) */}
+                          {entryAttachments.length === 0 && (
+                            <div className="mt-1 flex items-center gap-1 text-[9px] text-amber-400/80 font-medium">
+                              <ImageIcon size={9} className="text-amber-400/60" />
+                              <span>No evidence — can attach via Edit</span>
+                            </div>
+                          )}
                           {entryAttachments.length > 0 && (
                             <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                               <button
                                 type="button"
                                 onClick={() => setViewingReceiptEntry(entry)}
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-700/60 text-[10px] font-bold transition cursor-pointer"
-                                title={entry.entryType === 'SALARY' ? 'Click to view payment evidence' : 'Click to view attached purchase / receipt evidence image(s)'}
+                                title={
+                                  entry.entryType === 'SALARY'
+                                    ? 'Click to view salary payment evidence'
+                                    : entry.entryType === 'TRANSFER'
+                                    ? 'Click to view transfer evidence'
+                                    : 'Click to view attached receipt evidence image(s)'
+                                }
                               >
                                 <Paperclip size={10} className="text-blue-400" />
-                                <span>{entryAttachments.length} {entry.entryType === 'SALARY' ? (entryAttachments.length === 1 ? 'Evidence' : 'Evidence') : (entryAttachments.length === 1 ? 'Receipt' : 'Receipts')}</span>
+                                <span>
+                                  {entryAttachments.length}{' '}
+                                  {entry.entryType === 'SALARY' || entry.entryType === 'TRANSFER'
+                                    ? 'Evidence'
+                                    : entryAttachments.length === 1
+                                    ? 'Receipt'
+                                    : 'Receipts'}
+                                </span>
                                 <Eye size={10} className="opacity-75" />
                               </button>
                               <button
@@ -1249,7 +1338,13 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                                 onClick={(e) => handleQuickDownloadReceipts(e, entry)}
                                 disabled={downloadingEntryId === entry._id}
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold transition cursor-pointer disabled:opacity-50"
-                                title={entry.entryType === 'SALARY' ? 'Download payment evidence' : 'Download official receipt evidence document'}
+                                title={
+                                  entry.entryType === 'SALARY'
+                                    ? 'Download payment evidence document'
+                                    : entry.entryType === 'TRANSFER'
+                                    ? 'Download transfer evidence document'
+                                    : 'Download official receipt evidence document'
+                                }
                               >
                                 <Download size={10} className={downloadingEntryId === entry._id ? 'animate-bounce text-emerald-400' : 'text-emerald-400'} />
                                 <span>{downloadingEntryId === entry._id ? 'Saving...' : 'Download'}</span>
@@ -1837,53 +1932,164 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </div>
               )}
 
-              {/* Attached Purchase / Receipt Images Preview in Edit Modal */}
-              {editingEntry && getEntryAttachments(editingEntry).length > 0 && (
-                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-300">
-                    <span className="flex items-center gap-1.5 text-blue-400">
-                      <Paperclip size={13} />
-                      Attached Receipts ({getEntryAttachments(editingEntry).length})
+              {/* Evidence & Supporting Documents Section (Attach, Change, or Delete) */}
+              <div className="p-3.5 bg-slate-950/90 border border-slate-800 rounded-xl space-y-3">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-300 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <ImagePlus size={15} className="text-blue-400" />
+                    <span>
+                      {editingEntry?.entryType === 'SALARY'
+                        ? 'Salary Payment Evidence'
+                        : editingEntry?.entryType === 'TRANSFER'
+                        ? 'Transfer Evidence & Bank Slips'
+                        : 'Receipt / Payment Evidence'}
                     </span>
+                    <span className="text-[10px] text-slate-400 font-mono bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                      {(editForm.attachments?.length || 0) + editNewFiles.length} total
+                    </span>
+                  </div>
+
+                  {/* Attach / Upload Button */}
+                  <div>
+                    <input
+                      ref={editFileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      disabled={savingEntryId === editingEntry?._id || editUploading}
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length) {
+                          setEditNewFiles((prev) => [...prev, ...files].slice(0, 10));
+                        }
+                        e.target.value = '';
+                      }}
+                    />
                     <button
                       type="button"
-                      onClick={(e) => handleQuickDownloadReceipts(e, editingEntry)}
-                      disabled={downloadingEntryId === editingEntry._id}
-                      className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                      disabled={savingEntryId === editingEntry?._id || editUploading}
+                      onClick={() => editFileInputRef.current?.click()}
+                      className="px-2.5 py-1 rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white font-semibold text-xs flex items-center gap-1.5 transition shadow disabled:opacity-50"
                     >
-                      <Download size={12} className={downloadingEntryId === editingEntry._id ? 'animate-bounce' : ''} />
-                      <span>{downloadingEntryId === editingEntry._id ? 'Saving...' : 'Download All'}</span>
+                      <Upload size={12} />
+                      <span>Attach / Upload Evidence</span>
                     </button>
                   </div>
-                  <div className="flex items-center gap-2 overflow-x-auto pt-1">
-                    {getEntryAttachments(editingEntry).map((att, idx) => (
-                      <div key={idx} className="relative group shrink-0">
-                        <img
-                          src={typeof att === 'string' ? att : att.url}
-                          alt="Receipt"
-                          className="w-14 h-14 rounded-lg object-cover border border-slate-700 cursor-pointer hover:border-blue-500 transition"
-                          onClick={() => setViewingReceiptEntry(editingEntry)}
-                          title="Click to view full receipt"
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            downloadReceiptImage(
-                              typeof att === 'string' ? att : att.url,
-                              (typeof att !== 'string' && att.originalName) || `Receipt_${idx + 1}.jpg`
-                            );
-                          }}
-                          className="absolute bottom-1 right-1 p-1 rounded bg-black/80 hover:bg-emerald-600 text-white transition shadow"
-                          title="Download this image"
-                        >
-                          <Download size={10} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
                 </div>
-              )}
+
+                {/* Existing Attachments List */}
+                {editForm.attachments && editForm.attachments.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
+                      <span>Current Attached Files ({editForm.attachments.length}):</span>
+                      <span className="text-[10px] text-slate-500">Click image to view • Click × to remove</span>
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-1">
+                      {editForm.attachments.map((att, idx) => {
+                        const imgUrl = typeof att === 'string' ? att : att.url;
+                        const origName = (typeof att !== 'string' && att.originalName) || `Evidence #${idx + 1}`;
+                        return (
+                          <div key={idx} className="relative group shrink-0">
+                            <img
+                              src={imgUrl}
+                              alt={origName}
+                              className="w-16 h-16 rounded-lg object-cover border border-slate-700 cursor-pointer hover:border-blue-500 transition"
+                              onClick={() => setViewingReceiptEntry({ attachments: [att], voucherNo: editForm.voucherNo })}
+                              title={`Click to view: ${origName}`}
+                            />
+                            {/* Delete / Remove button */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveExistingAttachment(idx)}
+                              className="absolute -top-1.5 -right-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full p-1 shadow-lg transition opacity-80 group-hover:opacity-100"
+                              title="Remove this attachment"
+                            >
+                              <X size={11} />
+                            </button>
+                            {/* Download button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                downloadReceiptImage(imgUrl, origName);
+                              }}
+                              className="absolute bottom-1 right-1 p-1 rounded bg-black/80 hover:bg-emerald-600 text-white transition shadow"
+                              title="Download this image"
+                            >
+                              <Download size={10} />
+                            </button>
+                            <div className="text-[9px] text-slate-400 truncate max-w-[64px] mt-0.5 font-mono" title={origName}>
+                              {origName}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Newly Selected Files (Staged for upload on save) */}
+                {editNewFiles.length > 0 && (
+                  <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                    <div className="text-[11px] font-semibold text-emerald-400 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Sparkles size={12} />
+                        New Files to Add ({editNewFiles.length}):
+                      </span>
+                      <span className="text-[10px] text-slate-400">Will be uploaded and attached upon clicking Save</span>
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-1">
+                      {editNewFiles.map((file, idx) => {
+                        const previewUrl = URL.createObjectURL(file);
+                        return (
+                          <div key={`${file.name}-${idx}`} className="relative group shrink-0">
+                            <img
+                              src={previewUrl}
+                              alt={file.name}
+                              className="w-16 h-16 rounded-lg object-cover border-2 border-emerald-500/70"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveNewFile(idx)}
+                              className="absolute -top-1.5 -right-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full p-1 shadow-lg transition"
+                              title="Unselect this file"
+                            >
+                              <X size={11} />
+                            </button>
+                            <div className="text-[9px] text-emerald-300 truncate max-w-[64px] mt-0.5 font-mono" title={file.name}>
+                              {file.name}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty State when no attachments exist */}
+                {(!editForm.attachments || editForm.attachments.length === 0) && editNewFiles.length === 0 && (
+                  <div
+                    onClick={() => editFileInputRef.current?.click()}
+                    className="border border-dashed border-slate-700 hover:border-blue-500 bg-slate-900/50 hover:bg-slate-900 rounded-xl p-3.5 text-center cursor-pointer transition space-y-1"
+                  >
+                    <div className="flex items-center justify-center gap-1.5 text-slate-400 text-xs font-semibold">
+                      <Upload size={14} className="text-blue-400" />
+                      <span>No evidence currently attached. Click here to attach proof of payment / receipt.</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      Supports JPG, PNG, WEBP, GIF (bank transfer screenshots, deposit slips, payment vouchers)
+                    </p>
+                  </div>
+                )}
+
+                {editUploading && (
+                  <div className="flex items-center gap-2 text-blue-300 text-xs font-semibold py-1">
+                    <RefreshCw size={13} className="animate-spin" />
+                    <span>Uploading new evidence images to secure storage...</span>
+                  </div>
+                )}
+              </div>
 
               <div>
                 <label className="block text-slate-400 font-semibold mb-1">Edit Notes / Reason for Correction</label>

@@ -485,7 +485,13 @@ export const updatePendingEntry = async (req, res) => {
     if (updates.propertyId === null || updates.propertyId === '') entry.propertyId = null;
     if (updates.unitId) entry.unitId = updates.unitId;
     if (updates.unitId === null || updates.unitId === '') entry.unitId = null;
-    if (updates.attachments !== undefined) entry.attachments = updates.attachments || [];
+    if (updates.attachments !== undefined) {
+      entry.attachments = updates.attachments || [];
+      if (entry.entryData) {
+        entry.entryData.attachments = entry.attachments;
+        entry.markModified('entryData');
+      }
+    }
     if (updates.expenseClassification !== undefined) {
       entry.expenseClassification = updates.expenseClassification || null;
     }
@@ -819,6 +825,7 @@ export const verifyEntry = async (req, res) => {
         reportCategory: 'Payments',
         sourceModule: 'EXPENSE',
         sourceId: entry.entryData?.payrollId || null,
+        attachments: entry.attachments || [],
         status: 'VERIFIED',
         checkedBy: req.user.name,
         createdBy: entry.submittedBy,
