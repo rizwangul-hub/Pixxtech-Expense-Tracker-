@@ -16,6 +16,7 @@ import {
   ArrowRight,
   X,
   FileSpreadsheet,
+  RotateCcw,
 } from 'lucide-react';
 import { monthlyReportsAPI, financialReportsAPI } from '../services/api.js';
 import { formatPKR, formatDate } from '../utils/formatters.js';
@@ -42,6 +43,9 @@ export function MonthlyReportsHistoryPage({ currentUser, onNavigateToReportDetai
 
   // Download PDF Loading
   const [downloadingMonth, setDownloadingMonth] = useState(null);
+
+  // Reset / Recompute Loading State
+  const [resettingMonth, setResettingMonth] = useState(null);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -84,6 +88,27 @@ export function MonthlyReportsHistoryPage({ currentUser, onNavigateToReportDetai
       setErrorMsg(err.response?.data?.message || err.message || 'Generation failed.');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  // Handle Reset & Recompute Report with fresh current information
+  const handleResetReport = async (month) => {
+    if (!window.confirm(`Reset and refresh Monthly Report for ${month} with current live ledger data? Any reversed transactions will be excluded.`)) {
+      return;
+    }
+    setResettingMonth(month);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const res = await monthlyReportsAPI.resetReport(month);
+      if (res?.success) {
+        setSuccessMsg(`Report for ${month} has been reset and refreshed with current ledger information.`);
+        await fetchReports();
+      }
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || err.message || 'Reset failed.');
+    } finally {
+      setResettingMonth(null);
     }
   };
 
@@ -313,6 +338,18 @@ export function MonthlyReportsHistoryPage({ currentUser, onNavigateToReportDetai
                             <FileDown size={13} className={downloadingMonth === r.month ? 'animate-spin' : ''} />
                           </button>
 
+                          {/* Reset & Sync with Live Current Ledger */}
+                          {userIsAdmin && (
+                            <button
+                              onClick={() => handleResetReport(r.month)}
+                              disabled={resettingMonth === r.month || r.status === 'PUBLISHED'}
+                              className="p-1.5 rounded bg-amber-950/80 hover:bg-amber-900 border border-amber-700/60 text-amber-300 hover:text-white transition disabled:opacity-40"
+                              title={r.status === 'PUBLISHED' ? "Unlock report first to reset" : "Reset & Sync with Current Information (Excludes Reversed Transactions)"}
+                            >
+                              <RotateCcw size={13} className={resettingMonth === r.month ? 'animate-spin' : ''} />
+                            </button>
+                          )}
+
                           {/* Admin Review / Publish Actions */}
                           {userIsAdmin && (
                             <>
@@ -409,6 +446,8 @@ export function MonthlyReportsHistoryPage({ currentUser, onNavigateToReportDetai
               <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-[11px] text-slate-400 space-y-1">
                 <div className="font-bold text-slate-300">Automated Pre-flight Checks:</div>
                 <div>&bull; Mathematically aggregates double-entry ledger lines</div>
+                <div>&bull; Excludes all reversed and voided transactions</div>
+                <div>&bull; Pulls fresh current balances directly from active ledger</div>
                 <div>&bull; Verifies bank and cash custodian running balances</div>
                 <div>&bull; Verifies rental hierarchy agreed vs received</div>
               </div>

@@ -137,18 +137,18 @@ export const generateMonthlyFundsReport = async (monthYear) => {
       date: { $gte: startDate, $lte: endDate },
       transactionType: 'INCOME',
       reportCategory: 'Rent',
-      status: { $ne: 'REVERSED' },
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     }).lean(),
     Transaction.find({
       date: { $gte: startDate, $lte: endDate },
       transactionType: 'INCOME',
       reportCategory: 'Other Income',
-      status: { $ne: 'REVERSED' },
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     }).lean(),
     Transaction.find({
       date: { $gte: startDate, $lte: endDate },
       transactionType: 'EXPENSE',
-      status: { $ne: 'REVERSED' },
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     }).lean(),
   ]);
 
@@ -217,7 +217,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   // 3. Fetch Master Transactions for Journal (Pages 4 & 5)
   const transactions = await Transaction.find({
     date: { $gte: startDate, $lte: endDate },
-    status: { $ne: 'REVERSED' },
+    $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   })
     .populate('categoryId', 'name type isRentalHead')
     .populate('drAccountId', 'name type')
@@ -644,5 +644,4 @@ export const generateReceiptEvidencePDF = async (evidenceData) => {
 };
 
 export default { generateMonthlyFundsReport, generateSingleVoucherPDF, generateReceiptEvidencePDF };
-
 

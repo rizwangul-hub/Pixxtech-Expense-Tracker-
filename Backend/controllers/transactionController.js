@@ -2,7 +2,7 @@ import Transaction from '../models/Transaction.js';
 import PendingEntry from '../models/PendingEntry.js';
 import Account from '../models/Account.js';
 import MonthlyReport from '../models/MonthlyReport.js';
-import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
+import { createTransaction, round2, suggestNextVoucherNumber, syncAccountBalances } from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
 import { validateExpenseClassification } from '../services/expenseClassificationService.js';
 
@@ -326,14 +326,13 @@ export const deleteTransaction = async (req, res) => {
 
     const amt = round2(tx.amount);
     // Reverse balances
-    if (tx.drAccountId && tx.crAccountId) {
-      await Promise.all([
-        Account.findByIdAndUpdate(tx.drAccountId, { $inc: { currentBalance: -amt } }),
-        Account.findByIdAndUpdate(tx.crAccountId, { $inc: { currentBalance: amt } }),
-      ]);
-    }
-
+    const drAccId = tx.drAccountId;
+    const crAccId = tx.crAccountId;
     await Transaction.findByIdAndDelete(id);
+
+    if (drAccId && crAccId) {
+      await syncAccountBalances([drAccId, crAccId]);
+    }
 
     return res.status(200).json({
       success: true,

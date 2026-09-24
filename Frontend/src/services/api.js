@@ -619,6 +619,10 @@ export const monthlyReportsAPI = {
     const res = await api.post('/monthly-reports/generate', data);
     return res.data;
   },
+  resetReport: async (month) => {
+    const res = await api.post(`/monthly-reports/${month}/reset`);
+    return res.data;
+  },
   validateReconciliation: async (month) => {
     const res = await api.get(`/monthly-reports/${month}/validate`);
     return res.data;

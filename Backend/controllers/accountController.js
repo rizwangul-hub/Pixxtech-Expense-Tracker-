@@ -65,7 +65,9 @@ export const getAccounts = async (req, res) => {
 
     // Derive balances from active ledger transactions so reversals are
     // immediately reflected even if a legacy cached balance is stale.
-    const activeTransactions = await Transaction.find({ status: { $ne: 'REVERSED' } })
+    const activeTransactions = await Transaction.find({
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+    })
       .select('drAccountId crAccountId amount')
       .lean();
     const netMovementByAccount = new Map();
@@ -172,7 +174,7 @@ export const getAccountById = async (req, res) => {
     // Fetch recent 10 transactions for quick preview
     const recentTransactions = await Transaction.find({
       $or: [{ drAccountId: id }, { crAccountId: id }],
-      status: { $ne: 'REVERSED' },
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     })
       .sort({ date: -1, createdAt: -1 })
       .limit(10)
@@ -377,7 +379,7 @@ export const updateAccount = async (req, res) => {
       } else {
         const txs = await Transaction.find({
           $or: [{ drAccountId: account._id }, { crAccountId: account._id }],
-          status: { $ne: 'REVERSED' },
+          $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
         }).select('drAccountId crAccountId amount').lean();
 
         let netMovement = 0;
@@ -486,7 +488,7 @@ export const getAccountLedger = async (req, res) => {
       const priorTxFilter = {
         $or: [{ drAccountId: id }, { crAccountId: id }],
         date: { $lt: periodStart },
-        status: { $ne: 'REVERSED' },
+        $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
       };
 
       const priorTransactions = await Transaction.find(priorTxFilter)
@@ -508,7 +510,7 @@ export const getAccountLedger = async (req, res) => {
     // 2. Fetch transactions in the period
     const txQuery = {
       $or: [{ drAccountId: id }, { crAccountId: id }],
-      status: { $ne: 'REVERSED' },
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     };
 
     if (periodStart && periodEnd) {
@@ -625,10 +627,16 @@ export const getMonthlySummary = async (req, res) => {
 
     // Fetch prior and monthly transactions
     const [priorTxs, monthlyTxs] = await Promise.all([
-      Transaction.find({ date: { $lt: monthStart } })
+      Transaction.find({
+        date: { $lt: monthStart },
+        $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+      })
         .select('drAccountId crAccountId amount')
         .lean(),
-      Transaction.find({ date: { $gte: monthStart, $lte: monthEnd } })
+      Transaction.find({
+        date: { $gte: monthStart, $lte: monthEnd },
+        $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+      })
         .select('drAccountId crAccountId amount')
         .lean(),
     ]);
@@ -1137,7 +1145,9 @@ export const recalculateAllBalances = async (req, res) => {
     const accounts = await Account.find({}).lean();
 
     // Fetch all non-reversed transactions in one shot for efficiency
-    const allTransactions = await Transaction.find({ status: { $ne: 'REVERSED' } })
+    const allTransactions = await Transaction.find({
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+    })
       .select('drAccountId crAccountId amount')
       .lean();
 

@@ -91,6 +91,9 @@ export const downloadFundsReportPDF = async (req, res) => {
     const month = req.query.month || new Date().toISOString().slice(0, 7);
     const pdfBuffer = await generateMonthlyFundsReport(month);
     const filename = `Pixx_Technologies_Funds_Report_${month}.pdf`;
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', pdfBuffer.length);
@@ -129,6 +132,7 @@ export const getMonthlyFinancialSummary = async (req, res) => {
       date: { $gte: startDate, $lte: endDate },
       transactionType: 'INCOME',
       reportCategory: 'Rent',
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     }).populate('drAccountId', 'name type').lean();
 
     let grandTotalRentalAgreed = 0, grandTotalRentalReceived = 0, grandTotalRentalOutstanding = 0;
@@ -163,7 +167,9 @@ export const getMonthlyFinancialSummary = async (req, res) => {
 
     const otherIncomeTxns = await Transaction.find({
       date: { $gte: startDate, $lte: endDate },
-      transactionType: 'INCOME', reportCategory: 'Other Income',
+      transactionType: 'INCOME',
+      reportCategory: 'Other Income',
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     }).populate('categoryId', 'name').lean();
     const otherIncomeByHead = new Map();
     let totalOtherIncome = 0;
@@ -184,7 +190,11 @@ export const getMonthlyFinancialSummary = async (req, res) => {
     const totalCashBalance = round2(cashRows.reduce((sum, r) => sum + r.closingBalance, 0));
     const grandClosingBalance = round2(totalBankBalance + totalCashBalance);
 
-    const transferTxns = await Transaction.find({ date: { $gte: startDate, $lte: endDate }, transactionType: 'TRANSFER' }).lean();
+    const transferTxns = await Transaction.find({
+      date: { $gte: startDate, $lte: endDate },
+      transactionType: 'TRANSFER',
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+    }).lean();
     const totalTransfers = round2(transferTxns.reduce((sum, t) => sum + t.amount, 0));
 
     return res.status(200).json({

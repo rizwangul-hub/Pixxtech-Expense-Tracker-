@@ -20,23 +20,23 @@ export const computeMonthSnapshot = async (year, month) => {
       date: { $gte: startOfMonth, $lte: endOfMonth },
       transactionType: 'INCOME',
       reportCategory: 'Rent',
-      status: { $ne: 'REVERSED' },
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     }).lean(),
     Transaction.find({
       date: { $gte: startOfMonth, $lte: endOfMonth },
       transactionType: 'INCOME',
       reportCategory: 'Other Income',
-      status: { $ne: 'REVERSED' },
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     }).lean(),
     Transaction.find({
       date: { $gte: startOfMonth, $lte: endOfMonth },
       transactionType: 'EXPENSE',
-      status: { $ne: 'REVERSED' },
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     }).lean(),
     Transaction.find({
       date: { $gte: startOfMonth, $lte: endOfMonth },
       transactionType: 'TRANSFER',
-      status: { $ne: 'REVERSED' },
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     }).lean(),
   ]);
 
@@ -311,10 +311,57 @@ export const validateMonthReconciliation = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Reset and recompute a monthly report from current live ledger data
+ * @route   POST /api/monthly-reports/:month/reset
+ * @access  Private (ADMIN, ADMIN_PUBLISHER)
+ */
+export const resetMonthlyReport = async (req, res) => {
+  try {
+    const { month } = req.params;
+    if (!month || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      return apiError(res, 'A valid month (YYYY-MM) is required.', 400);
+    }
+
+    const [y, m] = month.split('-').map(Number);
+    const existing = await MonthlyReport.findOne({ month });
+
+    const { snapshot, reconciliationStatus, reconciliationNotes, matrixData } = await computeMonthSnapshot(y, m);
+
+    const updated = await MonthlyReport.findOneAndUpdate(
+      { month },
+      {
+        month,
+        year: y,
+        monthNumber: m,
+        status: existing?.status === 'PUBLISHED' ? 'DRAFT' : (existing?.status || 'DRAFT'),
+        reconciliationStatus,
+        reconciliationNotes,
+        summarySnapshot: snapshot,
+        preparedBy: req.user?._id,
+        preparedByName: req.user?.name || 'System Operator',
+        generatedAt: new Date(),
+        notes: existing?.notes ? `${existing.notes} (Reset with current ledger on ${new Date().toISOString().split('T')[0]})` : 'Reset with current ledger',
+      },
+      { new: true, upsert: true }
+    );
+
+    return apiSuccess(
+      res,
+      { report: updated, matrixData },
+      `Monthly report for ${month} has been reset and refreshed with current ledger information.`
+    );
+  } catch (error) {
+    console.error('Error in resetMonthlyReport:', error);
+    return apiError(res, error.message || 'Failed to reset monthly report.', 500);
+  }
+};
+
 export default {
   getMonthlyReports,
   getMonthlyReportByMonth,
   generateMonthlyReport,
+  resetMonthlyReport,
   updateReportStatus,
   validateMonthReconciliation,
   computeMonthSnapshot,

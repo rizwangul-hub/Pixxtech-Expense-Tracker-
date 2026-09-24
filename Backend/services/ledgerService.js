@@ -263,7 +263,7 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
     const priorTransactions = await Transaction.find({
       date: { $lt: start },
       $or: [{ drAccountId: accountId }, { crAccountId: accountId }],
-      status: { $ne: 'REVERSED' },
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     }).lean();
 
     for (const tx of priorTransactions) {
@@ -279,6 +279,7 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
   // 2. Query transactions within the date window
   const query = {
     $or: [{ drAccountId: accountId }, { crAccountId: accountId }],
+    $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   };
 
   if (start && end) {
@@ -393,7 +394,7 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
   // Fetch all transactions prior to this month to compute Opening Balances
   const priorTransactions = await Transaction.find({
     date: { $lt: startOfMonth },
-    status: { $ne: 'REVERSED' },
+    $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   }).lean();
 
   // Pre-aggregate prior movements by account
@@ -417,7 +418,7 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
   // Fetch all transactions within the target month
   const monthTransactions = await Transaction.find({
     date: { $gte: startOfMonth, $lte: endOfMonth },
-    status: { $ne: 'REVERSED' },
+    $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   })
     .populate({
       path: 'categoryId',
@@ -1223,6 +1224,45 @@ export const getTransactionsFiltered = async (filters = {}) => {
   };
 };
 
+/**
+ * Synchronize Account.currentBalance with active non-reversed transactions.
+ * Calculates openingBalance + sum(DR) - sum(CR) from all active transactions.
+ * @param {Array<string|ObjectId>|Set<string|ObjectId>} accountIds
+ */
+export const syncAccountBalances = async (accountIds) => {
+  if (!accountIds) return [];
+  const idArray = Array.from(accountIds instanceof Set ? accountIds : accountIds)
+    .filter(Boolean)
+    .map((id) => id.toString());
+  if (idArray.length === 0) return [];
+
+  const updated = [];
+  for (const accId of idArray) {
+    const account = await Account.findById(accId);
+    if (!account) continue;
+
+    const activeTxs = await Transaction.find({
+      $or: [{ drAccountId: accId }, { crAccountId: accId }],
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+    })
+      .select('drAccountId crAccountId amount')
+      .lean();
+
+    let netMovement = 0;
+    for (const tx of activeTxs) {
+      const amount = Number(tx.amount) || 0;
+      if (tx.drAccountId?.toString() === accId) netMovement += amount;
+      if (tx.crAccountId?.toString() === accId) netMovement -= amount;
+    }
+
+    const calculatedBalance = round2((account.openingBalance || 0) + netMovement);
+    account.currentBalance = calculatedBalance;
+    await account.save();
+    updated.push(account);
+  }
+  return updated;
+};
+
 export default {
   createTransaction,
   createVoucherWithLines,
@@ -1232,5 +1272,6 @@ export default {
   getAccountRunningLedger,
   getMonthlyOpeningClosingMatrix,
   getHeadWiseExpenseReport,
+  syncAccountBalances,
   round2,
 };

@@ -3,6 +3,7 @@ import {
   getMonthlyReports,
   getMonthlyReportByMonth,
   generateMonthlyReport,
+  resetMonthlyReport,
   updateReportStatus,
   validateMonthReconciliation,
 } from '../controllers/monthlyReportController.js';
@@ -16,9 +17,10 @@ router.use(protect);
 router.get('/', getMonthlyReports);
 router.get('/:month', getMonthlyReportByMonth);
 
-// Generation, reconciliation validation, and publishing (restricted to ADMIN_PUBLISHER)
-router.post('/generate', authorize('ADMIN_PUBLISHER'), generateMonthlyReport);
-router.get('/:month/validate', authorize('ADMIN_PUBLISHER'), validateMonthReconciliation);
-router.patch('/:month/status', authorize('ADMIN_PUBLISHER'), updateReportStatus);
+// Generation, reset, reconciliation validation, and publishing (restricted to ADMIN, ADMIN_PUBLISHER)
+router.post('/generate', authorize('ADMIN', 'ADMIN_PUBLISHER'), generateMonthlyReport);
+router.post('/:month/reset', authorize('ADMIN', 'ADMIN_PUBLISHER'), resetMonthlyReport);
+router.get('/:month/validate', authorize('ADMIN', 'ADMIN_PUBLISHER'), validateMonthReconciliation);
+router.patch('/:month/status', authorize('ADMIN', 'ADMIN_PUBLISHER'), updateReportStatus);
 
 export default router;

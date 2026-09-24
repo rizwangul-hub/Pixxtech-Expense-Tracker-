@@ -7,6 +7,7 @@ import {
   suggestNextVoucherNumber,
   syncLegacyTransactionsToVouchers,
   getTransactionsFiltered,
+  syncAccountBalances,
   round2,
 } from '../services/ledgerService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
@@ -230,19 +231,18 @@ export const reverseVoucher = async (req, res) => {
     });
 
     // Rollback account balances for each line:
-    // Debit account was increased -> decrease by amount
-    // Credit account was decreased -> increase by amount
+    const affectedAccountIds = new Set();
     for (const line of lines) {
-      await Promise.all([
-        Account.findByIdAndUpdate(line.drAccountId, { $inc: { currentBalance: -line.amount } }),
-        Account.findByIdAndUpdate(line.crAccountId, { $inc: { currentBalance: line.amount } }),
-        Transaction.findByIdAndUpdate(line._id, {
-          status: 'REVERSED',
-          detail: `[REVERSED] ${line.detail}. Reason: ${reason}`,
-          updatedBy: req.user?._id,
-        }),
-      ]);
+      if (line.drAccountId) affectedAccountIds.add(line.drAccountId.toString());
+      if (line.crAccountId) affectedAccountIds.add(line.crAccountId.toString());
+      await Transaction.findByIdAndUpdate(line._id, {
+        status: 'REVERSED',
+        detail: `[REVERSED] ${line.detail}. Reason: ${reason}`,
+        updatedBy: req.user?._id,
+      });
     }
+
+    await syncAccountBalances(affectedAccountIds);
 
     // Mark voucher as REVERSED
     voucher.status = 'REVERSED';

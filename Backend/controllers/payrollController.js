@@ -12,7 +12,7 @@ import Voucher from '../models/Voucher.js';
 import StaffAuditLog from '../models/StaffAuditLog.js';
 import PendingEntry from '../models/PendingEntry.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
-import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
+import { createTransaction, round2, suggestNextVoucherNumber, syncAccountBalances } from '../services/ledgerService.js';
 
 /**
  * Helper to ensure canonical Salaries category head exists
@@ -1923,22 +1923,7 @@ export const reverseSalaryPayment = async (req, res) => {
 
     // Rebuild affected bank/cash balances from the non-reversed ledger. This
     // corrects legacy cached balances as well as the transactions reversed now.
-    for (const accountId of affectedAccountIds) {
-      const account = await Account.findById(accountId).lean();
-      if (!account) continue;
-      const activeTransactions = await Transaction.find({
-        status: { $ne: 'REVERSED' },
-        $or: [{ drAccountId: accountId }, { crAccountId: accountId }],
-      })
-        .select('drAccountId crAccountId amount')
-        .lean();
-      let balance = Number(account.openingBalance) || 0;
-      activeTransactions.forEach((tx) => {
-        if (tx.drAccountId?.toString() === accountId) balance += Number(tx.amount) || 0;
-        if (tx.crAccountId?.toString() === accountId) balance -= Number(tx.amount) || 0;
-      });
-      await Account.findByIdAndUpdate(accountId, { currentBalance: round2(balance) });
-    }
+    await syncAccountBalances(affectedAccountIds);
 
     // Legacy payroll rows may not have installment transaction links. Keep the
     // audit amount useful without changing balances a second time.

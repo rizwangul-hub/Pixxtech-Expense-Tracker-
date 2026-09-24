@@ -7,7 +7,7 @@ import Category from '../models/Category.js';
 import Transaction from '../models/Transaction.js';
 import Voucher from '../models/Voucher.js';
 import RentReceived from '../models/RentReceived.js';
-import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
+import { createTransaction, round2, suggestNextVoucherNumber, syncAccountBalances } from '../services/ledgerService.js';
 
 /**
  * In-memory short-term idempotency cache to prevent double-click / rapid submission duplicates
@@ -855,6 +855,8 @@ export const reverseOtherIncome = async (req, res) => {
           status: 'REVERSED',
           detail: `[REVERSED] ${tx?.detail || otherIncome.transactionDetail}`,
         });
+
+        await syncAccountBalances([tx?.drAccountId, tx?.crAccountId, otherIncome.accountId]);
       }
 
       // 3. Mark Voucher as REVERSED

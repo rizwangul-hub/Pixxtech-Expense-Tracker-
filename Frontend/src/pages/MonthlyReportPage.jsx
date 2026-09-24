@@ -14,8 +14,9 @@ import {
   CheckCircle2,
   Circle,
   FileDown,
+  RotateCcw,
 } from 'lucide-react';
-import { financialReportsAPI } from '../services/api.js';
+import { financialReportsAPI, monthlyReportsAPI } from '../services/api.js';
 import { isAdmin } from '../utils/permissions.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -222,6 +223,7 @@ export function MonthlyReportPage({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const fetchSummary = useCallback(async () => {
     setLoading(true);
@@ -243,6 +245,21 @@ export function MonthlyReportPage({ currentUser }) {
   useEffect(() => {
     fetchSummary();
   }, [fetchSummary]);
+
+  const handleReset = async () => {
+    if (!window.confirm(`Reset and refresh monthly ledger calculations for ${selectedMonth}? This will sync live bank balances and exclude any reversed transactions.`)) {
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await monthlyReportsAPI.resetReport(selectedMonth);
+      await fetchSummary();
+    } catch (e) {
+      alert('Report reset failed: ' + (e?.response?.data?.message || e.message));
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   const handleDownloadPDF = async () => {
     setPdfLoading(true);
@@ -292,12 +309,25 @@ export function MonthlyReportPage({ currentUser }) {
 
           <button
             onClick={fetchSummary}
-            disabled={loading}
+            disabled={loading || resetLoading}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition disabled:opacity-50"
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             Refresh
           </button>
+
+          {/* Reset & Sync with Live Ledger — Admin only */}
+          {isAdmin(currentUser) && (
+            <button
+              onClick={handleReset}
+              disabled={resetLoading || loading}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-amber-950/80 hover:bg-amber-900 border border-amber-700/60 text-amber-300 hover:text-white transition disabled:opacity-50"
+              title="Reset report snapshot and sync live calculations excluding reversed transactions"
+            >
+              <RotateCcw size={13} className={resetLoading ? 'animate-spin' : ''} />
+              {resetLoading ? 'Resetting…' : 'Reset & Sync'}
+            </button>
+          )}
 
           {/* PDF Download — Admin only */}
           {isAdmin(currentUser) && (
