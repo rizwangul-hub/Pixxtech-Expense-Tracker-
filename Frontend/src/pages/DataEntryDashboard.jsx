@@ -83,7 +83,7 @@ export const DataEntryDashboard = ({ user }) => {
       const [accRes, catRes, propRes, entriesRes, headsRes, pendingRes] = await Promise.all([
         accountsAPI.getActiveSummary(),
         accountsAPI.getCategories(),
-        accountsAPI.getProperties(),
+        accountsAPI.getProperties().catch(() => ({ properties: [] })),
         transactionsAPI.getMyEntries(),
         otherIncomeAPI.getHeads().catch(() => ({ data: { heads: [] } })),
         verificationAPI.getMySubmissions().catch(() => ({ data: [] })),
@@ -92,6 +92,7 @@ export const DataEntryDashboard = ({ user }) => {
       const accs = accRes.accounts || accRes.data?.accounts || [];
       const custs = accRes.grouped?.custodians || [];
       const cats = catRes.categories || catRes.data?.categories || [];
+      const props = propRes?.properties || propRes?.data?.properties || [];
       const rawRecents = entriesRes.transactions || entriesRes.data?.transactions || [];
       const recents = rawRecents.filter((tx) => tx.status !== 'PENDING');
       const pendingFromTx = rawRecents.filter((tx) => tx.status === 'PENDING');
