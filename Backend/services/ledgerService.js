@@ -558,7 +558,7 @@ export const getHeadWiseExpenseReport = async (year, month) => {
   const transactions = await Transaction.find({
     date: { $gte: startOfMonth, $lte: endOfMonth },
     categoryId: { $in: expenseCatIds },
-    status: { $ne: 'REVERSED' },
+    $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   })
     .populate({
       path: 'categoryId',

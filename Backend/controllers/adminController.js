@@ -8,6 +8,7 @@ import {
   getMonthlyOpeningClosingMatrix,
   getAccountRunningLedger,
   getHeadWiseExpenseReport,
+  syncAccountBalances,
   round2,
 } from '../services/ledgerService.js';
 
@@ -55,15 +56,24 @@ export const getFinancialAtAGlance = async (req, res) => {
     const closingAvailableBalance = grandTotal.closingBalance;
     const netPosition = round2(totalAmountAvailable - totalNetExpenses);
 
-    // 3. Audit Verification Statistics for the period
-    const totalVouchers = await Transaction.countDocuments({
+    // 3. Audit Verification Statistics for the period (excluding reversed/void)
+    const activeQuery = {
       date: { $gte: startDate, $lte: endDate },
-    });
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+    };
+    const totalVouchers = await Transaction.countDocuments(activeQuery);
     const verifiedVouchers = await Transaction.countDocuments({
-      date: { $gte: startDate, $lte: endDate },
+      ...activeQuery,
       status: 'VERIFIED',
     });
-    const pendingVouchers = totalVouchers - verifiedVouchers;
+    const pendingVouchers = await Transaction.countDocuments({
+      ...activeQuery,
+      status: 'PENDING',
+    });
+    const reversedVouchers = await Transaction.countDocuments({
+      date: { $gte: startDate, $lte: endDate },
+      status: 'REVERSED',
+    });
 
     return res.status(200).json({
       success: true,
@@ -80,6 +90,7 @@ export const getFinancialAtAGlance = async (req, res) => {
         totalVouchers,
         verifiedVouchers,
         pendingVouchers,
+        reversedVouchers,
         auditPercentage: totalVouchers > 0 ? Math.round((verifiedVouchers / totalVouchers) * 100) : 100,
         auditedBy: req.user.name,
       },
@@ -121,8 +132,17 @@ export const getMasterLedger = async (req, res) => {
       query.categoryId = categoryId;
     }
 
-    if (status && (status === 'PENDING' || status === 'VERIFIED')) {
-      query.status = status;
+    if (status === 'PENDING') {
+      query.status = 'PENDING';
+    } else if (status === 'VERIFIED') {
+      query.status = 'VERIFIED';
+    } else if (status === 'REVERSED') {
+      query.status = 'REVERSED';
+    } else if (status === 'ALL_INCLUDING_REVERSED') {
+      // Return all without status filter
+    } else {
+      // By default, exclude reversed and void transactions from active ledger
+      query.status = { $nin: ['REVERSED', 'VOID'] };
     }
 
     if (search && search.trim()) {
@@ -283,32 +303,14 @@ export const updateTransactionMaster = async (req, res) => {
       });
     }
 
-    // Check if account balances are affected
-    const balanceAffected =
-      oldAmount !== newAmount || oldDrId !== newDrId || oldCrId !== newCrId;
-
-    if (balanceAffected) {
-      // 1. Reverse previous transaction effect
-      await Promise.all([
-        Account.findByIdAndUpdate(oldDrId, { $inc: { currentBalance: -oldAmount } }),
-        Account.findByIdAndUpdate(oldCrId, { $inc: { currentBalance: oldAmount } }),
-      ]);
-
-      // 2. Apply new transaction effect
-      await Promise.all([
-        Account.findByIdAndUpdate(newDrId, { $inc: { currentBalance: newAmount } }),
-        Account.findByIdAndUpdate(newCrId, { $inc: { currentBalance: -newAmount } }),
-      ]);
-    }
-
     // Update fields
     if (date) tx.date = new Date(date);
     if (voucherNo) tx.voucherNo = voucherNo.trim();
     if (detail) tx.detail = detail.trim();
     if (categoryId) {
-      const category = await Category.findOne({ _id: categoryId, type: 'EXPENSE' }).lean();
+      const category = await Category.findById(categoryId).lean();
       if (!category) {
-        return res.status(400).json({ success: false, message: 'Selected expense head was not found.' });
+        return res.status(400).json({ success: false, message: 'Selected account head was not found.' });
       }
       tx.categoryId = categoryId;
       if (tx.transactionType === 'EXPENSE') {
@@ -327,6 +329,9 @@ export const updateTransactionMaster = async (req, res) => {
     if (checkedBy !== undefined) tx.checkedBy = checkedBy;
 
     await tx.save();
+
+    // Reliably synchronize account balances from active ledger
+    await syncAccountBalances([oldDrId, oldCrId, newDrId, newCrId]);
 
     const updated = await Transaction.findById(id)
       .populate('categoryId', 'name type')
@@ -373,18 +378,19 @@ export const deleteTransaction = async (req, res) => {
       });
     }
 
-    const amt = round2(tx.amount);
-    // Reverse balances
-    await Promise.all([
-      Account.findByIdAndUpdate(tx.drAccountId, { $inc: { currentBalance: -amt } }),
-      Account.findByIdAndUpdate(tx.crAccountId, { $inc: { currentBalance: amt } }),
-    ]);
+    const drId = tx.drAccountId?.toString();
+    const crId = tx.crAccountId?.toString();
 
     await Transaction.findByIdAndDelete(id);
 
+    // Synchronize account balances safely from active ledger
+    if (drId || crId) {
+      await syncAccountBalances([drId, crId]);
+    }
+
     return res.status(200).json({
       success: true,
-      message: `Voucher #${tx.voucherNo} deleted and account balances reversed successfully.`,
+      message: `Voucher #${tx.voucherNo} deleted and account balances synchronized successfully.`,
     });
   } catch (error) {
     console.error('Error in deleteTransaction:', error);
@@ -411,12 +417,13 @@ export const getRentalIncomeSummary = async (req, res) => {
       .sort({ plazaName: 1 })
       .lean();
 
-    // 2. Fetch all rent transactions for this month
+    // 2. Fetch all active rent transactions for this month (excluding reversed)
     const rentTransactions = await Transaction.find({
       $or: [
         { rentMonth: periodString },
         { date: { $gte: startDate, $lte: endDate }, propertyId: { $ne: null } },
       ],
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
     })
       .populate('drAccountId', 'name type')
       .lean();

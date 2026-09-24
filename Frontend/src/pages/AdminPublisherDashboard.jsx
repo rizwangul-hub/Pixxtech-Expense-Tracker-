@@ -99,10 +99,12 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
           accountsAPI.getCategories(),
           accountsAPI.getActiveSummary(),
         ]);
-        setCategoriesList(catRes.categories || []);
-        setAccountsList(accRes.accounts || []);
-        if (accRes.accounts && accRes.accounts.length > 0) {
-          setReconcileAccountId(accRes.accounts[0]._id);
+        const cats = catRes.categories || catRes.data?.categories || [];
+        const accs = accRes.accounts || accRes.data?.accounts || [];
+        setCategoriesList(cats);
+        setAccountsList(accs);
+        if (accs.length > 0) {
+          setReconcileAccountId((prev) => prev || accs[0]._id);
         }
       } catch (err) {
         console.error('Error loading dropdown lists:', err);
@@ -673,9 +675,11 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                   onChange={(e) => setLedgerStatus(e.target.value)}
                   className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500"
                 >
-                  <option value="">All Statuses</option>
+                  <option value="">Active Entries (Excludes Reversed)</option>
                   <option value="PENDING">Pending Review</option>
                   <option value="VERIFIED">Verified by Fahad</option>
+                  <option value="REVERSED">Reversed / Cancelled</option>
+                  <option value="ALL_INCLUDING_REVERSED">All (Including Reversed)</option>
                 </select>
 
                 <select
@@ -741,6 +745,7 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                     ) : (
                       ledgerEntries.map((tx) => {
                         const isVerified = tx.status === 'VERIFIED';
+                        const isReversed = tx.status === 'REVERSED';
                         const dateStr = tx.date
                           ? new Date(tx.date).toISOString().split('T')[0]
                           : '-';
@@ -748,7 +753,7 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                         return (
                           <tr
                             key={tx._id}
-                            className="hover:bg-slate-800/40 transition-colors text-slate-300"
+                            className={`hover:bg-slate-800/40 transition-colors ${isReversed ? 'text-slate-500 opacity-60' : 'text-slate-300'}`}
                           >
                             <td className="py-2.5 px-3 font-mono text-slate-400 whitespace-nowrap">
                               {dateStr}
@@ -775,7 +780,7 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                             <td className="py-2.5 px-3 text-rose-300 whitespace-nowrap">
                               {tx.crAccountId?.name || '-'}
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono font-bold text-white whitespace-nowrap">
+                            <td className={`py-2.5 px-3 text-right font-mono font-bold whitespace-nowrap ${isReversed ? 'text-slate-400 line-through' : 'text-white'}`}>
                               {formatPKR(tx.amount)}
                             </td>
                             <td className="py-2.5 px-3 text-center whitespace-nowrap">
@@ -783,6 +788,10 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                                 <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full text-[10px] font-semibold">
                                   <CheckCircle2 className="w-3 h-3" />
                                   {tx.checkedBy || 'Checked By Fahad'}
+                                </span>
+                              ) : isReversed ? (
+                                <span className="inline-flex items-center gap-1 bg-rose-500/10 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                                  Reversed
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full text-[10px] font-semibold">
@@ -792,7 +801,7 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                             </td>
                             <td className="py-2.5 px-3 text-center whitespace-nowrap">
                               <div className="flex items-center justify-center gap-1.5">
-                                {!isVerified && (
+                                {tx.status === 'PENDING' && (
                                   <button
                                     onClick={() => handleVerify(tx._id)}
                                     title="Verify & Stamp as Fahad Sb"
@@ -1205,16 +1214,21 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  {(headWiseData.mainHeads?.length
-                    ? headWiseData.mainHeads
-                    : (headWiseData.heads || []).map((head) => ({
-                        mainHeadId: head.categoryId,
-                        mainHeadName: head.headName,
-                        totalSpent: head.totalSpent,
-                        transactionCount: head.transactionCount,
-                        expenses: [head],
-                      }))).map((h) => {
+                {headWiseData.totalExpensesOverall === 0 || (!headWiseData.mainHeads?.length && (!headWiseData.heads || headWiseData.heads.every(h => h.transactionCount === 0))) ? (
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-500 text-xs">
+                    No active expense disbursements recorded for {selectedMonth}.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(headWiseData.mainHeads?.length
+                      ? headWiseData.mainHeads
+                      : (headWiseData.heads || []).map((head) => ({
+                          mainHeadId: head.categoryId,
+                          mainHeadName: head.headName,
+                          totalSpent: head.totalSpent,
+                          transactionCount: head.transactionCount,
+                          expenses: [head],
+                        }))).map((h) => {
                     const isExp = expandedHeads[h.mainHeadId] ?? true;
                     const childExpenses = h.expenses || [];
                     const transactions = childExpenses.flatMap((expense) =>
@@ -1296,7 +1310,8 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                       </div>
                     );
                   })}
-                </div>
+                  </div>
+                )}
               </>
             ) : null}
           </div>
