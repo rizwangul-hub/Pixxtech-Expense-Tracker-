@@ -859,11 +859,13 @@ export const verifyEntry = async (req, res) => {
         pDoc.transactionId = postedTransaction._id;
         pDoc.voucherNo = entry.voucherNo;
         pDoc.paymentMethod = entry.paymentMethod || 'BANK_TRANSFER';
-        pDoc.paymentNotes = entry.detail;
+        const disburseDate = entry.date || new Date();
+        const dMonth = `${new Date(disburseDate).getUTCFullYear()}-${String(new Date(disburseDate).getUTCMonth() + 1).padStart(2, '0')}`;
         pDoc.salaryInstallments = pDoc.salaryInstallments || [];
         pDoc.salaryInstallments.push({
           amount: netAmount,
-          paymentDate: entry.date || new Date(),
+          paymentDate: disburseDate,
+          disbursementMonth: entry.entryData?.disbursementMonth || dMonth,
           paidFromAccountId: account._id,
           paidFromAccountName: account.name,
           paymentMethod: entry.entryData?.paymentMethod || 'BANK_TRANSFER',

@@ -1415,12 +1415,19 @@ export const paySingleSalary = async (req, res) => {
     const [yStr, mStr] = month.split('-');
     const year = parseInt(yStr, 10);
     const monthNum = parseInt(mStr, 10);
+
     const endOfMonthDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
 
+    // Support actual financial disbursement date (defaults to end of payroll cycle month e.g. 2026-08-31)
     let pDate = paymentDate ? new Date(paymentDate) : endOfMonthDate;
-    if (isNaN(pDate.getTime()) || pDate.getUTCFullYear() !== year || (pDate.getUTCMonth() + 1) !== monthNum) {
+    if (isNaN(pDate.getTime())) {
       pDate = endOfMonthDate;
     }
+    const pDateMonth = `${pDate.getUTCFullYear()}-${String(pDate.getUTCMonth() + 1).padStart(2, '0')}`;
+    const isAdvance = pDateMonth < month;
+    const detailNarration = isAdvance
+      ? `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month} (Advance paid in ${pDateMonth})${paymentNotes ? '. ' + paymentNotes : ''}`
+      : `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}${paymentNotes ? '. ' + paymentNotes : ''}`;
 
     // Only approvers may post directly. All operational payout submissions are
     // staged for verification so the bank is never debited before approval.
@@ -1472,13 +1479,15 @@ export const paySingleSalary = async (req, res) => {
         drAccountId: clearingAccount._id,
         categoryId: salaryCategory._id,
         receivingAccountId: account._id,
-        detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`.trim(),
+        detail: detailNarration.trim(),
         tenantId: pDoc.employeeId,
         attachments: validAttachments,
         entryData: {
           payrollId: pDoc._id,
           employeeId: pDoc.employeeId,
           month,
+          disbursementMonth: pDateMonth,
+          paymentDate: pDate,
           loanDeduction: pDoc.loanDeduction || 0,
           paidFromAccountId: account._id,
           paymentMethod,
@@ -1543,7 +1552,7 @@ export const paySingleSalary = async (req, res) => {
     const transaction = await createTransaction({
       date: pDate,
       voucherNo,
-      detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}${paymentNotes ? '. ' + paymentNotes : ''}`,
+      detail: detailNarration.trim(),
       categoryId: salaryCategory._id,
       drAccountId: clearingAccount._id,
       crAccountId: account._id,
@@ -1574,6 +1583,7 @@ export const paySingleSalary = async (req, res) => {
     pDoc.salaryInstallments.push({
       amount: netAmount,
       paymentDate: pDate,
+      disbursementMonth: pDateMonth,
       paidFromAccountId: account._id,
       paidFromAccountName: account.name,
       paymentMethod,
@@ -1717,10 +1727,13 @@ export const payBulkSalary = async (req, res) => {
     const monthNum = parseInt(mStr, 10);
     const endOfMonthDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
 
+    // Support actual financial disbursement date (defaults to end of payroll cycle month e.g. 2026-08-31)
     let pDate = paymentDate ? new Date(paymentDate) : endOfMonthDate;
-    if (isNaN(pDate.getTime()) || pDate.getUTCFullYear() !== year || (pDate.getUTCMonth() + 1) !== monthNum) {
+    if (isNaN(pDate.getTime())) {
       pDate = endOfMonthDate;
     }
+    const pDateMonth = `${pDate.getUTCFullYear()}-${String(pDate.getUTCMonth() + 1).padStart(2, '0')}`;
+    const isAdvance = pDateMonth < month;
 
     // Routing for Data Entry role (Sarfraz Khan): Create PendingEntry for each unpaid salary record
     if (req.user?.role === 'DATA_ENTRY') {
@@ -1739,6 +1752,10 @@ export const payBulkSalary = async (req, res) => {
         if (existingPending) continue;
 
         const voucherNo = await suggestNextVoucherNumber(pDate);
+        const detailNarration = isAdvance
+          ? `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month} (Advance paid in ${pDateMonth})${paymentNotes ? '. ' + paymentNotes : ''}`.trim()
+          : `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}${paymentNotes ? '. ' + paymentNotes : ''}`.trim();
+
         const pending = await PendingEntry.create({
           entryType: 'SALARY',
           amount: remaining,
@@ -1749,12 +1766,14 @@ export const payBulkSalary = async (req, res) => {
           drAccountId: clearingAccount._id,
           categoryId: (await getOrCreateEmployeeSalaryCategory(pDoc.employeeName, salariesCategory))._id,
           receivingAccountId: account._id,
-          detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`.trim(),
+          detail: detailNarration,
           tenantId: pDoc.employeeId,
           entryData: {
             payrollId: pDoc._id,
             employeeId: pDoc.employeeId,
             month,
+            disbursementMonth: pDateMonth,
+            paymentDate: pDate,
             loanDeduction: pDoc.loanDeduction || 0,
             paidFromAccountId: account._id,
             paymentMethod,
@@ -1800,11 +1819,15 @@ export const payBulkSalary = async (req, res) => {
       if (remaining <= 0) continue;
 
       const voucherNo = await suggestNextVoucherNumber(pDate);
+      const detailNarration = isAdvance
+        ? `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month} (Advance paid in ${pDateMonth})${paymentNotes ? '. ' + paymentNotes : ''}`.trim()
+        : `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}${paymentNotes ? '. ' + paymentNotes : ''}`.trim();
+
       const transaction = await createTransaction({
         date: pDate,
         voucherNo,
-        detail: `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}`,
-        categoryId: (await getOrCreateEmployeeSalaryCategory(payroll.employeeName, salariesCategory))._id,
+        detail: detailNarration,
+        categoryId: (await getOrCreateEmployeeSalaryCategory(pDoc.employeeName, salariesCategory))._id,
         drAccountId: clearingAccount._id,
         crAccountId: account._id,
         amount: remaining,
@@ -1832,6 +1855,7 @@ export const payBulkSalary = async (req, res) => {
       pDoc.salaryInstallments.push({
         amount: remaining,
         paymentDate: pDate,
+        disbursementMonth: pDateMonth,
         paidFromAccountId: account._id,
         paidFromAccountName: account.name,
         paymentMethod,

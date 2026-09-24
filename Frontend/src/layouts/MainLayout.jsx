@@ -189,16 +189,18 @@ export function MainLayout({
       badge: 'Active',
       badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
     },
-    {
-      id: 'expenses',
-      label: 'Expenses',
-      icon: Receipt,
-      status: canEnterData ? 'active' : 'locked',
-      badge: canEnterData ? 'Active' : 'Restricted',
-      badgeColor: canEnterData
-        ? 'bg-rose-100 text-rose-800 border-rose-200'
-        : 'bg-slate-100 text-slate-400 border-slate-200',
-    },
+    ...(userIsAdmin
+      ? [
+          {
+            id: 'expenses',
+            label: 'Expenses',
+            icon: Receipt,
+            status: 'active',
+            badge: 'Audit',
+            badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
+          },
+        ]
+      : []),
     {
       id: 'accounts',
       label: 'Accounts',

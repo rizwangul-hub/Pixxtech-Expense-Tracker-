@@ -61,7 +61,7 @@ const getAccessibleSection = (section, user) => {
   if (section === 'chart-of-accounts' && !isAdmin(user)) {
     return 'dashboard';
   }
-  if (section === 'expenses' && !isAdmin(user) && !isVerifier(user)) {
+  if (section === 'expenses' && !isAdmin(user)) {
     return 'dashboard';
   }
   const requiredPermission = SECTION_PERMISSIONS[section];
@@ -264,22 +264,12 @@ export function App() {
         />
       ) : currentSection === 'operational' ? (
         <DataEntryDashboard user={user} />
-      ) : currentSection === 'expenses' ? (
-        isVerifier(user) ? (
-          <VerifierDashboard
-            user={user}
-            onOpenMasterAccounts={() => setCurrentSection('accounts')}
-            onOpenProperties={() => setCurrentSection('properties')}
-          />
-        ) : isAdmin(user) ? (
-          <AdminPublisherDashboard
-            user={user}
-            onLogout={handleLogout}
-            onSwitchToDataEntry={() => setCurrentSection('verification')}
-          />
-        ) : (
-          <DataEntryDashboard user={user} />
-        )
+      ) : currentSection === 'expenses' && isAdmin(user) ? (
+        <AdminPublisherDashboard
+          user={user}
+          onLogout={handleLogout}
+          onSwitchToDataEntry={() => setCurrentSection('verification')}
+        />
       ) : currentSection === 'users' && isAdmin(user) ? (
         <UserManager currentUser={user} />
       ) : currentSection === 'properties' ? (

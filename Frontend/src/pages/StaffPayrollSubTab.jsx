@@ -47,12 +47,22 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [modalError, setModalError] = useState('');
   
+  const getDefaultPayDate = (monthStr) => {
+    if (!monthStr || !/^\d{4}-\d{2}$/.test(monthStr)) return new Date().toISOString().split('T')[0];
+    const [y, m] = monthStr.split('-');
+    const year = parseInt(y, 10);
+    const monthNum = parseInt(m, 10);
+    const lastDay = new Date(Date.UTC(year, monthNum, 0)).getUTCDate();
+    return `${year}-${String(monthNum).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  };
+
   // Pay Single Modal
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [payTargetRow, setPayTargetRow] = useState(null);
   const [payMethod, setPayMethod] = useState('BANK_TRANSFER');
   const [payNotes, setPayNotes] = useState('');
   const [payAmount, setPayAmount] = useState('');
+  const [payDate, setPayDate] = useState(() => getDefaultPayDate(new Date().toISOString().slice(0, 7)));
   const [processingPay, setProcessingPay] = useState(false);
 
   // Evidence upload state (for the payout modal)
@@ -339,6 +349,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
     setPayNotes('');
     setModalError('');
     setPayAmount(String(exactRemaining));
+    setPayDate(getDefaultPayDate(selectedMonth));
     setEvidenceFiles([]);
     setEvidencePreview(null);
     setPayModalOpen(true);
@@ -376,6 +387,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
         paymentMethod: payMethod,
         paymentNotes: payNotes,
         paymentAmount: Number(payAmount),
+        paymentDate: payDate,
         amount: Number(payAmount),
         basicSalary: Number(payTargetRow.basicSalary) || 0,
         allowance: Number(payTargetRow.allowance) || 0,
@@ -1005,10 +1017,47 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                   <p className="text-slate-500 font-semibold mb-1">Previous installments:</p>
                   {payTargetRow.salaryInstallments.map((item, i) => (
                     <div key={i} className="flex justify-between text-slate-500">
-                      <span>Installment {i + 1} ({item.paidFromAccountName || 'Bank'}):</span>
+                      <span>
+                        Installment {i + 1} ({item.paidFromAccountName || 'Bank'})
+                        {item.paidAt && ` · ${new Date(item.paidAt).toLocaleDateString()}`}
+                        {item.disbursementMonth && item.disbursementMonth !== selectedMonth && (
+                          <span className="ml-1 text-[10px] text-amber-400 font-medium">({item.disbursementMonth} Report)</span>
+                        )}:
+                      </span>
                       <span className="font-mono">{formatPKR(item.amount)}</span>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5 text-xs">
+              <label className="text-slate-300 font-bold flex items-center justify-between">
+                <span>Disbursement Date / Report Month:</span>
+                <span className="text-[11px] font-normal text-slate-400">
+                  Financial Report: <strong className="text-cyan-300 font-mono">{payDate ? payDate.slice(0, 7) : selectedMonth}</strong>
+                </span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={payDate}
+                  onChange={(e) => setPayDate(e.target.value)}
+                  className="flex-1 bg-slate-950 border border-slate-700 text-cyan-300 font-mono font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-500"
+                />
+                {payDate !== getDefaultPayDate(selectedMonth) && (
+                  <button
+                    type="button"
+                    onClick={() => setPayDate(getDefaultPayDate(selectedMonth))}
+                    className="px-3 py-2 text-[11px] font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition shrink-0"
+                  >
+                    Reset ({selectedMonth})
+                  </button>
+                )}
+              </div>
+              {payDate && payDate.slice(0, 7) < selectedMonth && (
+                <div className="p-2.5 rounded-lg bg-blue-950/40 border border-blue-800/60 text-blue-300 text-[11px] leading-relaxed">
+                  ℹ️ <strong>Advance Salary Payout:</strong> Posting this payout to the <strong>{payDate.slice(0, 7)}</strong> financial report, deducting from the <strong>{selectedMonth}</strong> salary balance.
                 </div>
               )}
             </div>
