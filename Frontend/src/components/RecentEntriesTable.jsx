@@ -23,6 +23,7 @@ import {
   Sparkles,
   RotateCcw,
   Building2,
+  Landmark,
 } from 'lucide-react';
 import { transactionsAPI, vouchersAPI, verificationAPI, uploadAPI } from '../services/api.js';
 import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
@@ -78,6 +79,7 @@ export const RecentEntriesTable = ({
   const [editUnitId, setEditUnitId] = useState('');
   const [editParentCategoryId, setEditParentCategoryId] = useState('');
   const [editCategoryId, setEditCategoryId] = useState('');
+  const [editAccountId, setEditAccountId] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState(null);
   const [deletingPendingId, setDeletingPendingId] = useState(null);
@@ -166,10 +168,19 @@ export const RecentEntriesTable = ({
       currentCat?.parentCategoryId ||
       '';
 
+    const accId =
+      entry.crAccountId?._id ||
+      (typeof entry.crAccountId === 'string' ? entry.crAccountId : '') ||
+      entry.receivingAccountId?._id ||
+      (typeof entry.receivingAccountId === 'string' ? entry.receivingAccountId : '') ||
+      entry.entryData?.paidFromAccountId ||
+      '';
+
     setEditPropertyId(propId);
     setEditUnitId(unitId);
     setEditParentCategoryId(parentId);
     setEditCategoryId(catId);
+    setEditAccountId(accId ? String(accId) : '');
 
     setEditAttachments(getItemAttachments(entry) || []);
     setEditNewFiles([]);
@@ -187,6 +198,7 @@ export const RecentEntriesTable = ({
     setEditUnitId('');
     setEditParentCategoryId('');
     setEditCategoryId('');
+    setEditAccountId('');
     setEditAttachments([]);
     setEditNewFiles([]);
     setUploadingEvidence(false);
@@ -270,6 +282,12 @@ export const RecentEntriesTable = ({
         if (editParentCategoryId) {
           payload.parentCategoryId = editParentCategoryId;
         }
+      }
+
+      if (editAccountId) {
+        payload.crAccountId = editAccountId;
+        payload.paidFromAccountId = editAccountId;
+        payload.receivingAccountId = editAccountId;
       }
 
       await verificationAPI.updatePending(editingPending._id, payload);
@@ -467,6 +485,23 @@ export const RecentEntriesTable = ({
                         {entry.rentMonth && (
                           <span className="block text-[10px] font-semibold text-slate-500">{entry.rentMonth}</span>
                         )}
+                        {/* Disbursing / Payment Bank or Cash Account */}
+                        {(() => {
+                          const bankName =
+                            entry.crAccountId?.name ||
+                            entry.receivingAccountId?.name ||
+                            accounts.find((a) => String(a._id) === String(entry.crAccountId || entry.receivingAccountId || entry.entryData?.paidFromAccountId))?.name;
+                          if (!bankName) return null;
+                          return (
+                            <div className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded w-fit">
+                              <Landmark size={10} className="text-emerald-600 shrink-0" />
+                              <span className="truncate">
+                                {entry.entryType === 'SALARY' ? 'Bank: ' : 'Account: '}
+                                {bankName}
+                              </span>
+                            </div>
+                          );
+                        })()}
                         {/* Attached Purchase / Receipt Evidence */}
                         {getItemAttachments(entry).length > 0 && (
                           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
@@ -949,6 +984,43 @@ export const RecentEntriesTable = ({
                   </div>
                 </div>
               )}
+
+              {/* Disbursing / Payment Bank or Cash Account */}
+              <div>
+                <label className="block text-slate-400 mb-1 font-semibold flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Landmark size={13} className="text-amber-400" />
+                    <span>
+                      {editingPending?.entryType === 'SALARY'
+                        ? 'Paid From Bank / Cash Account *'
+                        : editingPending?.entryType === 'RENT' || editingPending?.entryType === 'RENT_RECEIVED'
+                        ? 'Receiving Bank / Cash Account *'
+                        : 'Payment Bank / Cash Account *'}
+                    </span>
+                  </span>
+                  {editAccountId && (
+                    <span className="text-[10px] text-emerald-400 font-mono">
+                      Current Bal: Rs. {formatPKR(accounts.find((a) => String(a._id) === String(editAccountId))?.currentBalance || 0)}
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={editAccountId}
+                  onChange={(e) => setEditAccountId(e.target.value)}
+                  required
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-emerald-300 font-medium focus:outline-none focus:border-amber-500 text-xs font-mono"
+                >
+                  <option value="">-- Select Bank / Cash Account --</option>
+                  {accounts.map((acc) => (
+                    <option key={acc._id} value={acc._id}>
+                      {acc.name} ({acc.type}) — Bal: Rs. {formatPKR(acc.currentBalance || 0)}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  The funds for this voucher will be processed through this account upon verification.
+                </p>
+              </div>
 
               <div>
                 <label className="block text-slate-400 mb-1 font-semibold">Amount (PKR) *</label>

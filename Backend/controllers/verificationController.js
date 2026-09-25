@@ -491,6 +491,17 @@ export const updatePendingEntry = async (req, res) => {
     if (updates.crAccountId) entry.crAccountId = updates.crAccountId;
     if (updates.receivingAccountId) entry.receivingAccountId = updates.receivingAccountId;
 
+    const paidFromAcc = updates.paidFromAccountId || updates.crAccountId;
+    if (paidFromAcc) {
+      entry.crAccountId = paidFromAcc;
+      if (entry.entryType === 'SALARY') {
+        entry.receivingAccountId = paidFromAcc;
+        if (!entry.entryData) entry.entryData = {};
+        entry.entryData.paidFromAccountId = paidFromAcc;
+        entry.markModified('entryData');
+      }
+    }
+
     if (entry.entryType === 'EXPENSE') {
       const classification = await validateExpenseClassification({
         expenseClassification: entry.expenseClassification,
@@ -547,6 +558,13 @@ export const updatePendingEntry = async (req, res) => {
         pDoc = await Payroll.findOne({ employeeId, payrollMonth: month });
       }
       if (pDoc) {
+        if (paidFromAcc && mongoose.Types.ObjectId.isValid(paidFromAcc)) {
+          const accObj = await Account.findById(paidFromAcc).select('name');
+          if (accObj) {
+            pDoc.paidFromAccountId = accObj._id;
+            pDoc.paidFromAccountName = accObj.name;
+          }
+        }
         if (grossSalary !== undefined) pDoc.grossSalary = grossSalary;
         if (loanDeduction !== undefined) pDoc.loanDeduction = loanDeduction;
         if (lopDeduction !== undefined) pDoc.lopDeduction = lopDeduction;
