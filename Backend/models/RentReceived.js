@@ -24,7 +24,8 @@ const rentReceivedSchema = new mongoose.Schema(
     tenantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Tenant',
-      required: [true, 'Tenant is required'],
+      required: false,
+      default: null,
       index: true,
     },
     propertyId: {
@@ -41,7 +42,8 @@ const rentReceivedSchema = new mongoose.Schema(
     agreementId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'RentalAgreement',
-      required: [true, 'Rental agreement is required'],
+      required: false,
+      default: null,
       index: true,
     },
     rentDueId: {

@@ -686,8 +686,22 @@ export const verifyEntry = async (req, res) => {
       const rentalCategory = await getOrCreateRentalIncomeCategory();
       const clearingAccount = await getOrCreateClearingAccount(entry.receivingAccountId);
 
+      // Auto-resolve agreementId and tenantId if missing on entry
+      let agreementDoc = entry.agreementId ? await RentalAgreement.findById(entry.agreementId).lean() : null;
+      if (!agreementDoc && entry.unitId) {
+        agreementDoc = await RentalAgreement.findOne({ unitId: entry.unitId, status: { $in: ['ACTIVE', 'PENDING_RENEWAL'] } }).sort({ createdAt: -1 }).lean()
+          || await RentalAgreement.findOne({ unitId: entry.unitId }).sort({ createdAt: -1 }).lean();
+      }
+      let tenantDoc = entry.tenantId ? await Tenant.findById(entry.tenantId).lean() : null;
+      if (!tenantDoc && agreementDoc?.tenantId) {
+        tenantDoc = await Tenant.findById(agreementDoc.tenantId).lean();
+      }
+      const resolvedAgreementId = agreementDoc?._id || entry.agreementId || null;
+      const resolvedTenantId = tenantDoc?._id || agreementDoc?.tenantId || entry.tenantId || null;
+      entry.agreementId = resolvedAgreementId;
+      entry.tenantId = resolvedTenantId;
+
       const propertyDoc = entry.propertyId ? await Property.findById(entry.propertyId).lean() : null;
-      const tenantDoc = entry.tenantId ? await Tenant.findById(entry.tenantId).lean() : null;
       const plazaName = propertyDoc?.plazaName || 'Property';
       const tenantName = tenantDoc?.fullName || 'Tenant';
 
@@ -704,8 +718,8 @@ export const verifyEntry = async (req, res) => {
         amount: entry.amount,
         propertyId: entry.propertyId,
         unitId: entry.unitId,
-        tenantId: entry.tenantId,
-        agreementId: entry.agreementId,
+        tenantId: resolvedTenantId,
+        agreementId: resolvedAgreementId,
         attachments: entry.attachments || [],
         rentMonth: cleanMonth,
         transactionType: 'INCOME',
@@ -720,9 +734,9 @@ export const verifyEntry = async (req, res) => {
       let allocatedPrior = 0;
       let allocatedAdvance = 0;
 
-      if (entry.agreementId) {
+      if (resolvedAgreementId) {
         const currentRentDue = await RentDue.findOne({
-          agreementId: entry.agreementId,
+          agreementId: resolvedAgreementId,
           rentMonth: cleanMonth,
         });
 
@@ -738,10 +752,10 @@ export const verifyEntry = async (req, res) => {
       postedRentReceived = await RentReceived.create({
         receiptNumber,
         receiptDate: entry.date || new Date(),
-        tenantId: entry.tenantId,
+        tenantId: resolvedTenantId,
         propertyId: entry.propertyId,
         unitId: entry.unitId,
-        agreementId: entry.agreementId,
+        agreementId: resolvedAgreementId,
         rentMonth: cleanMonth,
         amount: entry.amount,
         allocatedCurrentMonth: allocatedCurrent,

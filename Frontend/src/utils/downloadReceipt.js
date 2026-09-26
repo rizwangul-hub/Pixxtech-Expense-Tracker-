@@ -120,6 +120,11 @@ export function extractReceiptMetadata(entry) {
     entry.entryData?.category?.name ||
     'General Expense';
 
+  const isRent =
+    entry.entryType === 'RENT' ||
+    entry.reportCategory === 'Rent' ||
+    entry.sourceModule === 'RENT_RECEIVED';
+
   let drAccount =
     entry.drAccountId?.name ||
     entry.receivingAccountId?.name ||
@@ -131,9 +136,14 @@ export function extractReceiptMetadata(entry) {
     entry.entryData?.crAccount?.name ||
     '';
 
-  if (entry.entryType === 'RENT') {
-    drAccount = drAccount || 'Receiving Account';
-    crAccount = crAccount || 'Rental Income / Clearing';
+  if (isRent) {
+    drAccount = drAccount || 'Cash in Hand (Receiving Account)';
+    const rentLocationName = [propertyName, unitName].filter(Boolean).join(' - ');
+    crAccount = rentLocationName || crAccount || 'Rental Income / Clearing';
+  } else if (entry.entryType === 'SALARY') {
+    const empName = entry.salaryDetails?.employeeName || entry.entryData?.payrollSnapshot?.employeeName;
+    drAccount = drAccount || (empName ? `Salary Expense (${empName})` : 'Salary Expense');
+    crAccount = crAccount || 'Paid From (Bank / Cash)';
   } else {
     drAccount = drAccount || categoryName;
     crAccount = crAccount || 'Paid From (Bank / Cash)';
@@ -176,6 +186,7 @@ export function extractReceiptMetadata(entry) {
     narration,
     amountStr,
     amountNum: entry.amount,
+    isRent,
     isVerified,
     statusLabel,
     rentMonth: entry.rentMonth || null,
@@ -597,6 +608,28 @@ export function printReceiptEvidenceSlip(entry, attachmentIndex = 0) {
             <div class="narration-label">Narration / Details</div>
             <div>${meta.narration}</div>
           </div>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 7.5pt; border: 1px solid #cbd5e1; border-radius: 4px; overflow: hidden; background: #fff;">
+            <thead>
+              <tr style="background: #f1f5f9; text-transform: uppercase; font-weight: 800; font-size: 6.5pt; color: #475569; border-bottom: 1px solid #cbd5e1;">
+                <th style="padding: 4px 8px; text-align: left;">Account / Bank or Cash</th>
+                <th style="padding: 4px 8px; text-align: right; width: 110px;">Debit (Dr.)</th>
+                <th style="padding: 4px 8px; text-align: right; width: 110px;">Credit (Cr.)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid #e2e8f0; font-weight: 600;">
+                <td style="padding: 4px 8px; color: #0f172a;">${meta.drAccount}</td>
+                <td style="padding: 4px 8px; text-align: right; font-family: monospace; font-weight: bold; color: #059669;">${meta.amountStr}</td>
+                <td style="padding: 4px 8px; text-align: right; font-family: monospace; color: #94a3b8;">-</td>
+              </tr>
+              <tr style="font-weight: 600;">
+                <td style="padding: 4px 8px; color: #0f172a;">${meta.crAccount}</td>
+                <td style="padding: 4px 8px; text-align: right; font-family: monospace; color: #94a3b8;">-</td>
+                <td style="padding: 4px 8px; text-align: right; font-family: monospace; font-weight: bold; color: #e11d48;">${meta.amountStr}</td>
+              </tr>
+            </tbody>
+          </table>
 
           <div class="total-box">
             <span>TOTAL VOUCHER AMOUNT (PKR)</span>

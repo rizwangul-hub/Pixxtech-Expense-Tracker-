@@ -289,16 +289,66 @@ export function ReceiptViewerModal({ entry, onClose }) {
               </p>
             </div>
 
-            {/* Total Amount Highlight Banner */}
-            <div className="p-3 bg-gradient-to-r from-slate-950 to-slate-900 border border-emerald-500/30 rounded-lg flex items-center justify-between">
-              <div>
-                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">
-                  Total Voucher Amount
+            {/* Double-Entry Accounting Table (Matches Official Download & Print Slip) */}
+            <div className="border border-slate-700/80 rounded-xl overflow-hidden bg-slate-950/90 shadow-md">
+              <div className="px-3.5 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+                <span className="text-[10px] uppercase font-black text-slate-300 tracking-wider flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+                  Official Accounting Ledger Posting
                 </span>
-                <span className="text-xs text-slate-500">Official verified payable / receivable amount</span>
+                <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded">
+                  #{meta.vNo}
+                </span>
               </div>
-              <div className="text-xl sm:text-2xl font-black font-mono text-emerald-400">
-                {meta.amountStr}
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-900/60 text-slate-400 uppercase font-black text-[10px] tracking-wider border-b border-slate-800">
+                    <tr>
+                      <th className="py-2.5 px-3.5 sm:px-4">Account / Bank or Cash</th>
+                      <th className="py-2.5 px-3.5 sm:px-4 text-right w-32 sm:w-44">Debit (Dr.)</th>
+                      <th className="py-2.5 px-3.5 sm:px-4 text-right w-32 sm:w-44">Credit (Cr.)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80 font-medium">
+                    <tr className="hover:bg-slate-900/40 transition">
+                      <td className="py-2.5 px-3.5 sm:px-4 text-slate-200">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                          <span className="font-bold text-white text-xs sm:text-sm">{meta.drAccount}</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono font-bold text-emerald-400 text-xs sm:text-sm">
+                        {meta.amountStr}
+                      </td>
+                      <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono text-slate-600">-</td>
+                    </tr>
+                    <tr className="hover:bg-slate-900/40 transition">
+                      <td className="py-2.5 px-3.5 sm:px-4 text-slate-200">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0"></span>
+                          <span className="font-bold text-white text-xs sm:text-sm">{meta.crAccount}</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono text-slate-600">-</td>
+                      <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono font-bold text-rose-400 text-xs sm:text-sm">
+                        {meta.amountStr}
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot className="bg-gradient-to-r from-slate-950 to-slate-900 border-t-2 border-slate-700">
+                    <tr>
+                      <td className="py-2.5 px-3.5 sm:px-4 text-[11px] font-black uppercase text-slate-300 tracking-wider">
+                        Total Voucher Amount
+                      </td>
+                      <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono font-black text-emerald-400 text-sm sm:text-base">
+                        {meta.amountStr}
+                      </td>
+                      <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono font-black text-rose-400 text-sm sm:text-base">
+                        {meta.amountStr}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </div>
           </div>
