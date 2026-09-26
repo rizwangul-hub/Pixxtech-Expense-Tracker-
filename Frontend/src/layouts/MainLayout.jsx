@@ -144,15 +144,29 @@ export function MainLayout({
       badge: 'Portfolio',
       badgeColor: 'bg-slate-100 text-slate-700 border-slate-200',
     },
-    {
-      id: 'tenants',
-      label: 'Tenants',
-      icon: Users,
-      status: 'active',
-      permission: PERMISSIONS.VIEW_FINANCIALS,
-      badge: 'Active',
-      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    },
+    ...(userIsDataEntry && !hasPermission(user, PERMISSIONS.VIEW_FINANCIALS)
+      ? [
+          {
+            id: 'tenants',
+            label: 'Tenants',
+            icon: Users,
+            status: 'active',
+            // No permission guard needed — the spread condition already restricts it
+            badge: 'Active',
+            badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+          },
+        ]
+      : [
+          {
+            id: 'tenants',
+            label: 'Tenants',
+            icon: Users,
+            status: 'active',
+            permission: PERMISSIONS.VIEW_FINANCIALS,
+            badge: 'Active',
+            badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+          },
+        ]),
     {
       id: 'agreements',
       label: 'Agreements',

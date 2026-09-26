@@ -628,6 +628,7 @@ export const RecentEntriesTable = ({
                     ? new Date(tx.date).toISOString().split('T')[0]
                     : 'N/A';
                   const { dr, cr, location } = resolveTransactionAccounts(tx);
+                  const isVerified = tx.status === 'VERIFIED';
 
                   return (
                     <tr key={tx._id} className="hover:bg-slate-50 transition-colors">
