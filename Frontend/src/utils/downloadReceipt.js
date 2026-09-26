@@ -112,7 +112,11 @@ export function extractReceiptMetadata(entry) {
   const tenantName =
     entry.tenantId?.fullName ||
     entry.tenantId?.tenantName ||
+    entry.agreementId?.tenantId?.fullName ||
+    entry.agreementId?.tenantId?.tenantName ||
+    entry.agreementId?.tenantId?.name ||
     entry.entryData?.tenant?.fullName ||
+    entry.entryData?.unit?.tenantName ||
     '';
 
   const categoryName =

@@ -1289,26 +1289,28 @@ export function TransactionsPage({ user }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
-                    {selectedVoucher.lines?.map((line, idx) => (
-                      <tr key={line._id || idx}>
-                        <td className="py-2.5 px-3 text-slate-500">{idx + 1}</td>
-                        <td className="py-2.5 px-3 font-sans font-medium text-slate-200">
-                          {line.detail}
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-400">
-                          {line.categoryId?.name || '—'}
-                        </td>
-                        <td className="py-2.5 px-3 text-emerald-300">
-                          {line.drAccountId?.name || '—'}
-                        </td>
-                        <td className="py-2.5 px-3 text-rose-300">
-                          {line.crAccountId?.name || '—'}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-bold text-white">
-                          {formatPKR(line.amount)}
-                        </td>
-                      </tr>
-                    ))}
+                    {selectedVoucher.lines?.map((line, idx) => {
+                      const { dr, cr, head } = resolveTransactionAccounts({
+                        ...selectedVoucher.voucher,
+                        ...line,
+                      });
+                      return (
+                        <tr key={line._id || idx}>
+                          <td className="py-2.5 px-3 text-slate-500">{idx + 1}</td>
+                          <td className="py-2.5 px-3 font-sans font-medium text-slate-200">
+                            {line.detail}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-400">
+                            {line.categoryId?.name || head}
+                          </td>
+                          <td className="py-2.5 px-3 text-emerald-300">{dr}</td>
+                          <td className="py-2.5 px-3 text-rose-300">{cr}</td>
+                          <td className="py-2.5 px-3 text-right font-bold text-white">
+                            {formatPKR(line.amount)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

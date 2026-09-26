@@ -157,14 +157,17 @@ export const resolveTransactionAccounts = (tx) => {
   const isRent =
     tx.reportCategory === 'Rent' ||
     tx.sourceModule === 'RENT_RECEIVED' ||
-    tx.entryType === 'RENT';
+    tx.entryType === 'RENT' ||
+    tx.voucherType === 'RENT_RECEIPT';
 
   const isTransfer =
     tx.entryType === 'TRANSFER' ||
-    tx.transactionType === 'TRANSFER';
+    tx.transactionType === 'TRANSFER' ||
+    tx.voucherType === 'TRANSFER';
   const isOtherIncome =
     tx.reportCategory === 'Other Income' ||
     tx.sourceModule === 'OTHER_INCOME' ||
+    tx.voucherType === 'OTHER_INCOME' ||
     (tx.transactionType === 'INCOME' && !isRent);
 
   let propName =

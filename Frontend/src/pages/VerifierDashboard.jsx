@@ -181,6 +181,16 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     return list.filter((a) => a && (typeof a === 'string' || a.url));
   };
 
+  const getEntryTenantName = (entry) =>
+    entry.tenantId?.fullName ||
+    entry.tenantId?.tenantName ||
+    entry.agreementId?.tenantId?.fullName ||
+    entry.agreementId?.tenantId?.tenantName ||
+    entry.agreementId?.tenantId?.name ||
+    entry.entryData?.tenant?.fullName ||
+    entry.entryData?.unit?.tenantName ||
+    '';
+
   // Instant download of formatted receipt evidence document (top voucher details + bottom receipt photo)
   const handleQuickDownloadReceipts = async (e, entry) => {
     if (e && e.stopPropagation) e.stopPropagation();
@@ -1041,8 +1051,8 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                       {entry.propertyId?.plazaName && (
                         <div className="text-[11px] text-blue-300">
                           Property: <span className="font-semibold text-white">{entry.propertyId.plazaName}</span>
-                          {entry.tenantId?.fullName && (
-                            <span className="text-slate-400 ml-2">(Tenant: {entry.tenantId.fullName})</span>
+                          {getEntryTenantName(entry) && (
+                            <span className="text-slate-400 ml-2">(Tenant: {getEntryTenantName(entry)})</span>
                           )}
                         </div>
                       )}
@@ -1366,9 +1376,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           <div className="text-white font-semibold truncate max-w-[160px]" title={entry.propertyId?.plazaName}>
                             {entry.propertyId?.plazaName || '—'}
                           </div>
-                          {entry.tenantId?.fullName && (
-                            <div className="text-[10px] text-slate-400 truncate max-w-[160px]" title={entry.tenantId.fullName}>
-                              Tenant: {entry.tenantId.fullName}
+                          {getEntryTenantName(entry) && (
+                            <div className="text-[10px] text-slate-400 truncate max-w-[160px]" title={getEntryTenantName(entry)}>
+                              Tenant: {getEntryTenantName(entry)}
                             </div>
                           )}
                         </td>

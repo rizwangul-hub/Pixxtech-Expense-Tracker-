@@ -1315,20 +1315,22 @@ export function FinancialReportsPage({ currentUser }) {
                     </thead>
                     <tbody className="divide-y divide-slate-800">
                       {selectedVoucher.lines && selectedVoucher.lines.length > 0 ? (
-                        selectedVoucher.lines.map((line, i) => (
-                          <tr key={i} className="hover:bg-slate-800/20">
-                            <td className="py-2 px-3 text-slate-300 font-medium">{line.detail}</td>
-                            <td className="py-2 px-3 text-emerald-400 font-mono">
-                              {line.drAccountId?.name || line.drAccountName || 'Debit Account'}
-                            </td>
-                            <td className="py-2 px-3 text-rose-400 font-mono">
-                              {line.crAccountId?.name || line.crAccountName || 'Credit Account'}
-                            </td>
-                            <td className="py-2 px-3 text-right font-bold text-white font-mono">
-                              {formatPKR(line.amount)}
-                            </td>
-                          </tr>
-                        ))
+                        selectedVoucher.lines.map((line, i) => {
+                          const { dr, cr } = resolveTransactionAccounts({
+                            ...selectedVoucher,
+                            ...line,
+                          });
+                          return (
+                            <tr key={i} className="hover:bg-slate-800/20">
+                              <td className="py-2 px-3 text-slate-300 font-medium">{line.detail}</td>
+                              <td className="py-2 px-3 text-emerald-400 font-mono">{dr}</td>
+                              <td className="py-2 px-3 text-rose-400 font-mono">{cr}</td>
+                              <td className="py-2 px-3 text-right font-bold text-white font-mono">
+                                {formatPKR(line.amount)}
+                              </td>
+                            </tr>
+                          );
+                        })
                       ) : (
                         <tr>
                           <td className="py-2 px-3 text-slate-300 font-medium">Single-entry voucher</td>

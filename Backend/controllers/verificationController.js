@@ -170,7 +170,11 @@ export const getPendingEntries = async (req, res) => {
         .populate('rejectedBy', 'name email role')
         .populate('propertyId', 'plazaName location')
         .populate('tenantId', 'fullName phone')
-        .populate('agreementId', 'agreementNumber monthlyRent')
+        .populate({
+          path: 'agreementId',
+          select: 'agreementNumber monthlyRent tenantId',
+          populate: { path: 'tenantId', select: 'fullName tenantName name phone' },
+        })
         .populate('categoryId', 'name type isRentalHead')
         .populate('drAccountId', 'name type currentBalance bankName cashHolder')
         .populate('crAccountId', 'name type currentBalance bankName cashHolder')
@@ -181,6 +185,40 @@ export const getPendingEntries = async (req, res) => {
         .lean(),
       PendingEntry.countDocuments(query),
     ]);
+
+    const rentEntriesWithoutTenant = entries.filter((entry) => {
+      if (entry.entryType !== 'RENT' || entry.tenantId?.fullName || entry.agreementId?.tenantId?.fullName) {
+        return false;
+      }
+      return Boolean(entry.propertyId?._id && entry.unitId);
+    });
+    if (rentEntriesWithoutTenant.length > 0) {
+      const agreementConditions = rentEntriesWithoutTenant.map((entry) => {
+        const rentDate = new Date(entry.date || entry.submittedAt || Date.now());
+        return {
+          propertyId: entry.propertyId._id,
+          unitId: entry.unitId,
+          startDate: { $lte: rentDate },
+          endDate: { $gte: rentDate },
+        };
+      });
+      const unitAgreements = await RentalAgreement.find({ $or: agreementConditions })
+        .select('agreementNumber monthlyRent tenantId propertyId unitId startDate endDate')
+        .populate('tenantId', 'fullName tenantName name phone')
+        .sort({ startDate: -1 })
+        .lean();
+
+      rentEntriesWithoutTenant.forEach((entry) => {
+        const rentDate = new Date(entry.date || entry.submittedAt || Date.now());
+        const agreement = unitAgreements.find((candidate) =>
+          candidate.propertyId.toString() === entry.propertyId._id.toString() &&
+          candidate.unitId.toString() === entry.unitId.toString() &&
+          new Date(candidate.startDate) <= rentDate &&
+          new Date(candidate.endDate) >= rentDate
+        );
+        if (agreement) entry.agreementId = agreement;
+      });
+    }
 
     const salaryEntries = entries.filter((entry) => entry.entryType === 'SALARY');
     if (salaryEntries.length > 0) {
@@ -1245,7 +1283,11 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
     let entry = await PendingEntry.findById(id)
       .populate('propertyId', 'plazaName propertyName propertyCode location address units')
       .populate('tenantId', 'fullName tenantName name phone cnic')
-      .populate('agreementId', 'agreementNumber monthlyRent')
+      .populate({
+        path: 'agreementId',
+        select: 'agreementNumber monthlyRent tenantId',
+        populate: { path: 'tenantId', select: 'fullName tenantName name phone cnic' },
+      })
       .populate('categoryId', 'name type isRentalHead')
       .populate('drAccountId', 'name type bankName accountNumber cashHolder')
       .populate('crAccountId', 'name type bankName accountNumber cashHolder')
@@ -1259,6 +1301,11 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
       entry = await Transaction.findById(id)
         .populate('propertyId', 'plazaName propertyName propertyCode location address units')
         .populate('tenantId', 'fullName tenantName name phone cnic')
+        .populate({
+          path: 'agreementId',
+          select: 'agreementNumber monthlyRent tenantId',
+          populate: { path: 'tenantId', select: 'fullName tenantName name phone cnic' },
+        })
         .populate('categoryId', 'name type isRentalHead')
         .populate('drAccountId', 'name type bankName accountNumber cashHolder')
         .populate('crAccountId', 'name type bankName accountNumber cashHolder')
@@ -1315,11 +1362,41 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
       unitName = entry.entryData.unit.unitName;
     }
 
-    // Resolve tenant
+    // Older rent entries may have the agreement but not a tenant reference directly.
+    let agreement = entry.agreementId;
+    const rentDate = new Date(entry.date || entry.submittedAt || Date.now());
+    if (
+      (!agreement || !agreement.tenantId) &&
+      entry.unitId &&
+      entry.propertyId?._id
+    ) {
+      agreement = await RentalAgreement.findOne({
+        propertyId: entry.propertyId._id,
+        unitId: entry.unitId,
+        startDate: { $lte: rentDate },
+        endDate: { $gte: rentDate },
+      })
+        .select('agreementNumber monthlyRent tenantId')
+        .populate('tenantId', 'fullName tenantName name phone cnic')
+        .sort({ startDate: -1 })
+        .lean();
+    }
+
+    // Resolve tenant from the entry, its agreement, or legacy unit metadata.
+    const unitTenantName = entry.propertyId?.units?.find(
+      (unit) => unit._id?.toString() === entry.unitId?.toString()
+    )?.tenantName;
     const tenantName =
       entry.tenantId?.fullName ||
       entry.tenantId?.tenantName ||
+      entry.agreementId?.tenantId?.fullName ||
+      entry.agreementId?.tenantId?.tenantName ||
+      entry.agreementId?.tenantId?.name ||
+      agreement?.tenantId?.fullName ||
+      agreement?.tenantId?.tenantName ||
+      agreement?.tenantId?.name ||
       entry.entryData?.tenant?.fullName ||
+      unitTenantName ||
       '';
 
     // Resolve accounts & names
