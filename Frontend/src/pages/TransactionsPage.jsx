@@ -31,7 +31,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { vouchersAPI, accountsAPI } from '../services/api.js';
-import { formatPKR, formatDate } from '../utils/formatters.js';
+import { formatPKR, formatDate, resolveTransactionAccounts } from '../utils/formatters.js';
 import { isAdmin } from '../utils/permissions.js';
 import { SingleVoucherPrintModal } from '../components/SingleVoucherPrintModal.jsx';
 import { ReceiptViewerModal } from '../components/ReceiptViewerModal.jsx';
@@ -750,10 +750,10 @@ export function TransactionsPage({ user }) {
                     {/* 3. Transaction Detail */}
                     <td className="py-2.5 px-4 font-medium text-slate-200">
                       <div>{tx.detail}</div>
-                      {tx.propertyId?.plazaName && (
+                      {resolveTransactionAccounts(tx).location && (
                         <div className="text-[10px] text-blue-400/80 font-mono mt-0.5 flex items-center gap-1">
                           <Building className="w-3 h-3" />
-                          <span>{tx.propertyId.plazaName}</span>
+                          <span>{resolveTransactionAccounts(tx).location}</span>
                         </div>
                       )}
                       {tx.attachments && tx.attachments.length > 0 && (
@@ -821,15 +821,20 @@ export function TransactionsPage({ user }) {
                         : '—'}
                     </td>
 
-                    {/* 6. Account (Dr.) */}
-                    <td className="py-2.5 px-3.5 whitespace-nowrap text-slate-300 font-mono text-[11px]">
-                      {tx.drAccountId?.name || '—'}
-                    </td>
-
-                    {/* 7. Account (Cr.) */}
-                    <td className="py-2.5 px-3.5 whitespace-nowrap text-slate-300 font-mono text-[11px]">
-                      {tx.crAccountId?.name || '—'}
-                    </td>
+                    {/* 6. Account (Dr.) & 7. Account (Cr.) */}
+                    {(() => {
+                      const { dr, cr } = resolveTransactionAccounts(tx);
+                      return (
+                        <>
+                          <td className="py-2.5 px-3.5 whitespace-nowrap text-slate-300 font-mono text-[11px]" title={dr}>
+                            {dr}
+                          </td>
+                          <td className="py-2.5 px-3.5 whitespace-nowrap text-slate-300 font-mono text-[11px]" title={cr}>
+                            {cr}
+                          </td>
+                        </>
+                      );
+                    })()}
 
                     {/* 8. Amount */}
                     <td className="py-2.5 px-3.5 whitespace-nowrap text-right font-mono font-bold text-white">

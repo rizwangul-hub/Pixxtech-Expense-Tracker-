@@ -25,7 +25,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { financialReportsAPI, accountsAPI, propertiesAPI, vouchersAPI } from '../services/api.js';
-import { formatPKR, formatDate } from '../utils/formatters.js';
+import { formatPKR, formatDate, resolveTransactionAccounts } from '../utils/formatters.js';
 import { isAdmin } from '../utils/permissions.js';
 import { MonthlyReportPage } from './MonthlyReportPage.jsx';
 
@@ -40,6 +40,22 @@ const getMonthOptions = () => {
     options.push({ val, label });
   }
   return options;
+};
+
+
+const resolveTransactionCategory = (tx) => {
+  const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED' || tx.transactionType === 'INCOME';
+  if (isRent) return 'Rent';
+  if (tx.transactionType === 'TRANSFER') return 'Transfer';
+  return tx.reportCategory || tx.transactionType || 'Payments';
+};
+
+const resolveTransactionHead = (tx) => {
+  const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED' || tx.transactionType === 'INCOME';
+  if (tx.categoryId?.name) return tx.categoryId.name;
+  if (isRent) return 'Rental Income';
+  if (tx.transactionType === 'TRANSFER') return 'Internal Transfer';
+  return 'General';
 };
 
 export function FinancialReportsPage({ currentUser }) {
@@ -1052,47 +1068,53 @@ export function FinancialReportsPage({ currentUser }) {
                       </td>
                     </tr>
                   ) : (
-                    txReportData.transactions.map((tx) => (
-                      <tr key={tx._id} className="hover:bg-slate-800/40 transition">
-                        <td className="py-2 px-3 text-slate-400 whitespace-nowrap">{formatDate(tx.date)}</td>
-                        <td className="py-2 px-3 font-bold text-white whitespace-nowrap">{tx.voucherNo}</td>
-                        <td className="py-2 px-3 font-sans text-slate-200 max-w-xs truncate">{tx.detail}</td>
-                        <td className="py-2 px-3 font-sans text-slate-300 whitespace-nowrap">
-                          {tx.categoryId?.name || 'General'}
-                        </td>
-                        <td className="py-2 px-3 whitespace-nowrap">
-                          <span
-                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                              tx.transactionType === 'INCOME'
-                                ? 'bg-emerald-950 text-emerald-300 border-emerald-700/60'
-                                : tx.transactionType === 'EXPENSE'
-                                ? 'bg-rose-950 text-rose-300 border-rose-700/60'
-                                : 'bg-sky-950 text-sky-300 border-sky-700/60'
-                            }`}
-                          >
-                            {tx.transactionType}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 font-sans text-emerald-400 truncate max-w-[140px]">
-                          {tx.drAccountId?.name}
-                        </td>
-                        <td className="py-2 px-3 font-sans text-rose-400 truncate max-w-[140px]">
-                          {tx.crAccountId?.name}
-                        </td>
-                        <td className="py-2 px-3 text-right font-bold text-white whitespace-nowrap">
-                          {formatPKR(tx.amount)}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          <button
-                            onClick={() => handleViewVoucher(tx.voucherId?._id || tx.voucherId, tx.voucherNo)}
-                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-                            title="View Full Voucher"
-                          >
-                            <Eye size={12} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    txReportData.transactions.map((tx) => {
+                      const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED' || tx.transactionType === 'INCOME';
+                      const categoryLabel = resolveTransactionCategory(tx);
+                      const headLabel = resolveTransactionHead(tx);
+                      const { dr: drDisplay, cr: crDisplay } = resolveTransactionAccounts(tx);
+                      return (
+                        <tr key={tx._id} className="hover:bg-slate-800/40 transition">
+                          <td className="py-2 px-3 text-slate-400 whitespace-nowrap">{formatDate(tx.date)}</td>
+                          <td className="py-2 px-3 font-bold text-white whitespace-nowrap">{tx.voucherNo}</td>
+                          <td className="py-2 px-3 font-sans text-slate-200 max-w-xs truncate">{tx.detail}</td>
+                          <td className="py-2 px-3 font-sans text-slate-300 whitespace-nowrap">
+                            {headLabel}
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                isRent
+                                  ? 'bg-emerald-950 text-emerald-300 border-emerald-700/60'
+                                  : tx.transactionType === 'EXPENSE'
+                                  ? 'bg-rose-950 text-rose-300 border-rose-700/60'
+                                  : 'bg-sky-950 text-sky-300 border-sky-700/60'
+                              }`}
+                            >
+                              {categoryLabel}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 font-sans text-emerald-400 truncate max-w-[140px]" title={drDisplay}>
+                            {drDisplay}
+                          </td>
+                          <td className="py-2 px-3 font-sans text-rose-400 truncate max-w-[140px]" title={crDisplay}>
+                            {crDisplay}
+                          </td>
+                          <td className="py-2 px-3 text-right font-bold text-white whitespace-nowrap">
+                            {formatPKR(tx.amount)}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <button
+                              onClick={() => handleViewVoucher(tx.voucherId?._id || tx.voucherId, tx.voucherNo)}
+                              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                              title="View Full Voucher"
+                            >
+                              <Eye size={12} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

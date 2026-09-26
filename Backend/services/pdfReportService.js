@@ -12,6 +12,7 @@ import {
   getMonthlyOpeningClosingMatrix,
   getHeadWiseExpenseReport,
   getAccountRunningLedger,
+  resolveTransactionAccountDisplay,
   round2,
 } from './ledgerService.js';
 
@@ -222,24 +223,34 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     .populate('categoryId', 'name type isRentalHead')
     .populate('drAccountId', 'name type')
     .populate('crAccountId', 'name type')
-    .populate('propertyId', 'plazaName')
+    .populate('propertyId', 'plazaName units')
     .sort({ date: 1, voucherNo: 1 })
     .lean();
 
-  // Filter only expenses for Master Journal if appropriate, or show all
-  const expenseTransactions = transactions.filter(t => t.categoryId?.type === 'EXPENSE' && t.status !== 'REVERSED');
-  const masterJournalList = (expenseTransactions.length > 0 ? expenseTransactions : transactions).map(tx => ({
-    date: formatShortDate(tx.date),
-    vn: tx.voucherNo,
-    detail: tx.detail,
-    head: tx.categoryId?.name || 'General Expense',
-    category: 'Payments',
-    dr: tx.drAccountId?.name || 'Cash Custodian',
-    cr: tx.crAccountId?.name || tx.categoryId?.name || 'Expense Head',
-    amount: round2(tx.amount),
-    expenseClassification: tx.expenseClassification
-      || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE'),
-  }));
+  const masterJournalList = transactions.map(tx => {
+    const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
+    const isTransfer = tx.transactionType === 'TRANSFER';
+
+    let category = 'Payments';
+    if (isRent) category = 'Rent';
+    else if (isTransfer) category = 'Transfer';
+    else if (tx.reportCategory) category = tx.reportCategory;
+
+    const { dr, cr, head } = resolveTransactionAccountDisplay(tx);
+
+    return {
+      date: formatShortDate(tx.date),
+      vn: tx.voucherNo,
+      detail: tx.detail,
+      head,
+      category,
+      dr,
+      cr,
+      amount: round2(tx.amount),
+      expenseClassification: tx.expenseClassification
+        || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE'),
+    };
+  });
 
   const totalJournalAmount = round2(
     masterJournalList.reduce((sum, v) => sum + v.amount, 0)
@@ -289,6 +300,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
 
       const matchingTxs = transactions.filter(
         t =>
+          (t.reportCategory === 'Rent' || t.sourceModule === 'RENT_RECEIVED') &&
           t.propertyId?._id?.toString() === plaza._id.toString() &&
           t.unitId?.toString() === unit._id.toString()
       );
@@ -298,9 +310,10 @@ export const generateMonthlyFundsReport = async (monthYear) => {
       );
 
       const latestTx = matchingTxs[matchingTxs.length - 1];
-      const receivingBank =
-        latestTx?.drAccountId?.name || unit.defaultReceivingAccountId?.name || 'ABL(Uraan Ventures)';
-      const receivedDate = latestTx?.date ? formatReportDate(latestTx.date) : '-';
+      const receivingBank = (latestTx && received > 0)
+        ? (latestTx.drAccountId?.name || '-')
+        : '-';
+      const receivedDate = (latestTx && received > 0 && latestTx.date) ? formatReportDate(latestTx.date) : '-';
       const renewalDate = unit.renewalDate ? formatReportDate(unit.renewalDate) : '-';
 
       const priorArrears = prior > 0 ? prior : 0;
@@ -513,16 +526,54 @@ export const generateSingleVoucherPDF = async (printDetail) => {
   const compiledTemplate = handlebars.compile(templateSource);
 
   const isVerified = printDetail.status !== 'PENDING' && printDetail.status !== 'PENDING_VERIFICATION';
-  const isRent = printDetail.documentTitle?.includes('RENT') || printDetail.reportCategory === 'Rent';
+  const isRent = printDetail.reportCategory === 'Rent' || printDetail.sourceModule === 'RENT_RECEIVED';
+  const isTransfer = printDetail.transactionType === 'TRANSFER';
+  const isOtherIncome =
+    printDetail.reportCategory === 'Other Income' ||
+    printDetail.sourceModule === 'OTHER_INCOME';
 
   let expenseClassificationLabel = '';
-  if (!isRent) {
+  if (!isRent && !isTransfer && !isOtherIncome) {
     if (printDetail.expenseClassification === 'UNIT_EXPENSE') {
       expenseClassificationLabel = 'Unit Expense';
     } else if (printDetail.expenseClassification === 'PROPERTY_OWN_EXPENSE') {
       expenseClassificationLabel = 'Property Own Expense';
     } else {
       expenseClassificationLabel = 'General Expense';
+    }
+  }
+  const propName = printDetail.property?.name || '';
+  const unitName = printDetail.unit?.name || '';
+  const locationName = [propName, unitName].filter(Boolean).join(' - ');
+  const categoryTitle = printDetail.category?.name || (isRent ? 'Rental Income' : (isTransfer ? 'Internal Transfer' : 'General'));
+
+  let drAccount = { ...(printDetail.drAccount || { name: '-' }) };
+  let crAccount = { ...(printDetail.crAccount || { name: '-' }) };
+
+  if (isRent) {
+    if (!drAccount.name || drAccount.name === '-' || /Clearing|External Parties/i.test(drAccount.name)) {
+      drAccount.name = 'Cash Custodian / Bank';
+    }
+    crAccount.name = locationName || 'Rental Income';
+  } else if (isOtherIncome) {
+    if (!drAccount.name || drAccount.name === '-' || /Clearing|External Parties/i.test(drAccount.name)) {
+      drAccount.name = 'Receiving Account (Bank/Cash)';
+    }
+    crAccount.name = categoryTitle || 'Other Income';
+  } else if (isTransfer) {
+    if (!drAccount.name || drAccount.name === '-' || /Clearing|External Parties/i.test(drAccount.name)) {
+      drAccount.name = 'Destination Account';
+    }
+    if (!crAccount.name || crAccount.name === '-' || /Clearing|External Parties/i.test(crAccount.name)) {
+      crAccount.name = 'Source Account';
+    }
+  } else {
+    // Expense
+    if (!drAccount.name || drAccount.name === '-' || /Clearing|External Parties/i.test(drAccount.name)) {
+      drAccount.name = locationName ? `${locationName} (${categoryTitle})` : categoryTitle;
+    }
+    if (!crAccount.name || crAccount.name === '-' || /Clearing|External Parties/i.test(crAccount.name)) {
+      crAccount.name = 'Payment Account (Bank/Cash)';
     }
   }
 
@@ -532,10 +583,10 @@ export const generateSingleVoucherPDF = async (printDetail) => {
     isVerified,
     isRent,
     expenseClassificationLabel,
-    actionLabel: isRent ? 'RECEIVED' : 'PAID',
-    category: printDetail.category || { name: 'General' },
-    drAccount: printDetail.drAccount || { name: '-' },
-    crAccount: printDetail.crAccount || { name: '-' },
+    actionLabel: isRent || isOtherIncome ? 'RECEIVED' : 'PAID',
+    category: { name: categoryTitle },
+    drAccount,
+    crAccount,
     logoBase64,
     sarfrazSignBase64,
     khurshidSignBase64,
@@ -644,4 +695,3 @@ export const generateReceiptEvidencePDF = async (evidenceData) => {
 };
 
 export default { generateMonthlyFundsReport, generateSingleVoucherPDF, generateReceiptEvidencePDF };
-

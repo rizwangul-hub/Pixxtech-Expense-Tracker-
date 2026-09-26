@@ -16,6 +16,61 @@ import {
  */
 export const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
 
+export const resolveTransactionAccountDisplay = (tx) => {
+  const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
+  const isTransfer = tx.transactionType === 'TRANSFER';
+  const isOtherIncome =
+    tx.reportCategory === 'Other Income' ||
+    tx.sourceModule === 'OTHER_INCOME' ||
+    (tx.transactionType === 'INCOME' && !isRent);
+  const categoryName = tx.categoryId?.name || tx.categoryName || '';
+  const propertyName = tx.propertyId?.plazaName || tx.propertyId?.propertyName || '';
+  const unitId = tx.unitId?._id || tx.unitId;
+  const unit = unitId && tx.propertyId?.units?.find(
+    (candidate) => candidate._id?.toString() === unitId.toString()
+  );
+  const unitName = unit?.unitName || unit?.unitNumber || tx.unitName || '';
+  const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
+  const drRaw = tx.drAccountId?.name || '';
+  const crRaw = tx.crAccountId?.name || '';
+
+  if (isRent) {
+    return {
+      dr: drRaw || 'Receiving Account (Bank/Cash)',
+      cr: locationName || categoryName || 'Rental Income',
+      head: categoryName || 'Rental Income',
+      location: locationName,
+    };
+  }
+  if (isOtherIncome) {
+    return {
+      dr: drRaw || 'Receiving Account (Bank/Cash)',
+      cr: categoryName || 'Other Income',
+      head: categoryName || 'Other Income',
+      location: locationName,
+    };
+  }
+  if (isTransfer) {
+    return {
+      dr: !drRaw || /Clearing|External Parties/i.test(drRaw) ? 'Destination Account' : drRaw,
+      cr: !crRaw || /Clearing|External Parties/i.test(crRaw) ? 'Source Account' : crRaw,
+      head: categoryName || 'Internal Transfer',
+      location: locationName,
+    };
+  }
+
+  return {
+    dr: !drRaw || /Clearing|External Parties/i.test(drRaw)
+      ? (locationName ? `${locationName} (${categoryName || 'Expense'})` : categoryName || 'Expense Head')
+      : drRaw,
+    cr: !crRaw || /Clearing|External Parties/i.test(crRaw)
+      ? 'Payment Account (Bank/Cash)'
+      : crRaw,
+    head: categoryName || 'Expense Head',
+    location: locationName,
+  };
+};
+
 /**
  * Create a double-entry voucher transaction and update account balances atomically.
  *
@@ -296,7 +351,7 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
       select: 'name type isRentalHead parentCategoryId isMainHead',
       populate: { path: 'parentCategoryId', select: 'name' },
     })
-    .populate('propertyId', 'plazaName')
+    .populate('propertyId', 'plazaName propertyName units')
     .populate('drAccountId', 'name type')
     .populate('crAccountId', 'name type')
     .sort({ date: 1, createdAt: 1 })
@@ -328,6 +383,18 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
 
     currentRunning = round2(currentRunning);
 
+    const display = resolveTransactionAccountDisplay(tx);
+    let counterpartyAccount;
+    if (tx.transactionType === 'INCOME') {
+      counterpartyAccount = display.cr;
+    } else if (tx.transactionType === 'EXPENSE') {
+      counterpartyAccount = display.location
+        ? `${display.location} (${display.head})`
+        : display.head;
+    } else {
+      counterpartyAccount = isDr ? display.cr : display.dr;
+    }
+
     return {
       _id: tx._id,
       date: tx.date,
@@ -335,7 +402,7 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
       detail: tx.detail,
       category: tx.categoryId?.name || 'Uncategorized',
       property: tx.propertyId?.plazaName || null,
-      counterpartyAccount: isDr ? tx.crAccountId?.name : tx.drAccountId?.name,
+      counterpartyAccount,
       drAmount,
       crAmount,
       runningBalance: currentRunning,
@@ -1125,7 +1192,7 @@ export const getTransactionsFiltered = async (filters = {}) => {
       .populate('categoryId', 'name type isRentalHead')
       .populate('drAccountId', 'name type currentBalance bankName cashHolder')
       .populate('crAccountId', 'name type currentBalance bankName cashHolder')
-      .populate('propertyId', 'plazaName location')
+      .populate('propertyId', 'plazaName location units')
       .populate('voucherId', 'voucherNumber voucherDate voucherType totalAmount status')
       .populate('createdBy', 'name email role')
       .sort({ date: -1, voucherNo: -1, createdAt: -1 })

@@ -7,8 +7,9 @@ import Property from '../models/Property.js';
 import Account from '../models/Account.js';
 import Category from '../models/Category.js';
 import Transaction from '../models/Transaction.js';
+import Voucher from '../models/Voucher.js';
 import PendingEntry from '../models/PendingEntry.js';
-import { createTransaction, round2 } from '../services/ledgerService.js';
+import { createTransaction, round2, syncAccountBalances } from '../services/ledgerService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
 /**
@@ -933,15 +934,32 @@ export const reverseRentReceipt = async (req, res) => {
       return apiError(res, 'This rent receipt has already been reversed.', 400);
     }
 
-    // 1. Reverse Account Balance: Subtract received amount from receiving account
-    await Account.findByIdAndUpdate(receipt.receivingAccountId, {
-      $inc: { currentBalance: -receipt.amount },
-    });
-
-    // 2. Mark original transaction as reversed or create reversal entry
+    // Reverse the original ledger row so reports and account statements exclude it.
     if (receipt.transactionId) {
-      await Transaction.findByIdAndUpdate(receipt.transactionId, {
-        detail: `[REVERSED] ${receipt.description}. Reason: ${reason}`,
+      const transaction = await Transaction.findById(receipt.transactionId);
+      if (transaction) {
+        transaction.status = 'REVERSED';
+        transaction.detail = `[REVERSED] ${transaction.detail}. Reason: ${reason}`;
+        await transaction.save();
+        await syncAccountBalances([transaction.drAccountId, transaction.crAccountId]);
+
+        if (transaction.voucherId) {
+          const remainingVoucherTransactions = await Transaction.countDocuments({
+            voucherId: transaction.voucherId,
+            status: { $nin: ['REVERSED', 'VOID'] },
+          });
+          if (remainingVoucherTransactions === 0) {
+            await Voucher.findByIdAndUpdate(transaction.voucherId, { status: 'REVERSED' });
+          }
+        }
+      } else {
+        await Account.findByIdAndUpdate(receipt.receivingAccountId, {
+          $inc: { currentBalance: -receipt.amount },
+        });
+      }
+    } else {
+      await Account.findByIdAndUpdate(receipt.receivingAccountId, {
+        $inc: { currentBalance: -receipt.amount },
       });
     }
 

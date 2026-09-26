@@ -124,6 +124,11 @@ export function extractReceiptMetadata(entry) {
     entry.entryType === 'RENT' ||
     entry.reportCategory === 'Rent' ||
     entry.sourceModule === 'RENT_RECEIVED';
+  const isOtherIncome =
+    entry.entryType === 'OTHER_INCOME' ||
+    entry.reportCategory === 'Other Income' ||
+    entry.sourceModule === 'OTHER_INCOME';
+  const isTransfer = entry.entryType === 'TRANSFER' || entry.transactionType === 'TRANSFER';
 
   let drAccount =
     entry.drAccountId?.name ||
@@ -139,7 +144,13 @@ export function extractReceiptMetadata(entry) {
   if (isRent) {
     drAccount = drAccount || 'Cash in Hand (Receiving Account)';
     const rentLocationName = [propertyName, unitName].filter(Boolean).join(' - ');
-    crAccount = rentLocationName || crAccount || 'Rental Income / Clearing';
+    crAccount = rentLocationName || categoryName || 'Rental Income';
+  } else if (isOtherIncome) {
+    drAccount = drAccount || entry.receivingAccountId?.name || 'Receiving Account (Bank/Cash)';
+    crAccount = categoryName;
+  } else if (isTransfer) {
+    drAccount = drAccount || 'Destination Account';
+    crAccount = crAccount || 'Source Account';
   } else if (entry.entryType === 'SALARY') {
     const empName = entry.salaryDetails?.employeeName || entry.entryData?.payrollSnapshot?.employeeName;
     drAccount = drAccount || (empName ? `Salary Expense (${empName})` : 'Salary Expense');

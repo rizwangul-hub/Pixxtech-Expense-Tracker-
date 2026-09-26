@@ -148,10 +148,101 @@ export const formatDateTime = (dateVal) => {
   return `${dateStr} ${hourStr}:${minutes} ${ampm}`;
 };
 
+/**
+ * Resolve Actual Debit (Dr.) and Credit (Cr.) display names for a transaction or entry
+ */
+export const resolveTransactionAccounts = (tx) => {
+  if (!tx) return { dr: '—', cr: '—', head: 'Uncategorized' };
+
+  const isRent =
+    tx.reportCategory === 'Rent' ||
+    tx.sourceModule === 'RENT_RECEIVED' ||
+    tx.entryType === 'RENT';
+
+  const isTransfer =
+    tx.entryType === 'TRANSFER' ||
+    tx.transactionType === 'TRANSFER';
+  const isOtherIncome =
+    tx.reportCategory === 'Other Income' ||
+    tx.sourceModule === 'OTHER_INCOME' ||
+    (tx.transactionType === 'INCOME' && !isRent);
+
+  let propName =
+    tx.propertyId?.plazaName ||
+    tx.propertyId?.propertyName ||
+    tx.propertyName ||
+    tx.entryData?.property?.plazaName ||
+    '';
+
+  let unitLabel = '';
+  if (tx.unitId?.unitName) {
+    unitLabel = tx.unitId.unitName;
+  } else if (tx.unitName) {
+    unitLabel = tx.unitName;
+  } else if (tx.propertyId?.units && tx.unitId) {
+    const unitId = tx.unitId?._id || tx.unitId;
+    const u = tx.propertyId.units.find(
+      (unit) => (unit._id || unit).toString() === unitId.toString()
+    );
+    if (u) unitLabel = u.unitName || u.unitNumber || '';
+  }
+
+  const locationName = [propName, unitLabel].filter(Boolean).join(' - ');
+
+  const headName =
+    tx.categoryId?.name ||
+    tx.categoryName ||
+    tx.entryData?.category?.name ||
+    (isRent ? 'Rental Income' : isTransfer ? 'Internal Transfer' : 'General Expense');
+
+  let drRaw =
+    tx.drAccountId?.name ||
+    tx.receivingAccountId?.name ||
+    tx.drAccount?.name ||
+    tx.entryData?.drAccount?.name ||
+    '';
+
+  let crRaw =
+    tx.crAccountId?.name ||
+    tx.crAccount?.name ||
+    tx.entryData?.crAccount?.name ||
+    '';
+
+  let dr = drRaw;
+  let cr = crRaw;
+
+  if (isRent) {
+    dr = drRaw || tx.receivingAccountId?.name || 'Receiving Account (Bank/Cash)';
+    cr = locationName || headName;
+  } else if (isOtherIncome) {
+    dr = drRaw || tx.receivingAccountId?.name || 'Receiving Account (Bank/Cash)';
+    cr = headName;
+  } else if (isTransfer) {
+    dr = !drRaw || /Clearing|External Parties/i.test(drRaw) ? 'Destination Account' : drRaw;
+    cr = !crRaw || /Clearing|External Parties/i.test(crRaw) ? 'Source Account' : crRaw;
+  } else {
+    // EXPENSE
+    if (!drRaw || /Clearing|External Parties/i.test(drRaw)) {
+      dr = locationName ? `${locationName} (${headName})` : headName;
+    }
+    if (!crRaw || /Clearing|External Parties/i.test(crRaw)) {
+      cr = 'Payment Account (Bank/Cash)';
+    }
+  }
+
+  return {
+    dr: dr || '—',
+    cr: cr || '—',
+    head: headName,
+    location: locationName,
+  };
+};
+
 export default {
   formatPKR,
   formatPKRShort,
   parseFinancialNumber,
   formatDate,
   formatDateTime,
+  resolveTransactionAccounts,
 };

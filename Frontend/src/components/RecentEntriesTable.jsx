@@ -29,6 +29,7 @@ import { transactionsAPI, vouchersAPI, verificationAPI, uploadAPI } from '../ser
 import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
 import { ReceiptViewerModal } from './ReceiptViewerModal.jsx';
 import { downloadReceiptEvidenceDocument, downloadReceiptImage } from '../utils/downloadReceipt.js';
+import { resolveTransactionAccounts } from '../utils/formatters.js';
 
 
 const formatPKR = (val) => {
@@ -626,6 +627,7 @@ export const RecentEntriesTable = ({
                   const formattedDate = tx.date
                     ? new Date(tx.date).toISOString().split('T')[0]
                     : 'N/A';
+                  const { dr, cr, location } = resolveTransactionAccounts(tx);
 
                   return (
                     <tr key={tx._id} className="hover:bg-slate-50 transition-colors">
@@ -633,8 +635,8 @@ export const RecentEntriesTable = ({
                       <td className="font-mono font-bold text-blue-700 whitespace-nowrap">#{tx.voucherNo}</td>
                       <td className="max-w-xs font-bold text-slate-900" title={tx.detail}>
                         <div className="truncate">{tx.detail}</div>
-                        {tx.propertyId?.plazaName && (
-                          <span className="block text-xs font-normal text-blue-600">{tx.propertyId.plazaName}</span>
+                        {location && (
+                          <span className="block text-xs font-normal text-blue-600">{location}</span>
                         )}
                         {tx.expenseClassification === 'UNIT_EXPENSE' ? (
                           <span className="inline-block mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
@@ -681,8 +683,8 @@ export const RecentEntriesTable = ({
                           {tx.categoryId?.name || 'Uncategorized'}
                         </span>
                       </td>
-                      <td className="text-emerald-800 font-bold whitespace-nowrap">{tx.drAccountId?.name || '-'}</td>
-                      <td className="text-rose-800 font-bold whitespace-nowrap">{tx.crAccountId?.name || '-'}</td>
+                      <td className="text-emerald-800 font-bold whitespace-nowrap">{dr}</td>
+                      <td className="text-rose-800 font-bold whitespace-nowrap">{cr}</td>
                       <td className="text-right font-mono font-bold text-slate-900 whitespace-nowrap currency-amount">
                         {formatPKR(tx.amount)}
                       </td>

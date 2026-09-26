@@ -46,6 +46,15 @@ const pendingEntrySchema = new mongoose.Schema(
       default: 'PENDING_VERIFICATION',
       index: true,
     },
+    verificationInProgress: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    verificationStartedAt: {
+      type: Date,
+      default: null,
+    },
     submittedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

@@ -616,6 +616,7 @@ export const verifyEntry = async (req, res) => {
   let postedTransaction = null;
   let postedRentReceived = null;
   let entry = null;
+  let claimedEntryId = null;
 
   try {
     const { id } = req.params;
@@ -623,19 +624,38 @@ export const verifyEntry = async (req, res) => {
       return apiError(res, 'Invalid entry ID.', 400);
     }
 
-    entry = await PendingEntry.findById(id);
-    if (!entry) {
+    const existingEntry = await PendingEntry.findById(id).select('status').lean();
+    if (!existingEntry) {
       return apiError(res, 'Pending entry not found.', 404);
     }
 
     // Strict idempotency: prevent double posting
-    if (entry.status === 'VERIFIED') {
+    if (existingEntry.status === 'VERIFIED') {
       return apiError(res, 'This entry has already been verified and posted to the central ledger.', 400);
     }
 
-    if (entry.status === 'REJECTED') {
+    if (existingEntry.status === 'REJECTED') {
       return apiError(res, 'Cannot verify an entry that has already been rejected.', 400);
     }
+
+    entry = await PendingEntry.findOneAndUpdate(
+      {
+        _id: id,
+        status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
+        verificationInProgress: { $ne: true },
+      },
+      {
+        $set: {
+          verificationInProgress: true,
+          verificationStartedAt: new Date(),
+        },
+      },
+      { new: true }
+    );
+    if (!entry) {
+      return apiError(res, 'This entry is already being verified. Refresh the queue before retrying.', 409);
+    }
+    claimedEntryId = entry._id;
 
     const verifierName = req.user?.name || 'Khurshid Anwar';
     const verifierId = req.user?._id || null;
@@ -728,6 +748,7 @@ export const verifyEntry = async (req, res) => {
         rentMonth: cleanMonth,
         reportCategory: 'Rent',
         sourceModule: 'RENT_RECEIVED',
+        sourceId: entry._id,
         transactionType: 'INCOME',
         reference: entry.referenceNumber || '',
         checkedBy: verifierName,
@@ -961,6 +982,8 @@ export const verifyEntry = async (req, res) => {
     }
 
     entry.status = 'VERIFIED';
+    entry.verificationInProgress = false;
+    entry.verificationStartedAt = null;
     entry.verifiedBy = verifierId;
     entry.verifiedByName = verifierName;
     entry.verifiedAt = new Date();
@@ -973,6 +996,7 @@ export const verifyEntry = async (req, res) => {
     });
 
     await entry.save();
+    claimedEntryId = null;
 
     return apiSuccess(
       res,
@@ -1004,6 +1028,17 @@ export const verifyEntry = async (req, res) => {
     }
 
     return apiError(res, error.message || 'Failed to verify entry.', 400);
+  } finally {
+    if (claimedEntryId) {
+      try {
+        await PendingEntry.updateOne(
+          { _id: claimedEntryId, verificationInProgress: true },
+          { $set: { verificationInProgress: false, verificationStartedAt: null } }
+        );
+      } catch (releaseError) {
+        console.error('[Verify Pending Entry Lock Release Error]:', releaseError);
+      }
+    }
   }
 };
 
@@ -1315,15 +1350,30 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
       entry.entryData?.crAccount?.name ||
       '';
 
+    const rentLocationName = [propertyName, unitName].filter(Boolean).join(' - ');
+
     if (entry.entryType === 'RENT') {
-      drAccountName = drAccountName || 'Receiving Account';
-      // Rent evidence should identify the credited unit, not only the
-      // technical clearing account used by the ledger.
-      const rentLocationName = [propertyName, unitName].filter(Boolean).join(' - ');
-      crAccountName = rentLocationName || crAccountName || 'Rental Income / Clearing';
+      drAccountName = (!drAccountName || /Clearing|External Parties/i.test(drAccountName))
+        ? (entry.receivingAccountId?.name || 'Cash Custodian / Bank')
+        : drAccountName;
+      crAccountName = rentLocationName || 'Rental Income';
+    } else if (
+      entry.entryType === 'OTHER_INCOME' ||
+      entry.reportCategory === 'Other Income' ||
+      entry.sourceModule === 'OTHER_INCOME'
+    ) {
+      drAccountName = drAccountName || entry.receivingAccountId?.name || 'Receiving Account (Bank/Cash)';
+      crAccountName = categoryName;
+    } else if (entry.entryType === 'TRANSFER') {
+      drAccountName = drAccountName || 'Destination Account';
+      crAccountName = crAccountName || 'Source Account';
     } else {
-      drAccountName = drAccountName || categoryName;
-      crAccountName = crAccountName || 'Payment Account (Bank/Cash)';
+      if (!drAccountName || /Clearing|External Parties/i.test(drAccountName)) {
+        drAccountName = rentLocationName ? `${rentLocationName} (${categoryName})` : categoryName;
+      }
+      if (!crAccountName || /Clearing|External Parties/i.test(crAccountName)) {
+        crAccountName = 'Payment Account (Bank/Cash)';
+      }
     }
 
     const isVerified =
@@ -1335,9 +1385,15 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
       entry.entryType === 'RENT' ||
       entry.reportCategory === 'Rent' ||
       entry.sourceModule === 'RENT_RECEIVED';
+    const isOtherIncome =
+      entry.entryType === 'OTHER_INCOME' ||
+      entry.reportCategory === 'Other Income' ||
+      entry.sourceModule === 'OTHER_INCOME';
 
     const documentTitle = isRent
       ? 'OFFICIAL RENT RECEIPT EVIDENCE'
+      : isOtherIncome
+      ? 'OFFICIAL OTHER INCOME RECEIPT EVIDENCE'
       : entry.entryType === 'TRANSFER'
       ? 'BANK / CASH TRANSFER EVIDENCE'
       : 'OFFICIAL PURCHASE & EXPENSE RECEIPT EVIDENCE';

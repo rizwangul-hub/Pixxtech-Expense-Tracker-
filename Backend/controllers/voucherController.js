@@ -324,9 +324,44 @@ export const getVoucherPrintDetail = async (req, res) => {
       expenseClassification = 'PROPERTY_OWN_EXPENSE';
     }
 
-    // Derive Document Title
-    const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED' || tx.transactionType === 'INCOME';
-    const documentTitle = isRent ? 'RENT RECEIPT / VOUCHER' : 'EXPENSE VOUCHER';
+    // Derive Document Title & Accounts
+    const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
+    const isOtherIncome = tx.reportCategory === 'Other Income' || tx.sourceModule === 'OTHER_INCOME';
+    const isTransfer = tx.transactionType === 'TRANSFER';
+    const documentTitle = isRent
+      ? 'RENT RECEIPT / VOUCHER'
+      : isOtherIncome
+      ? 'OTHER INCOME RECEIPT / VOUCHER'
+      : isTransfer
+      ? 'TRANSFER VOUCHER'
+      : 'EXPENSE VOUCHER';
+    const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
+    const categoryTitle = tx.categoryId?.name || (isRent ? 'Rental Income' : (isTransfer ? 'Internal Transfer' : 'General'));
+
+    let resolvedDrName = tx.drAccountId?.name || '';
+    let resolvedCrName = tx.crAccountId?.name || '';
+
+    if (isRent) {
+      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
+        resolvedDrName = 'Cash Custodian / Bank';
+      }
+      resolvedCrName = locationName || 'Rental Income';
+    } else if (isOtherIncome) {
+      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
+        resolvedDrName = 'Receiving Account (Bank/Cash)';
+      }
+      resolvedCrName = categoryTitle || 'Other Income';
+    } else if (isTransfer) {
+      resolvedDrName = resolvedDrName || 'Destination Account';
+      resolvedCrName = resolvedCrName || 'Source Account';
+    } else {
+      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
+        resolvedDrName = locationName ? `${locationName} (${categoryTitle})` : categoryTitle;
+      }
+      if (!resolvedCrName || /Clearing|External Parties/i.test(resolvedCrName)) {
+        resolvedCrName = 'Payment Account (Bank/Cash)';
+      }
+    }
 
     const printDetail = {
       _id: tx._id,
@@ -362,7 +397,7 @@ export const getVoucherPrintDetail = async (req, res) => {
       },
       drAccount: {
         id: tx.drAccountId?._id || null,
-        name: tx.drAccountId?.name || '',
+        name: resolvedDrName,
         type: tx.drAccountId?.type || '',
         bankName: tx.drAccountId?.bankName || '',
         accountNumber: tx.drAccountId?.accountNumber || '',
@@ -370,7 +405,7 @@ export const getVoucherPrintDetail = async (req, res) => {
       },
       crAccount: {
         id: tx.crAccountId?._id || null,
-        name: tx.crAccountId?.name || '',
+        name: resolvedCrName,
         type: tx.crAccountId?.type || '',
         bankName: tx.crAccountId?.bankName || '',
         accountNumber: tx.crAccountId?.accountNumber || '',
@@ -378,9 +413,9 @@ export const getVoucherPrintDetail = async (req, res) => {
       },
       category: {
         id: tx.categoryId?._id || null,
-        name: tx.categoryId?.name || 'General',
-        type: tx.categoryId?.type || 'EXPENSE',
-        isRentalHead: tx.categoryId?.isRentalHead || false,
+        name: categoryTitle,
+        type: tx.categoryId?.type || (isRent ? 'INCOME' : 'EXPENSE'),
+        isRentalHead: tx.categoryId?.isRentalHead || isRent,
       },
       preparedBy: tx.createdBy?.name || 'Sarfraz',
       checkedBy: tx.checkedBy || 'Khurshid Anwar',
@@ -460,8 +495,44 @@ export const downloadSingleVoucherPDF = async (req, res) => {
       expenseClassification = 'PROPERTY_OWN_EXPENSE';
     }
 
-    const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED' || tx.transactionType === 'INCOME';
-    const documentTitle = isRent ? 'RENT RECEIPT / VOUCHER' : 'EXPENSE VOUCHER';
+    // Derive Document Title & Accounts
+    const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
+    const isOtherIncome = tx.reportCategory === 'Other Income' || tx.sourceModule === 'OTHER_INCOME';
+    const isTransfer = tx.transactionType === 'TRANSFER';
+    const documentTitle = isRent
+      ? 'RENT RECEIPT / VOUCHER'
+      : isOtherIncome
+      ? 'OTHER INCOME RECEIPT / VOUCHER'
+      : isTransfer
+      ? 'TRANSFER VOUCHER'
+      : 'EXPENSE VOUCHER';
+    const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
+    const categoryTitle = tx.categoryId?.name || (isRent ? 'Rental Income' : (isTransfer ? 'Internal Transfer' : 'General'));
+
+    let resolvedDrName = tx.drAccountId?.name || '';
+    let resolvedCrName = tx.crAccountId?.name || '';
+
+    if (isRent) {
+      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
+        resolvedDrName = 'Cash Custodian / Bank';
+      }
+      resolvedCrName = locationName || 'Rental Income';
+    } else if (isOtherIncome) {
+      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
+        resolvedDrName = 'Receiving Account (Bank/Cash)';
+      }
+      resolvedCrName = categoryTitle || 'Other Income';
+    } else if (isTransfer) {
+      resolvedDrName = resolvedDrName || 'Destination Account';
+      resolvedCrName = resolvedCrName || 'Source Account';
+    } else {
+      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
+        resolvedDrName = locationName ? `${locationName} (${categoryTitle})` : categoryTitle;
+      }
+      if (!resolvedCrName || /Clearing|External Parties/i.test(resolvedCrName)) {
+        resolvedCrName = 'Payment Account (Bank/Cash)';
+      }
+    }
 
     const printDetail = {
       _id: tx._id,
@@ -497,7 +568,7 @@ export const downloadSingleVoucherPDF = async (req, res) => {
       },
       drAccount: {
         id: tx.drAccountId?._id || null,
-        name: tx.drAccountId?.name || '',
+        name: resolvedDrName,
         type: tx.drAccountId?.type || '',
         bankName: tx.drAccountId?.bankName || '',
         accountNumber: tx.drAccountId?.accountNumber || '',
@@ -505,7 +576,7 @@ export const downloadSingleVoucherPDF = async (req, res) => {
       },
       crAccount: {
         id: tx.crAccountId?._id || null,
-        name: tx.crAccountId?.name || '',
+        name: resolvedCrName,
         type: tx.crAccountId?.type || '',
         bankName: tx.crAccountId?.bankName || '',
         accountNumber: tx.crAccountId?.accountNumber || '',
@@ -513,9 +584,9 @@ export const downloadSingleVoucherPDF = async (req, res) => {
       },
       category: {
         id: tx.categoryId?._id || null,
-        name: tx.categoryId?.name || 'General',
-        type: tx.categoryId?.type || 'EXPENSE',
-        isRentalHead: tx.categoryId?.isRentalHead || false,
+        name: categoryTitle,
+        type: tx.categoryId?.type || (isRent ? 'INCOME' : 'EXPENSE'),
+        isRentalHead: tx.categoryId?.isRentalHead || isRent,
       },
       preparedBy: tx.createdBy?.name || 'Sarfraz',
       checkedBy: tx.checkedBy || 'Khurshid Anwar',

@@ -460,8 +460,8 @@ export const getRentalIncomeSummary = async (req, res) => {
         );
 
         const latestTx = matchingTxs[matchingTxs.length - 1];
-        const receivingAccountName = latestTx?.drAccountId?.name || unit.defaultReceivingAccountId?.name || '-';
-        const receivedDate = latestTx?.date ? new Date(latestTx.date).toISOString().split('T')[0] : '-';
+        const receivingAccountName = (latestTx && totalReceived > 0) ? (latestTx.drAccountId?.name || '-') : '-';
+        const receivedDate = (latestTx && totalReceived > 0 && latestTx.date) ? new Date(latestTx.date).toISOString().split('T')[0] : '-';
         const isVerified = matchingTxs.length > 0 && matchingTxs.every((t) => t.status === 'VERIFIED');
 
         // Total obligations vs total payments + advance carried over

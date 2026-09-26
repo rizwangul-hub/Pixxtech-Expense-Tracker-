@@ -21,7 +21,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { accountsAPI, otherIncomeAPI, propertiesAPI, vouchersAPI } from '../services/api.js';
-import { formatPKR } from '../utils/formatters.js';
+import { formatPKR, resolveTransactionAccounts } from '../utils/formatters.js';
 
 const initialProperty = {
   propertyName: '',
@@ -1349,7 +1349,7 @@ export function ChartOfAccountsPage({ currentUser }) {
                         <td className="p-3 whitespace-nowrap">{tx.date ? tx.date.split('T')[0] : ''}</td>
                         <td className="p-3 font-mono font-bold text-blue-700">{tx.voucherNo}</td>
                         <td className="p-3 max-w-xs truncate">{tx.detail}</td>
-                        <td className="p-3">{tx.crAccountId?.name || 'Cash/Bank'}</td>
+                        <td className="p-3">{resolveTransactionAccounts(tx).cr}</td>
                         <td className="p-3 text-right font-mono font-bold text-rose-700">
                           {formatPKR(tx.amount)}
                         </td>

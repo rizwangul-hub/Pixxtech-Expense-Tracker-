@@ -8,6 +8,7 @@ import {
   getAccountRunningLedger,
   getHeadWiseExpenseReport,
   getTransactionsFiltered,
+  resolveTransactionAccountDisplay,
   round2,
 } from '../services/ledgerService.js';
 import { generateMonthlyFundsReport } from '../services/pdfReportService.js';
@@ -151,7 +152,17 @@ export const getMonthlyFinancialSummary = async (req, res) => {
         if (totalReceived >= agreed && agreed > 0) statusBadge = 'FULLY_PAID';
         else if (totalReceived > 0) statusBadge = 'PARTIALLY_PAID';
         plazaAgreed += agreed; plazaReceived += totalReceived;
-        return { unitId: unit._id, unitName: unit.unitName, tenantName: unit.tenantName || 'Unassigned', agreedRent: agreed, receivedAmount: totalReceived, outstanding, receivedDate: latestTx?.date ? new Date(latestTx.date).toISOString().split('T')[0] : '-', receivingAccount: latestTx?.drAccountId?.name || '-', statusBadge };
+        return {
+          unitId: unit._id,
+          unitName: unit.unitName,
+          tenantName: unit.tenantName || 'Unassigned',
+          agreedRent: agreed,
+          receivedAmount: totalReceived,
+          outstanding,
+          receivedDate: (latestTx && totalReceived > 0 && latestTx.date) ? new Date(latestTx.date).toISOString().split('T')[0] : '-',
+          receivingAccount: (latestTx && totalReceived > 0) ? (latestTx.drAccountId?.name || '-') : '-',
+          statusBadge,
+        };
       });
       plazaAgreed = round2(plazaAgreed); plazaReceived = round2(plazaReceived);
       const plazaOutstanding = round2(Math.max(0, plazaAgreed - plazaReceived));
@@ -673,15 +684,24 @@ export const exportExcel = async (req, res) => {
           const u = tx.propertyId.units.find((unit) => unit._id?.toString() === tx.unitId.toString());
           if (u) unitLabel = u.unitName || u.unitNumber || '';
         }
+        const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
+        const isTransfer = tx.transactionType === 'TRANSFER';
+        let category = 'Payments';
+        if (isRent) category = 'Rent';
+        else if (isTransfer) category = 'Transfer';
+        else if (tx.reportCategory) category = tx.reportCategory;
+
+        const { head, dr: drAccount, cr: crAccount } = resolveTransactionAccountDisplay(tx);
+
         return [
           fmtDate(tx.date),
           tx.voucherNo || '',
           tx.detail || '',
-          tx.categoryId?.name || '',
+          head,
           getExpenseClassificationLabel(tx.expenseClassification),
-          tx.transactionType || '',
-          tx.drAccountId?.name || '',
-          tx.crAccountId?.name || '',
+          category,
+          drAccount,
+          crAccount,
           tx.amount,
           tx.propertyId?.plazaName || '',
           unitLabel,
@@ -843,21 +863,32 @@ export const exportCSV = async (req, res) => {
 
     // Default: all-transactions
     const result = await getTransactionsFiltered({ ...req.query, limit: 5000 });
-    const rows = result.transactions.map((tx) => ({
-      Date: fmtDate(tx.date),
-      'V.N': tx.voucherNo || '',
-      Description: tx.detail || '',
-      Category: tx.categoryId?.name || '',
-      Type: tx.transactionType || '',
-      'Dr. Account': tx.drAccountId?.name || '',
-      'Cr. Account': tx.crAccountId?.name || '',
-      'Amount (Rs.)': tx.amount,
-      Property: tx.propertyId?.plazaName || '',
-      'Expense Type': tx.expenseClassification
-        || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE'),
-      Unit: tx.unitId || '',
-      Status: tx.status || '',
-    }));
+    const rows = result.transactions.map((tx) => {
+      let unitLabel = '';
+      if (tx.propertyId?.units && tx.unitId) {
+        const u = tx.propertyId.units.find((unit) => unit._id?.toString() === tx.unitId.toString());
+        if (u) unitLabel = u.unitName || u.unitNumber || '';
+      }
+      const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
+      const isTransfer = tx.transactionType === 'TRANSFER';
+      const { head, dr: drAccount, cr: crAccount } = resolveTransactionAccountDisplay(tx);
+
+      return {
+        Date: fmtDate(tx.date),
+        'V.N': tx.voucherNo || '',
+        Description: tx.detail || '',
+        Category: head,
+        Type: isRent ? 'Rent' : (isTransfer ? 'Transfer' : (tx.reportCategory || tx.transactionType || '')),
+        'Dr. Account': drAccount,
+        'Cr. Account': crAccount,
+        'Amount (Rs.)': tx.amount,
+        Property: tx.propertyId?.plazaName || '',
+        'Expense Type': tx.expenseClassification
+          || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE'),
+        Unit: unitLabel || tx.unitId || '',
+        Status: tx.status || '',
+      };
+    });
     return sendCSV(res, `Pixx_Transactions_${periodString}.csv`, rows, ['Date', 'V.N', 'Description', 'Category', 'Type', 'Dr. Account', 'Cr. Account', 'Amount (Rs.)', 'Property', 'Expense Type', 'Unit', 'Status']);
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to generate CSV export.', error: error.message });

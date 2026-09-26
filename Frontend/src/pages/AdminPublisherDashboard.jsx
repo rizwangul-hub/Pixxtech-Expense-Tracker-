@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { adminAPI, reportsAPI, accountsAPI } from '../services/api.js';
 import { MonthlyReportsHistoryPage } from './MonthlyReportsHistoryPage.jsx';
+import { resolveTransactionAccounts } from '../utils/formatters.js';
 
 // Format Pakistani Rupees with standard comma separation
 const formatPKR = (val) => {
@@ -775,10 +776,10 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                               </span>
                             </td>
                             <td className="py-2.5 px-3 text-emerald-300 whitespace-nowrap">
-                              {tx.drAccountId?.name || '-'}
+                              {resolveTransactionAccounts(tx).dr}
                             </td>
                             <td className="py-2.5 px-3 text-rose-300 whitespace-nowrap">
-                              {tx.crAccountId?.name || '-'}
+                              {resolveTransactionAccounts(tx).cr}
                             </td>
                             <td className={`py-2.5 px-3 text-right font-mono font-bold whitespace-nowrap ${isReversed ? 'text-slate-400 line-through' : 'text-white'}`}>
                               {formatPKR(tx.amount)}
