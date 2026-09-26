@@ -613,13 +613,17 @@ export const updatePendingEntry = async (req, res) => {
  * @access  Private (VERIFICATION_MANAGER, ADMIN, ADMIN_PUBLISHER)
  */
 export const verifyEntry = async (req, res) => {
+  let postedTransaction = null;
+  let postedRentReceived = null;
+  let entry = null;
+
   try {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return apiError(res, 'Invalid entry ID.', 400);
     }
 
-    const entry = await PendingEntry.findById(id);
+    entry = await PendingEntry.findById(id);
     if (!entry) {
       return apiError(res, 'Pending entry not found.', 404);
     }
@@ -633,8 +637,8 @@ export const verifyEntry = async (req, res) => {
       return apiError(res, 'Cannot verify an entry that has already been rejected.', 400);
     }
 
-    let postedTransaction = null;
-    let postedRentReceived = null;
+    const verifierName = req.user?.name || 'Khurshid Anwar';
+    const verifierId = req.user?._id || null;
 
     if (entry.entryType === 'EXPENSE') {
       // Older pending vouchers could contain a user/category ID in drAccountId
@@ -722,9 +726,11 @@ export const verifyEntry = async (req, res) => {
         agreementId: resolvedAgreementId,
         attachments: entry.attachments || [],
         rentMonth: cleanMonth,
+        reportCategory: 'Rent',
+        sourceModule: 'RENT_RECEIVED',
         transactionType: 'INCOME',
         reference: entry.referenceNumber || '',
-        checkedBy: req.user.name,
+        checkedBy: verifierName,
         status: 'VERIFIED',
         createdBy: entry.submittedBy,
       });
@@ -768,7 +774,7 @@ export const verifyEntry = async (req, res) => {
         status: 'VERIFIED',
         transactionId: postedTransaction._id,
         attachments: entry.attachments || [],
-        checkedBy: req.user.name,
+        checkedBy: verifierName,
         checkedAt: new Date(),
         createdBy: entry.submittedBy,
       });
@@ -955,15 +961,15 @@ export const verifyEntry = async (req, res) => {
     }
 
     entry.status = 'VERIFIED';
-    entry.verifiedBy = req.user._id;
-    entry.verifiedByName = req.user.name;
+    entry.verifiedBy = verifierId;
+    entry.verifiedByName = verifierName;
     entry.verifiedAt = new Date();
     entry.auditLog.push({
       action: 'VERIFIED_AND_POSTED',
-      performedBy: req.user.name,
-      performedById: req.user._id,
+      performedBy: verifierName,
+      performedById: verifierId,
       timestamp: new Date(),
-      notes: `Verified by ${req.user.name} and officially posted to central ledger.`,
+      notes: `Verified by ${verifierName} and officially posted to central ledger.`,
     });
 
     await entry.save();
@@ -980,6 +986,23 @@ export const verifyEntry = async (req, res) => {
     );
   } catch (error) {
     console.error('[Verify Pending Entry Error]:', error);
+
+    // Rollback any partially created transaction/records on verification failure
+    try {
+      if (postedTransaction) {
+        await Transaction.findByIdAndDelete(postedTransaction._id);
+        if (postedTransaction.drAccountId && postedTransaction.crAccountId) {
+          await Account.findByIdAndUpdate(postedTransaction.drAccountId, { $inc: { currentBalance: -postedTransaction.amount } });
+          await Account.findByIdAndUpdate(postedTransaction.crAccountId, { $inc: { currentBalance: postedTransaction.amount } });
+        }
+      }
+      if (postedRentReceived) {
+        await RentReceived.findByIdAndDelete(postedRentReceived._id);
+      }
+    } catch (rollbackErr) {
+      console.error('[Verify Rollback Error]:', rollbackErr);
+    }
+
     return apiError(res, error.message || 'Failed to verify entry.', 400);
   }
 };

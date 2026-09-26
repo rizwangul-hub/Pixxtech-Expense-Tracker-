@@ -39,7 +39,7 @@ export function RentReceivedPage({
   const [loading, setLoading] = useState(true);
 
   // Filter states
-  const [selectedMonth, setSelectedMonth] = useState('2026-08');
+  const [selectedMonth, setSelectedMonth] = useState('2026-09');
   const [propertyFilter, setPropertyFilter] = useState('');
   const [accountFilter, setAccountFilter] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
@@ -446,6 +446,16 @@ export function RentReceivedPage({
               }`}
             >
               All
+            </button>
+            <button
+              onClick={() => setSelectedMonth('2026-09')}
+              className={`text-xs px-2.5 py-1 rounded font-semibold transition ${
+                selectedMonth === '2026-09'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              Sep 2026
             </button>
             <button
               onClick={() => setSelectedMonth('2026-08')}

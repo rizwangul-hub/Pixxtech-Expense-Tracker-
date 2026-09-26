@@ -41,7 +41,7 @@ export function TransactionsPage({ user }) {
   const userIsAdmin = isAdmin(user);
 
   // Filter State
-  const [month, setMonth] = useState('2026-08');
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [useDateRange, setUseDateRange] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -209,7 +209,7 @@ export function TransactionsPage({ user }) {
     setUseDateRange(false);
     setStartDate('');
     setEndDate('');
-    setMonth('2026-08');
+    setMonth(new Date().toISOString().slice(0, 7));
     setPage(1);
   };
 

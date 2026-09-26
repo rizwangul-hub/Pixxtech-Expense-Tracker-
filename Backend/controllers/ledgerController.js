@@ -176,8 +176,8 @@ export const queryLedger = async (req, res) => {
     let totalCredit = 0;
     let closingBalance = 0;
 
-    // Base query filter: ONLY posted transactions for official ledger
-    const baseStatusFilter = { status: 'POSTED' };
+    // Base query filter: include both POSTED and VERIFIED transactions for official ledger
+    const baseStatusFilter = { status: { $in: ['POSTED', 'VERIFIED'] } };
 
     // =========================================================================
     // 1. BANK ACCOUNT & CASH CUSTODIAN LEDGER

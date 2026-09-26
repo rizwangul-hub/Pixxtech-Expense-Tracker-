@@ -50,7 +50,7 @@ export function FinancialReportsPage({ currentUser }) {
   const [activeTab, setActiveTab] = useState('overview');
 
   // Shared Global Filter
-  const [selectedMonth, setSelectedMonth] = useState('2026-08');
+  const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.val || '2026-09');
   const [useDateRange, setUseDateRange] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
