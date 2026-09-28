@@ -1077,9 +1077,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                     </div>
 
                     {/* Amount Highlight */}
-                    <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800/80 rounded-lg p-3">
-                      <span className="text-xs font-semibold text-slate-400">Total Transaction Amount</span>
-                      <span className="text-xl font-black font-mono text-amber-300">
+                    <div className="flex items-center justify-between bg-slate-100 border border-slate-300 rounded-lg p-3">
+                      <span className="text-xs font-semibold text-slate-700">Total Transaction Amount</span>
+                      <span className="text-xl font-black font-mono text-slate-950">
                         {formatPKR(entry.amount)}
                       </span>
                     </div>
@@ -1462,7 +1462,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           )}
                         </td>
 
-                        <td className="py-2.5 px-3.5 text-right whitespace-nowrap font-mono font-black text-amber-300 text-base align-middle">
+                        <td className="py-2.5 px-3.5 text-right whitespace-nowrap font-mono font-black text-slate-950 text-base align-middle bg-slate-100">
                           {formatPKR(entry.amount)}
                         </td>
 
