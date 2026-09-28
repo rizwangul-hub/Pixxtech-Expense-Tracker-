@@ -412,7 +412,7 @@ export const getMySubmissions = async (req, res) => {
 
     const entries = await PendingEntry.find(query)
       .populate('submittedBy', 'name email role')
-      .populate('propertyId', 'plazaName')
+      .populate('propertyId', 'plazaName propertyName units._id units.unitName units.unitNumber')
       .populate('tenantId', 'fullName')
       .populate('categoryId', 'name')
       .populate('drAccountId', 'name')
@@ -445,9 +445,13 @@ export const getPendingEntryById = async (req, res) => {
       .populate('submittedBy', 'name email role')
       .populate('verifiedBy', 'name email role')
       .populate('rejectedBy', 'name email role')
-      .populate('propertyId', 'plazaName location')
+      .populate('propertyId', 'plazaName propertyName location units._id units.unitName units.unitNumber')
       .populate('tenantId', 'fullName phone')
-      .populate('agreementId', 'agreementNumber monthlyRent')
+      .populate({
+        path: 'agreementId',
+        select: 'agreementNumber monthlyRent tenantId',
+        populate: { path: 'tenantId', select: 'fullName tenantName name phone' },
+      })
       .populate('categoryId', 'name type isRentalHead')
       .populate('drAccountId', 'name type currentBalance bankName cashHolder')
       .populate('crAccountId', 'name type currentBalance bankName cashHolder')
@@ -509,10 +513,22 @@ export const updatePendingEntry = async (req, res) => {
     if (updates.rentMonth) entry.rentMonth = updates.rentMonth;
     if (updates.detail !== undefined) entry.detail = updates.detail.trim();
     if (updates.voucherNo !== undefined) entry.voucherNo = updates.voucherNo.trim();
-    if (updates.propertyId) entry.propertyId = updates.propertyId;
-    if (updates.propertyId === null || updates.propertyId === '') entry.propertyId = null;
-    if (updates.unitId) entry.unitId = updates.unitId;
-    if (updates.unitId === null || updates.unitId === '') entry.unitId = null;
+    if (entry.entryType === 'RENT' && updates.propertyId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(updates.propertyId)) {
+        return apiError(res, 'A valid property is required for rent entries.', 400);
+      }
+      entry.propertyId = updates.propertyId;
+    } else if (entry.entryType !== 'RENT' && updates.propertyId !== undefined) {
+      entry.propertyId = updates.propertyId || null;
+    }
+    if (entry.entryType === 'RENT' && updates.unitId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(updates.unitId)) {
+        return apiError(res, 'A valid unit is required for rent entries.', 400);
+      }
+      entry.unitId = updates.unitId;
+    } else if (entry.entryType !== 'RENT' && updates.unitId !== undefined) {
+      entry.unitId = updates.unitId || null;
+    }
     if (updates.attachments !== undefined) {
       entry.attachments = updates.attachments || [];
       if (entry.entryData) {
@@ -556,7 +572,7 @@ export const updatePendingEntry = async (req, res) => {
         return apiError(res, 'A property and unit are required for rent entries.', 400);
       }
 
-      const property = await Property.findById(entry.propertyId).select('units').lean();
+      const property = await Property.findById(entry.propertyId).select('units._id').lean();
       const unitExists = property?.units?.some((unit) => String(unit._id) === String(entry.unitId));
       if (!unitExists) {
         return apiError(res, 'The selected unit does not belong to the selected property.', 400);
@@ -565,9 +581,22 @@ export const updatePendingEntry = async (req, res) => {
       const locationChanged =
         String(previousSnapshot.propertyId || '') !== String(entry.propertyId) ||
         String(previousSnapshot.unitId || '') !== String(entry.unitId);
-      if (locationChanged) {
-        entry.tenantId = null;
-        entry.agreementId = null;
+
+      const rentDate = entry.date || new Date();
+      const matchingAgreement = await RentalAgreement.findOne({
+        propertyId: entry.propertyId,
+        unitId: entry.unitId,
+        startDate: { $lte: rentDate },
+        endDate: { $gte: rentDate },
+      })
+        .select('_id tenantId')
+        .sort({ startDate: -1 })
+        .lean();
+
+      if (locationChanged || matchingAgreement) {
+        entry.agreementId = matchingAgreement?._id || null;
+        entry.tenantId = matchingAgreement?.tenantId || null;
+        if (entry.entryData?.tenant) entry.entryData.tenant = null;
       }
       if (!entry.entryData) entry.entryData = {};
       entry.entryData.propertyId = entry.propertyId;
@@ -652,8 +681,13 @@ export const updatePendingEntry = async (req, res) => {
     await entry.save();
 
     const populated = await PendingEntry.findById(entry._id)
-      .populate('propertyId', 'plazaName')
-      .populate('tenantId', 'fullName')
+      .populate('propertyId', 'plazaName propertyName units._id units.unitName units.unitNumber')
+      .populate('tenantId', 'fullName tenantName name')
+      .populate({
+        path: 'agreementId',
+        select: 'agreementNumber monthlyRent tenantId',
+        populate: { path: 'tenantId', select: 'fullName tenantName name phone' },
+      })
       .populate('categoryId', 'name')
       .populate('drAccountId', 'name')
       .populate('crAccountId', 'name')
