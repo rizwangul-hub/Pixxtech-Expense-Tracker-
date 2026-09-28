@@ -60,6 +60,7 @@ const SalaryBreakdown = ({ entry }) => {
   const otherDed = Number(salary.otherDeduction || 0);
   const netPay = Number(salary.netPayable || Math.max(0, gross - (loanDed + lopDed + otherDed)));
   const paidNow = Number(entry.amount || 0);
+  const salaryMonth = entry.rentMonth || entry.entryData?.month;
   const alreadyPaid = Number(salary.alreadyPaid || 0);
   const totalPaidAfter = alreadyPaid + paidNow;
   const remaining = Math.max(0, netPay - totalPaidAfter);
@@ -79,6 +80,12 @@ const SalaryBreakdown = ({ entry }) => {
           </span>
         )}
       </div>
+
+      {salaryMonth && (
+        <div className="text-[10px] text-cyan-300">
+          Salary For: <strong>{salaryMonth}</strong> · On approval, today is recorded as the paid date and financial report month.
+        </div>
+      )}
 
       {/* Clean inline chips */}
       <div className="flex items-center flex-wrap gap-1.5 text-[11px] font-mono">

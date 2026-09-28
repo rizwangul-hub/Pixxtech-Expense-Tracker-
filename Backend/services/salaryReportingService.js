@@ -15,7 +15,7 @@ export const getSalaryPaymentPeriod = (salaryMonth, paymentDate) => {
   return {
     salaryForMonth: salaryMonth || null,
     paymentMonth,
-    classification: paymentMonth && salaryMonth && paymentMonth < salaryMonth
+    classification: paymentMonth && salaryMonth && paymentMonth <= salaryMonth
       ? 'ADVANCE_SALARY'
       : 'SALARY',
     requiresPaymentDateCorrection: !paymentMonth,

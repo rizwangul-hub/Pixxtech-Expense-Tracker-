@@ -82,6 +82,22 @@ test('advance salary is explicitly labeled and retains its salary period', () =>
   assert.equal(formatSalaryMonth('2026-08'), 'August 2026');
 });
 
+test('salary paid during its salary month is treated as an advance in that payment month', () => {
+  const paymentDate = '2026-09-05T12:00:00.000Z';
+  const period = getSalaryPaymentPeriod('2026-09', paymentDate);
+  const detail = getSalaryPaymentDetail({
+    employeeName: 'Sabir Nawaz',
+    salaryMonth: '2026-09',
+    paymentDate,
+  });
+
+  assert.equal(period.salaryForMonth, '2026-09');
+  assert.equal(period.paymentMonth, '2026-09');
+  assert.equal(period.classification, 'ADVANCE_SALARY');
+  assert.match(detail, /^ADVANCE SALARY/);
+  assert.match(detail, /September 2026 Salary/);
+});
+
 test('missing historical payment dates are flagged without inferring a salary-month date', () => {
   const paymentPeriod = getSalaryPaymentPeriod('2026-08', null);
 

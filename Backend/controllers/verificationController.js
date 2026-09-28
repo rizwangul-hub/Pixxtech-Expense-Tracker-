@@ -26,6 +26,7 @@ import {
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { validateExpenseClassification } from '../services/expenseClassificationService.js';
 import { generateReceiptEvidencePDF } from '../services/pdfReportService.js';
+import { getSalaryPaymentDetail, getSalaryPaymentPeriod } from '../services/salaryReportingService.js';
 
 /**
  * Generate sequential Receipt Number for Rent
@@ -947,6 +948,8 @@ export const verifyEntry = async (req, res) => {
       const salaryExpenseAccount = await getOrCreateSalaryExpenseAccount();
       const paidFromAccountId = entry.crAccountId;
       const netAmount = round2(entry.amount);
+      const salaryMonth = entry.rentMonth || entry.entryData?.month;
+      const paymentDate = new Date();
 
       // currentBalance is a cached field and can be stale after reversals or
       // other ledger corrections. Use the posted, non-reversed ledger as the
@@ -963,6 +966,18 @@ export const verifyEntry = async (req, res) => {
           400
         );
       }
+
+      const salaryName = entry.salaryDetails?.employeeName
+        || entry.entryData?.payrollSnapshot?.employeeName
+        || entry.detail
+        || 'Employee';
+      const paymentPeriod = getSalaryPaymentPeriod(salaryMonth, paymentDate);
+      const paymentDetail = getSalaryPaymentDetail({
+        employeeName: salaryName,
+        salaryMonth,
+        paymentDate,
+        notes: entry.entryData?.paymentNotes || '',
+      });
 
       const payrollForValidation = entry.entryData?.payrollId
         ? await Payroll.findById(entry.entryData.payrollId)
@@ -981,9 +996,9 @@ export const verifyEntry = async (req, res) => {
 
       // 1. Create Transaction in Central Ledger
       postedTransaction = await createTransaction({
-        date: entry.date || new Date(),
+        date: paymentDate,
         voucherNo: entry.voucherNo,
-        detail: entry.detail || `Salary Payout to Employee — Month ${entry.rentMonth}`,
+        detail: paymentDetail,
         categoryId: salaryCategory._id,
         drAccountId: salaryExpenseAccount._id,
         crAccountId: paidFromAccountId,
@@ -1032,18 +1047,16 @@ export const verifyEntry = async (req, res) => {
         pDoc.paymentStatus = updatedTotalPaid >= pDoc.netPayable ? 'PAID' : 'PARTIAL_PAYMENT';
         pDoc.paidFromAccountId = account._id;
         pDoc.paidFromAccountName = account.name;
-        pDoc.paymentDate = entry.date || new Date();
-        pDoc.paidDate = entry.date || new Date();
+        pDoc.paymentDate = paymentDate;
+        pDoc.paidDate = paymentDate;
         pDoc.transactionId = postedTransaction._id;
         pDoc.voucherNo = entry.voucherNo;
         pDoc.paymentMethod = entry.paymentMethod || 'BANK_TRANSFER';
-        const disburseDate = entry.date || new Date();
-        const dMonth = `${new Date(disburseDate).getUTCFullYear()}-${String(new Date(disburseDate).getUTCMonth() + 1).padStart(2, '0')}`;
         pDoc.salaryInstallments = pDoc.salaryInstallments || [];
         pDoc.salaryInstallments.push({
           amount: netAmount,
-          paymentDate: disburseDate,
-          disbursementMonth: entry.entryData?.disbursementMonth || dMonth,
+          paymentDate,
+          disbursementMonth: paymentPeriod.paymentMonth,
           paidFromAccountId: account._id,
           paidFromAccountName: account.name,
           paymentMethod: entry.entryData?.paymentMethod || 'BANK_TRANSFER',
@@ -1098,6 +1111,15 @@ export const verifyEntry = async (req, res) => {
       }
 
       entry.postedTransactionId = postedTransaction._id;
+      entry.date = paymentDate;
+      entry.detail = paymentDetail;
+      entry.entryData = {
+        ...entry.entryData,
+        month: salaryMonth,
+        paymentDate,
+        disbursementMonth: paymentPeriod.paymentMonth,
+      };
+      entry.markModified('entryData');
     }
 
     entry.status = 'VERIFIED';
