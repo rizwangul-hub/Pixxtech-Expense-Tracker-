@@ -199,7 +199,6 @@ export const validateSignalInput = (body = {}) => {
     }
   } else if (
     typeof payload.candidate !== 'string' ||
-    !payload.candidate.trim() ||
     payload.candidate.length > 4096 ||
     (payload.sdpMid !== undefined && payload.sdpMid !== null && typeof payload.sdpMid !== 'string') ||
     (payload.sdpMLineIndex !== undefined && payload.sdpMLineIndex !== null &&

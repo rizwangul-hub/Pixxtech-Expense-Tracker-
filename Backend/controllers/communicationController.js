@@ -82,12 +82,19 @@ const handleAsync = (handler) => (req, res, next) =>
 
 export const bootstrap = handleAsync(async (req, res) => {
   const context = await getContext(req);
-  const [unreadCount] = await Promise.all([
+  const [unreadCount, unreadMessages] = await Promise.all([
     CommunicationMessage.countDocuments({
       conversationId: context.conversationId,
       recipient: context.self._id,
       readAt: null,
     }),
+    populateMessage(
+      CommunicationMessage.find({
+        conversationId: context.conversationId,
+        recipient: context.self._id,
+        readAt: null,
+      }).sort({ createdAt: -1, _id: -1 }).limit(20)
+    ),
   ]);
   return res.json({
     success: true,
@@ -97,6 +104,7 @@ export const bootstrap = handleAsync(async (req, res) => {
       conversationId: context.conversationId,
       channelName: context.channelName,
       unreadCount,
+      unreadMessages: unreadMessages.map(toMessage),
       iceServers: getIceServers(),
     },
   });
@@ -106,7 +114,7 @@ export const createTokenRequest = handleAsync(async (req, res) => {
   const context = await getContext(req);
   const tokenRequest = await getAbly().auth.createTokenRequest({
     clientId: String(context.self._id),
-    capability: JSON.stringify({ [context.channelName]: ['subscribe'] }),
+    capability: JSON.stringify({ [context.channelName]: ['subscribe', 'presence'] }),
   });
   return res.json({ success: true, data: tokenRequest });
 });

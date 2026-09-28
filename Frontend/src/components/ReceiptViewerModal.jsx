@@ -36,6 +36,10 @@ export function ReceiptViewerModal({ entry, onClose }) {
 
   const meta = extractReceiptMetadata(entry);
   const attachments = meta.attachments || [];
+  const ledgerCreditAccount =
+    meta.propertyName && meta.unitName && meta.crAccount?.trim() === meta.propertyName.trim()
+      ? `${meta.propertyName} (${meta.unitName})`
+      : meta.crAccount;
 
   if (attachments.length === 0) {
     return (
@@ -326,7 +330,7 @@ export function ReceiptViewerModal({ entry, onClose }) {
                       <td className="py-2.5 px-3.5 sm:px-4 text-slate-200">
                         <div className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0"></span>
-                          <span className="font-bold text-white text-xs sm:text-sm">{meta.crAccount}</span>
+                          <span className="font-bold text-white text-xs sm:text-sm">{ledgerCreditAccount}</span>
                         </div>
                       </td>
                       <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono text-slate-600">-</td>
@@ -335,15 +339,15 @@ export function ReceiptViewerModal({ entry, onClose }) {
                       </td>
                     </tr>
                   </tbody>
-                  <tfoot className="bg-gradient-to-r from-slate-950 to-slate-900 border-t-2 border-slate-700">
+                  <tfoot className="bg-slate-100 border-t-2 border-slate-300">
                     <tr>
-                      <td className="py-2.5 px-3.5 sm:px-4 text-[11px] font-black uppercase text-slate-300 tracking-wider">
+                      <td className="py-2.5 px-3.5 sm:px-4 text-[11px] font-black uppercase text-slate-800 tracking-wider">
                         Total Voucher Amount
                       </td>
-                      <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono font-black text-emerald-400 text-sm sm:text-base">
+                      <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono font-black text-emerald-700 text-sm sm:text-base">
                         {meta.amountStr}
                       </td>
-                      <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono font-black text-rose-400 text-sm sm:text-base">
+                      <td className="py-2.5 px-3.5 sm:px-4 text-right font-mono font-black text-rose-700 text-sm sm:text-base">
                         {meta.amountStr}
                       </td>
                     </tr>

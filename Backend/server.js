@@ -129,7 +129,7 @@ app.use((err, req, res, next) => {
   console.error('[Server Error]:', err.stack || err.message);
   res.status(err.status || 500).json({
     success: false,
-    message: err.status ? err.message : 'Internal Server Error',
+    message: err.status && err.status < 500 ? err.message : 'Internal Server Error',
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 });

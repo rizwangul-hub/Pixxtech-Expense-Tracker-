@@ -34,7 +34,6 @@ export const communicationsAPI = {
     const formData = new FormData();
     formData.append('file', file);
     return (await api.post('/communications/attachments', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress,
     })).data;
   },

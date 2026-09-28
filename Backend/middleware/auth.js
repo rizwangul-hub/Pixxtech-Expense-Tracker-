@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { getJwtSecret } from '../config/jwt.js';
 
 /**
  * Middleware to protect private routes via JWT authentication.
@@ -23,8 +24,15 @@ export const protect = async (req, res, next) => {
     });
   }
 
+  const secret = getJwtSecret();
+  if (!secret) {
+    return res.status(503).json({
+      success: false,
+      message: 'Authentication is unavailable: JWT_SECRET is not configured.',
+    });
+  }
+
   try {
-    const secret = process.env.JWT_SECRET || 'pixx_tech_super_secret_jwt_key_2026_finance';
     const decoded = jwt.verify(token, secret);
 
     const user = await User.findById(decoded.id).select('-password');

@@ -27,11 +27,14 @@ const terminalCallStatuses = new Set(['ENDED', 'DECLINED', 'CANCELLED', 'MISSED'
 export function CommunicationsProvider({ user, onOpenMessages, children }) {
   const authorized = canUseCommunications(user);
   const [bootstrap, setBootstrap] = useState(null);
+  const [bootstrapError, setBootstrapError] = useState('');
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [connection, setConnection] = useState('offline');
   const [realtimeReady, setRealtimeReady] = useState(false);
   const [peerOnline, setPeerOnline] = useState(null);
   const [toast, setToast] = useState(null);
+  const [notifications, setNotifications] = useState([]);
   const [call, setCall] = useState(null);
   const [muted, setMuted] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(true);
@@ -42,6 +45,7 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
   const activeCallRef = useRef(null);
+  const callStartRef = useRef(false);
   const conversationOpenRef = useRef(false);
   const timeoutRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -216,7 +220,8 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
   }, []);
 
   const startCall = useCallback(async (type) => {
-    if (activeCallRef.current) return;
+    if (activeCallRef.current || callStartRef.current) return;
+    callStartRef.current = true;
     setCallError('');
     let stream;
     try {
@@ -251,6 +256,8 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
         activeCallRef.current = null;
         setCall(null);
       }
+    } finally {
+      callStartRef.current = false;
     }
   }, [acquireMedia, cleanupMedia, createPeerConnection, finishCall, publishCallStatus]);
 
@@ -359,8 +366,10 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
   useEffect(() => {
     if (!authorized) {
       setBootstrap(null);
+      setBootstrapError('');
       setUnreadCount(0);
       setPeerOnline(null);
+      setNotifications([]);
       setConnection('offline');
       setRealtimeReady(false);
       return undefined;
@@ -391,10 +400,14 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
         }).catch(() => {});
       } else {
         setUnreadCount((count) => count + 1);
-        setToast({
+        const notification = {
+          id: key,
           title: message.sender?.name || 'New message',
           body: message.text || (message.type === 'IMAGE' ? 'Sent an image' : 'Sent a voice message'),
-        });
+          createdAt: message.createdAt,
+        };
+        setNotifications((items) => [notification, ...items.filter((item) => item.id !== key)].slice(0, 20));
+        setToast(notification);
         window.clearTimeout(toastTimerRef.current);
         toastTimerRef.current = window.setTimeout(() => setToast(null), 6500);
       }
@@ -402,11 +415,18 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
 
     (async () => {
       try {
+        setBootstrapError('');
         const info = responseData(await communicationsAPI.getBootstrap());
         if (!mounted) return;
         setBootstrap(info);
         selfUserIdRef.current = String(info.self?.id || '');
         setUnreadCount(Number(info.unreadCount) || 0);
+        setNotifications((Array.isArray(info.unreadMessages) ? info.unreadMessages : []).map((message) => ({
+          id: String(message.id),
+          title: message.sender?.name || 'New message',
+          body: message.text || (message.type === 'IMAGE' ? 'Sent an image' : 'Sent a voice message'),
+          createdAt: message.createdAt,
+        })));
         realtime = new Realtime({
           authCallback: (_params, callback) => {
             communicationsAPI.getToken().then((result) => callback(null, responseData(result)))
@@ -426,7 +446,10 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
           subscribe('message:delivered', (event) => emit('communications:delivered', event)),
           subscribe('messages:read', (event) => {
             emit('communications:read', event);
-            if (String(event.readerId || '') === String(info.self?.id || '')) setUnreadCount(0);
+            if (String(event.readerId || '') === String(info.self?.id || '')) {
+              setUnreadCount(0);
+              setNotifications([]);
+            }
           }),
           subscribe('typing', (event) => emit('communications:typing', event)),
           subscribe('call:invite', (event) => {
@@ -492,6 +515,7 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
         if (mounted) {
           setConnection(error?.response?.status === 403 ? 'failed' : 'offline');
           setPeerOnline(null);
+          setBootstrapError(errorMessage(error, 'Could not connect to Messages & Calls.'));
         }
       }
     })();
@@ -507,7 +531,7 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
       cleanupMedia();
       activeCallRef.current = null;
     };
-  }, [authorized, cleanupMedia, finishCall, handleCallUpdate, processSignal]);
+  }, [authorized, bootstrapAttempt, cleanupMedia, finishCall, handleCallUpdate, processSignal]);
 
   useEffect(() => {
     if (localVideoRef.current && localStreamRef.current) localVideoRef.current.srcObject = localStreamRef.current;
@@ -528,14 +552,25 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
   const setConversationOpen = useCallback((open) => {
     conversationOpenRef.current = open;
     if (open && authorized) {
+      setNotifications([]);
       communicationsAPI.markRead().then(() => setUnreadCount(0)).catch(() => {});
     }
   }, [authorized]);
 
+  const retryBootstrap = useCallback(() => {
+    setBootstrap(null);
+    setBootstrapError('');
+    setRealtimeReady(false);
+    setConnection('connecting');
+    setBootstrapAttempt((attempt) => attempt + 1);
+  }, []);
+
   const contextValue = useMemo(() => ({
     authorized,
     bootstrap,
+    bootstrapError,
     unreadCount,
+    notifications,
     setUnreadCount,
     connection,
     realtimeReady,
@@ -550,12 +585,13 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
     remoteVideoRef,
     remoteAudioRef,
     setConversationOpen,
+    retryBootstrap,
     startCall,
     acceptCall,
     finishCall,
     toggleMute,
     toggleCamera,
-  }), [authorized, bootstrap, unreadCount, connection, realtimeReady, peerOnline, call, callError, callDuration, muted, cameraEnabled, setConversationOpen, startCall, acceptCall, finishCall, toggleMute, toggleCamera]);
+  }), [authorized, bootstrap, bootstrapError, unreadCount, notifications, connection, realtimeReady, peerOnline, call, callError, callDuration, muted, cameraEnabled, setConversationOpen, retryBootstrap, startCall, acceptCall, finishCall, toggleMute, toggleCamera]);
 
   const terminalAction = call?.direction === 'incoming' && call.status !== 'ACCEPTED'
     ? 'decline'

@@ -94,8 +94,8 @@ function MessageBubble({ message, own }) {
 
 export function MessagesCallsPage() {
   const {
-    authorized, bootstrap, unreadCount, connection, realtimeReady, peerOnline, call, startCall,
-    setConversationOpen, setUnreadCount,
+    authorized, bootstrap, bootstrapError, unreadCount, connection, realtimeReady, peerOnline, call, startCall,
+    callError, setCallError, retryBootstrap, setConversationOpen, setUnreadCount,
   } = useCommunications();
   const [messages, setMessages] = useState([]);
   const [calls, setCalls] = useState([]);
@@ -104,12 +104,14 @@ export function MessagesCallsPage() {
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
   const [typing, setTyping] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [voicePreview, setVoicePreview] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [activeTab, setActiveTab] = useState('messages');
   const messageListRef = useRef(null);
   const messageInputRef = useRef(null);
@@ -262,8 +264,16 @@ export function MessagesCallsPage() {
   useEffect(() => () => {
     if (voicePreview?.url) URL.revokeObjectURL(voicePreview.url);
     window.clearInterval(recordingTimerRef.current);
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+    }
     recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
   }, [voicePreview]);
+
+  useEffect(() => () => {
+    if (imagePreview?.url) URL.revokeObjectURL(imagePreview.url);
+  }, [imagePreview]);
 
   const handleTextChange = (event) => {
     setText(event.target.value);
@@ -294,6 +304,7 @@ export function MessagesCallsPage() {
       return false;
     } finally {
       setBusy(false);
+      setUploading(false);
       setUploadProgress(0);
       sendTyping(false);
     }
@@ -309,12 +320,14 @@ export function MessagesCallsPage() {
   const uploadAndSend = async (file, type) => {
     if (busy) return;
     setBusy(true);
+    setUploading(true);
     setError('');
     setUploadProgress(0);
     try {
       const attachment = responseData(await communicationsAPI.uploadAttachment(file, (event) => {
         if (event.total) setUploadProgress(Math.round((event.loaded / event.total) * 100));
       }));
+      setUploading(false);
       const message = responseData(await communicationsAPI.sendMessage({
         clientMessageId: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         type,
@@ -325,10 +338,12 @@ export function MessagesCallsPage() {
       setText('');
       wasAtBottomRef.current = true;
       setVoicePreview(null);
+      setImagePreview(null);
     } catch (requestError) {
       setError(messageError(requestError));
     } finally {
       setBusy(false);
+      setUploading(false);
       setUploadProgress(0);
       sendTyping(false);
     }
@@ -346,7 +361,8 @@ export function MessagesCallsPage() {
       setError('Images must not exceed 10 MB.');
       return;
     }
-    uploadAndSend(file, 'IMAGE');
+    setError('');
+    setImagePreview({ file, url: URL.createObjectURL(file) });
   };
 
   const stopRecording = () => {
@@ -395,7 +411,10 @@ export function MessagesCallsPage() {
         setRecording(false);
         window.clearInterval(recordingTimerRef.current);
       };
-      recorder.onerror = () => setError('The microphone recording failed. Please try again.');
+      recorder.onerror = () => {
+        setError('The microphone recording failed. Please try again.');
+        if (recorder.state === 'recording') recorder.stop();
+      };
       mediaRecorderRef.current = recorder;
       setRecordingSeconds(0);
       recordingSecondsRef.current = 0;
@@ -440,7 +459,11 @@ export function MessagesCallsPage() {
           <h1 className="truncate text-lg font-black text-slate-900 sm:text-xl">Messages & Calls</h1>
           <p className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
             <span className={`h-2 w-2 rounded-full ${peerOnline === true ? 'bg-emerald-500' : peerOnline === false ? 'bg-slate-300' : 'animate-pulse bg-amber-400'}`} />
-            <span>{bootstrap?.peer?.name || 'Secure conversation'} · {connectionLabel}</span>
+            <span>
+              {bootstrap?.peer?.name || 'Secure conversation'}
+              {bootstrap?.peer?.role ? ` · ${bootstrap.peer.role.replaceAll('_', ' ')}` : ''}
+              {' · '}{connectionLabel}
+            </span>
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -448,6 +471,7 @@ export function MessagesCallsPage() {
           <button type="button" onClick={() => startCall('VIDEO')} disabled={!bootstrap || Boolean(call)} className="rounded-xl p-2.5 text-slate-700 hover:bg-slate-100 disabled:opacity-40" aria-label="Start video call" title="Video call"><Video size={19} /></button>
         </div>
       </header>
+      {callError && <div className="flex shrink-0 items-center justify-between gap-2 border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700" role="alert"><span>{callError}</span><button type="button" onClick={() => setCallError('')} aria-label="Dismiss call error"><X size={16} /></button></div>}
 
       <nav className="flex shrink-0 border-b border-slate-200 bg-white sm:hidden" aria-label="Messages and call history">
         <button type="button" onClick={() => setActiveTab('messages')} className={`flex-1 py-2.5 text-sm font-bold ${activeTab === 'messages' ? 'border-b-2 border-indigo-600 text-indigo-700' : 'text-slate-500'}`}>Messages {unreadCount > 0 && <span className="ml-1 rounded-full bg-rose-100 px-1.5 text-xs text-rose-700">{unreadCount}</span>}</button>
@@ -456,6 +480,23 @@ export function MessagesCallsPage() {
 
       <div className="flex min-h-0 flex-1 overflow-hidden sm:rounded-b-2xl sm:border sm:border-t-0 sm:border-slate-200">
         <aside className={`${activeTab === 'calls' ? 'flex' : 'hidden'} w-full shrink-0 flex-col border-r border-slate-200 bg-white sm:flex sm:w-72 lg:w-80`}>
+          <button
+            type="button"
+            onClick={() => setActiveTab('messages')}
+            className="m-3 flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 text-left hover:bg-indigo-50"
+            aria-label={`Open conversation with ${bootstrap?.peer?.name || 'contact'}`}
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-indigo-600 text-sm font-bold text-white">
+              {(bootstrap?.peer?.name || '?').slice(0, 1).toUpperCase()}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold text-slate-900">{bootstrap?.peer?.name || 'Loading contact…'}</span>
+              <span className="block truncate text-xs text-slate-500">
+                {bootstrap?.peer?.role?.replaceAll('_', ' ') || 'Conversation'}{messages.length ? ` · ${messages[messages.length - 1].text || (messages[messages.length - 1].type === 'IMAGE' ? 'Image' : 'Voice message')}` : ' · No messages yet'}
+              </span>
+            </span>
+            {unreadCount > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+          </button>
           <div className="border-b border-slate-100 p-4">
             <h2 className="flex items-center gap-2 font-bold text-slate-800"><PhoneCall size={17} className="text-indigo-600" />Recent calls</h2>
           </div>
@@ -485,7 +526,8 @@ export function MessagesCallsPage() {
             wasAtBottomRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 100;
           }} className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-5">
             {hasMore && <div className="text-center"><button type="button" onClick={loadEarlier} disabled={loadingEarlier} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-white disabled:opacity-50">{loadingEarlier ? <LoaderCircle size={14} className="animate-spin" /> : <ChevronUp size={14} />}Load earlier messages</button></div>}
-            {loading && <p className="py-8 text-center text-sm text-slate-500">Loading conversation…</p>}
+            {!bootstrap && <div className="mx-auto max-w-md py-10 text-center"><p className="text-sm font-semibold text-slate-700">{bootstrapError || 'Connecting to secure conversation…'}</p>{bootstrapError && <button type="button" onClick={retryBootstrap} className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">Retry connection</button>}</div>}
+            {loading && bootstrap && <p className="py-8 text-center text-sm text-slate-500">Loading conversation…</p>}
             {!loading && messages.length === 0 && <div className="grid h-full place-items-center text-center"><div><MessagesSquare size={32} className="mx-auto text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-600">No messages yet</p><p className="mt-1 text-xs text-slate-500">Send a message to start the conversation.</p></div></div>}
             {messages.map((message) => (
               <MessageBubble key={message.id || message.clientMessageId} message={message} own={String(message.sender?.id) === selfId} />
@@ -502,12 +544,20 @@ export function MessagesCallsPage() {
               <button type="button" onClick={() => uploadAndSend(voicePreview.file, 'VOICE')} disabled={busy} className="rounded-lg bg-indigo-600 p-2 text-white disabled:opacity-50" aria-label="Send voice recording"><Send size={17} /></button>
             </div>
           )}
+          {imagePreview && (
+            <div className="flex items-center gap-3 border-t border-slate-200 bg-white px-3 py-2">
+              <img src={imagePreview.url} alt="Image preview before sending" className="h-16 w-16 rounded-lg border border-slate-200 object-cover" />
+              <span className="min-w-0 flex-1 truncate text-xs text-slate-600">{imagePreview.file.name}</span>
+              <button type="button" onClick={() => setImagePreview(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Cancel image attachment"><X size={17} /></button>
+              <button type="button" onClick={() => uploadAndSend(imagePreview.file, 'IMAGE')} disabled={busy} className="rounded-lg bg-indigo-600 p-2 text-white disabled:opacity-50" aria-label="Send image"><Send size={17} /></button>
+            </div>
+          )}
           {recording && <div className="flex items-center gap-2 border-t border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700"><span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" />Recording · {formatDuration(recordingSeconds)}<button type="button" onClick={stopRecording} className="ml-auto inline-flex items-center gap-1 rounded-lg px-3 py-1.5 font-semibold hover:bg-rose-100" aria-label="Stop recording"><Square size={14} />Stop</button></div>}
-          {busy && <div className="h-1 w-full bg-slate-200"><div className="h-full bg-indigo-500 transition-[width]" style={{ width: `${uploadProgress || 2}%` }} aria-label={`Upload ${uploadProgress}%`} /></div>}
+          {uploading && <div className="h-1 w-full bg-slate-200" role="progressbar" aria-label="Attachment upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}><div className="h-full bg-indigo-500 transition-[width]" style={{ width: `${uploadProgress}%` }} /></div>}
           <form onSubmit={submitText} className="flex shrink-0 items-end gap-1.5 border-t border-slate-200 bg-white p-2.5 sm:gap-2 sm:p-3">
             <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={selectImage} aria-label="Choose an image" />
-            <button type="button" onClick={() => imageInputRef.current?.click()} disabled={busy || recording || Boolean(voicePreview)} className="rounded-xl p-2.5 text-slate-600 hover:bg-slate-100 disabled:opacity-40" aria-label="Attach image"><ImagePlus size={20} /></button>
-            <button type="button" onClick={recording ? stopRecording : startRecording} disabled={busy || Boolean(voicePreview)} className={`rounded-xl p-2.5 hover:bg-slate-100 disabled:opacity-40 ${recording ? 'text-rose-600' : 'text-slate-600'}`} aria-label={recording ? 'Stop voice recording' : 'Record voice message'}>{recording ? <Square size={19} /> : <Mic size={20} />}</button>
+            <button type="button" onClick={() => imageInputRef.current?.click()} disabled={busy || recording || Boolean(voicePreview) || Boolean(imagePreview)} className="rounded-xl p-2.5 text-slate-600 hover:bg-slate-100 disabled:opacity-40" aria-label="Attach image"><ImagePlus size={20} /></button>
+            <button type="button" onClick={recording ? stopRecording : startRecording} disabled={busy || Boolean(voicePreview) || Boolean(imagePreview)} className={`rounded-xl p-2.5 hover:bg-slate-100 disabled:opacity-40 ${recording ? 'text-rose-600' : 'text-slate-600'}`} aria-label={recording ? 'Stop voice recording' : 'Record voice message'}>{recording ? <Square size={19} /> : <Mic size={20} />}</button>
             <textarea
               ref={messageInputRef}
               value={text}
@@ -521,11 +571,11 @@ export function MessagesCallsPage() {
               maxLength={5000}
               rows={1}
               placeholder="Write a message… (Enter to send)"
-              disabled={busy || recording || Boolean(voicePreview)}
+              disabled={busy || recording || Boolean(voicePreview) || Boolean(imagePreview)}
               className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50"
               aria-label="Message"
             />
-            <button type="submit" disabled={busy || !text.trim() || recording || Boolean(voicePreview)} className="rounded-xl bg-indigo-600 p-3 text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message">{busy ? <LoaderCircle size={19} className="animate-spin" /> : <Send size={19} />}</button>
+            <button type="submit" disabled={busy || !text.trim() || recording || Boolean(voicePreview) || Boolean(imagePreview)} className="rounded-xl bg-indigo-600 p-3 text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message">{busy ? <LoaderCircle size={19} className="animate-spin" /> : <Send size={19} />}</button>
           </form>
           <p className="bg-white pb-2 text-center text-[10px] text-slate-400">Shift + Enter for a new line · Attachments are securely shared</p>
         </div>

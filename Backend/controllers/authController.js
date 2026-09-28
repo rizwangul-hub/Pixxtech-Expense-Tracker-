@@ -1,11 +1,15 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { getJwtSecret } from '../config/jwt.js';
 
 /**
  * Generate 7-day JWT Token helper
  */
 const generateToken = (id) => {
-  const secret = process.env.JWT_SECRET || 'pixx_tech_super_secret_jwt_key_2026_finance';
+  const secret = getJwtSecret();
+  if (!secret) {
+    throw new Error('JWT_SECRET is not configured.');
+  }
   return jwt.sign({ id }, secret, {
     expiresIn: '7d',
   });
@@ -18,6 +22,13 @@ const generateToken = (id) => {
  */
 export const login = async (req, res) => {
   try {
+    if (!getJwtSecret()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Authentication is unavailable: JWT_SECRET is not configured.',
+      });
+    }
+
     const { email, password } = req.body;
 
     if (!email || !password) {

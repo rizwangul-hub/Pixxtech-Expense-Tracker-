@@ -7,7 +7,7 @@ async function runPhase2Tests() {
 
   // Test 1: JWT token generation and verification
   console.log('Test 1: JWT Token signing & verification');
-  const secret = 'pixx_tech_super_secret_jwt_key_2026_finance';
+  const secret = 'phase2-test-only-secret-not-for-authentication';
   const payload = { id: '654321654321654321654321', role: 'DATA_ENTRY' };
   const token = jwt.sign(payload, secret, { expiresIn: '7d' });
   const decoded = jwt.verify(token, secret);

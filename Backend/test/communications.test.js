@@ -11,9 +11,42 @@ import {
   validateSignalInput,
 } from '../services/communicationService.js';
 import { getCorsAllowedOrigins, isCorsOriginAllowed } from '../config/communicationCors.js';
+import { getJwtSecret } from '../config/jwt.js';
+import { protect } from '../middleware/auth.js';
 
 const admin = { _id: 'admin-1', email: 'ADMIN@example.com ', name: 'Khurshid', role: 'ADMIN', isActive: true };
 const dataEntry = { _id: 'entry-2', email: 'entry@example.com', name: 'Sarfraz', role: 'DATA_ENTRY', isActive: true };
+
+test('JWT authentication has no built-in fallback secret', () => {
+  const configuredSecret = process.env.JWT_SECRET;
+  try {
+    delete process.env.JWT_SECRET;
+    assert.equal(getJwtSecret(), null);
+    let status;
+    let response;
+    protect(
+      { headers: { authorization: 'Bearer test-token' }, query: {} },
+      {
+        status(code) {
+          status = code;
+          return this;
+        },
+        json(body) {
+          response = body;
+          return this;
+        },
+      },
+      () => assert.fail('Authentication must stop when JWT_SECRET is missing.')
+    );
+    assert.equal(status, 503);
+    assert.match(response.message, /JWT_SECRET is not configured/);
+    process.env.JWT_SECRET = 'configured-secret';
+    assert.equal(getJwtSecret(), 'configured-secret');
+  } finally {
+    if (configuredSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = configuredSecret;
+  }
+});
 
 test('participant resolution is exact, normalized, and fail-closed', () => {
   assert.deepEqual(
@@ -108,6 +141,10 @@ test('signaling input is bounded and TURN configuration fails closed', () => {
       kind: 'ice-candidate',
       payload: { candidate: 'candidate', sdpMid: 'audio', sdpMLineIndex: 0 },
     }).kind,
+    'ice-candidate'
+  );
+  assert.equal(
+    validateSignalInput({ kind: 'ice-candidate', payload: { candidate: '' } }).kind,
     'ice-candidate'
   );
   assert.throws(

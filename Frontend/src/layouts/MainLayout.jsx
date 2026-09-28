@@ -21,6 +21,7 @@ import {
   BookOpen,
   Sparkles,
   MessagesSquare,
+  Bell,
 } from 'lucide-react';
 import { hasPermission, isAdmin, isVerifier, isDataEntry, PERMISSIONS } from '../utils/permissions.js';
 import { verificationAPI } from '../services/api.js';
@@ -36,11 +37,16 @@ export function MainLayout({
   children,
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [communicationNotificationsOpen, setCommunicationNotificationsOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const userIsAdmin = isAdmin(user);
   const userIsVerifier = isVerifier(user);
   const userIsDataEntry = isDataEntry(user);
-  const { authorized: communicationsAuthorized, unreadCount: communicationsUnread } = useCommunications();
+  const {
+    authorized: communicationsAuthorized,
+    unreadCount: communicationsUnread,
+    notifications: communicationNotifications = [],
+  } = useCommunications();
   const canEnterData = hasPermission(user, PERMISSIONS.ENTER_DATA);
   const canManageSettings = hasPermission(user, PERMISSIONS.MANAGE_SETTINGS);
 
@@ -363,20 +369,62 @@ export function MainLayout({
           )}
 
           {communicationsAuthorized && (
-            <button
-              type="button"
-              onClick={() => onViewChange('communications')}
-              className="relative rounded-xl p-2.5 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"
-              aria-label={`Open Messages and Calls${communicationsUnread ? `, ${communicationsUnread} unread messages` : ''}`}
-              title="Messages & Calls"
-            >
-              <MessagesSquare size={20} />
-              {communicationsUnread > 0 && (
-                <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">
-                  {communicationsUnread > 99 ? '99+' : communicationsUnread}
-                </span>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setCommunicationNotificationsOpen((open) => !open)}
+                className="relative rounded-xl p-2.5 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"
+                aria-label={`Open communication notifications${communicationsUnread ? `, ${communicationsUnread} unread messages` : ''}`}
+                aria-expanded={communicationNotificationsOpen}
+                title="Communication notifications"
+              >
+                <Bell size={20} />
+                {communicationsUnread > 0 && (
+                  <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">
+                    {communicationsUnread > 99 ? '99+' : communicationsUnread}
+                  </span>
+                )}
+              </button>
+              {communicationNotificationsOpen && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                    <h2 className="text-sm font-bold text-slate-900">Messages & Calls</h2>
+                    <button type="button" onClick={() => {
+                      setCommunicationNotificationsOpen(false);
+                      onViewChange('communications');
+                    }} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                      Open chat
+                    </button>
+                  </div>
+                  {communicationNotifications.length ? (
+                    <ul className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                      {communicationNotifications.map((notification) => (
+                        <li key={notification.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCommunicationNotificationsOpen(false);
+                              onViewChange('communications');
+                            }}
+                            className="block w-full px-4 py-3 text-left hover:bg-slate-50"
+                          >
+                            <span className="flex items-center justify-between gap-3">
+                              <span className="truncate text-sm font-semibold text-slate-800">{notification.title}</span>
+                              <time className="shrink-0 text-[10px] text-slate-400" dateTime={notification.createdAt}>
+                                {notification.createdAt ? new Date(notification.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}
+                              </time>
+                            </span>
+                            <span className="mt-0.5 block truncate text-xs text-slate-500">{notification.body}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="px-4 py-5 text-center text-sm text-slate-500">No new message notifications.</p>
+                  )}
+                </div>
               )}
-            </button>
+            </div>
           )}
 
           {/* User Profile Pill */}
