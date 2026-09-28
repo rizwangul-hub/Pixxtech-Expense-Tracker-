@@ -551,6 +551,28 @@ export const updatePendingEntry = async (req, res) => {
       entry.expenseClassification = classification.expenseClassification;
       entry.propertyId = classification.propertyId;
       entry.unitId = classification.unitId;
+    } else if (entry.entryType === 'RENT' && (updates.propertyId !== undefined || updates.unitId !== undefined)) {
+      if (!entry.propertyId || !entry.unitId) {
+        return apiError(res, 'A property and unit are required for rent entries.', 400);
+      }
+
+      const property = await Property.findById(entry.propertyId).select('units').lean();
+      const unitExists = property?.units?.some((unit) => String(unit._id) === String(entry.unitId));
+      if (!unitExists) {
+        return apiError(res, 'The selected unit does not belong to the selected property.', 400);
+      }
+
+      const locationChanged =
+        String(previousSnapshot.propertyId || '') !== String(entry.propertyId) ||
+        String(previousSnapshot.unitId || '') !== String(entry.unitId);
+      if (locationChanged) {
+        entry.tenantId = null;
+        entry.agreementId = null;
+      }
+      if (!entry.entryData) entry.entryData = {};
+      entry.entryData.propertyId = entry.propertyId;
+      entry.entryData.unitId = entry.unitId;
+      entry.markModified('entryData');
     } else if (entry.entryType === 'SALARY') {
       const grossSalary = updates.grossSalary !== undefined ? round2(Number(updates.grossSalary)) : undefined;
       const loanDeduction = updates.loanDeduction !== undefined ? round2(Number(updates.loanDeduction)) : undefined;

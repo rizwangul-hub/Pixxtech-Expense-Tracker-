@@ -452,7 +452,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       rentMonth: entry.rentMonth || '',
       expenseClassification: entry.expenseClassification || 'GENERAL_EXPENSE',
       propertyId: entry.propertyId?._id || entry.propertyId || '',
-      unitId: entry.unitId || '',
+      unitId: entry.unitId?._id || entry.unitId || '',
       parentCategoryId: initialParentId,
       categoryId: entry.categoryId?._id || entry.categoryId || '',
       crAccountId: crAcc,
@@ -675,20 +675,6 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     }
     return true;
   });
-
-  const rentEditPropertyId = editingEntry?.propertyId?._id || editingEntry?.propertyId || editForm.propertyId;
-  const rentEditProperty = properties.find((property) => String(property._id) === String(rentEditPropertyId));
-  const rentEditUnitId = editingEntry?.unitId?._id || editingEntry?.unitId || editForm.unitId;
-  const rentEditUnit = rentEditProperty?.units?.find((unit) => String(unit._id) === String(rentEditUnitId));
-  const rentEditPropertyName =
-    rentEditProperty?.plazaName || rentEditProperty?.propertyName || editingEntry?.propertyId?.plazaName || '—';
-  const rentEditUnitName =
-    rentEditUnit?.unitName ||
-    rentEditUnit?.unitNumber ||
-    rentEditUnit?.name ||
-    editingEntry?.unitId?.unitName ||
-    editingEntry?.entryData?.unit?.unitName ||
-    '—';
 
   return (
     <div className="space-y-6">
@@ -1647,12 +1633,37 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
               {editingEntry?.entryType === 'RENT' && (
                 <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950/80 border border-slate-800 rounded-xl">
                   <div>
-                    <label className="block text-slate-400 font-semibold mb-1">Property</label>
-                    <div className="text-white font-medium">{rentEditPropertyName}</div>
+                    <label className="block text-slate-400 font-semibold mb-1">Property *</label>
+                    <select
+                      value={editForm.propertyId}
+                      onChange={(e) => setEditForm({ ...editForm, propertyId: e.target.value, unitId: '' })}
+                      required
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    >
+                      <option value="">-- Select Property --</option>
+                      {properties.map((property) => (
+                        <option key={property._id} value={property._id}>
+                          {property.plazaName || property.propertyName || property.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-slate-400 font-semibold mb-1">Unit</label>
-                    <div className="text-white font-medium">{rentEditUnitName}</div>
+                    <label className="block text-slate-400 font-semibold mb-1">Unit *</label>
+                    <select
+                      value={editForm.unitId}
+                      onChange={(e) => setEditForm({ ...editForm, unitId: e.target.value })}
+                      required
+                      disabled={!editForm.propertyId}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white disabled:opacity-50"
+                    >
+                      <option value="">-- Select Unit --</option>
+                      {(properties.find((property) => String(property._id) === String(editForm.propertyId))?.units || []).map((unit) => (
+                        <option key={unit._id} value={unit._id}>
+                          {unit.unitName || unit.unitNumber || unit.name || 'Unit'}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               )}

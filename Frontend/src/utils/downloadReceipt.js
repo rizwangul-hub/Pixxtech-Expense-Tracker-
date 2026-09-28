@@ -101,12 +101,18 @@ export function extractReceiptMetadata(entry) {
     '';
 
   let unitName = '';
-  if (entry.propertyId?.units && entry.unitId) {
-    const u = entry.propertyId.units.find((un) => un._id?.toString() === entry.unitId?.toString());
+  const unitId = entry.unitId?._id || entry.unitId || entry.entryData?.unitId?._id || entry.entryData?.unitId;
+  if (entry.propertyId?.units && unitId) {
+    const u = entry.propertyId.units.find((un) => un._id?.toString() === unitId.toString());
     if (u) unitName = u.unitName || u.unitNumber || '';
   }
-  if (!unitName && entry.entryData?.unit?.unitName) {
-    unitName = entry.entryData.unit.unitName;
+  if (!unitName) {
+    unitName =
+      entry.unitId?.unitName ||
+      entry.unitId?.unitNumber ||
+      entry.entryData?.unit?.unitName ||
+      entry.entryData?.unit?.unitNumber ||
+      '';
   }
 
   const tenantName =
