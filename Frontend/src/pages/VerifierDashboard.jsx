@@ -191,6 +191,18 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     entry.entryData?.unit?.tenantName ||
     '';
 
+  const getExpenseDebitLabel = (entry) => {
+    const category = entry.categoryId;
+    const expenseHead = category?.isMainHead
+      ? category.name
+      : category?.parentCategoryId?.name ||
+        entry.entryData?.category?.parentCategoryId?.name ||
+        category?.name ||
+        entry.entryData?.category?.name;
+    const debitAccount = entry.drAccountId?.name || '';
+    return expenseHead || (/Clearing|External Parties/i.test(debitAccount) ? 'Expense Head' : debitAccount || 'Expense Account');
+  };
+
   // Instant download of formatted receipt evidence document (top voucher details + bottom receipt photo)
   const handleQuickDownloadReceipts = async (e, entry) => {
     if (e && e.stopPropagation) e.stopPropagation();
@@ -1179,7 +1191,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                         <>
                           <div className="flex items-center justify-between">
                             <span className="text-emerald-400 font-bold">Debit (Expense):</span>
-                            <span className="text-slate-200 font-semibold">{entry.drAccountId?.name || 'Expense Account'}</span>
+                            <span className="text-slate-200 font-semibold">{entry.entryType === 'EXPENSE' ? getExpenseDebitLabel(entry) : entry.drAccountId?.name || 'Expense Account'}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-rose-400 font-bold">Credit (Paid From):</span>
@@ -1426,7 +1438,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                             <div className="space-y-0.5">
                               <div>
                                 <span className="text-emerald-400 font-bold">Dr: </span>
-                                <span className="text-slate-200 font-medium">{entry.drAccountId?.name || 'Debit Account'}</span>
+                                <span className="text-slate-200 font-medium">{entry.entryType === 'EXPENSE' ? getExpenseDebitLabel(entry) : entry.drAccountId?.name || 'Debit Account'}</span>
                               </div>
                               <div>
                                 <span className="text-rose-400 font-bold">Cr: </span>
