@@ -676,6 +676,20 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     return true;
   });
 
+  const rentEditPropertyId = editingEntry?.propertyId?._id || editingEntry?.propertyId || editForm.propertyId;
+  const rentEditProperty = properties.find((property) => String(property._id) === String(rentEditPropertyId));
+  const rentEditUnitId = editingEntry?.unitId?._id || editingEntry?.unitId || editForm.unitId;
+  const rentEditUnit = rentEditProperty?.units?.find((unit) => String(unit._id) === String(rentEditUnitId));
+  const rentEditPropertyName =
+    rentEditProperty?.plazaName || rentEditProperty?.propertyName || editingEntry?.propertyId?.plazaName || '—';
+  const rentEditUnitName =
+    rentEditUnit?.unitName ||
+    rentEditUnit?.unitNumber ||
+    rentEditUnit?.name ||
+    editingEntry?.unitId?.unitName ||
+    editingEntry?.entryData?.unit?.unitName ||
+    '—';
+
   return (
     <div className="space-y-6">
       {/* Top Header Banner */}
@@ -1629,6 +1643,19 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                   />
                 </div>
               </div>
+
+              {editingEntry?.entryType === 'RENT' && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950/80 border border-slate-800 rounded-xl">
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">Property</label>
+                    <div className="text-white font-medium">{rentEditPropertyName}</div>
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">Unit</label>
+                    <div className="text-white font-medium">{rentEditUnitName}</div>
+                  </div>
+                </div>
+              )}
 
               {editingEntry?.entryType === 'EXPENSE' && (
                 <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
