@@ -45,6 +45,7 @@ export function MainLayout({
   const {
     authorized: communicationsAuthorized,
     unreadCount: communicationsUnread,
+    toast: communicationToast,
     notifications: communicationNotifications = [],
   } = useCommunications();
   const canEnterData = hasPermission(user, PERMISSIONS.ENTER_DATA);
@@ -90,7 +91,11 @@ export function MainLayout({
           label: 'Messages & Calls',
           icon: MessagesSquare,
           status: 'active',
-          badge: communicationsUnread > 0 ? String(communicationsUnread) : '',
+          badge: communicationsUnread > 0
+            ? `${communicationsUnread} unread`
+            : communicationToast
+              ? 'New message'
+              : '',
           badgeColor: 'bg-rose-100 text-rose-700 border-rose-200',
         }]
       : []),
@@ -496,7 +501,12 @@ export function MainLayout({
                   }`}
                 >
                   <div className="flex items-center gap-3.5">
-                    <Icon size={21} className={isActive ? 'text-white-keep' : isItemActive ? 'text-slate-700' : 'text-slate-400'} />
+                    <span className="relative">
+                      <Icon size={21} className={isActive ? 'text-white-keep' : isItemActive ? 'text-slate-700' : 'text-slate-400'} />
+                      {item.id === 'communications' && communicationToast && (
+                        <span className="absolute -right-1 -top-1 h-2.5 w-2.5 animate-ping rounded-full bg-rose-500" />
+                      )}
+                    </span>
                     <span className="text-[15px] font-bold leading-none">{item.label}</span>
                   </div>
 
@@ -508,7 +518,7 @@ export function MainLayout({
                             ? 'bg-rose-500 text-white border-rose-400 font-extrabold text-white-keep animate-pulse'
                             : 'bg-blue-700 text-white border-blue-500 text-white-keep'
                           : item.badgeColor
-                      }`}
+                      } ${item.id === 'communications' && (communicationsUnread > 0 || communicationToast) ? 'animate-pulse' : ''}`}
                     >
                       {item.badge}
                     </span>
@@ -572,7 +582,12 @@ export function MainLayout({
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <Icon size={20} />
+                        <span className="relative">
+                          <Icon size={20} />
+                          {item.id === 'communications' && communicationToast && (
+                            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 animate-ping rounded-full bg-rose-500" />
+                          )}
+                        </span>
                         <span className="text-[15px] font-bold">{item.label}</span>
                       </div>
                       {item.badge && (
@@ -582,7 +597,7 @@ export function MainLayout({
                               ? 'bg-rose-500 text-white border-rose-400 font-extrabold text-white-keep animate-pulse'
                               : 'bg-blue-700 text-white border-blue-500 text-white-keep'
                             : item.badgeColor
-                        }`}>
+                        } ${item.id === 'communications' && (communicationsUnread > 0 || communicationToast) ? 'animate-pulse' : ''}`}>
                           {item.badge}
                         </span>
                       )}

@@ -392,6 +392,15 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
       emit('communications:message', message);
       const selfId = String(selfUserIdRef.current || '');
       if (String(message.sender?.id || '') === selfId) return;
+      const notification = {
+        id: key,
+        title: message.sender?.name || 'New message',
+        body: message.text || (message.type === 'IMAGE' ? 'Sent an image' : 'Sent a voice message'),
+        createdAt: message.createdAt,
+      };
+      setToast(notification);
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = window.setTimeout(() => setToast(null), 3000);
       communicationsAPI.markDelivered(message.id).catch(() => {});
       if (conversationOpenRef.current) {
         communicationsAPI.markRead().then((result) => {
@@ -400,16 +409,7 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
         }).catch(() => {});
       } else {
         setUnreadCount((count) => count + 1);
-        const notification = {
-          id: key,
-          title: message.sender?.name || 'New message',
-          body: message.text || (message.type === 'IMAGE' ? 'Sent an image' : 'Sent a voice message'),
-          createdAt: message.createdAt,
-        };
         setNotifications((items) => [notification, ...items.filter((item) => item.id !== key)].slice(0, 20));
-        setToast(notification);
-        window.clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = window.setTimeout(() => setToast(null), 6500);
       }
     };
 
@@ -570,6 +570,7 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
     bootstrap,
     bootstrapError,
     unreadCount,
+    toast,
     notifications,
     setUnreadCount,
     connection,
@@ -591,7 +592,7 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
     finishCall,
     toggleMute,
     toggleCamera,
-  }), [authorized, bootstrap, bootstrapError, unreadCount, notifications, connection, realtimeReady, peerOnline, call, callError, callDuration, muted, cameraEnabled, setConversationOpen, retryBootstrap, startCall, acceptCall, finishCall, toggleMute, toggleCamera]);
+  }), [authorized, bootstrap, bootstrapError, unreadCount, toast, notifications, connection, realtimeReady, peerOnline, call, callError, callDuration, muted, cameraEnabled, setConversationOpen, retryBootstrap, startCall, acceptCall, finishCall, toggleMute, toggleCamera]);
 
   const terminalAction = call?.direction === 'incoming' && call.status !== 'ACCEPTED'
     ? 'decline'
@@ -606,8 +607,9 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
         <button
           type="button"
           onClick={() => { setToast(null); onOpenMessagesRef.current?.(); }}
-          className="fixed right-4 top-20 z-[70] flex max-w-[calc(100vw-2rem)] items-start gap-3 rounded-2xl border border-indigo-200 bg-white p-4 text-left shadow-xl"
+          className="fixed right-4 top-4 z-[70] flex max-w-[calc(100vw-2rem)] items-start gap-3 rounded-2xl border border-indigo-200 bg-white p-4 text-left shadow-xl"
           aria-label={`Open new message from ${toast.title}`}
+          aria-live="polite"
         >
           <MessagesSquare className="mt-1 shrink-0 text-indigo-600" size={20} />
           <span className="min-w-0"><strong className="block text-sm text-slate-900">{toast.title}</strong><span className="block truncate text-sm text-slate-600">{toast.body}</span></span>
