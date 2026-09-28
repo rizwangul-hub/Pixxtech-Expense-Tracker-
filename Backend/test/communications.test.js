@@ -10,6 +10,7 @@ import {
   validateMessageInput,
   validateSignalInput,
 } from '../services/communicationService.js';
+import { getCorsAllowedOrigins, isCorsOriginAllowed } from '../config/communicationCors.js';
 
 const admin = { _id: 'admin-1', email: 'ADMIN@example.com ', name: 'Khurshid', role: 'ADMIN', isActive: true };
 const dataEntry = { _id: 'entry-2', email: 'entry@example.com', name: 'Sarfraz', role: 'DATA_ENTRY', isActive: true };
@@ -102,11 +103,18 @@ test('call transitions enforce actor and state rules', () => {
 });
 
 test('signaling input is bounded and TURN configuration fails closed', () => {
-  assert.equal(validateSignalInput({ kind: 'ice-candidate', payload: { candidate: 'candidate' } }).kind, 'ice-candidate');
+  assert.equal(
+    validateSignalInput({
+      kind: 'ice-candidate',
+      payload: { candidate: 'candidate', sdpMid: 'audio', sdpMLineIndex: 0 },
+    }).kind,
+    'ice-candidate'
+  );
   assert.throws(
-    () => validateSignalInput({ kind: 'offer', payload: { sdp: 'x'.repeat(16 * 1024) } }),
+    () => validateSignalInput({ kind: 'offer', payload: { type: 'offer', sdp: 'x'.repeat(16 * 1024) } }),
     (error) => error.status === 413
   );
+  assert.throws(() => validateSignalInput(null), CommunicationError);
   assert.deepEqual(getIceServers({}), [{ urls: ['stun:stun.l.google.com:19302'] }]);
   assert.throws(
     () => getIceServers({ TURN_URLS: 'turn:turn.example.com:3478' }),
@@ -120,4 +128,17 @@ test('signaling input is bounded and TURN configuration fails closed', () => {
     })[0].urls,
     ['turns:turn.example.com:5349']
   );
+});
+
+test('CORS allows only trusted or explicitly configured origins with credentials', () => {
+  const env = { CORS_ORIGIN: 'https://custom.example, http://localhost:5173/' };
+  assert.equal(isCorsOriginAllowed('https://pixxtech-expense-tracker-fz2h.vercel.app', env), true);
+  assert.equal(isCorsOriginAllowed('https://pixxtech-expense-tracker.vercel.app', env), true);
+  assert.equal(isCorsOriginAllowed('https://custom.example', env), true);
+  assert.equal(isCorsOriginAllowed('http://localhost:5173', env), true);
+  assert.equal(isCorsOriginAllowed('https://evil.example', env), false);
+  assert.equal(isCorsOriginAllowed('https://custom.example.attacker.tld', env), false);
+  assert.equal(isCorsOriginAllowed('null', env), false);
+  assert.equal(isCorsOriginAllowed(undefined, env), true);
+  assert.equal(getCorsAllowedOrigins({ CORS_ORIGIN: 'https://custom.example/path' }).has('https://custom.example/path'), false);
 });

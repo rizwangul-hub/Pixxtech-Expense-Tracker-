@@ -106,7 +106,7 @@ export const createTokenRequest = handleAsync(async (req, res) => {
   const context = await getContext(req);
   const tokenRequest = await getAbly().auth.createTokenRequest({
     clientId: String(context.self._id),
-    capability: JSON.stringify({ [context.channelName]: ['subscribe', 'presence'] }),
+    capability: JSON.stringify({ [context.channelName]: ['subscribe'] }),
   });
   return res.json({ success: true, data: tokenRequest });
 });

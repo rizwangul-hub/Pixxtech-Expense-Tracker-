@@ -69,6 +69,7 @@ export const getConversationContext = (participants, authenticatedUserId) => {
 };
 
 export const validateMessageInput = (body = {}) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) body = {};
   const { clientMessageId, type } = body;
   if (typeof clientMessageId !== 'string' || !clientMessageId.trim() || clientMessageId.length > 128) {
     throw new CommunicationError('clientMessageId is required and must be at most 128 characters.');
@@ -181,12 +182,30 @@ export const getCallTransition = (call, actorId, action) => {
 };
 
 export const validateSignalInput = (body = {}) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) body = {};
   const { kind, payload } = body;
   if (!['offer', 'answer', 'ice-candidate'].includes(kind)) {
     throw new CommunicationError('kind must be offer, answer, or ice-candidate.');
   }
   if (payload === undefined || payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new CommunicationError('payload must be a JSON object.');
+  }
+  if (kind === 'offer' || kind === 'answer') {
+    if (payload.type !== kind || typeof payload.sdp !== 'string' || !payload.sdp.trim()) {
+      throw new CommunicationError(`${kind} payload must include matching type and SDP.`);
+    }
+    if (payload.sdp.length > MAX_SIGNAL_BYTES) {
+      throw new CommunicationError('Signaling payload must not exceed 16 KB.', 413, 'SIGNAL_TOO_LARGE');
+    }
+  } else if (
+    typeof payload.candidate !== 'string' ||
+    !payload.candidate.trim() ||
+    payload.candidate.length > 4096 ||
+    (payload.sdpMid !== undefined && payload.sdpMid !== null && typeof payload.sdpMid !== 'string') ||
+    (payload.sdpMLineIndex !== undefined && payload.sdpMLineIndex !== null &&
+      (!Number.isInteger(payload.sdpMLineIndex) || payload.sdpMLineIndex < 0))
+  ) {
+    throw new CommunicationError('ice-candidate payload must contain a valid candidate and optional media identifiers.');
   }
   let size;
   try {

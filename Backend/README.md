@@ -2,7 +2,9 @@
 
 ## Communications (Ably)
 
-The communications API is mounted at `/api/communications`; every route requires the existing JWT `protect` middleware. Access is deliberately restricted to exactly two existing active users:
+The communications API is mounted at `/api/communications`; every route requires the existing JWT `protect` middleware. Browser origins are allowlisted (credentialed CORS never uses `*`): the production frontend (`https://pixxtech-expense-tracker.vercel.app`), the active preview (`https://pixxtech-expense-tracker-fz2h.vercel.app`), and any exact origins in comma-separated `CORS_ORIGIN`. Configure `CORS_ORIGIN` in Vercel if deployments use other frontend origins. Disallowed origins receive no CORS permission; preflight requests are handled before database connection middleware.
+
+Access is deliberately restricted to exactly two existing active users:
 
 - `COMMUNICATION_ADMIN_EMAIL` must resolve to one `ADMIN` user (Khurshid Anwar).
 - `COMMUNICATION_DATA_ENTRY_EMAIL` must resolve to one `DATA_ENTRY` user (Sarfraz).
@@ -15,4 +17,6 @@ Images (JPEG/PNG/WEBP/GIF, maximum 10 MB) and audio (MP3/M4A/AAC/WAV/OGG/WEBM, m
 
 Optional TURN settings: configure all of `TURN_URLS` (comma-separated `turn:`/`turns:` URLs or a JSON string array), `TURN_USERNAME`, and `TURN_CREDENTIAL`. The temporary ICE configuration is returned only to the two authorized participants. If none are configured, bootstrap supplies a public STUN-only fallback; this does not relay media and calls may fail on restrictive NATs/firewalls. Set up a production TURN provider for reliable connectivity.
 
-Focused tests: `npm test`. They use no live MongoDB, Cloudinary, or Ably credentials.
+Vercel deployment: set the Vercel project Root Directory to `Backend`, with `Backend/vercel.json` and `Backend/package.json` as the deployment configuration and dependency manifest. The Backend lockfile includes `ably`, which is statically imported by the deployed API function and must be installed from this root. Configure all production credentials in Vercel Environment Variables; never commit `.env` or real credential values. The preview frontend origin above is allowed by the backend CORS policy.
+
+Focused tests: run `npm test` from the `Backend` directory. They use no live MongoDB, Cloudinary, or Ably credentials.

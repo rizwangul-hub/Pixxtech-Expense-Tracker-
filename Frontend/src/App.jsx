@@ -22,7 +22,9 @@ import { DataEntryDashboard } from './pages/DataEntryDashboard.jsx';
 import { AdminPublisherDashboard } from './pages/AdminPublisherDashboard.jsx';
 import { VerifierDashboard } from './pages/VerifierDashboard.jsx';
 import { StaffPage } from './pages/StaffPage.jsx';
+import { MessagesCallsPage } from './pages/MessagesCallsPage.jsx';
 import { LoginForm } from './components/LoginForm.jsx';
+import { CommunicationsProvider, canUseCommunications } from './communications/CommunicationsProvider.jsx';
 import loadingImg from './assets/image/loading.png';
 import loadingMobileImg from './assets/image/loadingmb.jpg';
 import { authAPI } from './services/api.js';
@@ -58,6 +60,9 @@ const SECTION_PERMISSIONS = {
 };
 
 const getAccessibleSection = (section, user) => {
+  if (section === 'communications' && !canUseCommunications(user)) {
+    return 'dashboard';
+  }
   if (section === 'chart-of-accounts' && !isAdmin(user)) {
     return 'dashboard';
   }
@@ -241,6 +246,10 @@ export function App() {
   };
 
   return (
+    <CommunicationsProvider
+      user={user}
+      onOpenMessages={() => handleNavChange('communications')}
+    >
     <MainLayout
       user={user}
       currentView={
@@ -259,7 +268,9 @@ export function App() {
         window.history.pushState({}, '', '/operational');
       }}
     >
-      {currentSection === 'verification' && (isVerifier(user) || isAdmin(user)) ? (
+      {currentSection === 'communications' && canUseCommunications(user) ? (
+        <MessagesCallsPage />
+      ) : currentSection === 'verification' && (isVerifier(user) || isAdmin(user)) ? (
         <VerifierDashboard
           user={user}
           onOpenMasterAccounts={() => setCurrentSection('accounts')}
@@ -377,6 +388,7 @@ export function App() {
         />
       )}
     </MainLayout>
+    </CommunicationsProvider>
   );
 }
 

@@ -20,9 +20,11 @@ import {
   Coins,
   BookOpen,
   Sparkles,
+  MessagesSquare,
 } from 'lucide-react';
 import { hasPermission, isAdmin, isVerifier, isDataEntry, PERMISSIONS } from '../utils/permissions.js';
 import { verificationAPI } from '../services/api.js';
+import { useCommunications } from '../communications/CommunicationsProvider.jsx';
 import logo from '../assets/image/logo.png';
 
 export function MainLayout({
@@ -38,6 +40,7 @@ export function MainLayout({
   const userIsAdmin = isAdmin(user);
   const userIsVerifier = isVerifier(user);
   const userIsDataEntry = isDataEntry(user);
+  const { authorized: communicationsAuthorized, unreadCount: communicationsUnread } = useCommunications();
   const canEnterData = hasPermission(user, PERMISSIONS.ENTER_DATA);
   const canManageSettings = hasPermission(user, PERMISSIONS.MANAGE_SETTINGS);
 
@@ -75,6 +78,16 @@ export function MainLayout({
       badge: 'Core',
       badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
     },
+    ...(communicationsAuthorized
+      ? [{
+          id: 'communications',
+          label: 'Messages & Calls',
+          icon: MessagesSquare,
+          status: 'active',
+          badge: communicationsUnread > 0 ? String(communicationsUnread) : '',
+          badgeColor: 'bg-rose-100 text-rose-700 border-rose-200',
+        }]
+      : []),
     {
       id: 'ledgers',
       label: 'Ledgers',
@@ -346,6 +359,23 @@ export function MainLayout({
                 {userIsAdmin ? 'Publisher Control Center' : 'Voucher Entry Terminal'}
               </span>
               <span className="md:hidden">Terminal</span>
+            </button>
+          )}
+
+          {communicationsAuthorized && (
+            <button
+              type="button"
+              onClick={() => onViewChange('communications')}
+              className="relative rounded-xl p-2.5 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"
+              aria-label={`Open Messages and Calls${communicationsUnread ? `, ${communicationsUnread} unread messages` : ''}`}
+              title="Messages & Calls"
+            >
+              <MessagesSquare size={20} />
+              {communicationsUnread > 0 && (
+                <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">
+                  {communicationsUnread > 99 ? '99+' : communicationsUnread}
+                </span>
+              )}
             </button>
           )}
 
