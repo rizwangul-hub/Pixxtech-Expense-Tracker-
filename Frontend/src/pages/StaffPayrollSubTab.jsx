@@ -1349,7 +1349,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="text-rose-400" size={20} />
-                <h3 className="text-lg font-black text-white">Reverse Salary Payout</h3>
+                <h3 className="text-lg font-black text-white">Reverse & Return Salary to Verification</h3>
               </div>
               <button
                 onClick={() => setReverseModalOpen(false)}
@@ -1360,9 +1360,9 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              Are you sure you want to reverse all recorded salary payments for{' '}
+              This will reverse all posted salary payments for{' '}
               <strong className="text-white">{reverseTargetRow.name}</strong> (Rs.{' '}
-              {formatPKR(reverseTargetRow.totalInstallmentsPaid || reverseTargetRow.netPayable)})?
+              {formatPKR(reverseTargetRow.totalInstallmentsPaid || reverseTargetRow.netPayable)}), restore the bank/cash and loan balances, and create pending item(s) for Khurshid to verify again. Salary month remains {selectedMonth}.
             </p>
 
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs space-y-1 font-mono">
@@ -1371,7 +1371,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
             </div>
 
             <div className="text-xs text-rose-300 bg-rose-950/60 p-3 rounded-xl border border-rose-900/60 space-y-1">
-              <div>• Every linked salary transaction will be marked REVERSED and its payment amount will be restored to the original bank/cash account.</div>
+              <div>• Every linked salary transaction will be marked REVERSED. New queue entries will be created for approval; no new financial transaction is posted until verification.</div>
               {Number(reverseTargetRow.loanDeduction) > 0 && (
                 <div className="text-amber-300 font-semibold">
                   • Rs. {formatPKR(reverseTargetRow.loanDeduction)} deducted for staff loan will be reversed and restored back to {reverseTargetRow.name}&apos;s loan balance.
@@ -1383,7 +1383,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
               <label className="text-slate-400 font-bold">Reversal Reason (Optional):</label>
               <input
                 type="text"
-                placeholder="e.g. Wrong bank account selected"
+                placeholder="e.g. Correcting the payment/report month"
                 value={reverseReason}
                 onChange={(e) => setReverseReason(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 text-white font-medium rounded-xl px-3 py-2 focus:outline-none"
@@ -1404,7 +1404,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                 disabled={processingReverse}
                 className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs disabled:opacity-50"
               >
-                {processingReverse ? 'Reversing...' : 'Confirm Reversal'}
+                {processingReverse ? 'Reversing & Returning...' : 'Reverse & Return to Khurshid Queue'}
               </button>
             </div>
           </div>

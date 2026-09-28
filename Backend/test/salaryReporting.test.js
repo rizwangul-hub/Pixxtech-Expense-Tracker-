@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   formatSalaryMonth,
+  groupSalaryPaymentsByAccount,
   getSalaryPaymentDetail,
   getSalaryPaymentPeriod,
   getUtcMonthDateRange,
+  getUtcMonthKey,
+  normalizeBusinessPaymentDate,
 } from '../services/salaryReportingService.js';
 
 const cases = [
@@ -104,4 +107,32 @@ test('missing historical payment dates are flagged without inferring a salary-mo
   assert.equal(paymentPeriod.salaryForMonth, '2026-08');
   assert.equal(paymentPeriod.paymentMonth, null);
   assert.equal(paymentPeriod.requiresPaymentDateCorrection, true);
+});
+
+test('reversing installments returns one pending amount per original payment account', () => {
+  const transactions = [
+    { crAccountId: 'bank-a', drAccountId: 'clearing', amount: 12000 },
+    { crAccountId: 'bank-a', drAccountId: 'clearing', amount: 8000 },
+    { crAccountId: 'cash-b', drAccountId: 'clearing', amount: 5000 },
+  ];
+  const payments = groupSalaryPaymentsByAccount(transactions);
+
+  assert.equal(payments.size, 2);
+  assert.equal(payments.get('bank-a').amount, 20000);
+  assert.equal(payments.get('cash-b').amount, 5000);
+  assert.equal([...payments.values()].reduce((sum, payment) => sum + payment.amount, 0), 25000);
+});
+
+test('date-only payment picker values stay in the selected Pakistan business month', () => {
+  const normalized = normalizeBusinessPaymentDate('2026-09-15');
+  assert.equal(getUtcMonthKey(normalized), '2026-09');
+  const { startDate, endDate } = getUtcMonthDateRange(2026, 9);
+  assert.equal(normalized >= startDate && normalized <= endDate, true);
+});
+
+test('late-evening Pakistan time on the 1st counts in that month, not the prior UTC month', () => {
+  const paymentInstant = new Date('2026-09-01T00:30:00.000+05:00');
+  assert.equal(getUtcMonthKey(paymentInstant), '2026-09');
+  const { startDate, endDate } = getUtcMonthDateRange(2026, 9);
+  assert.equal(paymentInstant >= startDate && paymentInstant <= endDate, true);
 });

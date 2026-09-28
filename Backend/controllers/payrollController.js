@@ -15,8 +15,10 @@ import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { createTransaction, round2, suggestNextVoucherNumber, syncAccountBalances } from '../services/ledgerService.js';
 import {
   formatSalaryMonth,
+  groupSalaryPaymentsByAccount,
   getSalaryPaymentDetail,
   getSalaryPaymentPeriod,
+  normalizeBusinessPaymentDate,
 } from '../services/salaryReportingService.js';
 
 /**
@@ -1455,7 +1457,7 @@ export const paySingleSalary = async (req, res) => {
     const clearingAccount = await getOrCreateSalaryExpenseAccount();
 
     // The payout belongs to the selected salary month but posts on its actual payment date.
-    const pDate = paymentDate ? new Date(paymentDate) : null;
+    const pDate = paymentDate ? normalizeBusinessPaymentDate(paymentDate) : null;
     if (!pDate || Number.isNaN(pDate.getTime())) {
       return apiError(res, 'A valid actual salary payment date is required.', 400);
     }
@@ -1762,7 +1764,7 @@ export const payBulkSalary = async (req, res) => {
     const clearingAccount = await getOrCreateSalaryExpenseAccount();
     
     // The payout belongs to the selected salary month but posts on its actual payment date.
-    const pDate = paymentDate ? new Date(paymentDate) : null;
+    const pDate = paymentDate ? normalizeBusinessPaymentDate(paymentDate) : null;
     if (!pDate || Number.isNaN(pDate.getTime())) {
       return apiError(res, 'A valid actual salary payment date is required.', 400);
     }
@@ -1962,13 +1964,36 @@ export const reverseSalaryPayment = async (req, res) => {
       ...(pDoc.salaryInstallments || []).map((installment) => installment.transactionId).filter(Boolean),
       pDoc.transactionId,
     ].filter((id, index, ids) => ids.findIndex((item) => String(item) === String(id)) === index);
+    const linkedTransactions = transactionIds.length > 0
+      ? await Transaction.find({ _id: { $in: transactionIds }, status: { $nin: ['REVERSED', 'VOID'] } })
+      : [];
+    if (linkedTransactions.some((tx) => !tx.crAccountId)) {
+      return apiError(res, 'A salary transaction is missing its payment account and cannot be safely returned to verification.', 400);
+    }
+    const pendingPaymentsByAccount = groupSalaryPaymentsByAccount(
+      linkedTransactions,
+      {
+        amount: pDoc.totalInstallmentsPaid || pDoc.netPayable || 0,
+        accountId: pDoc.paidFromAccountId,
+        paymentMethod: pDoc.paymentMethod,
+      }
+    );
+    if (pendingPaymentsByAccount.size === 0) {
+      return apiError(res, 'The original salary payment account could not be identified; no reversal was made.', 400);
+    }
+    const paymentAccounts = new Map();
+    for (const payment of pendingPaymentsByAccount.values()) {
+      const account = await Account.findById(payment.accountId);
+      if (!account || !account.isActive) {
+        return apiError(res, 'The original salary payment account is no longer active; no reversal was made.', 409);
+      }
+      paymentAccounts.set(payment.accountId.toString(), account);
+    }
+
     let paidAmount = 0;
     const affectedAccountIds = new Set();
 
-    for (const transactionId of transactionIds) {
-      const tx = await Transaction.findById(transactionId);
-      if (!tx || tx.status === 'REVERSED') continue;
-
+    for (const tx of linkedTransactions) {
       if (tx.crAccountId) affectedAccountIds.add(tx.crAccountId.toString());
       if (tx.drAccountId) affectedAccountIds.add(tx.drAccountId.toString());
       const transactionAmount = round2(tx.amount);
@@ -1993,7 +2018,9 @@ export const reverseSalaryPayment = async (req, res) => {
     // Legacy payroll rows may not have installment transaction links. Keep the
     // audit amount useful without changing balances a second time.
     if (paidAmount <= 0) {
-      paidAmount = round2(pDoc.totalInstallmentsPaid || pDoc.netPayable);
+      paidAmount = round2(
+        Array.from(pendingPaymentsByAccount.values()).reduce((sum, payment) => sum + payment.amount, 0)
+      );
     }
 
     // Reverse any loan repayments / deductions processed for this employee and payroll month
@@ -2048,25 +2075,104 @@ export const reverseSalaryPayment = async (req, res) => {
     pDoc.paymentNotes = '';
     await pDoc.save();
 
+    const paymentDate = new Date();
+    const salaryMonth = pDoc.payrollMonth;
+    const disbursementMonth = paymentDate.toISOString().slice(0, 7);
+    const salarySnapshot = {
+      employeeName: pDoc.employeeName,
+      employeeId: pDoc.employeeId,
+      designation: pDoc.designation,
+      department: pDoc.department,
+      basicSalary: pDoc.basicSalary || 0,
+      allowance: pDoc.allowance || 0,
+      allowanceReason: pDoc.allowanceReason || '',
+      grossSalary: pDoc.grossSalary || 0,
+      loanDeduction: pDoc.loanDeduction || 0,
+      lopDeduction: pDoc.lopDeduction || 0,
+      otherDeduction: pDoc.otherDeduction || 0,
+      totalDeduction: pDoc.totalDeduction || 0,
+      netPayable: pDoc.netPayable || 0,
+      totalInstallmentsPaid: 0,
+      salaryInstallments: [],
+      paymentStatus: 'PENDING_PAYMENT',
+    };
+    const pendingEntries = [];
+    for (const payment of pendingPaymentsByAccount.values()) {
+      const amount = round2(payment.amount);
+      if (amount <= 0) continue;
+      const account = paymentAccounts.get(payment.accountId.toString());
+      const salaryCategory = payment.categoryId
+        ? payment.categoryId
+        : (await getOrCreateEmployeeSalaryCategory(pDoc.employeeName))._id;
+      const voucherNo = await suggestNextVoucherNumber(paymentDate);
+      const detail = getSalaryPaymentDetail({
+        employeeName: pDoc.employeeName,
+        designation: pDoc.designation,
+        salaryMonth,
+        paymentDate,
+        notes: reason ? `Re-submitted for verification after reversal: ${reason}` : 'Re-submitted for verification after reversal',
+      });
+      const pendingEntry = await PendingEntry.create({
+        entryType: 'SALARY',
+        amount,
+        date: paymentDate,
+        voucherNo,
+        rentMonth: salaryMonth,
+        crAccountId: account._id,
+        drAccountId: payment.debitAccountId,
+        categoryId: salaryCategory,
+        receivingAccountId: account._id,
+        detail,
+        tenantId: pDoc.employeeId,
+        paymentMethod: payment.paymentMethod,
+        entryData: {
+          payrollId: pDoc._id,
+          employeeId: pDoc.employeeId,
+          month: salaryMonth,
+          disbursementMonth,
+          paymentDate,
+          paidFromAccountId: account._id,
+          paymentMethod: payment.paymentMethod,
+          paymentNotes: reason,
+          paymentAmount: amount,
+          payrollSnapshot: salarySnapshot,
+          returnedForVerificationAfterReversal: true,
+        },
+        status: 'PENDING_VERIFICATION',
+        submittedBy: req.user._id,
+        submittedByName: req.user?.name || 'Finance Manager',
+        submittedAt: paymentDate,
+        auditLog: [{
+          action: 'RESUBMITTED_AFTER_REVERSAL',
+          performedBy: req.user?.name || 'Finance Manager',
+          performedById: req.user._id,
+          timestamp: paymentDate,
+          notes: `Previously recorded salary payment reversed and returned to Khurshid Anwar's verification queue. Salary for ${salaryMonth}.`,
+        }],
+      });
+      pendingEntries.push(pendingEntry);
+    }
+
     await StaffAuditLog.create({
       userId: req.user?._id || null,
       userName: req.user?.name || 'System Operator',
       action: 'SALARY_PAYMENT_REVERSED',
       recordId: pDoc._id.toString(),
-      details: `Reversed salary payment of Rs. ${formatPKR(paidAmount)} for ${pDoc.employeeName} (Voucher ${prevVoucher})${totalLoanRestored > 0 ? `. Restored Rs. ${formatPKR(totalLoanRestored)} to employee loan balance.` : ''}. Reason: ${reason || 'N/A'}.`,
+      details: `Reversed salary payment of Rs. ${formatPKR(paidAmount)} for ${pDoc.employeeName} (Voucher ${prevVoucher}) and returned it to the verification queue${totalLoanRestored > 0 ? `. Restored Rs. ${formatPKR(totalLoanRestored)} to employee loan balance.` : ''}. Reason: ${reason || 'N/A'}.`,
       newValue: {
         paidAmount,
         totalLoanRestored,
         reason,
+        pendingEntryIds: pendingEntries.map((entry) => entry._id),
       },
     });
 
     return apiSuccess(
       res,
-      { payroll: pDoc, totalLoanRestored },
+      { payroll: pDoc, totalLoanRestored, pendingEntries },
       totalLoanRestored > 0
-        ? `Salary payment for ${pDoc.employeeName} reversed successfully. Disbursing account balance restored and Rs. ${formatPKR(totalLoanRestored)} restored to employee loan balance.`
-        : `Salary payment for ${pDoc.employeeName} reversed successfully. Disbursing account balance restored.`
+        ? `Salary payment for ${pDoc.employeeName} reversed and returned to Khurshid Anwar's verification queue. Disbursing account balance restored and Rs. ${formatPKR(totalLoanRestored)} restored to employee loan balance.`
+        : `Salary payment for ${pDoc.employeeName} reversed and returned to Khurshid Anwar's verification queue. Disbursing account balance restored.`
     );
   } catch (error) {
     console.error('[Reverse Salary Payment Error]:', error);

@@ -26,7 +26,11 @@ import {
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { validateExpenseClassification } from '../services/expenseClassificationService.js';
 import { generateReceiptEvidencePDF } from '../services/pdfReportService.js';
-import { getSalaryPaymentDetail, getSalaryPaymentPeriod } from '../services/salaryReportingService.js';
+import {
+  getSalaryPaymentDetail,
+  getSalaryPaymentPeriod,
+  resolveSalaryPaymentDateOnVerification,
+} from '../services/salaryReportingService.js';
 
 /**
  * Generate sequential Receipt Number for Rent
@@ -949,7 +953,7 @@ export const verifyEntry = async (req, res) => {
       const paidFromAccountId = entry.crAccountId;
       const netAmount = round2(entry.amount);
       const salaryMonth = entry.rentMonth || entry.entryData?.month;
-      const paymentDate = new Date();
+      const paymentDate = resolveSalaryPaymentDateOnVerification(entry);
 
       // currentBalance is a cached field and can be stale after reversals or
       // other ledger corrections. Use the posted, non-reversed ledger as the
