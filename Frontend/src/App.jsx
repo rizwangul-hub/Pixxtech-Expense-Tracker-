@@ -61,6 +61,9 @@ const getAccessibleSection = (section, user) => {
   if (section === 'chart-of-accounts' && !isAdmin(user)) {
     return 'dashboard';
   }
+  if (section === 'tenants' && isDataEntry(user)) {
+    return section;
+  }
   if (section === 'expenses' && !isAdmin(user)) {
     return 'dashboard';
   }

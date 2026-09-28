@@ -412,7 +412,7 @@ export function TenantsPage({ currentUser, onSelectTenant, onNavigateToAgreement
                             <Eye size={15} />
                           </button>
 
-                          {userIsAdmin && (
+                          {canManageTenants && (
                             <>
                               <button
                                 onClick={() => handleOpenEditModal(tenant)}
