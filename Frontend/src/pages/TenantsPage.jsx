@@ -18,10 +18,12 @@ import {
 } from 'lucide-react';
 import { tenantsAPI } from '../services/api.js';
 import { formatPKR, formatDate } from '../utils/formatters.js';
-import { isAdmin } from '../utils/permissions.js';
+import { isAdmin, isDataEntry } from '../utils/permissions.js';
 
 export function TenantsPage({ currentUser, onSelectTenant, onNavigateToAgreements }) {
   const userIsAdmin = isAdmin(currentUser);
+  // DATA_ENTRY (Sarfraz) can also create/edit/toggle tenants, same as admin
+  const canManageTenants = userIsAdmin || isDataEntry(currentUser);
 
   const [tenants, setTenants] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -175,7 +177,7 @@ export function TenantsPage({ currentUser, onSelectTenant, onNavigateToAgreement
         </div>
 
         <div className="flex items-center gap-2">
-          {userIsAdmin && (
+          {canManageTenants && (
             <button
               onClick={handleOpenCreateModal}
               className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg text-sm transition flex items-center gap-2 shadow-lg shadow-emerald-900/30"

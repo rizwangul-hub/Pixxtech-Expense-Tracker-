@@ -16,11 +16,11 @@ router.use(protect);
 
 // Collection routes
 router.get('/', getTenants);
-router.post('/', requireRole('ADMIN'), validateTenant, createTenant);
+router.post('/', requireRole('ADMIN', 'DATA_ENTRY'), validateTenant, createTenant);
 
 // Single tenant routes
 router.get('/:id', getTenantById);
-router.put('/:id', requireRole('ADMIN'), validateTenant, updateTenant);
-router.patch('/:id/status', requireRole('ADMIN'), toggleTenantStatus);
+router.put('/:id', requireRole('ADMIN', 'DATA_ENTRY'), validateTenant, updateTenant);
+router.patch('/:id/status', requireRole('ADMIN', 'DATA_ENTRY'), toggleTenantStatus);
 
 export default router;
