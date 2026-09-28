@@ -26,6 +26,7 @@ import uploadRoutes from './routes/uploadRoutes.js';
 import staffRoutes from './routes/staffRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
 import payrollRoutes from './routes/payrollRoutes.js';
+import communicationRoutes from './routes/communicationRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -129,6 +130,7 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/staff/attendance', attendanceRoutes);
 app.use('/api/staff/payroll', payrollRoutes);
+app.use('/api/communications', communicationRoutes);
 
 // 404 Not Found Handler
 app.use((req, res, next) => {

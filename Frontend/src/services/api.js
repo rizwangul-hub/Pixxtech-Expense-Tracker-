@@ -23,6 +23,29 @@ export const uploadAPI = {
   },
 };
 
+export const communicationsAPI = {
+  getBootstrap: async () => (await api.get('/communications/bootstrap')).data,
+  getToken: async () => (await api.post('/communications/token')).data,
+  getMessages: async (params = {}) => (await api.get('/communications/messages', { params })).data,
+  sendMessage: async (data) => (await api.post('/communications/messages', data)).data,
+  markDelivered: async (id) => (await api.post(`/communications/messages/${id}/delivered`)).data,
+  markRead: async () => (await api.post('/communications/messages/read')).data,
+  uploadAttachment: async (file, onUploadProgress) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return (await api.post('/communications/attachments', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress,
+    })).data;
+  },
+  getAttachmentUrl: async (id) => (await api.get(`/communications/attachments/${id}/url`)).data,
+  getCalls: async (params = {}) => (await api.get('/communications/calls', { params })).data,
+  createCall: async (data) => (await api.post('/communications/calls', data)).data,
+  updateCall: async (id, data) => (await api.patch(`/communications/calls/${id}`, data)).data,
+  sendSignal: async (id, data) => (await api.post(`/communications/calls/${id}/signals`, data)).data,
+  setTyping: async (typing) => (await api.post('/communications/typing', { typing })).data,
+};
+
 // Request interceptor: attach JWT token if present in localStorage
 api.interceptors.request.use(
   (config) => {
