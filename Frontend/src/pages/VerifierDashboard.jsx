@@ -1079,7 +1079,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                     {/* Amount Highlight */}
                     <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800/80 rounded-lg p-3">
                       <span className="text-xs font-semibold text-slate-400">Total Transaction Amount</span>
-                      <span className="text-lg font-black font-mono text-emerald-400">
+                      <span className="text-xl font-black font-mono text-amber-300">
                         {formatPKR(entry.amount)}
                       </span>
                     </div>
@@ -1279,7 +1279,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                     <th className="py-3 px-3.5 w-72 min-w-[220px] max-w-[320px]">Narration / Details</th>
                     <th className="py-3 px-3 w-40">Property / Unit</th>
                     <th className="py-3 px-3 w-56">Accounts Involved</th>
-                    <th className="py-3 px-3.5 text-right w-32">Amount (PKR)</th>
+                    <th className="py-3 px-3.5 text-right w-32 text-[11px] text-amber-300">Amount (PKR)</th>
                     <th className="py-3 px-3 text-center w-32">Status</th>
                     <th className="py-3 px-3 text-center w-36">Actions</th>
                   </tr>
@@ -1462,7 +1462,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           )}
                         </td>
 
-                        <td className="py-2.5 px-3.5 text-right whitespace-nowrap font-mono font-black text-emerald-400 text-sm align-middle">
+                        <td className="py-2.5 px-3.5 text-right whitespace-nowrap font-mono font-black text-amber-300 text-base align-middle">
                           {formatPKR(entry.amount)}
                         </td>
 
