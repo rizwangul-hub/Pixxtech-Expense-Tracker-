@@ -36,7 +36,7 @@ const payrollSchema = new mongoose.Schema(
     },
     allowanceReason: {
       type: String,
-      default: '',
+      default: null,
     },
     fuelAllowance: {
       type: Number,
@@ -180,6 +180,11 @@ const payrollSchema = new mongoose.Schema(
       {
         amount: { type: Number, required: true },
         paymentDate: { type: Date, required: true },
+        disbursementMonth: {
+          type: String,
+          match: [/^\d{4}-(0[1-9]|1[0-2])$/, 'disbursementMonth must be formatted as YYYY-MM'],
+          default: '',
+        },
         paidFromAccountId: {
           type: mongoose.Schema.Types.ObjectId,
           ref: 'Account',

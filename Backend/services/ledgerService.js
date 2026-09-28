@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Account from '../models/Account.js';
 import Transaction from '../models/Transaction.js';
+import { getUtcMonthDateRange } from './salaryReportingService.js';
 import Category from '../models/Category.js';
 import Property from '../models/Property.js';
 import Voucher from '../models/Voucher.js';
@@ -449,8 +450,7 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
     year = y;
     month = m;
   }
-  const startOfMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-  const endOfMonth = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+  const { startDate: startOfMonth, endDate: endOfMonth } = getUtcMonthDateRange(year, month);
 
   // Get all active bank and cash accounts (excluding internal clearing accounts)
   const accounts = await Account.find({ isActive: true, isClearing: { $ne: true } })
@@ -617,8 +617,7 @@ export const getHeadWiseExpenseReport = async (year, month) => {
     year = y;
     month = m;
   }
-  const startOfMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-  const endOfMonth = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+  const { startDate: startOfMonth, endDate: endOfMonth } = getUtcMonthDateRange(year, month);
 
   // Find all categories of type EXPENSE
   const expenseCategories = await Category.find({ type: 'EXPENSE' }).lean();
@@ -1107,10 +1106,8 @@ export const getTransactionsFiltered = async (filters = {}) => {
   // 1. Date / Month filtering (based on transaction date, NOT createdAt)
   if (month && /^\d{4}-\d{2}$/.test(month)) {
     const [y, m] = month.split('-').map(Number);
-    query.date = {
-      $gte: new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0)),
-      $lte: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)),
-    };
+    const { startDate, endDate } = getUtcMonthDateRange(y, m);
+    query.date = { $gte: startDate, $lte: endDate };
   } else if (startDate || endDate) {
     query.date = {};
     if (startDate) {

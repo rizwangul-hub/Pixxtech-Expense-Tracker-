@@ -31,6 +31,11 @@ const formatPKR = (val) => {
   }).format(val || 0);
 };
 
+const getTodayDate = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+};
+
 export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [payrollRows, setPayrollRows] = useState([]);
@@ -47,22 +52,13 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [modalError, setModalError] = useState('');
   
-  const getDefaultPayDate = (monthStr) => {
-    if (!monthStr || !/^\d{4}-\d{2}$/.test(monthStr)) return new Date().toISOString().split('T')[0];
-    const [y, m] = monthStr.split('-');
-    const year = parseInt(y, 10);
-    const monthNum = parseInt(m, 10);
-    const lastDay = new Date(Date.UTC(year, monthNum, 0)).getUTCDate();
-    return `${year}-${String(monthNum).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-  };
-
   // Pay Single Modal
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [payTargetRow, setPayTargetRow] = useState(null);
   const [payMethod, setPayMethod] = useState('BANK_TRANSFER');
   const [payNotes, setPayNotes] = useState('');
   const [payAmount, setPayAmount] = useState('');
-  const [payDate, setPayDate] = useState(() => getDefaultPayDate(new Date().toISOString().slice(0, 7)));
+  const [payDate, setPayDate] = useState(getTodayDate);
   const [processingPay, setProcessingPay] = useState(false);
 
   // Evidence upload state (for the payout modal)
@@ -349,7 +345,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
     setPayNotes('');
     setModalError('');
     setPayAmount(String(exactRemaining));
-    setPayDate(getDefaultPayDate(selectedMonth));
+    setPayDate(getTodayDate());
     setEvidenceFiles([]);
     setEvidencePreview(null);
     setPayModalOpen(true);
@@ -357,6 +353,10 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
 
   const handleConfirmPayout = async () => {
     if (!payTargetRow || !selectedAccountId) return;
+    if (!payDate) {
+      setModalError('Select the actual date the salary payment will be made.');
+      return;
+    }
     try {
       setProcessingPay(true);
       setMsg({ type: '', text: '' });
@@ -829,6 +829,12 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                             <div className="text-[9px] text-slate-400 font-mono truncate">
                               Vn: <span className="text-emerald-400 font-bold">{row.voucherNo}</span>
                             </div>
+                            <div className="text-[9px] text-slate-400">
+                              Paid: {row.paymentDate ? new Date(row.paymentDate).toLocaleDateString('en-PK') : 'See installments'}
+                            </div>
+                            <div className="text-[9px] text-slate-500 truncate">
+                              {row.paidFromAccountName || ''}
+                            </div>
                             <button
                               onClick={() => openReverseModal(row)}
                               className="text-[9px] text-rose-400 hover:text-rose-300 underline font-semibold transition"
@@ -964,7 +970,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                 <span className="text-purple-400 font-bold">{payTargetRow.designation} ({payTargetRow.department})</span>
               </div>
               <div className="flex justify-between border-t border-slate-800/80 pt-2">
-                <span className="text-slate-400 font-semibold">Payroll Month:</span>
+                <span className="text-slate-400 font-semibold">Salary For Month:</span>
                 <span className="text-slate-300 font-mono font-bold">{selectedMonth}</span>
               </div>
               {/* Salary breakdown */}
@@ -1019,7 +1025,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                     <div key={i} className="flex justify-between text-slate-500">
                       <span>
                         Installment {i + 1} ({item.paidFromAccountName || 'Bank'})
-                        {item.paidAt && ` · ${new Date(item.paidAt).toLocaleDateString()}`}
+                        {item.paymentDate && ` · Paid ${new Date(item.paymentDate).toLocaleDateString()}`}
                         {item.disbursementMonth && item.disbursementMonth !== selectedMonth && (
                           <span className="ml-1 text-[10px] text-amber-400 font-medium">({item.disbursementMonth} Report)</span>
                         )}:
@@ -1033,9 +1039,9 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
 
             <div className="space-y-1.5 text-xs">
               <label className="text-slate-300 font-bold flex items-center justify-between">
-                <span>Disbursement Date / Report Month:</span>
+                <span>Actual Payment Date:</span>
                 <span className="text-[11px] font-normal text-slate-400">
-                  Financial Report: <strong className="text-cyan-300 font-mono">{payDate ? payDate.slice(0, 7) : selectedMonth}</strong>
+                  Financial Report Month: <strong className="text-cyan-300 font-mono">{payDate ? payDate.slice(0, 7) : 'Select date'}</strong>
                 </span>
               </label>
               <div className="flex gap-2">
@@ -1045,19 +1051,23 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                   onChange={(e) => setPayDate(e.target.value)}
                   className="flex-1 bg-slate-950 border border-slate-700 text-cyan-300 font-mono font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-500"
                 />
-                {payDate !== getDefaultPayDate(selectedMonth) && (
+                {payDate !== getTodayDate() && (
                   <button
                     type="button"
-                    onClick={() => setPayDate(getDefaultPayDate(selectedMonth))}
+                    onClick={() => setPayDate(getTodayDate())}
                     className="px-3 py-2 text-[11px] font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition shrink-0"
                   >
-                    Reset ({selectedMonth})
+                    Reset (today)
                   </button>
                 )}
               </div>
-              {payDate && payDate.slice(0, 7) < selectedMonth && (
+              {payDate && payDate.slice(0, 7) !== selectedMonth && (
                 <div className="p-2.5 rounded-lg bg-blue-950/40 border border-blue-800/60 text-blue-300 text-[11px] leading-relaxed">
-                  ℹ️ <strong>Advance Salary Payout:</strong> Posting this payout to the <strong>{payDate.slice(0, 7)}</strong> financial report, deducting from the <strong>{selectedMonth}</strong> salary balance.
+                  {payDate.slice(0, 7) < selectedMonth ? (
+                    <>Advance salary for <strong>{selectedMonth}</strong>. This payment will appear in the <strong>{payDate.slice(0, 7)}</strong> financial report.</>
+                  ) : (
+                    <>Paid in a different month — this transaction will appear in the <strong>{payDate.slice(0, 7)}</strong> payment-date month&apos;s financial report. Salary For remains <strong>{selectedMonth}</strong>.</>
+                  )}
                 </div>
               )}
             </div>
@@ -1495,13 +1505,19 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                     )}
                   </div>
 
+                  {selectedLedgerData.summary?.paymentDatesRequiringCorrection > 0 && (
+                    <div className="rounded-xl border border-amber-800/70 bg-amber-950/40 px-4 py-3 text-xs text-amber-200">
+                      {selectedLedgerData.summary.paymentDatesRequiringCorrection} historical salary payment(s) have no verified payment date. Their dates are not inferred from the salary month; correct the payment date before relying on their monthly financial classification.
+                    </div>
+                  )}
+
                   {/* Ledger Table */}
                   <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-slate-900 border-b border-slate-800 text-slate-400 uppercase font-bold text-[10px] tracking-wider">
-                          <th className="py-2.5 px-3">Date</th>
-                          <th className="py-2.5 px-3">Month</th>
+                          <th className="py-2.5 px-3">Payment / Accrual Date</th>
+                          <th className="py-2.5 px-3">Financial Month / Salary For</th>
                           <th className="py-2.5 px-3">Voucher No.</th>
                           <th className="py-2.5 px-3">Detail / Narration</th>
                           <th className="py-2.5 px-3 text-right">Accrued (+)</th>
@@ -1523,10 +1539,13 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                             return (
                               <tr key={i} className={`hover:bg-slate-900/40 transition ${isAccrual ? 'bg-slate-950' : 'bg-slate-900/20'}`}>
                                 <td className="py-2.5 px-3 font-mono text-slate-300">
-                                  {new Date(entry.date).toLocaleDateString('en-PK')}
+                                  {entry.date ? new Date(entry.date).toLocaleDateString('en-PK') : 'Date needed'}
                                 </td>
                                 <td className="py-2.5 px-3 font-bold text-purple-400 font-mono">
-                                  {entry.month}
+                                  <div>{isAccrual ? '—' : (entry.paymentMonth || 'Date needed')}</div>
+                                  <div className="text-[9px] text-slate-500">
+                                    Salary For: {entry.salaryForMonth || entry.month}
+                                  </div>
                                 </td>
                                 <td className="py-2.5 px-3 font-mono font-bold text-blue-400">
                                   {entry.voucherNo}
@@ -1535,7 +1554,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                                   <div className={isAccrual ? 'font-bold' : ''}>{entry.detail}</div>
                                   {!isAccrual && entry.paidFromAccount && entry.paidFromAccount !== '-' && (
                                     <div className="text-[10px] text-slate-400 font-mono">
-                                      Account: {entry.paidFromAccount}
+                                      Paid Date: {entry.date ? new Date(entry.date).toLocaleDateString('en-PK') : 'Correction required'} • Account: {entry.paymentAccount || entry.paidFromAccount}
                                       {entry.paidBy ? ` • By: ${entry.paidBy}` : ''}
                                     </div>
                                   )}
@@ -1556,13 +1575,17 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                                 </td>
                                 <td className="py-2.5 px-3 text-center">
                                   <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${
-                                    entry.status === 'PAID'
+                                    entry.requiresPaymentDateCorrection
+                                      ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                                      : entry.status === 'PAID'
                                       ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                                       : entry.status === 'PARTIAL'
                                       ? 'bg-amber-950 text-amber-300 border border-amber-700'
                                       : 'bg-slate-800 text-slate-400 border border-slate-700'
                                   }`}>
-                                    {entry.status === 'PARTIAL' ? 'PARTIAL' : entry.status}
+                                    {entry.requiresPaymentDateCorrection
+                                      ? 'DATE REQUIRED'
+                                      : entry.status === 'PARTIAL' ? 'PARTIAL' : entry.status}
                                   </span>
                                 </td>
                               </tr>

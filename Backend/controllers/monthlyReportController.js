@@ -1,14 +1,14 @@
 import MonthlyReport from '../models/MonthlyReport.js';
 import Transaction from '../models/Transaction.js';
 import { getMonthlyOpeningClosingMatrix, getHeadWiseExpenseReport, round2 } from '../services/ledgerService.js';
+import { getUtcMonthDateRange } from '../services/salaryReportingService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
 /**
  * Helper to compute live report snapshot from ledger and transactions
  */
 export const computeMonthSnapshot = async (year, month) => {
-  const startOfMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-  const endOfMonth = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+  const { startDate: startOfMonth, endDate: endOfMonth } = getUtcMonthDateRange(year, month);
 
   // Matrix calculation
   const matrixData = await getMonthlyOpeningClosingMatrix(year, month);

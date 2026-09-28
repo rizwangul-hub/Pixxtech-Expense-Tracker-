@@ -11,7 +11,12 @@ import Account from '../models/Account.js';
 import Payroll from '../models/Payroll.js';
 import Employee from '../models/Employee.js';
 import StaffLoan from '../models/StaffLoan.js';
-import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
+import {
+  createTransaction,
+  round2,
+  suggestNextVoucherNumber,
+  syncAccountBalances,
+} from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
 import {
   getOrCreateEmployeeSalaryCategory,
@@ -943,6 +948,10 @@ export const verifyEntry = async (req, res) => {
       const paidFromAccountId = entry.crAccountId;
       const netAmount = round2(entry.amount);
 
+      // currentBalance is a cached field and can be stale after reversals or
+      // other ledger corrections. Use the posted, non-reversed ledger as the
+      // source of truth before enforcing the salary payout balance check.
+      await syncAccountBalances([paidFromAccountId]);
       const account = await Account.findById(paidFromAccountId);
       if (!account) {
         return apiError(res, 'Selected Finance Bank/Cash Account not found.', 404);

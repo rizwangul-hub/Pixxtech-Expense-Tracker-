@@ -13,6 +13,11 @@ import StaffAuditLog from '../models/StaffAuditLog.js';
 import PendingEntry from '../models/PendingEntry.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { createTransaction, round2, suggestNextVoucherNumber, syncAccountBalances } from '../services/ledgerService.js';
+import {
+  formatSalaryMonth,
+  getSalaryPaymentDetail,
+  getSalaryPaymentPeriod,
+} from '../services/salaryReportingService.js';
 
 /**
  * Helper to ensure canonical Salaries category head exists
@@ -548,7 +553,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
     });
 
     // Title Row 1: Company Name Banner
-    ws1.mergeCells('A1:L1');
+    ws1.mergeCells('A1:R1');
     const titleCell = ws1.getCell('A1');
     titleCell.value = 'PIXX TECHNOLOGIES PAKISTAN';
     titleCell.font = { name: 'Segoe UI', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -557,7 +562,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
     ws1.getRow(1).height = 36;
 
     // Subtitle Row 2: Month & Title
-    ws1.mergeCells('A2:L2');
+    ws1.mergeCells('A2:R2');
     const subCell = ws1.getCell('A2');
     subCell.value = `MONTHLY SALARY SHEET â€” ${month.toUpperCase()}`;
     subCell.font = { name: 'Segoe UI', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -582,6 +587,12 @@ export const downloadSalarySheetExcel = async (req, res) => {
       'Account Title',
       'IBAN Number',
       'Bank Name',
+      'Salary For Month',
+      'Paid Date(s)',
+      'Payment Account(s)',
+      'Paid Amount (PKR)',
+      'Payment Status',
+      'Voucher / Transaction Ref.',
     ];
     const headerRow = ws1.addRow(headers);
     headerRow.height = 28;
@@ -612,6 +623,19 @@ export const downloadSalarySheetExcel = async (req, res) => {
       const gross = basic + fuel + food + mobile + perf + other;
       const loanDed = saved ? saved.loanDeduction : 0;
       const netPay = saved ? saved.netPayable : Math.max(0, gross - loanDed);
+      const installments = Array.isArray(saved?.salaryInstallments) ? saved.salaryInstallments : [];
+      const paidDates = installments
+        .map((installment) => installment.paymentDate)
+        .filter(Boolean)
+        .map((date) => new Date(date).toISOString().slice(0, 10));
+      if (paidDates.length === 0 && saved?.paymentDate) {
+        paidDates.push(new Date(saved.paymentDate).toISOString().slice(0, 10));
+      }
+      const paymentAccounts = [...new Set(installments.map((installment) => installment.paidFromAccountName).filter(Boolean))];
+      if (paymentAccounts.length === 0 && saved?.paidFromAccountName) paymentAccounts.push(saved.paidFromAccountName);
+      const voucherReferences = [...new Set(installments.map((installment) => installment.voucherNo).filter(Boolean))];
+      if (voucherReferences.length === 0 && saved?.voucherNo) voucherReferences.push(saved.voucherNo);
+      const paidAmount = round2(saved?.totalInstallmentsPaid || 0);
 
       const row = ws1.addRow([
         srNo++,
@@ -626,6 +650,12 @@ export const downloadSalarySheetExcel = async (req, res) => {
         emp.accountTitle || emp.name,
         emp.ibanNumber || 'N/A',
         emp.bankName || 'Cash / Bank',
+        month,
+        paidDates.join(', ') || (paidAmount > 0 ? 'Payment date correction required' : '—'),
+        paymentAccounts.join(', ') || '—',
+        paidAmount,
+        saved?.paymentStatus || 'PENDING_PAYMENT',
+        voucherReferences.join(', ') || '—',
       ]);
 
       row.height = 22;
@@ -644,7 +674,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
 
         if (colNumber === 1) {
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        } else if ([5, 6, 7, 8, 9].includes(colNumber)) {
+        } else if ([5, 6, 7, 8, 9, 15].includes(colNumber)) {
           cell.alignment = { horizontal: 'right', vertical: 'middle' };
           cell.numFmt = '#,##0';
           if (colNumber === 9) {
@@ -672,6 +702,12 @@ export const downloadSalarySheetExcel = async (req, res) => {
       '',
       '',
       '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
     ]);
 
     totalRow.height = 26;
@@ -685,7 +721,7 @@ export const downloadSalarySheetExcel = async (req, res) => {
         right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
       };
 
-      if ([5, 6, 7, 8, 9].includes(colNumber)) {
+      if ([5, 6, 7, 8, 9, 15].includes(colNumber)) {
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
         cell.numFmt = '#,##0';
       } else {
@@ -709,6 +745,12 @@ export const downloadSalarySheetExcel = async (req, res) => {
       { width: 26 }, // Account Title
       { width: 28 }, // IBAN Number
       { width: 24 }, // Bank Name
+      { width: 20 }, // Salary For Month
+      { width: 28 }, // Paid Date(s)
+      { width: 28 }, // Payment Account(s)
+      { width: 20 }, // Paid Amount
+      { width: 22 }, // Payment Status
+      { width: 32 }, // Voucher / Transaction Ref.
     ];
 
     // -------------------------------------------------------------
@@ -1412,22 +1454,19 @@ export const paySingleSalary = async (req, res) => {
     const salaryCategory = await getOrCreateEmployeeSalaryCategory(pDoc.employeeName, salariesCategory);
     const clearingAccount = await getOrCreateSalaryExpenseAccount();
 
-    const [yStr, mStr] = month.split('-');
-    const year = parseInt(yStr, 10);
-    const monthNum = parseInt(mStr, 10);
-
-    const endOfMonthDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
-
-    // Support actual financial disbursement date (defaults to end of payroll cycle month e.g. 2026-08-31)
-    let pDate = paymentDate ? new Date(paymentDate) : endOfMonthDate;
-    if (isNaN(pDate.getTime())) {
-      pDate = endOfMonthDate;
+    // The payout belongs to the selected salary month but posts on its actual payment date.
+    const pDate = paymentDate ? new Date(paymentDate) : null;
+    if (!pDate || Number.isNaN(pDate.getTime())) {
+      return apiError(res, 'A valid actual salary payment date is required.', 400);
     }
-    const pDateMonth = `${pDate.getUTCFullYear()}-${String(pDate.getUTCMonth() + 1).padStart(2, '0')}`;
-    const isAdvance = pDateMonth < month;
-    const detailNarration = isAdvance
-      ? `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month} (Advance paid in ${pDateMonth})${paymentNotes ? '. ' + paymentNotes : ''}`
-      : `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}${paymentNotes ? '. ' + paymentNotes : ''}`;
+    const { paymentMonth: pDateMonth } = getSalaryPaymentPeriod(month, pDate);
+    const detailNarration = getSalaryPaymentDetail({
+      employeeName: pDoc.employeeName,
+      designation: pDoc.designation,
+      salaryMonth: month,
+      paymentDate: pDate,
+      notes: paymentNotes,
+    });
 
     // Only approvers may post directly. All operational payout submissions are
     // staged for verification so the bank is never debited before approval.
@@ -1722,18 +1761,12 @@ export const payBulkSalary = async (req, res) => {
     const salariesCategory = await getOrCreateSalariesCategory();
     const clearingAccount = await getOrCreateSalaryExpenseAccount();
     
-    const [yStr, mStr] = month.split('-');
-    const year = parseInt(yStr, 10);
-    const monthNum = parseInt(mStr, 10);
-    const endOfMonthDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
-
-    // Support actual financial disbursement date (defaults to end of payroll cycle month e.g. 2026-08-31)
-    let pDate = paymentDate ? new Date(paymentDate) : endOfMonthDate;
-    if (isNaN(pDate.getTime())) {
-      pDate = endOfMonthDate;
+    // The payout belongs to the selected salary month but posts on its actual payment date.
+    const pDate = paymentDate ? new Date(paymentDate) : null;
+    if (!pDate || Number.isNaN(pDate.getTime())) {
+      return apiError(res, 'A valid actual salary payment date is required.', 400);
     }
-    const pDateMonth = `${pDate.getUTCFullYear()}-${String(pDate.getUTCMonth() + 1).padStart(2, '0')}`;
-    const isAdvance = pDateMonth < month;
+    const { paymentMonth: pDateMonth } = getSalaryPaymentPeriod(month, pDate);
 
     // Routing for Data Entry role (Sarfraz Khan): Create PendingEntry for each unpaid salary record
     if (req.user?.role === 'DATA_ENTRY') {
@@ -1752,9 +1785,13 @@ export const payBulkSalary = async (req, res) => {
         if (existingPending) continue;
 
         const voucherNo = await suggestNextVoucherNumber(pDate);
-        const detailNarration = isAdvance
-          ? `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month} (Advance paid in ${pDateMonth})${paymentNotes ? '. ' + paymentNotes : ''}`.trim()
-          : `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}${paymentNotes ? '. ' + paymentNotes : ''}`.trim();
+        const detailNarration = getSalaryPaymentDetail({
+          employeeName: pDoc.employeeName,
+          designation: pDoc.designation,
+          salaryMonth: month,
+          paymentDate: pDate,
+          notes: paymentNotes,
+        });
 
         const pending = await PendingEntry.create({
           entryType: 'SALARY',
@@ -1819,9 +1856,13 @@ export const payBulkSalary = async (req, res) => {
       if (remaining <= 0) continue;
 
       const voucherNo = await suggestNextVoucherNumber(pDate);
-      const detailNarration = isAdvance
-        ? `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month} (Advance paid in ${pDateMonth})${paymentNotes ? '. ' + paymentNotes : ''}`.trim()
-        : `Salary Payout to ${pDoc.employeeName} (${pDoc.designation}) — Month ${month}${paymentNotes ? '. ' + paymentNotes : ''}`.trim();
+      const detailNarration = getSalaryPaymentDetail({
+        employeeName: pDoc.employeeName,
+        designation: pDoc.designation,
+        salaryMonth: month,
+        paymentDate: pDate,
+        notes: paymentNotes,
+      });
 
       const transaction = await createTransaction({
         date: pDate,
@@ -2176,9 +2217,18 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
       const actualPresentDays = records.length > 0 ? livePresentDays : (pDoc?.presentDays ?? livePresentDays);
       const actualLopDays = records.length > 0 ? liveLopDays : (pDoc?.lopDays ?? liveLopDays);
 
-      const status = pDoc?.paymentStatus === 'PAID' ? 'PAID' : 'PENDING';
+      const status = pDoc?.paymentStatus || 'PENDING_PAYMENT';
       const paidAccount = pDoc?.paidFromAccountName || '-';
       const voucherNo = pDoc?.voucherNo || '-';
+      const paidAmount = round2(pDoc?.totalInstallmentsPaid || 0);
+      const salaryInstallments = Array.isArray(pDoc?.salaryInstallments) ? pDoc.salaryInstallments : [];
+      const paidDates = salaryInstallments
+        .map((installment) => installment.paymentDate)
+        .filter(Boolean)
+        .map((date) => new Date(date).toLocaleDateString('en-GB'));
+      if (paidDates.length === 0 && pDoc?.paymentDate) {
+        paidDates.push(new Date(pDoc.paymentDate).toLocaleDateString('en-GB'));
+      }
 
       grandBasic += basic;
       grandAllowance += allowance;
@@ -2191,13 +2241,12 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
       grandTotalDed += totDed;
       grandNetPay += netPayable;
 
-      if (status === 'PAID') {
-        totalPaid += netPayable;
+      totalPaid += paidAmount;
+      totalPending += Math.max(0, netPayable - paidAmount);
+      if (paidAmount > 0) {
         if (pDoc?.paidFromAccountName) {
-          accountBreakdownMap[pDoc.paidFromAccountName] = round2((accountBreakdownMap[pDoc.paidFromAccountName] || 0) + netPayable);
+          accountBreakdownMap[pDoc.paidFromAccountName] = round2((accountBreakdownMap[pDoc.paidFromAccountName] || 0) + paidAmount);
         }
-      } else {
-        totalPending += netPayable;
       }
 
       return {
@@ -2223,6 +2272,8 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
         status,
         paidAccount,
         voucherNo,
+        paidAmount,
+        paidDates,
       };
     });
 
@@ -2539,6 +2590,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
             </td>
             <td>
               <div class="fw7" style="font-size:8px;color:#1e293b;">${r.paidAccount}</div>
+              <div style="font-size:7px;color:#475569;">Paid: Rs. ${formatPKR(r.paidAmount)}${r.paidDates.length ? ` • ${r.paidDates.join(', ')}` : r.paidAmount > 0 ? ' • Payment date correction required' : ''}</div>
               ${r.voucherNo !== '-' ? `<div class="mono col-blue" style="font-size:7px;">Vn: ${r.voucherNo}</div>` : ''}
             </td>
           </tr>
@@ -2655,9 +2707,23 @@ export const getEmployeeLedger = async (req, res) => {
       (a, b) => String(a.payrollMonth).localeCompare(String(b.payrollMonth))
     );
 
+    const paymentTransactionIds = uniquePayrollDocs.flatMap((payroll) => [
+      payroll.transactionId,
+      ...(Array.isArray(payroll.salaryInstallments)
+        ? payroll.salaryInstallments.map((installment) => installment.transactionId)
+        : []),
+    ]).filter(Boolean);
+    const paymentTransactions = paymentTransactionIds.length > 0
+      ? await Transaction.find({ _id: { $in: paymentTransactionIds } }, { date: 1 }).lean()
+      : [];
+    const paymentDateByTransactionId = new Map(
+      paymentTransactions.map((transaction) => [transaction._id.toString(), transaction.date])
+    );
+
     const rawLedgerEntries = [];
     let totalAccrued = 0;
     let totalPaid = 0;
+    let paymentDatesRequiringCorrection = 0;
 
     for (const p of uniquePayrollDocs) {
       const netPay = round2(p.netPayable);
@@ -2677,6 +2743,8 @@ export const getEmployeeLedger = async (req, res) => {
       rawLedgerEntries.push({
         date: accrualDate,
         month: p.payrollMonth,
+        salaryForMonth: p.payrollMonth,
+        paymentMonth: null,
         type: 'SALARY_ACCRUAL',
         voucherNo: `ACCRUAL-${p.payrollMonth}`,
         detail: `Monthly Salary Accrual \u2014 ${p.payrollMonth}${p.loanDeduction > 0 ? ` (Loan Ded: Rs. ${formatPKR(p.loanDeduction)})` : ''}`,
@@ -2701,20 +2769,30 @@ export const getEmployeeLedger = async (req, res) => {
           const instAmount = round2(inst.amount || 0);
           if (instAmount <= 0) return;
 
-          const instDate = inst.paymentDate ? new Date(inst.paymentDate) : accrualDate;
+          const linkedTransactionDate = inst.transactionId
+            ? paymentDateByTransactionId.get(inst.transactionId.toString())
+            : null;
+          const instDate = inst.paymentDate || linkedTransactionDate || null;
+          const paymentPeriod = getSalaryPaymentPeriod(p.payrollMonth, instDate);
+          if (paymentPeriod.requiresPaymentDateCorrection) paymentDatesRequiringCorrection += 1;
           const installmentLabel = installments.length > 1
             ? ` (Installment ${idx + 1}/${installments.length})`
             : '';
 
           rawLedgerEntries.push({
             date: instDate,
-            month: p.payrollMonth,
+            month: paymentPeriod.paymentMonth,
+            salaryForMonth: p.payrollMonth,
+            paymentMonth: paymentPeriod.paymentMonth,
             type: 'SALARY_DISBURSAL',
             voucherNo: inst.voucherNo || p.voucherNo || `PAY-${p.payrollMonth}-${idx + 1}`,
-            detail: `Salary Payment${installmentLabel} via ${inst.paidFromAccountName || p.paidFromAccountName || 'Finance Account'} \u2014 ${p.payrollMonth}`,
+            detail: `${paymentPeriod.classification === 'ADVANCE_SALARY' ? 'Advance salary payment' : 'Salary payment'}${installmentLabel} for ${formatSalaryMonth(p.payrollMonth)}${instDate ? '' : ' — payment date correction required'}`,
             accruedAmount: 0,
             paidAmount: instAmount,
             status: 'PAID',
+            requiresPaymentDateCorrection: paymentPeriod.requiresPaymentDateCorrection,
+            paymentDate: instDate,
+            paymentAccount: inst.paidFromAccountName || p.paidFromAccountName || 'Finance Account',
             paidFromAccount: inst.paidFromAccountName || p.paidFromAccountName || 'Finance Account',
             payrollId: p._id,
             paymentMethod: inst.paymentMethod || p.paymentMethod || 'BANK_TRANSFER',
@@ -2725,18 +2803,29 @@ export const getEmployeeLedger = async (req, res) => {
         });
       } else if ((p.paymentStatus === 'PAID' || p.totalInstallmentsPaid > 0) && p.totalInstallmentsPaid > 0) {
         // Fallback: legacy fully-paid record with no installments array populated
-        const payoutDate = p.paymentDate || p.paidDate || accrualDate;
+        const linkedTransactionDate = p.transactionId
+          ? paymentDateByTransactionId.get(p.transactionId.toString())
+          : null;
+        const payoutDate = p.paymentDate || p.paidDate || linkedTransactionDate || null;
+        const paymentPeriod = getSalaryPaymentPeriod(p.payrollMonth, payoutDate);
+        if (paymentPeriod.requiresPaymentDateCorrection) paymentDatesRequiringCorrection += 1;
         rawLedgerEntries.push({
           date: payoutDate,
-          month: p.payrollMonth,
+          month: paymentPeriod.paymentMonth,
+          salaryForMonth: p.payrollMonth,
+          paymentMonth: paymentPeriod.paymentMonth,
           type: 'SALARY_DISBURSAL',
           voucherNo: p.voucherNo || 'PAID',
-          detail: `Salary Disbursal via ${p.paidFromAccountName || 'Finance Account'} (Voucher: ${p.voucherNo || 'N/A'})`,
+          detail: `${paymentPeriod.classification === 'ADVANCE_SALARY' ? 'Advance salary' : 'Salary'} for ${formatSalaryMonth(p.payrollMonth)}${payoutDate ? '' : ' — payment date correction required'}`,
           accruedAmount: 0,
           paidAmount: round2(p.totalInstallmentsPaid),
           status: 'PAID',
+          requiresPaymentDateCorrection: paymentPeriod.requiresPaymentDateCorrection,
+          paymentDate: payoutDate,
+          paymentAccount: p.paidFromAccountName || 'Finance Account',
           paidFromAccount: p.paidFromAccountName || 'Finance Account',
           payrollId: p._id,
+          paymentMethod: p.paymentMethod || 'BANK_TRANSFER',
         });
 
         totalPaid += round2(p.totalInstallmentsPaid);
@@ -2745,6 +2834,9 @@ export const getEmployeeLedger = async (req, res) => {
 
     // Sort chronologically; on same date, accrual comes before disbursal
     rawLedgerEntries.sort((a, b) => {
+      if (!a.date && b.date) return 1;
+      if (a.date && !b.date) return -1;
+      if (!a.date && !b.date) return 0;
       const dateDiff = new Date(a.date) - new Date(b.date);
       if (dateDiff !== 0) return dateDiff;
       if (a.type === 'SALARY_ACCRUAL' && b.type === 'SALARY_DISBURSAL') return -1;
@@ -2780,6 +2872,7 @@ export const getEmployeeLedger = async (req, res) => {
           totalAccrued: round2(totalAccrued),
           totalPaid: round2(totalPaid),
           pendingBalance,
+          paymentDatesRequiringCorrection,
         },
         ledger,
       },

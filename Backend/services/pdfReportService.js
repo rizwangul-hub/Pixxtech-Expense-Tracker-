@@ -15,6 +15,7 @@ import {
   resolveTransactionAccountDisplay,
   round2,
 } from './ledgerService.js';
+import { getUtcMonthDateRange } from './salaryReportingService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -116,8 +117,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   }
 
   const periodName = `${year}-${String(month).padStart(2, '0')}`;
-  const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-  const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+  const { startDate, endDate } = getUtcMonthDateRange(year, month);
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const monthName = monthNames[month - 1];
   const monthNameYear = `${monthName}-${year}`;

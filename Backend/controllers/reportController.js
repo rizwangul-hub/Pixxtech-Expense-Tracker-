@@ -12,6 +12,7 @@ import {
   round2,
 } from '../services/ledgerService.js';
 import { generateMonthlyFundsReport } from '../services/pdfReportService.js';
+import { getUtcMonthDateRange } from '../services/salaryReportingService.js';
 
 // ─── Shared Helpers ────────────────────────────────────────────────────────────
 
@@ -33,17 +34,19 @@ const parseDateFilters = ({ month, startDate: sdStr, endDate: edStr } = {}) => {
 
   // Custom date range overrides month
   if (sdStr || edStr) {
-    const startDate = sdStr ? new Date(sdStr + 'T00:00:00.000Z') : new Date(Date.UTC(year, mon - 1, 1));
-    const endDate = edStr ? new Date(edStr + 'T23:59:59.999Z') : new Date(Date.UTC(year, mon, 0, 23, 59, 59, 999));
+    const monthRange = getUtcMonthDateRange(year, mon);
+    const startDate = sdStr ? new Date(sdStr + 'T00:00:00.000Z') : monthRange.startDate;
+    const endDate = edStr ? new Date(edStr + 'T23:59:59.999Z') : monthRange.endDate;
     return { year, month: mon, periodString, startDate, endDate, isCustomRange: true };
   }
 
+  const { startDate, endDate } = getUtcMonthDateRange(year, mon);
   return {
     year,
     month: mon,
     periodString,
-    startDate: new Date(Date.UTC(year, mon - 1, 1, 0, 0, 0, 0)),
-    endDate: new Date(Date.UTC(year, mon, 0, 23, 59, 59, 999)),
+    startDate,
+    endDate,
     isCustomRange: false,
   };
 };
