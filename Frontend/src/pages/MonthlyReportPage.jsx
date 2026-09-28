@@ -636,19 +636,27 @@ export function MonthlyReportPage({ currentUser }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {(ex?.heads || []).map((h) => (
-                      <tr
-                        key={h.headName}
-                        className="border-t border-slate-800/60 hover:bg-slate-800/30"
-                      >
-                        <td className="px-3 py-2 text-slate-300">{h.headName}</td>
-                        <td className="px-3 py-2 text-right text-slate-500">
-                          {h.transactionCount}
-                        </td>
-                        <td className="px-3 py-2 text-right text-rose-400 font-semibold">
-                          {fmt(h.totalSpent)}
-                        </td>
-                      </tr>
+                    {(ex?.mainHeads?.length ? ex.mainHeads : (ex?.heads || [])).map((h) => (
+                      <React.Fragment key={h.mainHeadId || h.headName || h.mainHeadName}>
+                        <tr className="border-t border-slate-800/60 hover:bg-slate-800/30">
+                          <td className="px-3 py-2 text-slate-200 font-semibold">{h.mainHeadName || h.headName}</td>
+                          <td className="px-3 py-2 text-right text-slate-500">
+                            {h.transactionCount}
+                          </td>
+                          <td className="px-3 py-2 text-right text-rose-400 font-semibold">
+                            {fmt(h.totalSpent)}
+                          </td>
+                        </tr>
+                        {(h.expenses || [])
+                          .filter((expense) => expense.headName && expense.headName !== (h.mainHeadName || h.headName))
+                          .map((expense) => (
+                            <tr key={`${h.mainHeadId || h.mainHeadName}-${expense.headName}`} className="border-t border-slate-800/40">
+                              <td className="px-3 py-1.5 pl-8 text-slate-400">{expense.headName}</td>
+                              <td className="px-3 py-1.5 text-right text-slate-600">{expense.transactionCount}</td>
+                              <td className="px-3 py-1.5 text-right text-rose-300">{fmt(expense.totalSpent)}</td>
+                            </tr>
+                          ))}
+                      </React.Fragment>
                     ))}
                   </tbody>
                   <tfoot>

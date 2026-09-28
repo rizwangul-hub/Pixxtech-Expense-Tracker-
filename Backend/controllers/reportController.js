@@ -196,7 +196,13 @@ export const getMonthlyFinancialSummary = async (req, res) => {
 
     const expenseReport = await getHeadWiseExpenseReport(year, month);
     const totalExpenses = round2(expenseReport.totalExpensesOverall);
-    const expenseHeadSummary = expenseReport.heads.filter((h) => h.totalSpent > 0).map((h) => ({ headName: h.headName, totalSpent: h.totalSpent, transactionCount: h.transactionCount }));
+    const expenseHeadSummary = expenseReport.mainHeads
+      .filter((head) => head.totalSpent > 0)
+      .map((head) => ({
+        headName: head.mainHeadName,
+        totalSpent: head.totalSpent,
+        transactionCount: head.transactionCount,
+      }));
 
     const totalIncome = round2(grandTotalRentalReceived + totalOtherIncome);
     const netSurplusDeficit = round2(totalIncome - totalExpenses);
@@ -220,6 +226,7 @@ export const getMonthlyFinancialSummary = async (req, res) => {
         totalExpenses,
         ...expenseReport.classificationTotals,
         heads: expenseHeadSummary,
+        mainHeads: expenseReport.mainHeads.filter((head) => head.totalSpent > 0),
       },
       financialPosition: { totalRentalIncome: grandTotalRentalReceived, totalOtherIncome, totalIncome, totalExpenses, netSurplusDeficit, totalTransfers, grandClosingBalance },
     });
@@ -272,47 +279,10 @@ export const getAccountLedgerReport = async (req, res) => {
  */
 export const getExpenseSummaryReport = async (req, res) => {
   try {
-    const { year, month, periodString, startDate, endDate } = parseDateFilters(req.query);
+    const { year, month, periodString } = parseDateFilters(req.query);
     const { propertyId, expenseClassification } = req.query;
 
-    const report = await getHeadWiseExpenseReport(year, month);
-
-    // Property filter: if propertyId supplied, re-run targeted query
-    let filteredHeads = report.heads;
-    let filteredTotal = report.totalExpensesOverall;
-    let classificationTotals = report.classificationTotals;
-
-    if ((propertyId && propertyId !== 'ALL') || (expenseClassification && expenseClassification !== 'ALL')) {
-      // Re-query transactions filtered by property
-      const expenseCats = await Category.find({ type: 'EXPENSE' }).lean();
-      const txns = await Transaction.find({
-        date: { $gte: startDate, $lte: endDate },
-        categoryId: { $in: expenseCats.map((c) => c._id) },
-        ...(propertyId && propertyId !== 'ALL' ? { propertyId } : {}),
-        ...(expenseClassification && expenseClassification !== 'ALL' ? { expenseClassification } : {}),
-      }).populate('categoryId', 'name type isRentalHead').lean();
-
-      const headMap = new Map();
-      filteredTotal = 0;
-      for (const tx of txns) {
-        const catName = tx.categoryId?.name || 'Unknown';
-        const amt = round2(tx.amount);
-        filteredTotal = round2(filteredTotal + amt);
-        if (!headMap.has(catName)) headMap.set(catName, { headName: catName, totalSpent: 0, transactionCount: 0 });
-        const h = headMap.get(catName);
-        h.totalSpent = round2(h.totalSpent + amt);
-        h.transactionCount += 1;
-      }
-      filteredHeads = Array.from(headMap.values()).sort((a, b) => b.totalSpent - a.totalSpent);
-      classificationTotals = txns.reduce((totals, tx) => {
-        const classification = tx.expenseClassification
-          || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
-        if (classification === 'GENERAL_EXPENSE') totals.generalExpenses += tx.amount;
-        if (classification === 'PROPERTY_OWN_EXPENSE') totals.propertyOwnExpenses += tx.amount;
-        if (classification === 'UNIT_EXPENSE') totals.unitExpenses += tx.amount;
-        return totals;
-      }, { generalExpenses: 0, propertyOwnExpenses: 0, unitExpenses: 0 });
-    }
+    const report = await getHeadWiseExpenseReport(year, month, { propertyId, expenseClassification });
 
     // Property names for filter UI
     const properties = await Property.find({}, { plazaName: 1, _id: 1 }).lean();
@@ -321,9 +291,17 @@ export const getExpenseSummaryReport = async (req, res) => {
       success: true,
       period: periodString,
       propertyFilter: propertyId || 'ALL',
-      totalExpenses: filteredTotal,
-      ...classificationTotals,
-      heads: filteredHeads.filter((h) => h.totalSpent > 0),
+      totalExpenses: report.totalExpensesOverall,
+      ...report.classificationTotals,
+      heads: report.mainHeads
+        .filter((head) => head.totalSpent > 0)
+        .map((head) => ({
+          headName: head.mainHeadName,
+          totalSpent: head.totalSpent,
+          transactionCount: head.transactionCount,
+          mainHeadId: head.mainHeadId,
+        })),
+      mainHeads: report.mainHeads.filter((head) => head.totalSpent > 0),
       properties,
     });
   } catch (error) {
@@ -575,11 +553,23 @@ export const exportExcel = async (req, res) => {
         ['#', 'Expense Head', 'Voucher Count', 'Amount (Rs.)'],
       ];
 
-      const headsWithData = report.heads.filter((h) => h.totalSpent > 0);
-      const dataRows = headsWithData.map((h, i) => [i + 1, h.headName, h.transactionCount, h.totalSpent]);
+      const headsWithData = report.mainHeads.filter((head) => head.totalSpent > 0);
+      const dataRows = [];
+      headsWithData.forEach((head, index) => {
+        dataRows.push([index + 1, head.mainHeadName, head.transactionCount, head.totalSpent]);
+        for (const expense of head.expenses) {
+          if (expense.headName && expense.headName !== head.mainHeadName) {
+            dataRows.push(['', `  ${expense.headName}`, expense.transactionCount, expense.totalSpent]);
+          } else {
+            for (const transaction of expense.transactions) {
+              dataRows.push(['', `  ${transaction.detail}`, '', transaction.amount]);
+            }
+          }
+        }
+      });
       const footerRows = [
         [],
-        ['', 'TOTAL EXPENSES', headsWithData.reduce((s, h) => s + h.transactionCount, 0), report.totalExpensesOverall],
+        ['', 'TOTAL EXPENSES', headsWithData.reduce((sum, head) => sum + head.transactionCount, 0), report.totalExpensesOverall],
       ];
 
       sheets.push({
@@ -588,29 +578,31 @@ export const exportExcel = async (req, res) => {
         colWidths: [6, 40, 16, 18],
       });
 
-      // Detailed transactions per head
-      for (const head of headsWithData) {
-        const headTxns = await Transaction.find({
-          date: { $gte: startDate, $lte: endDate },
-          categoryId: (await Category.findOne({ name: head.headName, type: 'EXPENSE' })?._id) ? await Category.findOne({ name: head.headName, type: 'EXPENSE' }).then((c) => c._id) : null,
-        }).populate('drAccountId', 'name').populate('crAccountId', 'name').populate('propertyId', 'plazaName').lean();
-
-        if (headTxns.length === 0) continue;
-
+      // Add a detail worksheet for each top-level report head.
+      for (const [index, head] of headsWithData.entries()) {
+        const headTransactions = head.expenses.flatMap((expense) => expense.transactions);
         const sheetRows = [
-          [`${head.headName} — Expense Detail`],
+          [`${head.mainHeadName} — Expense Detail`],
           [`Period: ${periodString}`],
           [],
-          ['Date', 'V.N', 'Description', 'Paid From', 'Property', 'Amount (Rs.)'],
-          ...headTxns.map((t) => [fmtDate(t.date), t.voucherNo, t.detail, t.crAccountId?.name || '', t.propertyId?.plazaName || '', t.amount]),
+          ['Date', 'V.N', 'Description', 'Expense Head', 'Paid From', 'Property / Unit', 'Amount (Rs.)'],
+          ...headTransactions.map((transaction) => [
+            fmtDate(transaction.date),
+            transaction.voucherNo,
+            transaction.detail,
+            transaction.categoryName,
+            transaction.paidFromAccount || '',
+            [transaction.property, transaction.unit].filter(Boolean).join(' - '),
+            transaction.amount,
+          ]),
           [],
-          ['', '', 'Total', '', '', head.totalSpent],
+          ['', '', 'Total', '', '', '', head.totalSpent],
         ];
 
         sheets.push({
-          name: head.headName.substring(0, 31),
+          name: `${String(index + 1).padStart(2, '0')}-${head.mainHeadName}`.substring(0, 31),
           data: sheetRows,
-          colWidths: [14, 10, 40, 24, 24, 18],
+          colWidths: [14, 10, 40, 24, 24, 28, 18],
         });
       }
     }
@@ -854,12 +846,34 @@ export const exportCSV = async (req, res) => {
 
     if (type === 'expense-summary') {
       const report = await getHeadWiseExpenseReport(year, month);
-      const rows = report.heads.filter((h) => h.totalSpent > 0).map((h, i) => ({
-        '#': i + 1,
-        'Expense Head': h.headName,
-        'Voucher Count': h.transactionCount,
-        'Amount (Rs.)': h.totalSpent,
-      }));
+      const rows = [];
+      report.mainHeads.filter((head) => head.totalSpent > 0).forEach((head, index) => {
+        rows.push({
+          '#': index + 1,
+          'Expense Head': head.mainHeadName,
+          'Voucher Count': head.transactionCount,
+          'Amount (Rs.)': head.totalSpent,
+        });
+        for (const expense of head.expenses) {
+          if (expense.headName && expense.headName !== head.mainHeadName) {
+            rows.push({
+              '#': '',
+              'Expense Head': `  ${expense.headName}`,
+              'Voucher Count': expense.transactionCount,
+              'Amount (Rs.)': expense.totalSpent,
+            });
+          } else {
+            for (const transaction of expense.transactions) {
+              rows.push({
+                '#': '',
+                'Expense Head': `  ${transaction.detail}`,
+                'Voucher Count': '',
+                'Amount (Rs.)': transaction.amount,
+              });
+            }
+          }
+        }
+      });
       rows.push({ '#': '', 'Expense Head': 'TOTAL', 'Voucher Count': '', 'Amount (Rs.)': report.totalExpensesOverall });
       return sendCSV(res, `Pixx_Expenses_${periodString}.csv`, rows, ['#', 'Expense Head', 'Voucher Count', 'Amount (Rs.)']);
     }

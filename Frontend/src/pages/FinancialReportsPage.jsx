@@ -52,10 +52,10 @@ const resolveTransactionCategory = (tx) => {
 
 const resolveTransactionHead = (tx) => {
   const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED' || tx.transactionType === 'INCOME';
-  if (tx.categoryId?.name) return tx.categoryId.name;
-  if (isRent) return 'Rental Income';
-  if (tx.transactionType === 'TRANSFER') return 'Internal Transfer';
-  return 'General';
+  if (isRent && (tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED')) return tx.categoryId?.name || 'Rental Income';
+  if (tx.transactionType === 'TRANSFER') return tx.categoryId?.name || 'Internal Transfer';
+  const accounts = resolveTransactionAccounts(tx);
+  return accounts.head || tx.categoryId?.name || 'General';
 };
 
 export function FinancialReportsPage({ currentUser }) {
@@ -751,36 +751,72 @@ export function FinancialReportsPage({ currentUser }) {
                       No expense transactions found for this period.
                     </td>
                   </tr>
-                ) : (
-                  expenseSummary.heads.map((head, idx) => {
+                ) : (() => {
+                  const displayHeads = expenseSummary?.mainHeads?.length
+                    ? expenseSummary.mainHeads
+                    : (expenseSummary?.heads || []).map((head) => ({
+                        mainHeadId: head.mainHeadId || head.headName,
+                        mainHeadName: head.headName,
+                        totalSpent: head.totalSpent,
+                        transactionCount: head.transactionCount,
+                        expenses: [],
+                      }));
+
+                  return displayHeads.map((group, idx) => {
                     const pct = expenseSummary.totalExpenses > 0
-                      ? ((head.totalSpent / expenseSummary.totalExpenses) * 100).toFixed(1)
+                      ? ((group.totalSpent / expenseSummary.totalExpenses) * 100).toFixed(1)
                       : 0;
+
                     return (
-                      <tr key={head.headName} className="hover:bg-slate-800/40 transition">
-                        <td className="py-2.5 px-3.5 text-slate-500 font-mono">{idx + 1}</td>
-                        <td className="py-2.5 px-3.5 font-bold text-white">{head.headName}</td>
-                        <td className="py-2.5 px-3.5 text-center font-mono text-slate-400">
-                          {head.transactionCount}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-right font-mono font-bold text-rose-400">
-                          {formatPKR(head.totalSpent)}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-right font-mono text-slate-400">
-                          <div className="flex items-center justify-end gap-2">
-                            <span>{pct}%</span>
-                            <div className="w-16 bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                              <div
-                                className="bg-rose-500 h-full rounded-full"
-                                style={{ width: `${pct}%` }}
-                              />
+                      <React.Fragment key={group.mainHeadId || group.mainHeadName}>
+                        <tr className="hover:bg-slate-800/40 transition bg-slate-900/60">
+                          <td className="py-2.5 px-3.5 text-slate-500 font-mono">{idx + 1}</td>
+                          <td className="py-2.5 px-3.5 font-bold text-white">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+                              <span>{group.mainHeadName}</span>
                             </div>
-                          </div>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="py-2.5 px-3.5 text-center font-mono text-slate-400">
+                            {group.transactionCount}
+                          </td>
+                          <td className="py-2.5 px-3.5 text-right font-mono font-bold text-rose-400">
+                            {formatPKR(group.totalSpent)}
+                          </td>
+                          <td className="py-2.5 px-3.5 text-right font-mono text-slate-300">
+                            <div className="flex items-center justify-end gap-2">
+                              <span>{pct}%</span>
+                              <div className="w-16 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className="bg-rose-500 h-full rounded-full"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {(group.expenses || [])
+                          .filter((expense) => expense.headName && expense.headName !== group.mainHeadName)
+                          .map((expense, childIdx) => (
+                          <tr key={`${group.mainHeadId || group.mainHeadName}-child-${childIdx}`} className="bg-slate-950/60 text-slate-300">
+                            <td className="py-1.5 px-3.5 text-slate-500 font-mono">&nbsp;</td>
+                            <td className="py-1.5 px-3.5 pl-8 text-slate-300">
+                              <span className="text-xs text-slate-400">•</span> {expense.headName}
+                            </td>
+                            <td className="py-1.5 px-3.5 text-center font-mono text-slate-500">
+                              {expense.transactionCount || 0}
+                            </td>
+                            <td className="py-1.5 px-3.5 text-right font-mono text-rose-300">
+                              {formatPKR(expense.totalSpent || 0)}
+                            </td>
+                            <td className="py-1.5 px-3.5 text-right font-mono text-slate-500">-</td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
                     );
-                  })
-                )}
+                  });
+                })()}
               </tbody>
               {expenseSummary && (
                 <tfoot className="bg-slate-950 font-bold border-t border-slate-800 text-xs">

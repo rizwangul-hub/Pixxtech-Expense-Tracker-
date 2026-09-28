@@ -13,6 +13,7 @@ import {
   getHeadWiseExpenseReport,
   getAccountRunningLedger,
   resolveTransactionAccountDisplay,
+  buildHeadWiseReportItems,
   round2,
 } from './ledgerService.js';
 import { getUtcMonthDateRange } from './salaryReportingService.js';
@@ -267,16 +268,13 @@ export const generateMonthlyFundsReport = async (monthYear) => {
 
   // 4. Fetch Head-Wise Expenses (Pages 6, 7 & 8)
   const headWise = await getHeadWiseExpenseReport(year, month);
-  const headWiseGroups = headWise.heads.filter(h => h.totalSpent > 0).map(h => ({
-    headName: h.headName,
-    totalAmount: h.totalSpent,
-    items: h.transactions.map(t => ({
-      detail: t.detail,
-      amount: t.amount,
-      vn: t.voucherNo,
-      expenseClassification: t.expenseClassification,
-    })),
-  }));
+  const headWiseGroups = headWise.mainHeads
+    .filter((head) => head.totalSpent > 0)
+    .map((head) => ({
+      headName: head.mainHeadName,
+      totalAmount: head.totalSpent,
+      items: buildHeadWiseReportItems(head),
+    }));
 
   const headWiseReport = {
     groups: headWiseGroups,

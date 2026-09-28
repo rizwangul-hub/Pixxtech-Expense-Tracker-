@@ -17,6 +17,106 @@ import {
  */
 export const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
 
+const asId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'object') return value._id?.toString() || null;
+  return String(value);
+};
+
+const asPropertyDoc = (value) =>
+  value && typeof value === 'object' && (value.plazaName || value.propertyName || Array.isArray(value.units))
+    ? value
+    : null;
+
+const isSalaryHeadName = (value = '') => /^salar(?:y|ies)$/i.test(String(value).trim());
+
+/**
+ * Resolve the report-level main head (property, unit, office, foundation, salary)
+ * and the nested expense head for a single expense transaction.
+ */
+export const resolveExpenseReportHead = (tx = {}) => {
+  const category = tx.categoryId && typeof tx.categoryId === 'object' ? tx.categoryId : {};
+  const parent = category.parentCategoryId && typeof category.parentCategoryId === 'object'
+    ? category.parentCategoryId
+    : {};
+  const property = asPropertyDoc(tx.propertyId) || asPropertyDoc(category.propertyId);
+  const propertyId = asId(tx.propertyId) || asId(category.propertyId);
+  const unitId = asId(tx.unitId) || asId(category.unitId);
+  const propertyName = property?.plazaName || property?.propertyName || tx.propertyName || '';
+  const unit = unitId && property?.units?.find((candidate) => asId(candidate._id) === unitId);
+  const unitName = unit?.unitName || unit?.unitNumber || tx.unitName || '';
+  const categoryName = category.name || tx.categoryName || 'Unknown Head';
+  const parentName = parent.name || '';
+  const classification = tx.expenseClassification
+    || category.expenseClassification
+    || (unitId ? 'UNIT_EXPENSE' : propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
+  const isSalary =
+    isSalaryHeadName(parentName) ||
+    isSalaryHeadName(categoryName) ||
+    /\b(?:advance\s+)?salary\b/i.test(tx.detail || '');
+  const isUnitExpense = classification === 'UNIT_EXPENSE' || Boolean(unitId && classification !== 'PROPERTY_OWN_EXPENSE');
+  const isPropertyExpense =
+    classification === 'PROPERTY_OWN_EXPENSE' ||
+    isUnitExpense ||
+    Boolean(propertyId);
+
+  let mainHeadName;
+  let mainHeadId;
+  if (isUnitExpense && (propertyId || propertyName)) {
+    mainHeadName = [propertyName || 'Property', unitName].filter(Boolean).join(' - ');
+    mainHeadId = `unit:${propertyId || 'property'}:${unitId || 'unit'}`;
+  } else if (isPropertyExpense && (propertyId || propertyName)) {
+    mainHeadName = propertyName || 'Property';
+    mainHeadId = `property:${propertyId || mainHeadName.toLowerCase()}`;
+  } else if (isSalary) {
+    mainHeadName = 'Salary';
+    mainHeadId = 'salary';
+  } else if (parentName) {
+    mainHeadName = parentName;
+    mainHeadId = `category:${asId(parent._id) || parentName.trim().toLowerCase()}`;
+  } else {
+    mainHeadName = categoryName;
+    mainHeadId = `category:${asId(category._id) || categoryName.trim().toLowerCase()}`;
+  }
+
+  const childHeadName = categoryName || parentName || 'Expense';
+  const locationName = [propertyName, isUnitExpense ? unitName : ''].filter(Boolean).join(' - ');
+
+  return {
+    mainHeadId,
+    mainHeadName,
+    childHeadName,
+    classification,
+    propertyName: propertyName || null,
+    unitName: unitName || null,
+    locationName,
+  };
+};
+
+export const buildHeadWiseReportItems = (head) => {
+  const items = [];
+  for (const expense of head.expenses || []) {
+    if (expense.headName && expense.headName !== head.mainHeadName && expense.headName !== head.headName) {
+      items.push({
+        detail: expense.headName,
+        amount: expense.totalSpent,
+        vn: '',
+        expenseClassification: expense.transactions?.[0]?.expenseClassification,
+      });
+      continue;
+    }
+    for (const transaction of expense.transactions || []) {
+      items.push({
+        detail: transaction.detail,
+        amount: transaction.amount,
+        vn: transaction.voucherNo,
+        expenseClassification: transaction.expenseClassification,
+      });
+    }
+  }
+  return items;
+};
+
 export const resolveTransactionAccountDisplay = (tx) => {
   const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
   const isTransfer = tx.transactionType === 'TRANSFER';
@@ -25,22 +125,17 @@ export const resolveTransactionAccountDisplay = (tx) => {
     tx.sourceModule === 'OTHER_INCOME' ||
     (tx.transactionType === 'INCOME' && !isRent);
   const categoryName = tx.categoryId?.name || tx.categoryName || '';
-  const mainExpenseHeadName = tx.categoryId?.isMainHead
-    ? tx.categoryId.name
-    : tx.categoryId?.parentCategoryId?.name || categoryName;
-  const propertyName = tx.propertyId?.plazaName || tx.propertyId?.propertyName || '';
-  const unitId = tx.unitId?._id || tx.unitId;
-  const unit = unitId && tx.propertyId?.units?.find(
-    (candidate) => candidate._id?.toString() === unitId.toString()
-  );
-  const unitName = unit?.unitName || unit?.unitNumber || tx.unitName || '';
-  const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
+  const reportHead = resolveExpenseReportHead(tx);
+  const mainExpenseHeadName = reportHead.mainHeadName || categoryName;
+  const locationName = reportHead.locationName;
   const isPropertyExpense =
     tx.transactionType === 'EXPENSE' &&
-    (tx.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
-      tx.expenseClassification === 'UNIT_EXPENSE' ||
+    (reportHead.classification === 'PROPERTY_OWN_EXPENSE' ||
+      reportHead.classification === 'UNIT_EXPENSE' ||
       Boolean(tx.propertyId) ||
-      Boolean(unitId));
+      Boolean(tx.unitId) ||
+      Boolean(tx.categoryId?.propertyId) ||
+      Boolean(tx.categoryId?.unitId));
   const drRaw = tx.drAccountId?.name || '';
   const crRaw = tx.crAccountId?.name || '';
 
@@ -78,7 +173,7 @@ export const resolveTransactionAccountDisplay = (tx) => {
     cr: !crRaw || /Clearing|External Parties/i.test(crRaw)
       ? 'Payment Account (Bank/Cash)'
       : crRaw,
-    head: categoryName || 'Expense Head',
+    head: mainExpenseHeadName || 'Expense Head',
     location: locationName,
   };
 };
@@ -614,13 +709,86 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
 };
 
 /**
- * Groups all expense transactions for the specified month by Category (Head).
+ * Groups expense transactions under their financial parent: property/unit,
+ * salary, or the root expense category.
+ */
+export const groupExpenseTransactionsByReportHead = (transactions) => {
+  const mainHeadsMap = new Map();
+
+  for (const tx of transactions) {
+    const amount = round2(tx.amount);
+    const category = tx.categoryId || {};
+    const {
+      mainHeadId,
+      mainHeadName,
+      childHeadName,
+      classification,
+      propertyName,
+      unitName,
+    } = resolveExpenseReportHead(tx);
+
+    if (!mainHeadsMap.has(mainHeadId)) {
+      mainHeadsMap.set(mainHeadId, {
+        mainHeadId,
+        mainHeadName,
+        totalSpent: 0,
+        transactionCount: 0,
+        expenses: [],
+      });
+    }
+    const mainHead = mainHeadsMap.get(mainHeadId);
+    mainHead.totalSpent = round2(mainHead.totalSpent + amount);
+    mainHead.transactionCount += 1;
+
+    let childHead = mainHead.expenses.find((expense) => expense.headName === childHeadName);
+    if (!childHead) {
+      childHead = {
+        categoryId: category._id || category,
+        headName: childHeadName,
+        totalSpent: 0,
+        transactionCount: 0,
+        transactions: [],
+      };
+      mainHead.expenses.push(childHead);
+    }
+    childHead.totalSpent = round2(childHead.totalSpent + amount);
+    childHead.transactionCount += 1;
+    childHead.transactions.push({
+      _id: tx._id,
+      date: tx.date,
+      voucherNo: tx.voucherNo,
+      detail: tx.detail,
+      amount,
+      paidFromAccount: tx.crAccountId?.name || null,
+      debitedAccount: tx.drAccountId?.name || null,
+      property: propertyName || null,
+      unit: unitName || null,
+      categoryName: childHeadName,
+      expenseClassification: classification,
+      unitId: tx.unitId || null,
+      status: tx.status,
+      checkedBy: tx.checkedBy,
+    });
+  }
+
+  return Array.from(mainHeadsMap.values())
+    .map((head) => ({
+      ...head,
+      expenses: head.expenses.sort((a, b) =>
+        b.totalSpent - a.totalSpent || a.headName.localeCompare(b.headName)
+      ),
+    }))
+    .sort((a, b) => b.totalSpent - a.totalSpent || a.mainHeadName.localeCompare(b.mainHeadName));
+};
+
+/**
+ * Summarizes monthly expenses by category and by their report-level main head.
  *
  * @param {number} year - Full year (e.g. 2026)
  * @param {number} month - 1-indexed month (1 = Jan, 8 = August)
- * @returns {Promise<Object>} - Breakdown by expense head with itemized transaction details
+ * @returns {Promise<Object>} - Legacy category totals and hierarchical main-head details
  */
-export const getHeadWiseExpenseReport = async (year, month) => {
+export const getHeadWiseExpenseReport = async (year, month, filters = {}) => {
   if (typeof year === 'string' && year.includes('-')) {
     const [y, m] = year.split('-').map(Number);
     year = y;
@@ -633,19 +801,30 @@ export const getHeadWiseExpenseReport = async (year, month) => {
   const expenseCatIds = expenseCategories.map((c) => c._id);
 
   // Find transactions belonging to expense categories in this month
-  const transactions = await Transaction.find({
+  const transactionQuery = {
     date: { $gte: startOfMonth, $lte: endOfMonth },
     categoryId: { $in: expenseCatIds },
     $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
-  })
+  };
+  if (filters.propertyId && filters.propertyId !== 'ALL') {
+    transactionQuery.propertyId = filters.propertyId;
+  }
+  if (filters.expenseClassification && filters.expenseClassification !== 'ALL') {
+    transactionQuery.expenseClassification = filters.expenseClassification;
+  }
+
+  const transactions = await Transaction.find(transactionQuery)
     .populate({
       path: 'categoryId',
-      select: 'name type isRentalHead parentCategoryId isMainHead',
-      populate: { path: 'parentCategoryId', select: 'name' },
+      select: 'name type isRentalHead parentCategoryId isMainHead expenseClassification propertyId unitId',
+      populate: [
+        { path: 'parentCategoryId', select: 'name isMainHead' },
+        { path: 'propertyId', select: 'plazaName propertyName units' },
+      ],
     })
     .populate('crAccountId', 'name type')
     .populate('drAccountId', 'name type')
-    .populate('propertyId', 'plazaName')
+    .populate('propertyId', 'plazaName propertyName units')
     .sort({ date: 1, voucherNo: 1 })
     .lean();
 
@@ -718,25 +897,6 @@ export const getHeadWiseExpenseReport = async (year, month) => {
     return a.headName.localeCompare(b.headName);
   });
 
-  const mainHeadsMap = new Map();
-  for (const head of heads.filter((item) => item.transactionCount > 0)) {
-    const mainId = head.parentCategoryId?.toString() || head.categoryId?.toString();
-    const mainName = head.parentHeadName || head.headName;
-    if (!mainHeadsMap.has(mainId)) {
-      mainHeadsMap.set(mainId, {
-        mainHeadId: mainId,
-        mainHeadName: mainName,
-        totalSpent: 0,
-        transactionCount: 0,
-        expenses: [],
-      });
-    }
-    const main = mainHeadsMap.get(mainId);
-    main.totalSpent = round2(main.totalSpent + head.totalSpent);
-    main.transactionCount += head.transactionCount;
-    main.expenses.push(head);
-  }
-
   return {
     year,
     month,
@@ -748,7 +908,7 @@ export const getHeadWiseExpenseReport = async (year, month) => {
       unitExpenses: round2(unitExpenses),
     },
     heads,
-    mainHeads: Array.from(mainHeadsMap.values()).sort((a, b) => b.totalSpent - a.totalSpent),
+    mainHeads: groupExpenseTransactionsByReportHead(transactions),
   };
 };
 

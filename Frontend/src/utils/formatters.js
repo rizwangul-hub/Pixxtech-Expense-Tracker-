@@ -201,6 +201,17 @@ export const resolveTransactionAccounts = (tx) => {
     ? tx.categoryId.name
     : tx.categoryId?.parentCategoryId?.name || headName;
 
+  const isPropertyExpense =
+    tx.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+    tx.expenseClassification === 'UNIT_EXPENSE' ||
+    Boolean(tx.propertyId) ||
+    Boolean(tx.unitId);
+  const reportHeadName = isPropertyExpense && locationName
+    ? locationName
+    : /^salar(?:y|ies)$/i.test(mainExpenseHeadName) || /\b(?:advance\s+)?salary\b/i.test(tx.detail || '')
+    ? 'Salary'
+    : mainExpenseHeadName;
+
   let drRaw =
     tx.drAccountId?.name ||
     tx.receivingAccountId?.name ||
@@ -227,12 +238,6 @@ export const resolveTransactionAccounts = (tx) => {
     dr = !drRaw || /Clearing|External Parties/i.test(drRaw) ? 'Destination Account' : drRaw;
     cr = !crRaw || /Clearing|External Parties/i.test(crRaw) ? 'Source Account' : crRaw;
   } else {
-    // EXPENSE
-    const isPropertyExpense =
-      tx.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
-      tx.expenseClassification === 'UNIT_EXPENSE' ||
-      Boolean(tx.propertyId) ||
-      Boolean(tx.unitId);
     if (isPropertyExpense && locationName) {
       dr = locationName;
     } else if (!drRaw || /Clearing|External Parties/i.test(drRaw)) {
@@ -246,7 +251,7 @@ export const resolveTransactionAccounts = (tx) => {
   return {
     dr: dr || '—',
     cr: cr || '—',
-    head: headName,
+    head: isRent || isOtherIncome || isTransfer ? headName : reportHeadName,
     location: locationName,
   };
 };

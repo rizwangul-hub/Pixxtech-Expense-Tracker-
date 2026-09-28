@@ -1206,7 +1206,7 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between text-xs">
                   <div>
                     <span className="font-bold text-white text-sm block">
-                      Disbursements Grouped by Expense Head
+                      Disbursements Grouped by Main Head
                     </span>
                     <span className="text-slate-400">Reporting Period: {selectedMonth}</span>
                   </div>
@@ -1296,8 +1296,8 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                                     <td className="py-2 px-3 font-mono font-bold text-emerald-400">
                                       #{t.voucherNo}
                                     </td>
-                                    <td className="py-2 px-3 text-slate-200">{t.detail}</td>
-                                    <td className="py-2 px-3 text-purple-300">{t.expenseHeadName}</td>
+                                    <td className="py-2 px-3 text-slate-200">{t.expenseHeadName}</td>
+                                    <td className="py-2 px-3 text-purple-300">{t.detail}</td>
                                     <td className="py-2 px-3 text-rose-300">{t.paidFromAccount}</td>
                                     <td className="py-2 px-3 text-right font-mono font-bold text-white">
                                       {formatPKR(t.amount)}

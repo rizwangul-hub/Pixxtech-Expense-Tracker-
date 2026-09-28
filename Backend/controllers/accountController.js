@@ -904,6 +904,10 @@ export const createCategory = async (req, res) => {
         isMainHead,
         isRentalHead: !!req.body.isRentalHead,
       });
+    } else if (!isMainHead && resolvedParentCategoryId && !category.parentCategoryId) {
+      category.parentCategoryId = resolvedParentCategoryId;
+      category.isMainHead = false;
+      await category.save();
     }
 
     let populatedCat = category;

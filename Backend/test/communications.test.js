@@ -13,7 +13,11 @@ import {
 import { getCorsAllowedOrigins, isCorsOriginAllowed } from '../config/communicationCors.js';
 import { getJwtSecret } from '../config/jwt.js';
 import { protect } from '../middleware/auth.js';
-import { resolveTransactionAccountDisplay } from '../services/ledgerService.js';
+import {
+  groupExpenseTransactionsByReportHead,
+  resolveTransactionAccountDisplay,
+  buildHeadWiseReportItems,
+} from '../services/ledgerService.js';
 
 const admin = { _id: 'admin-1', email: 'ADMIN@example.com ', name: 'Khurshid', role: 'ADMIN', isActive: true };
 const dataEntry = { _id: 'entry-2', email: 'entry@example.com', name: 'Sarfraz', role: 'DATA_ENTRY', isActive: true };
@@ -47,8 +51,125 @@ test('property expenses use their property or unit as the debit display', () => 
   });
 
   assert.equal(propertyExpense.dr, 'Pixx Plaza');
+  assert.equal(propertyExpense.head, 'Pixx Plaza');
   assert.equal(unitExpense.dr, 'Pixx Plaza - Office 4');
+  assert.equal(unitExpense.head, 'Pixx Plaza - Office 4');
   assert.equal(generalExpense.dr, 'General Operations');
+  assert.equal(generalExpense.head, 'Office Supplies');
+});
+
+test('expense reports group transactions under property, general, and salary heads', () => {
+  const property = {
+    _id: 'property-1',
+    plazaName: 'Amin Park',
+    units: [{ _id: 'unit-1', unitName: 'Flat 502' }],
+  };
+  const groups = groupExpenseTransactionsByReportHead([
+    {
+      _id: 'property-expense',
+      amount: 100,
+      expenseClassification: 'PROPERTY_OWN_EXPENSE',
+      propertyId: property,
+      categoryId: { name: 'Electricity Bill' },
+      detail: 'Paid electricity bill',
+    },
+    {
+      _id: 'unit-expense',
+      amount: 200,
+      expenseClassification: 'UNIT_EXPENSE',
+      propertyId: property,
+      unitId: 'unit-1',
+      categoryId: { name: 'Maintenance' },
+      detail: 'Paid maintenance charges',
+    },
+    {
+      _id: 'general-expense',
+      amount: 300,
+      expenseClassification: 'GENERAL_EXPENSE',
+      categoryId: {
+        name: 'PTCL Bills',
+        parentCategoryId: { _id: 'office-expenses', name: 'IT Office Expenses - Bahrain Office' },
+      },
+      detail: 'Paid PTCL bill',
+    },
+    {
+      _id: 'salary-expense',
+      amount: 400,
+      expenseClassification: 'GENERAL_EXPENSE',
+      categoryId: { name: 'Sabir Nawaz', parentCategoryId: { name: 'Salary' } },
+      detail: 'Salary - Sabir Nawaz - August 2026 Salary',
+    },
+    {
+      _id: 'salary-expense-2',
+      amount: 150,
+      expenseClassification: 'GENERAL_EXPENSE',
+      categoryId: { name: 'Miss Nausheen' },
+      detail: 'Salary - Miss Nausheen - August 2026 Salary',
+    },
+  ]);
+
+  assert.deepEqual(
+    groups.map(({ mainHeadName, totalSpent }) => [mainHeadName, totalSpent]),
+    [
+      ['Salary', 550],
+      ['IT Office Expenses - Bahrain Office', 300],
+      ['Amin Park - Flat 502', 200],
+      ['Amin Park', 100],
+    ]
+  );
+  assert.deepEqual(
+    groups.find((group) => group.mainHeadName === 'Amin Park').expenses.map((expense) => expense.headName),
+    ['Electricity Bill']
+  );
+  assert.deepEqual(
+    groups.find((group) => group.mainHeadName === 'IT Office Expenses - Bahrain Office').expenses.map((expense) => expense.headName),
+    ['PTCL Bills']
+  );
+  assert.equal(groups.find((group) => group.mainHeadName === 'Salary').expenses[0].transactions[0].detail,
+    'Salary - Sabir Nawaz - August 2026 Salary');
+  assert.equal(groups.find((group) => group.mainHeadName === 'Salary').transactionCount, 2);
+
+  const propertyItems = buildHeadWiseReportItems(groups.find((group) => group.mainHeadName === 'Amin Park'));
+  assert.deepEqual(propertyItems.map((item) => [item.detail, item.amount]), [['Electricity Bill', 100]]);
+});
+
+test('property expenses group under the property even when only the category has the property', () => {
+  const property = { _id: 'property-2', plazaName: 'Pixx Plaza', units: [] };
+  const groups = groupExpenseTransactionsByReportHead([
+    {
+      amount: 50,
+      expenseClassification: 'PROPERTY_OWN_EXPENSE',
+      categoryId: { name: 'Electricity Bill', propertyId: property },
+      detail: 'Paid KE bill',
+    },
+    {
+      amount: 25,
+      expenseClassification: 'PROPERTY_OWN_EXPENSE',
+      categoryId: { name: 'Entertainment', propertyId: property },
+      detail: 'Guest tea',
+    },
+    {
+      amount: 80,
+      expenseClassification: 'GENERAL_EXPENSE',
+      categoryId: {
+        name: 'Foundation Repairs',
+        parentCategoryId: { _id: 'foundation', name: 'Abida Ijaz Foundation' },
+      },
+      detail: 'Repair work',
+    },
+  ]);
+
+  assert.deepEqual(
+    groups.map(({ mainHeadName, totalSpent }) => [mainHeadName, totalSpent]),
+    [
+      ['Abida Ijaz Foundation', 80],
+      ['Pixx Plaza', 75],
+    ]
+  );
+  assert.deepEqual(
+    groups.find((group) => group.mainHeadName === 'Pixx Plaza').expenses.map((expense) => expense.headName).sort(),
+    ['Electricity Bill', 'Entertainment']
+  );
 });
 
 test('JWT authentication has no built-in fallback secret', () => {
