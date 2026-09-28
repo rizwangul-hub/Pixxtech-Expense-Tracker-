@@ -175,7 +175,11 @@ export const getPendingEntries = async (req, res) => {
           select: 'agreementNumber monthlyRent tenantId',
           populate: { path: 'tenantId', select: 'fullName tenantName name phone' },
         })
-        .populate('categoryId', 'name type isRentalHead')
+        .populate({
+          path: 'categoryId',
+          select: 'name type isRentalHead parentCategoryId isMainHead',
+          populate: { path: 'parentCategoryId', select: 'name' },
+        })
         .populate('drAccountId', 'name type currentBalance bankName cashHolder')
         .populate('crAccountId', 'name type currentBalance bankName cashHolder')
         .populate('receivingAccountId', 'name type currentBalance bankName cashHolder')
@@ -452,7 +456,11 @@ export const getPendingEntryById = async (req, res) => {
         select: 'agreementNumber monthlyRent tenantId',
         populate: { path: 'tenantId', select: 'fullName tenantName name phone' },
       })
-      .populate('categoryId', 'name type isRentalHead')
+      .populate({
+        path: 'categoryId',
+        select: 'name type isRentalHead parentCategoryId isMainHead',
+        populate: { path: 'parentCategoryId', select: 'name' },
+      })
       .populate('drAccountId', 'name type currentBalance bankName cashHolder')
       .populate('crAccountId', 'name type currentBalance bankName cashHolder')
       .populate('receivingAccountId', 'name type currentBalance bankName cashHolder')
@@ -1344,7 +1352,11 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
         select: 'agreementNumber monthlyRent tenantId',
         populate: { path: 'tenantId', select: 'fullName tenantName name phone cnic' },
       })
-      .populate('categoryId', 'name type isRentalHead')
+      .populate({
+        path: 'categoryId',
+        select: 'name type isRentalHead parentCategoryId isMainHead',
+        populate: { path: 'parentCategoryId', select: 'name' },
+      })
       .populate('drAccountId', 'name type bankName accountNumber cashHolder')
       .populate('crAccountId', 'name type bankName accountNumber cashHolder')
       .populate('receivingAccountId', 'name type bankName accountNumber cashHolder')
@@ -1362,7 +1374,11 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
           select: 'agreementNumber monthlyRent tenantId',
           populate: { path: 'tenantId', select: 'fullName tenantName name phone cnic' },
         })
-        .populate('categoryId', 'name type isRentalHead')
+        .populate({
+          path: 'categoryId',
+          select: 'name type isRentalHead parentCategoryId isMainHead',
+          populate: { path: 'parentCategoryId', select: 'name' },
+        })
         .populate('drAccountId', 'name type bankName accountNumber cashHolder')
         .populate('crAccountId', 'name type bankName accountNumber cashHolder')
         .populate('createdBy', 'name email role')
@@ -1472,6 +1488,9 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
       entry.categoryId?.name ||
       entry.entryData?.category?.name ||
       'General';
+    const mainExpenseHeadName = entry.categoryId?.isMainHead
+      ? entry.categoryId.name
+      : entry.categoryId?.parentCategoryId?.name || categoryName;
 
     let drAccountName =
       entry.drAccountId?.name ||
@@ -1502,7 +1521,7 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
       crAccountName = crAccountName || 'Source Account';
     } else {
       if (!drAccountName || /Clearing|External Parties/i.test(drAccountName)) {
-        drAccountName = rentLocationName ? `${rentLocationName} (${categoryName})` : categoryName;
+        drAccountName = mainExpenseHeadName;
       }
       if (!crAccountName || /Clearing|External Parties/i.test(crAccountName)) {
         crAccountName = 'Payment Account (Bank/Cash)';

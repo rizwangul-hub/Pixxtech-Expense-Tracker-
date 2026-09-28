@@ -197,6 +197,9 @@ export const resolveTransactionAccounts = (tx) => {
     tx.categoryName ||
     tx.entryData?.category?.name ||
     (isRent ? 'Rental Income' : isTransfer ? 'Internal Transfer' : 'General Expense');
+  const mainExpenseHeadName = tx.categoryId?.isMainHead
+    ? tx.categoryId.name
+    : tx.categoryId?.parentCategoryId?.name || headName;
 
   let drRaw =
     tx.drAccountId?.name ||
@@ -226,7 +229,7 @@ export const resolveTransactionAccounts = (tx) => {
   } else {
     // EXPENSE
     if (!drRaw || /Clearing|External Parties/i.test(drRaw)) {
-      dr = locationName ? `${locationName} (${headName})` : headName;
+      dr = mainExpenseHeadName;
     }
     if (!crRaw || /Clearing|External Parties/i.test(crRaw)) {
       cr = 'Payment Account (Bank/Cash)';

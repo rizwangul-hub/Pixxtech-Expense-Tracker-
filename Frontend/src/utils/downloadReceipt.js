@@ -108,10 +108,13 @@ export function extractReceiptMetadata(entry) {
   }
   if (!unitName) {
     unitName =
+      entry.unit?.unitName ||
+      entry.unit?.unitNumber ||
       entry.unitId?.unitName ||
       entry.unitId?.unitNumber ||
       entry.entryData?.unit?.unitName ||
       entry.entryData?.unit?.unitNumber ||
+      entry.unitName ||
       '';
   }
 
@@ -129,6 +132,9 @@ export function extractReceiptMetadata(entry) {
     entry.categoryId?.name ||
     entry.entryData?.category?.name ||
     'General Expense';
+  const mainExpenseHeadName = entry.categoryId?.isMainHead
+    ? entry.categoryId.name
+    : entry.categoryId?.parentCategoryId?.name || categoryName;
 
   const isRent =
     entry.entryType === 'RENT' ||
@@ -166,7 +172,9 @@ export function extractReceiptMetadata(entry) {
     drAccount = drAccount || (empName ? `Salary Expense (${empName})` : 'Salary Expense');
     crAccount = crAccount || 'Paid From (Bank / Cash)';
   } else {
-    drAccount = drAccount || categoryName;
+    drAccount = !drAccount || /Clearing|External Parties/i.test(drAccount)
+      ? mainExpenseHeadName
+      : drAccount;
     crAccount = crAccount || 'Paid From (Bank / Cash)';
   }
 

@@ -220,7 +220,11 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     date: { $gte: startDate, $lte: endDate },
     $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   })
-    .populate('categoryId', 'name type isRentalHead')
+    .populate({
+      path: 'categoryId',
+      select: 'name type isRentalHead parentCategoryId isMainHead',
+      populate: { path: 'parentCategoryId', select: 'name' },
+    })
     .populate('drAccountId', 'name type')
     .populate('crAccountId', 'name type')
     .populate('propertyId', 'plazaName units')
@@ -546,6 +550,9 @@ export const generateSingleVoucherPDF = async (printDetail) => {
   const unitName = printDetail.unit?.name || '';
   const locationName = [propName, unitName].filter(Boolean).join(' - ');
   const categoryTitle = printDetail.category?.name || (isRent ? 'Rental Income' : (isTransfer ? 'Internal Transfer' : 'General'));
+  const mainExpenseHeadTitle = printDetail.category?.isMainHead
+    ? printDetail.category.name
+    : printDetail.category?.parentCategoryId?.name || categoryTitle;
 
   let drAccount = { ...(printDetail.drAccount || { name: '-' }) };
   let crAccount = { ...(printDetail.crAccount || { name: '-' }) };
@@ -570,7 +577,7 @@ export const generateSingleVoucherPDF = async (printDetail) => {
   } else {
     // Expense
     if (!drAccount.name || drAccount.name === '-' || /Clearing|External Parties/i.test(drAccount.name)) {
-      drAccount.name = locationName ? `${locationName} (${categoryTitle})` : categoryTitle;
+      drAccount.name = mainExpenseHeadTitle;
     }
     if (!crAccount.name || crAccount.name === '-' || /Clearing|External Parties/i.test(crAccount.name)) {
       crAccount.name = 'Payment Account (Bank/Cash)';

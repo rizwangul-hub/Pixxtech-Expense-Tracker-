@@ -534,6 +534,13 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
 
       const res = await verificationAPI.updatePending(entryId, payload);
       if (res.success) {
+        const savedEntry = res.data?.data || res.data || {};
+        const selectedProperty = properties.find(
+          (property) => String(property._id) === String(editForm.propertyId)
+        );
+        const selectedUnit = selectedProperty?.units?.find(
+          (unit) => String(unit._id) === String(editForm.unitId)
+        );
         setFeedback({
           message: 'Entry details and evidence updated successfully. You can now verify it.',
           type: 'success',
@@ -559,6 +566,19 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                   date: editForm.date ? new Date(editForm.date).toISOString() : e.date,
                   detail: editForm.detail ?? e.detail,
                   rentMonth: editForm.rentMonth || e.rentMonth,
+                  ...(e.entryType === 'RENT' ? {
+                    propertyId: savedEntry.propertyId || selectedProperty || editForm.propertyId,
+                    unitId: savedEntry.unitId || selectedUnit || editForm.unitId,
+                    tenantId: savedEntry.tenantId ?? e.tenantId,
+                    agreementId: savedEntry.agreementId ?? e.agreementId,
+                    entryData: {
+                      ...(e.entryData || {}),
+                      ...(savedEntry.entryData || {}),
+                      attachments: finalAttachments,
+                      propertyId: editForm.propertyId,
+                      unitId: editForm.unitId,
+                    },
+                  } : {}),
                   crAccountId: accounts.find((a) => String(a._id) === String(editForm.crAccountId)) || e.crAccountId,
                   salaryDetails: e.entryType === 'SALARY' ? {
                     ...(e.salaryDetails || {}),
@@ -1665,6 +1685,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                       ))}
                     </select>
                   </div>
+                  <p className="col-span-2 text-[11px] text-slate-400">
+                    Change the property or unit here before saving. Selecting a different property clears the unit so you can choose a unit from that property.
+                  </p>
                 </div>
               )}
 

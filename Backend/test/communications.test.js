@@ -13,6 +13,7 @@ import {
 import { getCorsAllowedOrigins, isCorsOriginAllowed } from '../config/communicationCors.js';
 import { getJwtSecret } from '../config/jwt.js';
 import { protect } from '../middleware/auth.js';
+import { resolveTransactionAccountDisplay } from '../services/ledgerService.js';
 
 const admin = { _id: 'admin-1', email: 'ADMIN@example.com ', name: 'Khurshid', role: 'ADMIN', isActive: true };
 const dataEntry = { _id: 'entry-2', email: 'entry@example.com', name: 'Sarfraz', role: 'DATA_ENTRY', isActive: true };
@@ -46,6 +47,21 @@ test('JWT authentication has no built-in fallback secret', () => {
     if (configuredSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = configuredSecret;
   }
+});
+
+test('expense ledger debit display uses the assigned main expense head', () => {
+  const display = resolveTransactionAccountDisplay({
+    transactionType: 'EXPENSE',
+    drAccountId: { name: 'External Parties / Operations Clearing' },
+    crAccountId: { name: 'Bank Al Falah' },
+    categoryId: {
+      name: 'Foundation Repairs',
+      isMainHead: false,
+      parentCategoryId: { name: 'Abida Ijaz Foundation' },
+    },
+  });
+  assert.equal(display.dr, 'Abida Ijaz Foundation');
+  assert.equal(display.cr, 'Bank Al Falah');
 });
 
 test('participant resolution is exact, normalized, and fail-closed', () => {

@@ -24,6 +24,9 @@ export const resolveTransactionAccountDisplay = (tx) => {
     tx.sourceModule === 'OTHER_INCOME' ||
     (tx.transactionType === 'INCOME' && !isRent);
   const categoryName = tx.categoryId?.name || tx.categoryName || '';
+  const mainExpenseHeadName = tx.categoryId?.isMainHead
+    ? tx.categoryId.name
+    : tx.categoryId?.parentCategoryId?.name || categoryName;
   const propertyName = tx.propertyId?.plazaName || tx.propertyId?.propertyName || '';
   const unitId = tx.unitId?._id || tx.unitId;
   const unit = unitId && tx.propertyId?.units?.find(
@@ -61,7 +64,7 @@ export const resolveTransactionAccountDisplay = (tx) => {
 
   return {
     dr: !drRaw || /Clearing|External Parties/i.test(drRaw)
-      ? (locationName ? `${locationName} (${categoryName || 'Expense'})` : categoryName || 'Expense Head')
+      ? mainExpenseHeadName || 'Expense Head'
       : drRaw,
     cr: !crRaw || /Clearing|External Parties/i.test(crRaw)
       ? 'Payment Account (Bank/Cash)'
@@ -1189,7 +1192,11 @@ export const getTransactionsFiltered = async (filters = {}) => {
   const [totalRecords, transactions, allFilteredTxs] = await Promise.all([
     Transaction.countDocuments(query),
     Transaction.find(query)
-      .populate('categoryId', 'name type isRentalHead')
+      .populate({
+        path: 'categoryId',
+        select: 'name type isRentalHead parentCategoryId isMainHead',
+        populate: { path: 'parentCategoryId', select: 'name' },
+      })
       .populate('drAccountId', 'name type currentBalance bankName cashHolder')
       .populate('crAccountId', 'name type currentBalance bankName cashHolder')
       .populate('propertyId', 'plazaName location units')

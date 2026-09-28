@@ -37,8 +37,8 @@ export function ReceiptViewerModal({ entry, onClose }) {
   const meta = extractReceiptMetadata(entry);
   const attachments = meta.attachments || [];
   const ledgerCreditAccount =
-    meta.propertyName && meta.unitName && meta.crAccount?.trim() === meta.propertyName.trim()
-      ? `${meta.propertyName} (${meta.unitName})`
+    meta.isRent && meta.propertyName && meta.unitName
+      ? `${meta.propertyName} - ${meta.unitName}`
       : meta.crAccount;
 
   if (attachments.length === 0) {
