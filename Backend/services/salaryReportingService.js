@@ -34,8 +34,27 @@ export const normalizeBusinessPaymentDate = (value) => {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
 
-/** Ledger date when Khurshid Anwar verifies a salary payout (cash leaves the bank). */
-export const resolveSalaryPaymentDateOnVerification = (_entry) => new Date();
+/**
+ * Ledger date when Khurshid Anwar verifies a salary payout (cash leaves the bank).
+ *
+ * Monthly financial reports use this instant (Pakistan calendar), not the salary-for month.
+ * A date already in the verification month is kept (including same-month advance).
+ * A leftover salary-period date (e.g. 31 Aug on an August payroll) is replaced with today
+ * so August salary verified in September appears in the September report.
+ */
+export const resolveSalaryPaymentDateOnVerification = (entry, now = new Date()) => {
+  const verificationInstant = now instanceof Date ? now : new Date(now);
+  const submittedRaw = entry?.entryData?.paymentDate || entry?.date;
+  if (!submittedRaw) return verificationInstant;
+
+  const submittedDate = normalizeBusinessPaymentDate(submittedRaw);
+  const submittedMonth = getUtcMonthKey(submittedDate);
+  const verificationMonth = getUtcMonthKey(verificationInstant);
+  if (submittedMonth && submittedMonth === verificationMonth) {
+    return submittedDate;
+  }
+  return verificationInstant;
+};
 
 export const getSalaryPaymentPeriod = (salaryMonth, paymentDate) => {
   const paymentMonth = getUtcMonthKey(paymentDate);

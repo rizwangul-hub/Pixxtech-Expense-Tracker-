@@ -29,6 +29,7 @@ import { generateReceiptEvidencePDF } from '../services/pdfReportService.js';
 import {
   getSalaryPaymentDetail,
   getSalaryPaymentPeriod,
+  normalizeBusinessPaymentDate,
   resolveSalaryPaymentDateOnVerification,
 } from '../services/salaryReportingService.js';
 
@@ -801,9 +802,9 @@ export const verifyEntry = async (req, res) => {
         });
       }
 
-      // 1. Post expense voucher transaction
+      // 1. Post expense voucher transaction on the cash/activity date (report month)
       postedTransaction = await createTransaction({
-        date: entry.date || new Date(),
+        date: normalizeBusinessPaymentDate(entry.date),
         voucherNo: entry.voucherNo,
         detail: entry.detail || `Expense Voucher #${entry.voucherNo}`,
         categoryId: entry.categoryId,
@@ -824,7 +825,8 @@ export const verifyEntry = async (req, res) => {
       entry.postedTransactionId = postedTransaction._id;
     } else if (entry.entryType === 'RENT') {
       // 2. Post rent receipt
-      const cleanMonth = entry.rentMonth || new Date().toISOString().slice(0, 7);
+      const rentCashDate = normalizeBusinessPaymentDate(entry.date);
+      const cleanMonth = entry.rentMonth || getSalaryPaymentPeriod(null, rentCashDate).paymentMonth;
       const receiptNumber = entry.voucherNo || (await generateReceiptNumber(cleanMonth));
 
       const rentalCategory = await getOrCreateRentalIncomeCategory();
@@ -853,7 +855,7 @@ export const verifyEntry = async (req, res) => {
 
       // Create official transaction
       postedTransaction = await createTransaction({
-        date: entry.date || new Date(),
+        date: rentCashDate,
         voucherNo: receiptNumber,
         detail: narration,
         categoryId: rentalCategory._id,
@@ -898,7 +900,7 @@ export const verifyEntry = async (req, res) => {
       // Create official RentReceived document
       postedRentReceived = await RentReceived.create({
         receiptNumber,
-        receiptDate: entry.date || new Date(),
+        receiptDate: rentCashDate,
         tenantId: resolvedTenantId,
         propertyId: entry.propertyId,
         unitId: entry.unitId,
@@ -928,7 +930,7 @@ export const verifyEntry = async (req, res) => {
       const crAcc = entry.crAccountId;
 
       postedTransaction = await createTransaction({
-        date: entry.date || new Date(),
+        date: normalizeBusinessPaymentDate(entry.date),
         voucherNo: entry.voucherNo,
         detail: entry.detail || `Internal Transfer #${entry.voucherNo}`,
         categoryId: transferCategory._id,

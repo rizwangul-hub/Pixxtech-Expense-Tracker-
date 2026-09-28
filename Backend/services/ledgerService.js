@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import Account from '../models/Account.js';
 import Transaction from '../models/Transaction.js';
-import { getUtcMonthDateRange } from './salaryReportingService.js';
+import { getUtcMonthDateRange, getUtcMonthKey, normalizeBusinessPaymentDate } from './salaryReportingService.js';
 import Category from '../models/Category.js';
 import Property from '../models/Property.js';
 import Voucher from '../models/Voucher.js';
@@ -111,9 +111,10 @@ export const createTransaction = async (data, externalSession = null) => {
     throw new Error('Transaction amount must be strictly greater than 0.');
   }
 
-  // Part 27: Published Report Lock Check
-  const txDate = data.date ? new Date(data.date) : new Date();
-  const txMonth = `${txDate.getUTCFullYear()}-${String(txDate.getUTCMonth() + 1).padStart(2, '0')}`;
+  // Part 27: Published Report Lock Check (Pakistan business month, same as reports)
+  const txDate = data.date ? normalizeBusinessPaymentDate(data.date) : new Date();
+  data.date = txDate;
+  const txMonth = getUtcMonthKey(txDate);
   const isLocked = await MonthlyReport.findOne({ month: txMonth, status: 'PUBLISHED' }).lean();
   if (isLocked) {
     throw new Error(`Financial period ${txMonth} is officially PUBLISHED and locked. New entries or modifications are prohibited.`);
@@ -750,11 +751,10 @@ export const getHeadWiseExpenseReport = async (year, month) => {
  * Entry number increments automatically after every entry.
  */
 export const suggestNextVoucherNumber = async (dateInput = null) => {
-  const d = dateInput ? new Date(dateInput) : new Date();
-  const validDate = isNaN(d.getTime()) ? new Date() : d;
-
-  const monthStr = String(validDate.getMonth() + 1).padStart(2, '0');
-  const yearStr = String(validDate.getFullYear()).slice(-2);
+  const validDate = dateInput ? normalizeBusinessPaymentDate(dateInput) : new Date();
+  const monthKey = getUtcMonthKey(validDate) || getUtcMonthKey(new Date());
+  const [yearFull, monthStr] = monthKey.split('-');
+  const yearStr = yearFull.slice(-2);
 
   const [vouchers, txs, pendings] = await Promise.all([
     Voucher.find({ status: { $ne: 'REVERSED' } }, { voucherNumber: 1 }).lean().catch(() => []),
