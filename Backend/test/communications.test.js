@@ -18,6 +18,39 @@ import { resolveTransactionAccountDisplay } from '../services/ledgerService.js';
 const admin = { _id: 'admin-1', email: 'ADMIN@example.com ', name: 'Khurshid', role: 'ADMIN', isActive: true };
 const dataEntry = { _id: 'entry-2', email: 'entry@example.com', name: 'Sarfraz', role: 'DATA_ENTRY', isActive: true };
 
+test('property expenses use their property or unit as the debit display', () => {
+  const property = {
+    _id: 'property-1',
+    plazaName: 'Pixx Plaza',
+    units: [{ _id: 'unit-1', unitName: 'Office 4' }],
+  };
+  const propertyExpense = resolveTransactionAccountDisplay({
+    transactionType: 'EXPENSE',
+    expenseClassification: 'PROPERTY_OWN_EXPENSE',
+    propertyId: property,
+    drAccountId: { name: 'Electricity Bill' },
+    categoryId: { name: 'Electricity Bill' },
+  });
+  const unitExpense = resolveTransactionAccountDisplay({
+    transactionType: 'EXPENSE',
+    expenseClassification: 'UNIT_EXPENSE',
+    propertyId: property,
+    unitId: 'unit-1',
+    drAccountId: { name: 'Maintenance Bill' },
+    categoryId: { name: 'Maintenance Bill' },
+  });
+  const generalExpense = resolveTransactionAccountDisplay({
+    transactionType: 'EXPENSE',
+    expenseClassification: 'GENERAL_EXPENSE',
+    drAccountId: { name: 'General Operations' },
+    categoryId: { name: 'Office Supplies' },
+  });
+
+  assert.equal(propertyExpense.dr, 'Pixx Plaza');
+  assert.equal(unitExpense.dr, 'Pixx Plaza - Office 4');
+  assert.equal(generalExpense.dr, 'General Operations');
+});
+
 test('JWT authentication has no built-in fallback secret', () => {
   const configuredSecret = process.env.JWT_SECRET;
   try {

@@ -228,7 +228,14 @@ export const resolveTransactionAccounts = (tx) => {
     cr = !crRaw || /Clearing|External Parties/i.test(crRaw) ? 'Source Account' : crRaw;
   } else {
     // EXPENSE
-    if (!drRaw || /Clearing|External Parties/i.test(drRaw)) {
+    const isPropertyExpense =
+      tx.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+      tx.expenseClassification === 'UNIT_EXPENSE' ||
+      Boolean(tx.propertyId) ||
+      Boolean(tx.unitId);
+    if (isPropertyExpense && locationName) {
+      dr = locationName;
+    } else if (!drRaw || /Clearing|External Parties/i.test(drRaw)) {
       dr = mainExpenseHeadName;
     }
     if (!crRaw || /Clearing|External Parties/i.test(crRaw)) {

@@ -355,8 +355,15 @@ export const getVoucherPrintDetail = async (req, res) => {
       resolvedDrName = resolvedDrName || 'Destination Account';
       resolvedCrName = resolvedCrName || 'Source Account';
     } else {
-      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
-        resolvedDrName = locationName ? `${locationName} (${categoryTitle})` : categoryTitle;
+      const isPropertyExpense =
+        tx.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+        tx.expenseClassification === 'UNIT_EXPENSE' ||
+        Boolean(tx.propertyId) ||
+        Boolean(tx.unitId);
+      if (isPropertyExpense && locationName) {
+        resolvedDrName = locationName;
+      } else if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
+        resolvedDrName = categoryTitle;
       }
       if (!resolvedCrName || /Clearing|External Parties/i.test(resolvedCrName)) {
         resolvedCrName = 'Payment Account (Bank/Cash)';
@@ -526,8 +533,15 @@ export const downloadSingleVoucherPDF = async (req, res) => {
       resolvedDrName = resolvedDrName || 'Destination Account';
       resolvedCrName = resolvedCrName || 'Source Account';
     } else {
-      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
-        resolvedDrName = locationName ? `${locationName} (${categoryTitle})` : categoryTitle;
+      const isPropertyExpense =
+        tx.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+        tx.expenseClassification === 'UNIT_EXPENSE' ||
+        Boolean(tx.propertyId) ||
+        Boolean(tx.unitId);
+      if (isPropertyExpense && locationName) {
+        resolvedDrName = locationName;
+      } else if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
+        resolvedDrName = categoryTitle;
       }
       if (!resolvedCrName || /Clearing|External Parties/i.test(resolvedCrName)) {
         resolvedCrName = 'Payment Account (Bank/Cash)';

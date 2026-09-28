@@ -35,6 +35,12 @@ export const resolveTransactionAccountDisplay = (tx) => {
   );
   const unitName = unit?.unitName || unit?.unitNumber || tx.unitName || '';
   const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
+  const isPropertyExpense =
+    tx.transactionType === 'EXPENSE' &&
+    (tx.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+      tx.expenseClassification === 'UNIT_EXPENSE' ||
+      Boolean(tx.propertyId) ||
+      Boolean(unitId));
   const drRaw = tx.drAccountId?.name || '';
   const crRaw = tx.crAccountId?.name || '';
 
@@ -64,7 +70,9 @@ export const resolveTransactionAccountDisplay = (tx) => {
   }
 
   return {
-    dr: !drRaw || /Clearing|External Parties/i.test(drRaw)
+    dr: isPropertyExpense && locationName
+      ? locationName
+      : !drRaw || /Clearing|External Parties/i.test(drRaw)
       ? mainExpenseHeadName || 'Expense Head'
       : drRaw,
     cr: !crRaw || /Clearing|External Parties/i.test(crRaw)

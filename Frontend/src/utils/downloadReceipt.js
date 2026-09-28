@@ -172,7 +172,15 @@ export function extractReceiptMetadata(entry) {
     drAccount = drAccount || (empName ? `Salary Expense (${empName})` : 'Salary Expense');
     crAccount = crAccount || 'Paid From (Bank / Cash)';
   } else {
-    drAccount = !drAccount || /Clearing|External Parties/i.test(drAccount)
+    const isPropertyExpense =
+      entry.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+      entry.expenseClassification === 'UNIT_EXPENSE' ||
+      Boolean(entry.propertyId) ||
+      Boolean(unitId);
+    const expenseLocationName = [propertyName, unitName].filter(Boolean).join(' - ');
+    drAccount = isPropertyExpense && expenseLocationName
+      ? expenseLocationName
+      : !drAccount || /Clearing|External Parties/i.test(drAccount)
       ? mainExpenseHeadName
       : drAccount;
     crAccount = crAccount || 'Paid From (Bank / Cash)';

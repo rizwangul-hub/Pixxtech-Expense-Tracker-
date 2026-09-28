@@ -204,6 +204,21 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       return debitAccount || 'Debit Account';
     }
 
+    const property = entry.propertyId || entry.entryData?.property;
+    const propertyName = property?.plazaName || property?.propertyName || property?.name || '';
+    const unitId = entry.unitId?._id || entry.unitId || entry.entryData?.unitId?._id || entry.entryData?.unitId;
+    const unit = entry.unitId?.unitName || entry.unitId?.unitNumber
+      ? entry.unitId
+      : property?.units?.find((candidate) => candidate._id?.toString() === unitId?.toString());
+    const unitName = unit?.unitName || unit?.unitNumber || entry.unitName || entry.entryData?.unit?.unitName || '';
+    const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
+    const isPropertyExpense =
+      entry.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+      entry.expenseClassification === 'UNIT_EXPENSE' ||
+      Boolean(entry.propertyId) ||
+      Boolean(unitId);
+    if (isPropertyExpense && locationName) return locationName;
+
     const category = entry.categoryId;
     const expenseHead = category?.isMainHead
       ? category.name
@@ -1090,8 +1105,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                         {entry.detail || 'No description provided'}
                       </div>
                       {entry.categoryId?.name && (
-                        <div className="text-[11px] text-amber-300 font-mono">
-                          Head / Category: <span className="font-semibold text-amber-200">{entry.categoryId.name}</span>
+                        <div className="inline-flex max-w-full flex-wrap items-center gap-x-1 rounded-md border border-amber-500/40 bg-amber-950/60 px-2 py-1 text-xs font-semibold text-amber-100">
+                          <span className="text-amber-300">Head / Category:</span>
+                          <span className="font-bold">{entry.categoryId.name}</span>
                         </div>
                       )}
                       {entry.propertyId?.plazaName && (
@@ -1107,8 +1123,8 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
 
                     {/* Attached Evidence (Uploaded by Sarfraz / Admin) */}
                     {entryAttachments.length === 0 && (
-                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-amber-950/20 border border-amber-800/30 text-[10px] text-amber-400/80 font-medium mt-1">
-                        <ImageIcon size={11} className="shrink-0 text-amber-400/60" />
+                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 font-semibold mt-1">
+                        <ImageIcon size={13} className="shrink-0 text-amber-300" />
                         <span>
                           {entry.entryType === 'SALARY'
                             ? 'No salary payment evidence attached — Admin can add via Edit'
@@ -1360,16 +1376,17 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                             {entry.detail || '—'}
                           </div>
                           {entry.categoryId?.name && (
-                            <div className="text-[10px] text-amber-400 font-mono truncate mt-0.5" title={entry.categoryId.name}>
-                              Head: {entry.categoryId.name}
+                            <div className="mt-1 inline-flex max-w-full items-center gap-1 rounded border border-amber-500/40 bg-amber-950/60 px-1.5 py-0.5 text-[11px] font-bold text-amber-100" title={entry.categoryId.name}>
+                              <span className="text-amber-300">Head:</span>
+                              <span className="truncate">{entry.categoryId.name}</span>
                             </div>
                           )}
                           {entry.entryType === 'SALARY' && <SalaryBreakdown entry={entry} />}
 
                           {/* Attached Evidence (Sarfraz / Admin) */}
                           {entryAttachments.length === 0 && (
-                            <div className="mt-1 flex items-center gap-1 text-[9px] text-amber-400/80 font-medium">
-                              <ImageIcon size={9} className="text-amber-400/60" />
+                            <div className="mt-1 inline-flex items-center gap-1.5 rounded bg-slate-800 px-1.5 py-1 text-[11px] font-semibold text-slate-200">
+                              <ImageIcon size={11} className="text-amber-300" />
                               <span>No evidence — can attach via Edit</span>
                             </div>
                           )}
@@ -1378,7 +1395,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                               <button
                                 type="button"
                                 onClick={() => setViewingReceiptEntry(entry)}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-700/60 text-[10px] font-bold transition cursor-pointer"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-950/80 hover:bg-blue-900 text-blue-200 border border-blue-700/60 text-[11px] font-bold transition cursor-pointer"
                                 title={
                                   entry.entryType === 'SALARY'
                                     ? 'Click to view salary payment evidence'

@@ -1569,7 +1569,14 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
       drAccountName = drAccountName || 'Destination Account';
       crAccountName = crAccountName || 'Source Account';
     } else {
-      if (!drAccountName || /Clearing|External Parties/i.test(drAccountName)) {
+      const isPropertyExpense =
+        entry.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+        entry.expenseClassification === 'UNIT_EXPENSE' ||
+        Boolean(entry.propertyId) ||
+        Boolean(entry.unitId);
+      if (isPropertyExpense && rentLocationName) {
+        drAccountName = rentLocationName;
+      } else if (!drAccountName || /Clearing|External Parties/i.test(drAccountName)) {
         drAccountName = mainExpenseHeadName;
       }
       if (!crAccountName || /Clearing|External Parties/i.test(crAccountName)) {
