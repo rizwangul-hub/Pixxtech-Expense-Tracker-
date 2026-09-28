@@ -10,6 +10,10 @@ import PendingEntry from '../models/PendingEntry.js';
 import {
   validateExpenseClassification,
   validateExpenseCategory,
+  isSalaryHeadName,
+  isNonExpenseTransaction,
+  isHrSalaryTransaction,
+  salaryChildHeadName,
 } from './expenseClassificationService.js';
 
 /**
@@ -27,8 +31,6 @@ const asPropertyDoc = (value) =>
   value && typeof value === 'object' && (value.plazaName || value.propertyName || Array.isArray(value.units))
     ? value
     : null;
-
-const isSalaryHeadName = (value = '') => /^salar(?:y|ies)$/i.test(String(value).trim());
 
 /**
  * Resolve the report-level main head (property, unit, office, foundation, salary)
@@ -50,36 +52,43 @@ export const resolveExpenseReportHead = (tx = {}) => {
   const classification = tx.expenseClassification
     || category.expenseClassification
     || (unitId ? 'UNIT_EXPENSE' : propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
-  const isSalary =
-    isSalaryHeadName(parentName) ||
-    isSalaryHeadName(categoryName) ||
-    /\b(?:advance\s+)?salary\b/i.test(tx.detail || '');
-  const isUnitExpense = classification === 'UNIT_EXPENSE' || Boolean(unitId && classification !== 'PROPERTY_OWN_EXPENSE');
-  const isPropertyExpense =
+  const isHrSalary = isHrSalaryTransaction(tx);
+  const isUnitExpense = !isHrSalary && (
+    classification === 'UNIT_EXPENSE' || Boolean(unitId && classification !== 'PROPERTY_OWN_EXPENSE')
+  );
+  const isPropertyExpense = !isHrSalary && (
     classification === 'PROPERTY_OWN_EXPENSE' ||
     isUnitExpense ||
-    Boolean(propertyId);
+    Boolean(propertyId)
+  );
 
   let mainHeadName;
   let mainHeadId;
-  if (isUnitExpense && (propertyId || propertyName)) {
+  if (isHrSalary) {
+    mainHeadName = 'Salary';
+    mainHeadId = 'salary';
+  } else if (isUnitExpense && (propertyId || propertyName)) {
     mainHeadName = [propertyName || 'Property', unitName].filter(Boolean).join(' - ');
     mainHeadId = `unit:${propertyId || 'property'}:${unitId || 'unit'}`;
   } else if (isPropertyExpense && (propertyId || propertyName)) {
     mainHeadName = propertyName || 'Property';
     mainHeadId = `property:${propertyId || mainHeadName.toLowerCase()}`;
-  } else if (isSalary) {
-    mainHeadName = 'Salary';
-    mainHeadId = 'salary';
   } else if (parentName) {
     mainHeadName = parentName;
     mainHeadId = `category:${asId(parent._id) || parentName.trim().toLowerCase()}`;
+  } else if (category.isMainHead || isSalaryHeadName(categoryName)) {
+    mainHeadName = isSalaryHeadName(categoryName) ? 'Salary' : categoryName;
+    mainHeadId = isSalaryHeadName(categoryName)
+      ? 'salary'
+      : `category:${asId(category._id) || categoryName.trim().toLowerCase()}`;
   } else {
     mainHeadName = categoryName;
     mainHeadId = `category:${asId(category._id) || categoryName.trim().toLowerCase()}`;
   }
 
-  const childHeadName = categoryName || parentName || 'Expense';
+  const childHeadName = isHrSalary
+    ? salaryChildHeadName(categoryName, tx.detail)
+    : (categoryName || parentName || 'Expense');
   const locationName = [propertyName, isUnitExpense ? unitName : ''].filter(Boolean).join(' - ');
 
   return {
@@ -715,7 +724,8 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
 export const groupExpenseTransactionsByReportHead = (transactions) => {
   const mainHeadsMap = new Map();
 
-  for (const tx of transactions) {
+  for (const tx of transactions || []) {
+    if (isNonExpenseTransaction(tx)) continue;
     const amount = round2(tx.amount);
     const category = tx.categoryId || {};
     const {
@@ -796,14 +806,19 @@ export const getHeadWiseExpenseReport = async (year, month, filters = {}) => {
   }
   const { startDate: startOfMonth, endDate: endOfMonth } = getUtcMonthDateRange(year, month);
 
-  // Find all categories of type EXPENSE
-  const expenseCategories = await Category.find({ type: 'EXPENSE' }).lean();
+  const expenseCategories = await Category.find({
+    type: 'EXPENSE',
+    isRentalHead: { $ne: true },
+    name: { $not: /^(?:rent|rental income|internal funds?\s+transfers?)$/i },
+  }).lean();
   const expenseCatIds = expenseCategories.map((c) => c._id);
 
-  // Find transactions belonging to expense categories in this month
   const transactionQuery = {
     date: { $gte: startOfMonth, $lte: endOfMonth },
     categoryId: { $in: expenseCatIds },
+    transactionType: { $nin: ['TRANSFER', 'INCOME', 'OPENING_BALANCE'] },
+    reportCategory: { $nin: ['Rent', 'Other Income', 'Transfer', 'Opening Balance'] },
+    sourceModule: { $nin: ['RENT_RECEIVED', 'TRANSFER', 'OTHER_INCOME', 'OPENING_BALANCE'] },
     $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   };
   if (filters.propertyId && filters.propertyId !== 'ALL') {
@@ -828,6 +843,8 @@ export const getHeadWiseExpenseReport = async (year, month, filters = {}) => {
     .sort({ date: 1, voucherNo: 1 })
     .lean();
 
+  const expenseTransactions = transactions.filter((tx) => !isNonExpenseTransaction(tx));
+
   // Group transactions by category
   const groupsMap = new Map();
   for (const cat of expenseCategories) {
@@ -846,7 +863,7 @@ export const getHeadWiseExpenseReport = async (year, month, filters = {}) => {
   let propertyOwnExpenses = 0;
   let unitExpenses = 0;
 
-  for (const tx of transactions) {
+  for (const tx of expenseTransactions) {
     const catId = tx.categoryId?._id?.toString() || tx.categoryId?.toString();
     if (!groupsMap.has(catId)) {
       groupsMap.set(catId, {
@@ -908,7 +925,7 @@ export const getHeadWiseExpenseReport = async (year, month, filters = {}) => {
       unitExpenses: round2(unitExpenses),
     },
     heads,
-    mainHeads: groupExpenseTransactionsByReportHead(transactions),
+    mainHeads: groupExpenseTransactionsByReportHead(expenseTransactions),
   };
 };
 

@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
 import Property from '../models/Property.js';
 import Category from '../models/Category.js';
+import Transaction from '../models/Transaction.js';
+import PendingEntry from '../models/PendingEntry.js';
+import Employee from '../models/Employee.js';
 import {
   EXPENSE_CLASSIFICATIONS,
   EXPENSE_CLASSIFICATION_LIST,
@@ -350,6 +353,140 @@ export const provisionStandardCategories = async () => {
   }
 };
 
+export const isSalaryHeadName = (value = '') => /^salar(?:y|ies)$/i.test(String(value).trim());
+
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export const isNonExpenseChartCategory = (category = {}) => {
+  const type = String(category.type || '').toUpperCase();
+  if (type && type !== 'EXPENSE') return true;
+  if (category.isRentalHead) return true;
+  const name = String(category.name || '').trim();
+  return /^(?:rent|rental income|internal funds?\s+transfers?)$/i.test(name);
+};
+
+export const isNonExpenseTransaction = (tx = {}) => {
+  const type = String(tx.transactionType || '').toUpperCase();
+  if (['TRANSFER', 'INCOME', 'OPENING_BALANCE'].includes(type)) return true;
+  if (['Rent', 'Other Income', 'Transfer', 'Opening Balance'].includes(tx.reportCategory)) return true;
+  const sourceModule = String(tx.sourceModule || '').toUpperCase();
+  if (['RENT_RECEIVED', 'TRANSFER', 'OTHER_INCOME', 'OPENING_BALANCE'].includes(sourceModule)) return true;
+  const category = tx.categoryId && typeof tx.categoryId === 'object' ? tx.categoryId : {};
+  return isNonExpenseChartCategory(category);
+};
+
+export const isFoundationExpenseContext = (categoryName = '', parentName = '') =>
+  /foundation/i.test(`${parentName} ${categoryName}`);
+
+export const isHrSalaryTransaction = (tx = {}) => {
+  const category = tx.categoryId && typeof tx.categoryId === 'object' ? tx.categoryId : {};
+  const parent = category.parentCategoryId && typeof category.parentCategoryId === 'object'
+    ? category.parentCategoryId
+    : {};
+  const categoryName = category.name || tx.categoryName || '';
+  const parentName = parent.name || '';
+  if (isFoundationExpenseContext(categoryName, parentName)) return false;
+  if (isSalaryHeadName(parentName) || isSalaryHeadName(categoryName)) return true;
+  return /^(?:ADVANCE SALARY|Salary)\s+-\s+/i.test(String(tx.detail || ''));
+};
+
+export const salaryChildHeadName = (categoryName, detail) => {
+  if (categoryName && !isSalaryHeadName(categoryName)) return categoryName;
+  const match = String(detail || '').match(/^(?:ADVANCE SALARY|Salary)\s+-\s+([^-]+)/i);
+  if (match) return match[1].replace(/\s*\([^)]*\)\s*$/, '').trim();
+  return categoryName || 'Salary';
+};
+
+const reassignCategoryReferences = async (fromId, toId) => {
+  await Transaction.updateMany({ categoryId: fromId }, { categoryId: toId });
+  await PendingEntry.updateMany({ categoryId: fromId }, { categoryId: toId });
+  await Category.updateMany({ parentCategoryId: fromId }, { parentCategoryId: toId });
+};
+
+/**
+ * One Salary main head. Employee / HR salary categories nest under it.
+ * Rent and internal-transfer categories stay out of the expense chart.
+ */
+export const ensureCanonicalSalaryHead = async (session = null) => {
+  const opts = session ? { session } : {};
+  const salaryQuery = Category.find({
+    type: 'EXPENSE',
+    name: { $regex: /^Salar(?:y|ies)$/i },
+    expenseClassification: 'GENERAL_EXPENSE',
+  }).sort({ isMainHead: -1, createdAt: 1 });
+  if (session) salaryQuery.session(session);
+  const salaryHeads = await salaryQuery;
+
+  let master = salaryHeads[0] || null;
+  if (!master) {
+    const created = await Category.create([{
+      name: 'Salary',
+      type: 'EXPENSE',
+      expenseClassification: 'GENERAL_EXPENSE',
+      propertyId: null,
+      unitId: null,
+      parentCategoryId: null,
+      isMainHead: true,
+      isRentalHead: false,
+    }], opts);
+    master = created[0];
+  } else {
+    master.name = 'Salary';
+    master.isMainHead = true;
+    master.parentCategoryId = null;
+    master.propertyId = null;
+    master.unitId = null;
+    master.expenseClassification = 'GENERAL_EXPENSE';
+    await master.save(opts);
+  }
+
+  for (const duplicate of salaryHeads.slice(1)) {
+    await reassignCategoryReferences(duplicate._id, master._id);
+    await Category.findByIdAndDelete(duplicate._id, opts);
+  }
+
+  const childrenQuery = Category.find({ parentCategoryId: master._id });
+  if (session) childrenQuery.session(session);
+  const children = await childrenQuery;
+  for (const child of children) {
+    if (child.isMainHead || child.isRentalHead) {
+      child.isMainHead = false;
+      child.isRentalHead = false;
+      await child.save(opts);
+    }
+  }
+
+  const employeesQuery = Employee.find({}, { name: 1 });
+  if (session) employeesQuery.session(session);
+  const employees = await employeesQuery.lean();
+  for (const employee of employees) {
+    const employeeName = String(employee.name || '').trim();
+    if (!employeeName || isSalaryHeadName(employeeName)) continue;
+    const matchesQuery = Category.find({
+      type: 'EXPENSE',
+      expenseClassification: 'GENERAL_EXPENSE',
+      propertyId: null,
+      unitId: null,
+      name: { $regex: `^${escapeRegex(employeeName)}$`, $options: 'i' },
+    });
+    if (session) matchesQuery.session(session);
+    const matches = await matchesQuery;
+    if (!matches.length) continue;
+    const keeper = matches.find((item) => String(item.parentCategoryId || '') === String(master._id)) || matches[0];
+    keeper.parentCategoryId = master._id;
+    keeper.isMainHead = false;
+    keeper.isRentalHead = false;
+    keeper.name = employeeName;
+    await keeper.save(opts);
+    for (const extra of matches.filter((item) => String(item._id) !== String(keeper._id))) {
+      await reassignCategoryReferences(extra._id, keeper._id);
+      await Category.findByIdAndDelete(extra._id, opts);
+    }
+  }
+
+  return master;
+};
+
 export default {
   validateExpenseClassification,
   validateExpenseCategory,
@@ -359,4 +496,10 @@ export default {
   getExpenseScope,
   getPropertyExpenseType,
   getExpenseClassificationLabel,
+  isSalaryHeadName,
+  isNonExpenseChartCategory,
+  isNonExpenseTransaction,
+  isHrSalaryTransaction,
+  salaryChildHeadName,
+  ensureCanonicalSalaryHead,
 };

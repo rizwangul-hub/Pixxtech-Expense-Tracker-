@@ -20,39 +20,13 @@ import {
   getSalaryPaymentPeriod,
   normalizeBusinessPaymentDate,
 } from '../services/salaryReportingService.js';
+import { ensureCanonicalSalaryHead } from '../services/expenseClassificationService.js';
 
 /**
  * Helper to ensure canonical Salaries category head exists
  */
 export const getOrCreateSalariesCategory = async () => {
-  let category = await Category.findOne({
-    type: 'EXPENSE',
-    name: { $regex: /^Salar(?:y|ies)$/i },
-    expenseClassification: 'GENERAL_EXPENSE',
-  });
-
-  if (!category) {
-    category = await Category.create({
-      name: 'Salary',
-      type: 'EXPENSE',
-      expenseClassification: 'GENERAL_EXPENSE',
-      propertyId: null,
-      unitId: null,
-      parentCategoryId: null,
-      isMainHead: true,
-      isRentalHead: false,
-    });
-  } else if (!category.isMainHead || category.parentCategoryId) {
-    category.parentCategoryId = null;
-    category.isMainHead = true;
-    await category.save();
-  }
-  if (category.name !== 'Salary') {
-    category.name = 'Salary';
-    await category.save();
-  }
-
-  return category;
+  return ensureCanonicalSalaryHead();
 };
 
 export const getOrCreateEmployeeSalaryCategory = async (employeeName, salariesCategory = null) => {
@@ -60,14 +34,15 @@ export const getOrCreateEmployeeSalaryCategory = async (employeeName, salariesCa
   const normalizedName = String(employeeName || '').trim();
   if (!normalizedName) throw new Error('Employee name is required for the salary expense head.');
 
-  let category = await Category.findOne({
+  const matches = await Category.find({
     type: 'EXPENSE',
-    name: normalizedName,
+    name: { $regex: `^${normalizedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
     expenseClassification: 'GENERAL_EXPENSE',
     propertyId: null,
     unitId: null,
-    parentCategoryId: parent._id,
   });
+
+  let category = matches.find((item) => String(item.parentCategoryId || '') === String(parent._id)) || matches[0];
 
   if (!category) {
     category = await Category.create({
@@ -80,6 +55,17 @@ export const getOrCreateEmployeeSalaryCategory = async (employeeName, salariesCa
       isMainHead: false,
       isRentalHead: false,
     });
+  } else {
+    category.name = normalizedName;
+    category.parentCategoryId = parent._id;
+    category.isMainHead = false;
+    category.isRentalHead = false;
+    await category.save();
+    for (const extra of matches.filter((item) => String(item._id) !== String(category._id))) {
+      await Transaction.updateMany({ categoryId: extra._id }, { categoryId: category._id });
+      await PendingEntry.updateMany({ categoryId: extra._id }, { categoryId: category._id });
+      await Category.findByIdAndDelete(extra._id);
+    }
   }
 
   return category;
