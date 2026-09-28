@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, authorize } from '../middleware/auth.js';
 import {
   getMonthlyPayroll,
   savePayroll,
@@ -18,7 +18,7 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get('/', getMonthlyPayroll);
-router.post('/save', savePayroll);
+router.post('/save', authorize('ADMIN', 'DATA_ENTRY'), savePayroll);
 router.get('/excel', downloadSalarySheetExcel);
 router.get('/monthly-sheet-pdf', generateMonthlySalarySheetPDF);
 router.get('/employee-ledger/:employeeId', getEmployeeLedger);

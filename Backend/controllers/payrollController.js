@@ -21,6 +21,10 @@ import {
   normalizeBusinessPaymentDate,
 } from '../services/salaryReportingService.js';
 import { ensureCanonicalSalaryHead } from '../services/expenseClassificationService.js';
+import {
+  getPayrollPendingPaymentAdjustment,
+  hasPayrollFinancialChanges,
+} from '../services/staffPayrollService.js';
 
 /**
  * Helper to ensure canonical Salaries category head exists
@@ -368,7 +372,7 @@ export const savePayroll = async (req, res) => {
   try {
     const { month, payrollRecords = [] } = req.body;
 
-    if (!month || !Array.isArray(payrollRecords)) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month || '') || !Array.isArray(payrollRecords)) {
       return apiError(res, 'Valid month (YYYY-MM) and payrollRecords array are required.', 400);
     }
 
@@ -387,6 +391,62 @@ export const savePayroll = async (req, res) => {
 
       const existingDoc = await Payroll.findOne({ payrollMonth: month, employeeId: rec.employeeId });
       const isAlreadyPaid = existingDoc?.paymentStatus === 'PAID';
+      const financialValuesChanged = existingDoc && hasPayrollFinancialChanges(existingDoc, {
+        basicSalary: basic,
+        allowance,
+        loanDeduction: loanDed,
+        lopDeduction: lopDed,
+        otherDeduction: othDed,
+      });
+      const hasVerifiedPayments = isAlreadyPaid || Number(existingDoc?.totalInstallmentsPaid || 0) > 0;
+
+      for (const [field, value] of Object.entries({
+        basicSalary: rec.basicSalary,
+        allowance: rec.allowance,
+        loanDeduction: rec.loanDeduction,
+        lopDeduction: rec.lopDeduction,
+        otherDeduction: rec.otherDeduction,
+      })) {
+        if (value !== undefined && (!Number.isFinite(Number(value)) || Number(value) < 0)) {
+          return apiError(res, `${field} must be a non-negative number.`, 400);
+        }
+      }
+
+      if (hasVerifiedPayments && financialValuesChanged) {
+        return apiError(
+          res,
+          `Salary for ${existingDoc.employeeName} has already been paid in part or full. Reverse the posted payment before changing payroll amounts.`,
+          400
+        );
+      }
+      if (hasVerifiedPayments) {
+        savedResults.push(existingDoc);
+        continue;
+      }
+
+      let pendingPaymentAdjustments = [];
+      if (existingDoc && Number(existingDoc.lopDeduction || 0) !== lopDed) {
+        const pendingEntries = await PendingEntry.find({
+          entryType: 'SALARY',
+          status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
+          rentMonth: month,
+          $or: [
+            { 'entryData.payrollId': existingDoc._id },
+            { tenantId: rec.employeeId },
+            { 'entryData.employeeId': rec.employeeId },
+          ],
+        });
+        try {
+          pendingPaymentAdjustments = getPayrollPendingPaymentAdjustment({
+            pendingEntries,
+            previousNetPayable: Number(existingDoc.netPayable || 0),
+            nextNetPayable: netPayable,
+            verifiedPaidAmount: Number(existingDoc.totalInstallmentsPaid || 0),
+          });
+        } catch (error) {
+          return apiError(res, error.message, 400);
+        }
+      }
 
       // Fetch live attendance count if rec metrics are empty
       let pDays = Number(rec.presentDays) || 0;
@@ -447,6 +507,41 @@ export const savePayroll = async (req, res) => {
         updatePayload,
         { upsert: true, returnDocument: 'after', runValidators: true }
       );
+
+      if (existingDoc && Number(existingDoc.lopDeduction || 0) !== lopDed) {
+        for (const { entry, amount } of pendingPaymentAdjustments) {
+          entry.amount = amount;
+          entry.entryData = {
+            ...(entry.entryData || {}),
+            paymentAmount: amount,
+            payrollSnapshot: {
+              ...(entry.entryData?.payrollSnapshot || {}),
+              employeeName: pDoc.employeeName,
+              employeeId: pDoc.employeeId,
+              basicSalary: pDoc.basicSalary,
+              allowance: pDoc.allowance,
+              grossSalary: pDoc.grossSalary,
+              loanDeduction: pDoc.loanDeduction,
+              lopDeduction: pDoc.lopDeduction,
+              otherDeduction: pDoc.otherDeduction,
+              totalDeduction: pDoc.totalDeduction,
+              netPayable: pDoc.netPayable,
+            },
+          };
+          entry.markModified('entryData');
+          await entry.save();
+        }
+
+        await StaffAuditLog.create({
+          userId: req.user?._id || null,
+          userName: req.user?.name || 'Staff Payroll User',
+          action: 'PAYROLL_LOP_DEDUCTION_UPDATED',
+          recordId: String(pDoc._id),
+          details: `Updated absent / leave deduction for ${pDoc.employeeName} in ${month}.`,
+          oldValue: { lopDeduction: Number(existingDoc.lopDeduction || 0) },
+          newValue: { lopDeduction: lopDed },
+        });
+      }
 
       // Manage employee loan deduction & StaffLoan ledger accurately
       const existingLoanRecord = await StaffLoan.findOne({

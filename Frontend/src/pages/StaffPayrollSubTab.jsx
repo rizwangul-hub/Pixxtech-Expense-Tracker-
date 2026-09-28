@@ -800,11 +800,13 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                         <input
                           type="number"
                           placeholder="0"
-                          disabled={isPaid || isPendingApproval}
+                          min="0"
+                          step="0.01"
+                          disabled={isPaid || Number(row.totalInstallmentsPaid || 0) > 0}
                           value={row.lopDeduction !== undefined ? row.lopDeduction : 0}
                           onChange={(e) => handleLopDeductionChange(row.employeeId, e.target.value)}
                           className="w-full bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-amber-300 font-mono font-bold text-right focus:outline-none focus:border-amber-500 disabled:opacity-50 text-[10px]"
-                          title="Absent / Leave deduction"
+                          title="Absent / Leave deduction. Can be corrected before any installment is paid."
                         />
                       </td>
                       <td className="py-2 px-1 text-right font-mono font-black text-xs text-emerald-400 whitespace-nowrap">

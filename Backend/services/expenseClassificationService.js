@@ -362,17 +362,21 @@ export const isNonExpenseChartCategory = (category = {}) => {
   if (type && type !== 'EXPENSE') return true;
   if (category.isRentalHead) return true;
   const name = String(category.name || '').trim();
-  return /^(?:rent|rental income|internal funds?\s+transfers?)$/i.test(name);
+  return /^(?:rent|rental income|internal(?: funds?)?\s+transfers?)$/i.test(name);
 };
 
 export const isNonExpenseTransaction = (tx = {}) => {
   const type = String(tx.transactionType || '').toUpperCase();
   if (['TRANSFER', 'INCOME', 'OPENING_BALANCE'].includes(type)) return true;
-  if (['Rent', 'Other Income', 'Transfer', 'Opening Balance'].includes(tx.reportCategory)) return true;
+  const reportCategory = String(tx.reportCategory || '').toLowerCase();
+  if (['rent', 'other income', 'transfer', 'opening balance'].includes(reportCategory)) return true;
   const sourceModule = String(tx.sourceModule || '').toUpperCase();
   if (['RENT_RECEIVED', 'TRANSFER', 'OTHER_INCOME', 'OPENING_BALANCE'].includes(sourceModule)) return true;
   const category = tx.categoryId && typeof tx.categoryId === 'object' ? tx.categoryId : {};
-  return isNonExpenseChartCategory(category);
+  const parent = category.parentCategoryId && typeof category.parentCategoryId === 'object'
+    ? category.parentCategoryId
+    : {};
+  return isNonExpenseChartCategory(category) || isNonExpenseChartCategory(parent);
 };
 
 export const isFoundationExpenseContext = (categoryName = '', parentName = '') =>
@@ -387,7 +391,7 @@ export const isHrSalaryTransaction = (tx = {}) => {
   const parentName = parent.name || '';
   if (isFoundationExpenseContext(categoryName, parentName)) return false;
   if (isSalaryHeadName(parentName) || isSalaryHeadName(categoryName)) return true;
-  return /^(?:ADVANCE SALARY|Salary)\s+-\s+/i.test(String(tx.detail || ''));
+  return /^(?:ADVANCE SALARY|Salary)\s+(?:-|Payout\b)/i.test(String(tx.detail || ''));
 };
 
 export const salaryChildHeadName = (categoryName, detail) => {

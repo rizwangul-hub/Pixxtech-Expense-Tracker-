@@ -806,26 +806,54 @@ export const getHeadWiseExpenseReport = async (year, month, filters = {}) => {
   }
   const { startDate: startOfMonth, endDate: endOfMonth } = getUtcMonthDateRange(year, month);
 
-  const expenseCategories = await Category.find({
-    type: 'EXPENSE',
-    isRentalHead: { $ne: true },
-    name: { $not: /^(?:rent|rental income|internal funds?\s+transfers?)$/i },
-  }).lean();
+  const categoryRecords = await Category.find({ type: 'EXPENSE' }).lean();
+  const categoryById = new Map(categoryRecords.map((category) => [category._id.toString(), category]));
+  const expenseCategories = categoryRecords.filter((category) => {
+    const parent = category.parentCategoryId
+      ? categoryById.get(category.parentCategoryId.toString())
+      : null;
+    return !isNonExpenseChartCategory(category) && !isNonExpenseChartCategory(parent);
+  });
   const expenseCatIds = expenseCategories.map((c) => c._id);
+  let filteredCategoryIds = expenseCategories;
+
+  if (filters.propertyId && filters.propertyId !== 'ALL') {
+    filteredCategoryIds = filteredCategoryIds.filter(
+      (category) => String(category.propertyId || '') === String(filters.propertyId)
+    );
+  }
+  if (filters.expenseClassification && filters.expenseClassification !== 'ALL') {
+    filteredCategoryIds = filteredCategoryIds.filter((category) => {
+      const categoryClassification = category.expenseClassification
+        || (category.unitId ? 'UNIT_EXPENSE' : category.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
+      return categoryClassification === filters.expenseClassification;
+    });
+  }
 
   const transactionQuery = {
     date: { $gte: startOfMonth, $lte: endOfMonth },
     categoryId: { $in: expenseCatIds },
-    transactionType: { $nin: ['TRANSFER', 'INCOME', 'OPENING_BALANCE'] },
+    transactionType: 'EXPENSE',
     reportCategory: { $nin: ['Rent', 'Other Income', 'Transfer', 'Opening Balance'] },
     sourceModule: { $nin: ['RENT_RECEIVED', 'TRANSFER', 'OTHER_INCOME', 'OPENING_BALANCE'] },
     $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   };
   if (filters.propertyId && filters.propertyId !== 'ALL') {
-    transactionQuery.propertyId = filters.propertyId;
+    transactionQuery.$or = [
+      { propertyId: filters.propertyId },
+      { categoryId: { $in: filteredCategoryIds.map((category) => category._id) } },
+    ];
   }
   if (filters.expenseClassification && filters.expenseClassification !== 'ALL') {
-    transactionQuery.expenseClassification = filters.expenseClassification;
+    transactionQuery.$and = [
+      ...(transactionQuery.$and || []),
+      {
+        $or: [
+          { expenseClassification: filters.expenseClassification },
+          { categoryId: { $in: filteredCategoryIds.map((category) => category._id) } },
+        ],
+      },
+    ];
   }
 
   const transactions = await Transaction.find(transactionQuery)
@@ -881,8 +909,7 @@ export const getHeadWiseExpenseReport = async (year, month, filters = {}) => {
     group.totalSpent = round2(group.totalSpent + amt);
     group.transactionCount += 1;
     totalExpensesOverall = round2(totalExpensesOverall + amt);
-    const classification = tx.expenseClassification
-      || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
+    const classification = resolveExpenseReportHead(tx).classification;
     if (classification === 'GENERAL_EXPENSE') generalExpenses = round2(generalExpenses + amt);
     if (classification === 'PROPERTY_OWN_EXPENSE') propertyOwnExpenses = round2(propertyOwnExpenses + amt);
     if (classification === 'UNIT_EXPENSE') unitExpenses = round2(unitExpenses + amt);
@@ -896,8 +923,7 @@ export const getHeadWiseExpenseReport = async (year, month, filters = {}) => {
       paidFromAccount: tx.crAccountId?.name || null,
       debitedAccount: tx.drAccountId?.name || null,
       property: tx.propertyId?.plazaName || null,
-      expenseClassification: tx.expenseClassification
-        || (tx.unitId ? 'UNIT_EXPENSE' : tx.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE'),
+      expenseClassification: classification,
       unitId: tx.unitId || null,
       status: tx.status,
       checkedBy: tx.checkedBy,

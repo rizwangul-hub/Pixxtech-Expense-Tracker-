@@ -18,6 +18,10 @@ import {
   resolveTransactionAccountDisplay,
   buildHeadWiseReportItems,
 } from '../services/ledgerService.js';
+import {
+  isNonExpenseChartCategory,
+  isNonExpenseTransaction,
+} from '../services/expenseClassificationService.js';
 
 const admin = { _id: 'admin-1', email: 'ADMIN@example.com ', name: 'Khurshid', role: 'ADMIN', isActive: true };
 const dataEntry = { _id: 'entry-2', email: 'entry@example.com', name: 'Sarfraz', role: 'DATA_ENTRY', isActive: true };
@@ -106,12 +110,35 @@ test('expense reports group transactions under property, general, and salary hea
       categoryId: { name: 'Miss Nausheen' },
       detail: 'Salary - Miss Nausheen - August 2026 Salary',
     },
+    {
+      _id: 'legacy-hr-salary',
+      amount: 125,
+      categoryId: { name: 'Adeel Ahmad' },
+      detail: 'Salary Payout to Adeel Ahmad (IT) — Month 2026-08',
+    },
+    {
+      _id: 'internal-transfer',
+      amount: 900,
+      transactionType: 'TRANSFER',
+      categoryId: { name: 'PTCL Bills' },
+      detail: 'Internal transfer',
+    },
+    {
+      _id: 'rent-entry',
+      amount: 800,
+      transactionType: 'EXPENSE',
+      categoryId: {
+        name: 'Unit Rent',
+        parentCategoryId: { name: 'Rent', type: 'EXPENSE' },
+      },
+      detail: 'Rent collection',
+    },
   ]);
 
   assert.deepEqual(
     groups.map(({ mainHeadName, totalSpent }) => [mainHeadName, totalSpent]),
     [
-      ['Salary', 550],
+      ['Salary', 675],
       ['IT Office Expenses - Bahrain Office', 300],
       ['Amin Park - Flat 502', 200],
       ['Amin Park', 100],
@@ -127,10 +154,35 @@ test('expense reports group transactions under property, general, and salary hea
   );
   assert.equal(groups.find((group) => group.mainHeadName === 'Salary').expenses[0].transactions[0].detail,
     'Salary - Sabir Nawaz - August 2026 Salary');
-  assert.equal(groups.find((group) => group.mainHeadName === 'Salary').transactionCount, 2);
+  assert.equal(groups.find((group) => group.mainHeadName === 'Salary').transactionCount, 3);
 
   const propertyItems = buildHeadWiseReportItems(groups.find((group) => group.mainHeadName === 'Amin Park'));
   assert.deepEqual(propertyItems.map((item) => [item.detail, item.amount]), [['Electricity Bill', 100]]);
+});
+
+test('rent, income, and transfer heads are excluded from expense reporting', () => {
+  assert.equal(isNonExpenseChartCategory({ type: 'EXPENSE', name: 'Rent' }), true);
+  assert.equal(isNonExpenseChartCategory({ type: 'EXPENSE', name: 'Internal Transfer' }), true);
+  assert.equal(isNonExpenseChartCategory({ type: 'INCOME', name: 'Office Income' }), true);
+  assert.equal(
+    isNonExpenseTransaction({
+      transactionType: 'EXPENSE',
+      categoryId: {
+        type: 'EXPENSE',
+        name: 'Unit Rent',
+        parentCategoryId: { name: 'Rent', type: 'EXPENSE' },
+      },
+    }),
+    true
+  );
+  assert.equal(isNonExpenseTransaction({ transactionType: 'TRANSFER' }), true);
+  assert.equal(
+    isNonExpenseTransaction({
+      transactionType: 'EXPENSE',
+      categoryId: { type: 'EXPENSE', name: 'Office Supplies' },
+    }),
+    false
+  );
 });
 
 test('property expenses group under the property even when only the category has the property', () => {

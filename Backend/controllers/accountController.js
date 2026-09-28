@@ -814,7 +814,7 @@ export const getCategories = async (req, res) => {
 
     const categories = await Category.find(filter)
       .populate('propertyId', 'plazaName propertyName')
-      .populate('parentCategoryId', 'name type expenseClassification propertyId unitId isMainHead')
+      .populate('parentCategoryId', 'name type expenseClassification propertyId unitId isMainHead isRentalHead')
       .sort({ type: 1, name: 1 })
       .lean();
 

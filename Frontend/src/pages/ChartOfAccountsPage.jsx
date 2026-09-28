@@ -63,6 +63,19 @@ const initialIncomeHead = {
   description: '',
 };
 
+const isExpenseChartCategory = (category) => {
+  if (String(category.type || '').toUpperCase() !== 'EXPENSE') return false;
+
+  const isNonExpenseHead = (head) =>
+    Boolean(head?.isRentalHead) ||
+    /^(?:rent|rental income|internal(?: funds?)? transfers?)$/i.test(String(head?.name || '').trim());
+  const parent = category.parentCategoryId && typeof category.parentCategoryId === 'object'
+    ? category.parentCategoryId
+    : null;
+
+  return !isNonExpenseHead(category) && !isNonExpenseHead(parent);
+};
+
 export function ChartOfAccountsPage({ currentUser }) {
   // Navigation sub-tab state
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'expense' | 'account' | 'property' | 'income'
@@ -343,12 +356,13 @@ export function ChartOfAccountsPage({ currentUser }) {
   // Guaranteed safe array fallbacks for search filters
   const q = searchQuery.toLowerCase().trim();
   const safeCategories = Array.isArray(categoriesList) ? categoriesList : [];
+  const expenseCategories = safeCategories.filter(isExpenseChartCategory);
   const safeAccounts = Array.isArray(accountsList) ? accountsList : [];
   const safeProperties = Array.isArray(propertiesList) ? propertiesList : [];
   const safeIncomeHeads = Array.isArray(incomeHeadsList) ? incomeHeadsList : [];
 
   const headSearchTrimmed = expenseHeadSearch.toLowerCase().trim();
-  const filteredCategories = safeCategories.filter((c) => {
+  const filteredCategories = expenseCategories.filter((c) => {
     if (q && !c.name?.toLowerCase().includes(q)) return false;
     if (headSearchTrimmed) {
       const matchName = c.name?.toLowerCase().includes(headSearchTrimmed);
@@ -368,11 +382,11 @@ export function ChartOfAccountsPage({ currentUser }) {
     return true;
   });
 
-  const countAllHeads = safeCategories.filter((c) => !q || c.name?.toLowerCase().includes(q)).length;
-  const countGeneralHeads = safeCategories.filter((c) => (!q || c.name?.toLowerCase().includes(q)) && (!c.propertyId && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE'))).length;
-  const countPropertyHeads = safeCategories.filter((c) => (!q || c.name?.toLowerCase().includes(q)) && (c.expenseClassification === 'PROPERTY_OWN_EXPENSE')).length;
-  const countUnitHeads = safeCategories.filter((c) => (!q || c.name?.toLowerCase().includes(q)) && (c.expenseClassification === 'UNIT_EXPENSE')).length;
-  const mainExpenseHeads = safeCategories.filter((c) => c.type === 'EXPENSE' && c.isMainHead);
+  const countAllHeads = expenseCategories.filter((c) => !q || c.name?.toLowerCase().includes(q)).length;
+  const countGeneralHeads = expenseCategories.filter((c) => (!q || c.name?.toLowerCase().includes(q)) && (!c.propertyId && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE'))).length;
+  const countPropertyHeads = expenseCategories.filter((c) => (!q || c.name?.toLowerCase().includes(q)) && (c.expenseClassification === 'PROPERTY_OWN_EXPENSE')).length;
+  const countUnitHeads = expenseCategories.filter((c) => (!q || c.name?.toLowerCase().includes(q)) && (c.expenseClassification === 'UNIT_EXPENSE')).length;
+  const mainExpenseHeads = expenseCategories.filter((c) => c.isMainHead);
   const filteredAccounts = safeAccounts.filter(
     (a) => !q || a.name?.toLowerCase().includes(q) || a.bankName?.toLowerCase().includes(q) || a.cashHolder?.toLowerCase().includes(q)
   );
@@ -421,7 +435,7 @@ export function ChartOfAccountsPage({ currentUser }) {
             <span className="text-[11px] font-bold uppercase tracking-wider">Expense Heads</span>
             <Tag size={18} className="text-rose-600" />
           </div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{safeCategories.length}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{expenseCategories.length}</div>
           <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Active categories</div>
         </div>
 
@@ -545,7 +559,7 @@ export function ChartOfAccountsPage({ currentUser }) {
                 <h2 className="text-base font-bold text-slate-900">1. Expense Heads &amp; Categories</h2>
               </div>
               <span className="text-xs font-bold bg-rose-100 text-rose-800 px-2.5 py-1 rounded-full">
-                {safeCategories.length} Active Heads
+                {expenseCategories.length} Active Heads
               </span>
             </div>
 

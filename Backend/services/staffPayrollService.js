@@ -26,6 +26,53 @@ export const numberToWords = (num) => {
   return `Rupees ${inWords(amount)} Only`;
 };
 
+export const getPayrollPendingPaymentAdjustment = ({
+  pendingEntries,
+  previousNetPayable,
+  nextNetPayable,
+  verifiedPaidAmount = 0,
+}) => {
+  const round2 = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+  const verified = round2(verifiedPaidAmount);
+  const previousRemaining = round2(Math.max(0, previousNetPayable - verified));
+
+  if (nextNetPayable < verified - 0.01) {
+    throw new Error('Updated net salary cannot be less than the amount already paid.');
+  }
+  const nextRemaining = round2(Math.max(0, nextNetPayable - verified));
+
+  const pendingTotal = round2(
+    pendingEntries.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0)
+  );
+  if (pendingEntries.length === 0 || Math.abs(pendingTotal - previousRemaining) > 0.01) {
+    return pendingEntries.map((entry) => ({ entry, amount: round2(Number(entry.amount) || 0) }));
+  }
+
+  if (nextRemaining < pendingEntries.length * 0.01) {
+    throw new Error('The updated salary is too low to retain the submitted pending payment entries.');
+  }
+
+  const amounts = pendingEntries.map((entry) => round2(Number(entry.amount) || 0));
+  let difference = round2(nextRemaining - pendingTotal);
+  if (difference > 0) {
+    amounts[amounts.length - 1] = round2(amounts[amounts.length - 1] + difference);
+  } else {
+    for (let index = amounts.length - 1; index >= 0 && difference < 0; index -= 1) {
+      const reduction = Math.min(amounts[index] - 0.01, Math.abs(difference));
+      amounts[index] = round2(amounts[index] - reduction);
+      difference = round2(difference + reduction);
+    }
+  }
+  return pendingEntries.map((entry, index) => ({ entry, amount: amounts[index] }));
+};
+
+export const hasPayrollFinancialChanges = (payroll, record) => {
+  const round2 = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+  return ['basicSalary', 'allowance', 'loanDeduction', 'lopDeduction', 'otherDeduction'].some(
+    (field) => round2(payroll?.[field]) !== round2(record?.[field])
+  );
+};
+
 /**
  * Central Payroll Calculation Service
  */

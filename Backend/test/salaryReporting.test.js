@@ -9,6 +9,10 @@ import {
   getUtcMonthKey,
   normalizeBusinessPaymentDate,
 } from '../services/salaryReportingService.js';
+import {
+  getPayrollPendingPaymentAdjustment,
+  hasPayrollFinancialChanges,
+} from '../services/staffPayrollService.js';
 
 const cases = [
   {
@@ -135,4 +139,42 @@ test('late-evening Pakistan time on the 1st counts in that month, not the prior 
   assert.equal(getUtcMonthKey(paymentInstant), '2026-09');
   const { startDate, endDate } = getUtcMonthDateRange(2026, 9);
   assert.equal(paymentInstant >= startDate && paymentInstant <= endDate, true);
+});
+
+test('correcting an unpaid LOP deduction updates the full pending salary payment', () => {
+  const adjustments = getPayrollPendingPaymentAdjustment({
+    pendingEntries: [{ amount: 94355 }],
+    previousNetPayable: 94355,
+    nextNetPayable: 94500,
+  });
+
+  assert.equal(adjustments[0].amount, 94500);
+  assert.equal(
+    hasPayrollFinancialChanges(
+      { basicSalary: 100000, allowance: 0, loanDeduction: 0, lopDeduction: 5645, otherDeduction: 0 },
+      { basicSalary: 100000, allowance: 0, loanDeduction: 0, lopDeduction: 5500, otherDeduction: 0 }
+    ),
+    true
+  );
+});
+
+test('LOP correction preserves partial pending installments and rejects salary below paid amount', () => {
+  assert.deepEqual(
+    getPayrollPendingPaymentAdjustment({
+      pendingEntries: [{ amount: 10000 }],
+      previousNetPayable: 50000,
+      nextNetPayable: 50145,
+    }).map(({ amount }) => amount),
+    [10000]
+  );
+
+  assert.throws(
+    () => getPayrollPendingPaymentAdjustment({
+      pendingEntries: [],
+      previousNetPayable: 50000,
+      nextNetPayable: 40000,
+      verifiedPaidAmount: 45000,
+    }),
+    /cannot be less than the amount already paid/
+  );
 });
