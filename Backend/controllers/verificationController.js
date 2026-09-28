@@ -168,7 +168,7 @@ export const getPendingEntries = async (req, res) => {
         .populate('submittedBy', 'name email role')
         .populate('verifiedBy', 'name email role')
         .populate('rejectedBy', 'name email role')
-        .populate('propertyId', 'plazaName location')
+        .populate('propertyId', 'plazaName location units._id units.unitName units.unitNumber')
         .populate('tenantId', 'fullName phone')
         .populate({
           path: 'agreementId',
