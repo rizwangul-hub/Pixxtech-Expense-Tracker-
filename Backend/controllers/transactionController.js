@@ -187,7 +187,11 @@ export const getMyEntries = async (req, res) => {
     }
 
     const transactions = await Transaction.find(filter)
-      .populate('categoryId', 'name type isRentalHead')
+      .populate({
+        path: 'categoryId',
+        select: 'name type isRentalHead parentCategoryId isMainHead',
+        populate: { path: 'parentCategoryId', select: 'name' },
+      })
       .populate('drAccountId', 'name type currentBalance bankName cashHolder')
       .populate('crAccountId', 'name type currentBalance bankName cashHolder')
       .populate('propertyId', 'plazaName propertyName propertyCode location address units')

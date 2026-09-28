@@ -418,7 +418,11 @@ export const getMySubmissions = async (req, res) => {
       .populate('submittedBy', 'name email role')
       .populate('propertyId', 'plazaName propertyName units._id units.unitName units.unitNumber')
       .populate('tenantId', 'fullName')
-      .populate('categoryId', 'name')
+      .populate({
+        path: 'categoryId',
+        select: 'name parentCategoryId isMainHead',
+        populate: { path: 'parentCategoryId', select: 'name' },
+      })
       .populate('drAccountId', 'name')
       .populate('crAccountId', 'name')
       .populate('receivingAccountId', 'name')
@@ -696,7 +700,11 @@ export const updatePendingEntry = async (req, res) => {
         select: 'agreementNumber monthlyRent tenantId',
         populate: { path: 'tenantId', select: 'fullName tenantName name phone' },
       })
-      .populate('categoryId', 'name')
+      .populate({
+        path: 'categoryId',
+        select: 'name parentCategoryId isMainHead',
+        populate: { path: 'parentCategoryId', select: 'name' },
+      })
       .populate('drAccountId', 'name')
       .populate('crAccountId', 'name')
       .populate('receivingAccountId', 'name')
@@ -1310,7 +1318,11 @@ export const createPendingEntry = async (req, res) => {
     const populated = await PendingEntry.findById(pending._id)
       .populate('propertyId', 'plazaName')
       .populate('tenantId', 'fullName')
-      .populate('categoryId', 'name')
+      .populate({
+        path: 'categoryId',
+        select: 'name parentCategoryId isMainHead',
+        populate: { path: 'parentCategoryId', select: 'name' },
+      })
       .populate('drAccountId', 'name')
       .populate('crAccountId', 'name')
       .populate('receivingAccountId', 'name')
