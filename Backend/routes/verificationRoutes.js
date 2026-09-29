@@ -6,6 +6,7 @@ import {
   getPendingEntryById,
   updatePendingEntry,
   verifyEntry,
+  unverifyEntry,
   rejectEntry,
   deletePendingEntry,
   createPendingEntry,
@@ -32,6 +33,7 @@ router.get('/:id/receipt-pdf', downloadReceiptEvidencePDF);
 router.get('/:id', getPendingEntryById);
 router.put('/:id', authorize('DATA_ENTRY', 'VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), updatePendingEntry);
 router.post('/:id/verify', authorize('VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), verifyEntry);
+router.post('/:id/unverify', authorize('VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), unverifyEntry);
 router.post('/:id/reject', authorize('VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), rejectEntry);
 router.delete('/:id', authorize('DATA_ENTRY', 'VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), deletePendingEntry);
 

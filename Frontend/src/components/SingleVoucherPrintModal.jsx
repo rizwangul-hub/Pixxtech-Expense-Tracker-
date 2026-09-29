@@ -318,7 +318,23 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
                   </thead>
                   <tbody className="divide-y divide-slate-200 font-semibold text-slate-900">
                     <tr>
-                      <td className="p-2.5">{data.drAccount?.name || data.category?.name || 'Expense/Asset'}</td>
+                      <td className="p-2.5">
+                        {(() => {
+                          const drName = data.drAccount?.name || '';
+                          const catName = data.category?.name || '';
+                          // If drAccount is just the property name and category already includes it,
+                          // show only the category (it's the full description e.g. "Manga Mandi Land Solar Expenses")
+                          if (drName && catName && catName.toLowerCase().startsWith(drName.toLowerCase())) {
+                            return catName;
+                          }
+                          // If drAccount is the property and category is a separate expense name,
+                          // combine them: "Property — Expense Category"
+                          if (drName && catName && drName !== catName) {
+                            return `${drName} — ${catName}`;
+                          }
+                          return drName || catName || 'Expense/Asset';
+                        })()}
+                      </td>
                       <td className="p-2.5">{data.category?.name || 'General'}</td>
                       <td className="p-2.5 text-right font-mono font-bold">{formatPKR(data.amount)}</td>
                       <td className="p-2.5 text-right font-mono text-slate-400">-</td>
@@ -332,6 +348,7 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
                   </tbody>
                 </table>
               </div>
+
 
               {/* 6. Prominent Total Amount Banner */}
               <div className="bg-slate-50 border-2 border-slate-900 text-slate-900 p-3.5 rounded-lg flex items-center justify-between shadow-xs">

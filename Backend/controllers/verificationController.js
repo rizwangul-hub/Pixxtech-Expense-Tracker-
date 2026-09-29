@@ -11,6 +11,7 @@ import Account from '../models/Account.js';
 import Payroll from '../models/Payroll.js';
 import Employee from '../models/Employee.js';
 import StaffLoan from '../models/StaffLoan.js';
+import MonthlyReport from '../models/MonthlyReport.js';
 import {
   createTransaction,
   round2,
@@ -1652,6 +1653,251 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Unverify entry: Reverses all posted ledger transactions, rent/payroll records,
+ *          restores account balances, and returns the entry back to PENDING_VERIFICATION queue.
+ * @route   POST /api/verification/:id/unverify
+ * @access  Private (ADMIN, ADMIN_PUBLISHER, VERIFICATION_MANAGER, VERIFIER)
+ */
+export const unverifyEntry = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return apiError(res, 'Invalid ID provided.', 400);
+    }
+
+    // Try finding by PendingEntry ID first, then by Transaction ID
+    let entry = await PendingEntry.findById(id);
+    let tx = null;
+
+    if (!entry) {
+      tx = await Transaction.findById(id);
+      if (tx) {
+        entry = await PendingEntry.findOne({
+          $or: [
+            { postedTransactionId: tx._id },
+            { voucherNo: tx.voucherNo },
+            { _id: tx.sourceId },
+          ],
+        });
+      }
+    }
+
+    if (!entry && !tx) {
+      return apiError(res, 'Verified entry or transaction not found.', 404);
+    }
+
+    if (entry && entry.status !== 'VERIFIED') {
+      return apiError(
+        res,
+        `This entry is not in VERIFIED status (current status: ${entry.status}). Only verified entries can be unverified.`,
+        400
+      );
+    }
+
+    // Find the associated transaction if not located yet
+    if (!tx && entry) {
+      if (entry.postedTransactionId) {
+        tx = await Transaction.findById(entry.postedTransactionId);
+      }
+      if (!tx && entry.voucherNo) {
+        tx = await Transaction.findOne({ voucherNo: entry.voucherNo });
+      }
+      if (!tx) {
+        tx = await Transaction.findOne({ sourceId: entry._id });
+      }
+    }
+
+    // 1. Check if the period is locked by a published monthly report
+    const checkDate = entry?.date || tx?.date || new Date();
+    const d = new Date(checkDate);
+    const periodMonth = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    const isLocked = await MonthlyReport.findOne({ month: periodMonth, status: 'PUBLISHED' }).lean();
+    if (isLocked) {
+      return apiError(
+        res,
+        `Financial period ${periodMonth} is officially PUBLISHED and locked. Entries cannot be unverified.`,
+        403
+      );
+    }
+
+    const affectedAccountIds = new Set();
+    if (entry?.drAccountId) affectedAccountIds.add(entry.drAccountId.toString());
+    if (entry?.crAccountId) affectedAccountIds.add(entry.crAccountId.toString());
+    if (entry?.receivingAccountId) affectedAccountIds.add(entry.receivingAccountId.toString());
+    if (tx?.drAccountId) affectedAccountIds.add(tx.drAccountId.toString());
+    if (tx?.crAccountId) affectedAccountIds.add(tx.crAccountId.toString());
+
+    // 2. Reverse/Delete the posted Transaction
+    if (tx) {
+      await Transaction.findByIdAndDelete(tx._id);
+    }
+
+    // 3. Handle Rent Reversal (RentReceived & RentDue)
+    const isRent = entry?.entryType === 'RENT' || tx?.reportCategory === 'Rent' || tx?.sourceModule === 'RENT_RECEIVED';
+    if (isRent) {
+      let rentRec = null;
+      if (entry?.postedRentReceivedId) {
+        rentRec = await RentReceived.findById(entry.postedRentReceivedId);
+      }
+      if (!rentRec && tx?._id) {
+        rentRec = await RentReceived.findOne({ transactionId: tx._id });
+      }
+      if (!rentRec && (entry?.voucherNo || tx?.voucherNo)) {
+        rentRec = await RentReceived.findOne({ receiptNumber: entry?.voucherNo || tx?.voucherNo });
+      }
+
+      if (rentRec) {
+        if (rentRec.receivingAccountId) affectedAccountIds.add(rentRec.receivingAccountId.toString());
+        await RentReceived.findByIdAndDelete(rentRec._id);
+      }
+
+      // Revert RentDue dues allocation if agreement exists
+      const cleanMonth = entry?.rentMonth || tx?.rentMonth;
+      const agreementId = entry?.agreementId || rentRec?.agreementId || tx?.agreementId;
+      const rentAmount = entry?.amount || tx?.amount || 0;
+
+      if (agreementId && cleanMonth) {
+        const currentRentDue = await RentDue.findOne({ agreementId, rentMonth: cleanMonth });
+        if (currentRentDue) {
+          const newTotalPaid = round2(Math.max(0, (currentRentDue.paidAmount || 0) - rentAmount));
+          currentRentDue.paidAmount = newTotalPaid;
+          currentRentDue.status = newTotalPaid >= currentRentDue.expectedRentAmount
+            ? 'PAID'
+            : newTotalPaid > 0
+            ? 'PARTIAL'
+            : 'UNPAID';
+          await currentRentDue.save();
+        }
+      }
+    }
+
+    // 4. Handle Salary Reversal (Payroll & StaffLoan)
+    const isSalary = entry?.entryType === 'SALARY' || tx?.sourceModule === 'SALARY';
+    if (isSalary) {
+      const payrollId = entry?.entryData?.payrollId || tx?.sourceId;
+      const employeeId = entry?.tenantId || entry?.entryData?.employeeId;
+      const salaryMonth = entry?.rentMonth || entry?.entryData?.month;
+      const salaryAmount = entry?.amount || tx?.amount || 0;
+
+      let pDoc = null;
+      if (payrollId) {
+        pDoc = await Payroll.findById(payrollId);
+      } else if (employeeId && salaryMonth) {
+        pDoc = await Payroll.findOne({ employeeId, payrollMonth: salaryMonth });
+      }
+
+      if (pDoc) {
+        if (Array.isArray(pDoc.salaryInstallments)) {
+          pDoc.salaryInstallments = pDoc.salaryInstallments.filter((inst) => {
+            if (tx?._id && inst.transactionId?.toString() === tx._id.toString()) return false;
+            if (entry?.voucherNo && inst.voucherNo === entry.voucherNo) return false;
+            if (tx?.voucherNo && inst.voucherNo === tx.voucherNo) return false;
+            return true;
+          });
+        }
+        const newTotalPaid = round2(Math.max(0, (pDoc.totalInstallmentsPaid || 0) - salaryAmount));
+        pDoc.totalInstallmentsPaid = newTotalPaid;
+        pDoc.status = newTotalPaid >= pDoc.netPayable ? 'PAID' : 'FINALIZED';
+        pDoc.paymentStatus = newTotalPaid >= pDoc.netPayable ? 'PAID' : newTotalPaid > 0 ? 'PARTIAL_PAYMENT' : 'UNPAID';
+        if (newTotalPaid === 0) {
+          pDoc.paidFromAccountId = null;
+          pDoc.paidFromAccountName = null;
+          pDoc.paymentDate = null;
+          pDoc.paidDate = null;
+          pDoc.transactionId = null;
+          pDoc.voucherNo = null;
+        }
+        await pDoc.save();
+
+        const loanDed = Number(pDoc.loanDeduction ?? entry?.entryData?.loanDeduction ?? 0);
+        if (loanDed > 0) {
+          const emp = await Employee.findById(pDoc.employeeId);
+          if (emp) {
+            const loanRec = await StaffLoan.findOne({
+              employeeId: emp._id,
+              payrollMonth: salaryMonth,
+              type: 'REPAYMENT',
+            });
+            if (loanRec) {
+              emp.loanBalance = round2((emp.loanBalance || 0) + loanRec.amount);
+              await emp.save();
+              await StaffLoan.findByIdAndDelete(loanRec._id);
+            }
+          }
+        }
+      }
+    }
+
+    // 5. Synchronize all affected account balances
+    const accountIdArray = Array.from(affectedAccountIds).filter(Boolean);
+    if (accountIdArray.length > 0) {
+      await syncAccountBalances(accountIdArray);
+    }
+
+    // 6. Reset or recreate PendingEntry back to PENDING_VERIFICATION
+    const operatorName = req.user?.name || 'Administrator';
+    const operatorId = req.user?._id || null;
+
+    if (entry) {
+      entry.status = 'PENDING_VERIFICATION';
+      entry.verificationInProgress = false;
+      entry.verificationStartedAt = null;
+      entry.verifiedBy = null;
+      entry.verifiedByName = null;
+      entry.verifiedAt = null;
+      entry.postedTransactionId = null;
+      entry.postedRentReceivedId = null;
+      entry.auditLog = entry.auditLog || [];
+      entry.auditLog.push({
+        action: 'UNVERIFIED_AND_REVERTED',
+        performedBy: operatorName,
+        performedById: operatorId,
+        timestamp: new Date(),
+        notes: `Unverified by ${operatorName}. Central ledger transaction #${entry.voucherNo || ''} reversed and removed. Entry returned to pending verification queue.`,
+      });
+      await entry.save();
+    } else if (tx) {
+      entry = await PendingEntry.create({
+        voucherNo: tx.voucherNo,
+        date: tx.date,
+        entryType: tx.reportCategory === 'Rent' ? 'RENT' : tx.transactionType === 'TRANSFER' ? 'TRANSFER' : 'EXPENSE',
+        categoryId: tx.categoryId,
+        drAccountId: tx.drAccountId,
+        crAccountId: tx.crAccountId,
+        receivingAccountId: tx.drAccountId,
+        amount: tx.amount,
+        detail: tx.detail,
+        propertyId: tx.propertyId,
+        unitId: tx.unitId,
+        tenantId: tx.tenantId,
+        agreementId: tx.agreementId,
+        rentMonth: tx.rentMonth,
+        attachments: tx.attachments || [],
+        submittedBy: tx.createdBy || operatorId,
+        submittedByName: operatorName,
+        status: 'PENDING_VERIFICATION',
+        auditLog: [{
+          action: 'RECREATED_AND_UNVERIFIED',
+          performedBy: operatorName,
+          performedById: operatorId,
+          timestamp: new Date(),
+          notes: `Created pending draft from reversed transaction #${tx.voucherNo}.`,
+        }],
+      });
+    }
+
+    return apiSuccess(
+      res,
+      entry,
+      `Voucher #${entry.voucherNo || ''} unverified successfully! All ledger transactions reversed, account balances restored, and entry returned to Pending Verification queue.`
+    );
+  } catch (error) {
+    console.error('Error in unverifyEntry:', error);
+    return apiError(res, error.message || 'Failed to unverify entry.', 500);
+  }
+};
+
 export default {
   getPendingEntries,
   getVerificationSummary,
@@ -1659,6 +1905,7 @@ export default {
   getPendingEntryById,
   updatePendingEntry,
   verifyEntry,
+  unverifyEntry,
   rejectEntry,
   deletePendingEntry,
   createPendingEntry,

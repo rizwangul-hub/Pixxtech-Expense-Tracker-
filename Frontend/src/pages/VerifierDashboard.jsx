@@ -16,6 +16,7 @@ import {
   RefreshCw,
   FileText,
   Check,
+  RotateCcw,
   ArrowRight,
   ArrowLeftRight,
   Eye,
@@ -471,6 +472,37 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     } catch (err) {
       setFeedback({
         message: err.response?.data?.message || err.message || 'Verification failed.',
+        type: 'error',
+      });
+    } finally {
+      setSavingEntryId(null);
+    }
+  };
+
+  // Unverify / Revert Entry (Reverses Central Ledger Transactions and returns entry to Pending queue)
+  const handleUnverify = async (entry) => {
+    const vn = entry.voucherNo ? `Voucher #${entry.voucherNo}` : `this ${entry.entryType || 'entry'}`;
+    const confirmMsg = `Are you sure you want to UNVERIFY ${vn}?\n\n• All ledger transactions will be reversed and deleted\n• Account balances will be recalculated and restored\n• Any rent/salary records will be reverted\n• The entry will return to the Pending Review Queue`;
+    if (!window.confirm(confirmMsg)) return;
+
+    const entryId = entry._id;
+    try {
+      setSavingEntryId(entryId);
+      setFeedback({ message: '', type: '' });
+      const res = await verificationAPI.unverifyEntry(entryId);
+      if (res.success) {
+        setFeedback({
+          message: res.message || `Entry unverified successfully! Returned to Pending Review queue.`,
+          type: 'success',
+        });
+        setPendingEntries((prev) =>
+          prev.map((e) => (e._id === entryId ? { ...e, status: 'PENDING_VERIFICATION' } : e))
+        );
+        loadData(false, { filterType, filterStatus });
+      }
+    } catch (err) {
+      setFeedback({
+        message: err.response?.data?.message || err.message || 'Unverify failed.',
         type: 'error',
       });
     } finally {
@@ -1302,6 +1334,35 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                         </button>
                       </div>
                     )}
+
+                    {isVerified && (
+                      <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+                        <div className="text-[11px] text-slate-400">
+                          Verified by <strong className="text-emerald-400">{entry.verifiedByName || 'Verifier'}</strong>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleUnverify(entry)}
+                            disabled={savingEntryId === entry._id}
+                            className="py-1.5 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition disabled:opacity-50"
+                            title="Unverify: Reverse ledger transactions and return to pending"
+                          >
+                            <RotateCcw size={13} className={savingEntryId === entry._id ? 'animate-spin' : ''} />
+                            <span>Unverify</span>
+                          </button>
+                          {entryAttachments.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingReceiptEntry(entry)}
+                              className="p-1.5 rounded-lg bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-700/60 transition"
+                              title="View Attached Receipt"
+                            >
+                              <ImageIcon size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1576,8 +1637,17 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           ) : (
                             <div className="text-[10px] text-slate-500">
                               {isVerified ? (
-                                <div>
-                                  <div>Verified by {entry.verifiedByName || 'Khurshid'}</div>
+                                <div className="flex flex-col gap-1 items-center">
+                                  <div className="text-slate-400">Verified by <span className="text-emerald-400 font-bold">{entry.verifiedByName || 'Verifier'}</span></div>
+                                  <button
+                                    onClick={() => handleUnverify(entry)}
+                                    disabled={savingEntryId === entry._id}
+                                    className="py-1 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold flex items-center gap-1 transition disabled:opacity-50"
+                                    title="Unverify: Reverse ledger transactions and return to pending"
+                                  >
+                                    <RotateCcw size={11} className={savingEntryId === entry._id ? 'animate-spin' : ''} />
+                                    <span>Unverify</span>
+                                  </button>
                                   {entryAttachments.length > 0 && (
                                     <button
                                       type="button"

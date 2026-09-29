@@ -770,6 +770,10 @@ export const verificationAPI = {
     const res = await api.post(`/verification/${id}/verify`);
     return res.data;
   },
+  unverifyEntry: async (id) => {
+    const res = await api.post(`/verification/${id}/unverify`);
+    return res.data;
+  },
   rejectEntry: async (id, reason = '') => {
     const res = await api.post(`/verification/${id}/reject`, { rejectionReason: reason });
     return res.data;
