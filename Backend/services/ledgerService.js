@@ -655,11 +655,16 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
       }
 
       // Outflow from this account (Credited)
+      // Rule: "Other Expenses" = Boss/Owner Personal only (OWNER_PERSONAL).
+      //        All other expense outflows (property, salary, general) → "Rental Expenses".
       if (isCr) {
-        if (isPropertyTied || (isRentalCat && cat?.type === 'EXPENSE')) {
-          rentalExpenses += tx.amount;
-        } else {
+        const isOwnerPersonal =
+          tx.sourceModule === 'OWNER_PERSONAL' ||
+          tx.reportCategory === 'Owner Personal';
+        if (isOwnerPersonal) {
           otherExpenses += tx.amount;
+        } else {
+          rentalExpenses += tx.amount;
         }
       }
     }
@@ -1459,17 +1464,27 @@ export const getTransactionsFiltered = async (filters = {}) => {
         totalOtherIncome = round2(totalOtherIncome + amt);
       }
     } else if (t.transactionType === 'EXPENSE') {
-      const classification = t.expenseClassification
-        || (t.unitId ? 'UNIT_EXPENSE' : t.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
-      if (classification === 'GENERAL_EXPENSE') {
-        totalGeneralExpenses = round2(totalGeneralExpenses + amt);
+      const isOwnerPersonal =
+        t.sourceModule === 'OWNER_PERSONAL' ||
+        t.reportCategory === 'Owner Personal';
+      if (isOwnerPersonal) {
+        // Boss/Owner Personal expenses → Other Expenses only
         totalOtherExpenses = round2(totalOtherExpenses + amt);
-      } else if (classification === 'PROPERTY_OWN_EXPENSE') {
-        totalPropertyOwnExpenses = round2(totalPropertyOwnExpenses + amt);
-        totalRentalExpenses = round2(totalRentalExpenses + amt);
+        totalGeneralExpenses = round2(totalGeneralExpenses + amt);
       } else {
-        totalUnitExpenses = round2(totalUnitExpenses + amt);
-        totalRentalExpenses = round2(totalRentalExpenses + amt);
+        // Property, unit, salary, and all other regular expenses → Rental Expenses
+        const classification = t.expenseClassification
+          || (t.unitId ? 'UNIT_EXPENSE' : t.propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
+        if (classification === 'PROPERTY_OWN_EXPENSE') {
+          totalPropertyOwnExpenses = round2(totalPropertyOwnExpenses + amt);
+          totalRentalExpenses = round2(totalRentalExpenses + amt);
+        } else if (classification === 'UNIT_EXPENSE') {
+          totalUnitExpenses = round2(totalUnitExpenses + amt);
+          totalRentalExpenses = round2(totalRentalExpenses + amt);
+        } else {
+          totalGeneralExpenses = round2(totalGeneralExpenses + amt);
+          totalRentalExpenses = round2(totalRentalExpenses + amt);
+        }
       }
     } else if (t.transactionType === 'TRANSFER') {
       totalTransfers = round2(totalTransfers + amt);
