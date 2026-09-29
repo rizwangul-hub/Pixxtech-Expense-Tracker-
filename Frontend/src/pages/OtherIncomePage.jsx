@@ -90,7 +90,8 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
         propertiesAPI.getProperties({ limit: 100 }),
       ]);
 
-      if (headsRes?.success) setIncomeHeads(headsRes.data || []);
+      const rawHeads = headsRes?.data || headsRes?.heads || [];
+      setIncomeHeads(Array.isArray(rawHeads) ? rawHeads : (rawHeads?.heads || []));
       if (accsRes?.success) {
         // Only active non-clearing accounts can receive funds
         const activeLiquidity = (accsRes.data?.accounts || accsRes.data || []).filter(
@@ -703,10 +704,18 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
                   <select
                     required
                     value={recordForm.incomeHeadId}
-                    onChange={(e) => setRecordForm({ ...recordForm, incomeHeadId: e.target.value })}
+                    onChange={(e) => {
+                      const selId = e.target.value;
+                      const foundHead = incomeHeads.find((h) => h._id === selId);
+                      setRecordForm({
+                        ...recordForm,
+                        incomeHeadId: selId,
+                        receivedFrom: foundHead ? foundHead.name : recordForm.receivedFrom,
+                      });
+                    }}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500"
                   >
-                    <option value="">Select Income Head</option>
+                    <option value="">Select Income Head (Boss Kamran Ijaz, 48-A Plaza, etc.)</option>
                     {incomeHeads.filter((h) => h.isActive).map((h) => (
                       <option key={h._id} value={h._id}>
                         {h.name} {h.code ? `(${h.code})` : ''}
@@ -767,57 +776,35 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
                   </select>
                 </div>
 
-                {/* Property (Optional) */}
-                <div>
+                {/* Received From (Payee / Source Head) */}
+                <div className="sm:col-span-2">
                   <label className="block text-slate-300 font-semibold mb-1">
-                    Property (Optional)
+                    Received From (Payee / Source Party) <span className="text-amber-400">*</span>
                   </label>
-                  <select
-                    value={recordForm.propertyId}
-                    onChange={(e) =>
-                      setRecordForm({ ...recordForm, propertyId: e.target.value, unitId: '' })
-                    }
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="">General Company (No Property)</option>
-                    {propertiesList.map((p) => (
-                      <option key={p._id} value={p._id}>
-                        {p.plazaName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Unit (Optional, appears if property selected) */}
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
-                    Unit (Optional)
-                  </label>
-                  <select
-                    disabled={!recordForm.propertyId || availableUnits.length === 0}
-                    value={recordForm.unitId}
-                    onChange={(e) => setRecordForm({ ...recordForm, unitId: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 disabled:opacity-50"
-                  >
-                    <option value="">Select Unit if applicable</option>
-                    {availableUnits.map((u) => (
-                      <option key={u._id} value={u._id}>
-                        {u.unitName} ({u.unitType})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Received From */}
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Received From</label>
                   <input
                     type="text"
-                    placeholder="Payer name, company, or party"
+                    list="other-income-payee-list"
+                    required
+                    placeholder="Select or type source (e.g. Boss Kamran Ijaz, 48-A Plaza, Scrap Dealer)"
                     value={recordForm.receivedFrom}
-                    onChange={(e) => setRecordForm({ ...recordForm, receivedFrom: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const matchedHead = incomeHeads.find(
+                        (h) => h.name.toLowerCase() === val.toLowerCase()
+                      );
+                      setRecordForm({
+                        ...recordForm,
+                        receivedFrom: val,
+                        incomeHeadId: matchedHead ? matchedHead._id : recordForm.incomeHeadId,
+                      });
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 font-semibold focus:outline-none focus:border-amber-500"
                   />
+                  <datalist id="other-income-payee-list">
+                    {incomeHeads.filter((h) => h.isActive).map((h) => (
+                      <option key={h._id} value={h.name} />
+                    ))}
+                  </datalist>
                 </div>
 
                 {/* Reference Number */}

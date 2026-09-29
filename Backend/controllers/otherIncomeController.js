@@ -121,6 +121,7 @@ export const getIncomeHeads = async (req, res) => {
       success: true,
       count: heads.length,
       data: heads,
+      heads: heads,
     });
   } catch (error) {
     console.error('getIncomeHeads error:', error);

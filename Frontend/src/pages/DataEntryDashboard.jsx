@@ -86,7 +86,7 @@ export const DataEntryDashboard = ({ user }) => {
         accountsAPI.getCategories(),
         accountsAPI.getProperties().catch(() => ({ properties: [] })),
         transactionsAPI.getMyEntries(),
-        otherIncomeAPI.getHeads().catch(() => ({ data: { heads: [] } })),
+        otherIncomeAPI.getHeads().catch(() => ({ data: [] })),
         verificationAPI.getMySubmissions().catch(() => ({ data: [] })),
       ]);
 
@@ -97,7 +97,12 @@ export const DataEntryDashboard = ({ user }) => {
       const rawRecents = entriesRes.transactions || entriesRes.data?.transactions || [];
       const recents = rawRecents.filter((tx) => tx.status !== 'PENDING');
       const pendingFromTx = rawRecents.filter((tx) => tx.status === 'PENDING');
-      const heads = headsRes?.data?.heads || headsRes?.heads || [];
+      const rawHeads = headsRes?.data || headsRes?.heads || headsRes || [];
+      const heads = Array.isArray(rawHeads)
+        ? rawHeads
+        : Array.isArray(rawHeads?.heads)
+        ? rawHeads.heads
+        : [];
       // pending entries: unverified submissions by this user
       const rawPendings = (pendingRes?.data || []).filter(e => e.status !== 'VERIFIED');
       const pendings = [
@@ -415,7 +420,7 @@ export const DataEntryDashboard = ({ user }) => {
                 Record Other Income / Other Receipts
               </h2>
               <form onSubmit={handleOtherIncomeSubmit} className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Date</label>
                     <input
@@ -442,43 +447,6 @@ export const DataEntryDashboard = ({ user }) => {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Income Head (Source)</label>
-                    <select
-                      value={otherForm.headId}
-                      onChange={(e) => setOtherForm({ ...otherForm, headId: e.target.value })}
-                      required
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold"
-                    >
-                      <option value="">Select Income Head...</option>
-                      {otherHeads.map((h) => (
-                        <option key={h._id} value={h._id}>{h.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">From Property (Optional)</label>
-                    <select
-                      value={otherForm.propertyId}
-                      onChange={(e) => setOtherForm({ ...otherForm, propertyId: e.target.value })}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
-                    >
-                      <option value="">-- General / Boss (No Property) --</option>
-                      {properties.map((p) => (
-                        <option key={p._id} value={p._id}>
-                          {p.plazaName || p.propertyName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="mb-2">
-                  <EvidenceImageUpload files={otherEvidenceFiles} onChange={setOtherEvidenceFiles} disabled={submittingOther} />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
                     <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Receiving Account (Dr.)</label>
                     <select
                       value={otherForm.accountId}
@@ -492,11 +460,47 @@ export const DataEntryDashboard = ({ user }) => {
                       ))}
                     </select>
                   </div>
+                </div>
+
+                <div className="mb-2">
+                  <EvidenceImageUpload files={otherEvidenceFiles} onChange={setOtherEvidenceFiles} disabled={submittingOther} />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Received From (Payee)</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">
+                      Received From / Income Head (Select Source)
+                    </label>
+                    <select
+                      value={otherForm.headId}
+                      onChange={(e) => {
+                        const selId = e.target.value;
+                        const foundHead = otherHeads.find((h) => (h._id || h.id) === selId);
+                        setOtherForm({
+                          ...otherForm,
+                          headId: selId,
+                          receivedFrom: foundHead ? foundHead.name : '',
+                        });
+                      }}
+                      required
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold"
+                    >
+                      <option value="">Select Income Head / Payer (Boss Kamran Ijaz, 48-A Plaza, etc.)...</option>
+                      {otherHeads.map((h) => (
+                        <option key={h._id || h.id} value={h._id || h.id}>
+                          {h.name} {h.code ? `(${h.code})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">
+                      Received From (Payee / Party Name)
+                    </label>
                     <input
                       type="text"
-                      placeholder="e.g. Tenant, Client, Scrap buyer"
+                      placeholder="e.g. Boss Kamran Ijaz, 48-A Plaza, Scrap Buyer..."
                       value={otherForm.receivedFrom}
                       onChange={(e) => setOtherForm({ ...otherForm, receivedFrom: e.target.value })}
                       required
