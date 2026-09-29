@@ -11,6 +11,7 @@ import {
   validateExpenseClassification,
   validateExpenseCategory,
   isSalaryHeadName,
+  isNonExpenseChartCategory,
   isNonExpenseTransaction,
   isHrSalaryTransaction,
   salaryChildHeadName,
