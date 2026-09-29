@@ -452,8 +452,9 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     accountStatements,
     reportStatus: monthlyReport?.status || 'DRAFT',
     isPublished: monthlyReport?.status === 'PUBLISHED',
-    preparedByName: monthlyReport?.preparedByName || 'System Operator',
-    checkedByName: monthlyReport?.reviewedByName || 'Management / Auditor',
+    dataEnteredByName: 'Sarfraz Khan',
+    checkedByName: 'Khurshid Anwar',
+    preparedByName: 'Pixx Tech Expense Tracker System',
     publishedByName: monthlyReport?.publishedByName || '',
     generatedDate: formatReportDate(new Date()),
   });
