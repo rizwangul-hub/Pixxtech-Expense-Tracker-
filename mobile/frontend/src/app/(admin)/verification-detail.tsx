@@ -41,6 +41,37 @@ const formatDate = (dateStr?: string): string => {
   }
 };
 
+const getExpenseDebitLabel = (entry: PendingEntryItem) => {
+  const rawDebit = entry.drAccountId?.name || entry.receivingAccountId?.name || '';
+  const property = (entry as any).propertyId || (entry as any).entryData?.property;
+  const propertyName = typeof property === 'object' ? property?.plazaName || property?.propertyName || '' : '';
+  const unitId = (entry as any).unitId?._id || (entry as any).unitId || (entry as any).entryData?.unitId?._id || (entry as any).entryData?.unitId;
+  const unit = typeof (entry as any).unitId === 'object' && (entry as any).unitId
+    ? (entry as any).unitId
+    : typeof (entry as any).entryData?.unit === 'object' && (entry as any).entryData?.unit
+      ? (entry as any).entryData.unit
+      : property && Array.isArray(property.units)
+        ? property.units.find((candidate: any) => (candidate._id || candidate).toString() === String(unitId || ''))
+        : null;
+  const unitName = typeof unit === 'object' ? unit.unitName || unit.unitNumber || '' : '';
+  const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
+  const isPropertyExpense =
+    entry.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+    entry.expenseClassification === 'UNIT_EXPENSE' ||
+    Boolean((entry as any).propertyId) ||
+    Boolean(unitId);
+
+  if (isPropertyExpense && locationName) return locationName;
+  if (!rawDebit || /Clearing|External Parties/i.test(rawDebit)) {
+    const category = (entry as any).categoryId || (entry as any).entryData?.category;
+    const categoryName = category?.isMainHead
+      ? category.name
+      : category?.parentCategoryId?.name || category?.name || (entry as any).entryData?.category?.name;
+    return categoryName || 'Expense Account';
+  }
+  return rawDebit;
+};
+
 export default function VerificationDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -383,7 +414,7 @@ export default function VerificationDetailScreen() {
               <View style={styles.divider} />
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Debit Account (Dr)</Text>
-                <Text style={styles.infoValue}>{entry.drAccountId?.name || 'Clearing Account'}</Text>
+                <Text style={styles.infoValue}>{getExpenseDebitLabel(entry)}</Text>
               </View>
             </>
           )}

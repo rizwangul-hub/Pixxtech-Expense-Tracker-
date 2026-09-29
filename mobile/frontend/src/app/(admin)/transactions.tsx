@@ -78,13 +78,13 @@ export default function TransactionsScreen() {
 
   const getExpenseDebitLabel = (item: TransactionItem) => {
     const rawDebit = item.drAccountId?.name || '';
-    const property = item.propertyId;
+    const property = item.propertyId as any;
     const propertyName = typeof property === 'object' ? property?.plazaName || property?.propertyName || '' : '';
-    const unitId = item.unitId?._id || item.unitId;
-    const unit = typeof item.unitId === 'object' && item.unitId
-      ? item.unitId
-      : property && Array.isArray((property as any)?.units)
-        ? (property as any).units.find((candidate: any) => (candidate._id || candidate).toString() === String(unitId || ''))
+    const unitId = (item as any).unitId?._id || (item as any).unitId;
+    const unit = typeof (item as any).unitId === 'object' && (item as any).unitId
+      ? (item as any).unitId
+      : property && Array.isArray(property.units)
+        ? property.units.find((candidate: any) => (candidate._id || candidate).toString() === String(unitId || ''))
         : null;
     const unitName = typeof unit === 'object' ? unit.unitName || unit.unitNumber || '' : '';
     const locationName = [propertyName, unitName].filter(Boolean).join(' - ');

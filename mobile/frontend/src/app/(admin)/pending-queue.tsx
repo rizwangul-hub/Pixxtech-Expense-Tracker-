@@ -125,13 +125,13 @@ export default function PendingQueueScreen() {
 
   const getExpenseDebitLabel = (entry: PendingEntryItem) => {
     const rawDebit = entry.drAccountId?.name || '';
-    const property = entry.propertyId;
+    const property = entry.propertyId as any;
     const propertyName = typeof property === 'object' ? property?.plazaName || property?.propertyName || '' : '';
-    const unitId = entry.unitId?._id || entry.unitId;
-    const unit = typeof entry.unitId === 'object' && entry.unitId
-      ? entry.unitId
-      : property && Array.isArray((property as any)?.units)
-        ? (property as any).units.find((candidate: any) => (candidate._id || candidate).toString() === String(unitId || ''))
+    const unitId = (entry as any).unitId?._id || (entry as any).unitId;
+    const unit = typeof (entry as any).unitId === 'object' && (entry as any).unitId
+      ? (entry as any).unitId
+      : property && Array.isArray(property.units)
+        ? property.units.find((candidate: any) => (candidate._id || candidate).toString() === String(unitId || ''))
         : null;
     const unitName = typeof unit === 'object' ? unit.unitName || unit.unitNumber || '' : '';
     const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
@@ -142,7 +142,7 @@ export default function PendingQueueScreen() {
       Boolean(unitId);
 
     if (isPropertyExpense && locationName) return locationName;
-    if (!rawDebit || /Clearing|External Parties/i.test(rawDebit)) return entry.categoryId?.name || 'Expense Account';
+    if (!rawDebit || /Clearing|External Parties/i.test(rawDebit)) return (entry as any).categoryId?.name || 'Expense Account';
     return rawDebit;
   };
 
