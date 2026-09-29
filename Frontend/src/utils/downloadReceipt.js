@@ -183,8 +183,19 @@ export function extractReceiptMetadata(entry) {
       Boolean(entry.propertyId) ||
       Boolean(unitId);
     const expenseLocationName = [propertyName, unitName].filter(Boolean).join(' - ');
+    // Build the debit label; avoid duplicating the property/unit prefix if
+    // the expense head name (e.g. "Manga Mandi Land Misc Expenses") already
+    // starts with the location string (e.g. "Manga Mandi Land").
+    const locationAlreadyInHead =
+      expenseLocationName &&
+      expenseDebitHeadName
+        .trim()
+        .toLowerCase()
+        .startsWith(expenseLocationName.trim().toLowerCase());
     drAccount = isPropertyExpense && expenseLocationName
-      ? `${expenseLocationName} ${expenseDebitHeadName}`.trim()
+      ? locationAlreadyInHead
+        ? expenseDebitHeadName.trim()
+        : `${expenseLocationName} ${expenseDebitHeadName}`.trim()
       : !drAccount || /Clearing|External Parties/i.test(drAccount) || drAccount === mainExpenseHeadName
       ? expenseDebitHeadName
       : drAccount;
