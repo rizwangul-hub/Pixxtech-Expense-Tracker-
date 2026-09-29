@@ -370,6 +370,7 @@ export const isSalaryHeadName = (value = '') => /^salar(?:y|ies)$/i.test(String(
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const isNonExpenseChartCategory = (category = {}) => {
+  if (!category || typeof category !== 'object') return false;
   const type = String(category.type || '').toUpperCase();
   if (type && type !== 'EXPENSE') return true;
   if (category.isRentalHead) return true;

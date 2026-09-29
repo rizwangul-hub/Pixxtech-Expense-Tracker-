@@ -186,6 +186,8 @@ export const getMyEntries = async (req, res) => {
       filter.status = { $in: ['VERIFIED', 'POSTED'] };
     }
 
+    const limitNum = req.query.limit ? parseInt(req.query.limit, 10) : 500;
+
     const transactions = await Transaction.find(filter)
       .populate({
         path: 'categoryId',
@@ -197,7 +199,7 @@ export const getMyEntries = async (req, res) => {
       .populate('propertyId', 'plazaName propertyName propertyCode location address units')
       .populate('createdBy', 'name email role')
       .sort({ createdAt: -1 })
-      .limit(60)
+      .limit(limitNum > 0 ? limitNum : 500)
       .lean();
 
     return res.status(200).json({

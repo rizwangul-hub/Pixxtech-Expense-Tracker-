@@ -438,7 +438,7 @@ export const getMySubmissions = async (req, res) => {
       .populate('crAccountId', 'name')
       .populate('receivingAccountId', 'name')
       .sort({ submittedAt: -1 })
-      .limit(100)
+      .limit(req.query.limit ? parseInt(req.query.limit, 10) : 500)
       .lean();
 
     return apiSuccess(res, entries, `Found ${entries.length} submissions.`);
