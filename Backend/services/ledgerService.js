@@ -636,6 +636,7 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
     let otherInput = 0;
     let rentalExpenses = 0;
     let otherExpenses = 0;
+    let transferOut = 0; // outflows from TRANSFER txs — kept separate so closing balance stays correct
 
     for (const tx of monthTransactions) {
       const isDr = tx.drAccountId?.toString() === accId;
@@ -654,17 +655,21 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
         }
       }
 
-      // Outflow from this account (Credited)
-      // Rule: "Other Expenses" = Boss/Owner Personal only (OWNER_PERSONAL).
-      //        All other expense outflows (property, salary, general) → "Rental Expenses".
+      // Outflow from this account (Credited) — categorise by transaction type
       if (isCr) {
-        const isOwnerPersonal =
-          tx.sourceModule === 'OWNER_PERSONAL' ||
-          tx.reportCategory === 'Owner Personal';
-        if (isOwnerPersonal) {
-          otherExpenses += tx.amount;
+        if (tx.transactionType === 'EXPENSE') {
+          // Only real EXPENSE transactions split into Rental vs Other Expenses
+          const isOwnerPersonal =
+            tx.sourceModule === 'OWNER_PERSONAL' ||
+            tx.reportCategory === 'Owner Personal';
+          if (isOwnerPersonal) {
+            otherExpenses += tx.amount;
+          } else {
+            rentalExpenses += tx.amount;
+          }
         } else {
-          rentalExpenses += tx.amount;
+          // TRANSFER or any other outflow — tracked separately (still affects closing balance)
+          transferOut += tx.amount;
         }
       }
     }
@@ -675,7 +680,9 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
 
     rentalExpenses = round2(rentalExpenses);
     otherExpenses = round2(otherExpenses);
-    const totalOutput = round2(rentalExpenses + otherExpenses);
+    transferOut = round2(transferOut);
+    // totalOutput must include transferOut to keep closing balance correct
+    const totalOutput = round2(rentalExpenses + otherExpenses + transferOut);
 
     const closingBalance = round2(openingBalance + totalInput - totalOutput);
 
