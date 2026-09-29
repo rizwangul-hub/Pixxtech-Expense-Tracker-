@@ -22,10 +22,16 @@ import {
 } from '../constants/propertyTypes.js';
 import { isAdmin } from '../utils/permissions.js';
 
+let propertiesPageCache = {
+  properties: [],
+  summary: null,
+  isLoaded: false,
+};
+
 export function PropertiesPage({ currentUser, onSelectProperty }) {
-  const [properties, setProperties] = useState([]);
-  const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [properties, setProperties] = useState(propertiesPageCache.properties);
+  const [summary, setSummary] = useState(propertiesPageCache.summary);
+  const [loading, setLoading] = useState(!propertiesPageCache.isLoaded);
   const [error, setError] = useState('');
   const [notification, setNotification] = useState('');
 
@@ -33,6 +39,21 @@ export function PropertiesPage({ currentUser, onSelectProperty }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+
+  // Pagination (10 properties per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, typeFilter, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(properties.length / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedProperties = React.useMemo(() => {
+    const start = (safeCurrentPage - 1) * PAGE_SIZE;
+    return properties.slice(start, start + PAGE_SIZE);
+  }, [properties, safeCurrentPage]);
 
   // Add / Edit Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -52,8 +73,10 @@ export function PropertiesPage({ currentUser, onSelectProperty }) {
 
   const userIsAdmin = isAdmin(currentUser);
 
-  const fetchProperties = async () => {
-    setLoading(true);
+  const fetchProperties = async (silent = false) => {
+    if (!silent && !propertiesPageCache.isLoaded) {
+      setLoading(true);
+    }
     setError('');
     try {
       const params = {};
@@ -63,8 +86,15 @@ export function PropertiesPage({ currentUser, onSelectProperty }) {
 
       const res = await propertiesAPI.getProperties(params);
       if (res?.success) {
-        setProperties(res.data?.properties || []);
-        setSummary(res.data?.summary || null);
+        const newProps = res.data?.properties || [];
+        const newSummary = res.data?.summary || null;
+        setProperties(newProps);
+        setSummary(newSummary);
+        propertiesPageCache = {
+          properties: newProps,
+          summary: newSummary,
+          isLoaded: true,
+        };
       } else {
         setError(res?.message || 'Failed to load properties.');
       }
@@ -77,7 +107,7 @@ export function PropertiesPage({ currentUser, onSelectProperty }) {
   };
 
   useEffect(() => {
-    fetchProperties();
+    fetchProperties(propertiesPageCache.isLoaded);
   }, [typeFilter, statusFilter]);
 
   const handleSearchSubmit = (e) => {

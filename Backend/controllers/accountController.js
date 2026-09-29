@@ -794,8 +794,8 @@ export const getCategories = async (req, res) => {
   try {
     const { type, expenseClassification, propertyId, unitId } = req.query;
     
-    // Auto-provision standard categories if any are missing
-    await provisionStandardCategories();
+    // Auto-provision standard categories in the background if not already done, do not block the API
+    provisionStandardCategories().catch((e) => console.error('[Provision error]:', e.message));
 
     const filter = {};
 

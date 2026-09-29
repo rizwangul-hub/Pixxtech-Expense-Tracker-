@@ -12,6 +12,51 @@ const api = axios.create({
   },
 });
 
+// Lightweight in-memory cache for master dropdowns & rapid page navigation
+const clientMemoryCache = new Map();
+
+export const getCachedOrFetch = async (key, ttlMs, fetchFn, force = false) => {
+  const now = Date.now();
+  const cached = clientMemoryCache.get(key);
+
+  if (!force && cached && cached.data && now - cached.timestamp < ttlMs) {
+    return cached.data;
+  }
+
+  if (cached && cached.promise) {
+    return cached.promise;
+  }
+
+  const promise = (async () => {
+    try {
+      const data = await fetchFn();
+      clientMemoryCache.set(key, { data, timestamp: Date.now(), promise: null });
+      return data;
+    } catch (err) {
+      clientMemoryCache.delete(key);
+      throw err;
+    }
+  })();
+
+  clientMemoryCache.set(key, {
+    data: cached?.data || null,
+    timestamp: cached?.timestamp || 0,
+    promise,
+  });
+
+  return promise;
+};
+
+export const invalidateCacheKey = (prefix) => {
+  if (!prefix) {
+    clientMemoryCache.clear();
+  } else {
+    for (const k of clientMemoryCache.keys()) {
+      if (k.startsWith(prefix)) clientMemoryCache.delete(k);
+    }
+  }
+};
+
 export const uploadAPI = {
   images: async (files) => {
     const formData = new FormData();
@@ -109,14 +154,17 @@ export const propertiesAPI = {
   },
   createProperty: async (propertyData) => {
     const res = await api.post('/properties', propertyData);
+    invalidateCacheKey('properties-list');
     return res.data;
   },
   updateProperty: async (id, propertyData) => {
     const res = await api.put(`/properties/${id}`, propertyData);
+    invalidateCacheKey('properties-list');
     return res.data;
   },
   togglePropertyStatus: async (id) => {
     const res = await api.patch(`/properties/${id}/status`);
+    invalidateCacheKey('properties-list');
     return res.data;
   },
   getPropertyUnits: async (id, params = {}) => {
@@ -403,32 +451,42 @@ export const accountsAPI = {
     const res = await api.get('/accounts/monthly-summary', { params });
     return res.data;
   },
-  getActiveSummary: async () => {
-    const res = await api.get('/accounts/active-summary');
-    return res.data;
+  getActiveSummary: async (force = false) => {
+    return getCachedOrFetch('active-summary', 30000, async () => {
+      const res = await api.get('/accounts/active-summary');
+      return res.data;
+    }, force);
   },
-  getCategories: async () => {
-    const res = await api.get('/accounts/categories-list');
-    return res.data;
+  getCategories: async (force = false) => {
+    return getCachedOrFetch('categories-list', 60000, async () => {
+      const res = await api.get('/accounts/categories-list');
+      return res.data;
+    }, force);
   },
   createCategory: async (data) => {
     const res = await api.post('/accounts/categories', data);
+    invalidateCacheKey('categories-list');
     return res.data;
   },
   updateCategory: async (id, data) => {
     const res = await api.patch(`/accounts/categories/${id}`, data);
+    invalidateCacheKey('categories-list');
     return res.data;
   },
   deleteCategory: async (id) => {
     const res = await api.delete(`/accounts/categories/${id}`);
+    invalidateCacheKey('categories-list');
     return res.data;
   },
-  getProperties: async () => {
-    const res = await api.get('/accounts/properties-list');
-    return res.data;
+  getProperties: async (force = false) => {
+    return getCachedOrFetch('properties-list', 60000, async () => {
+      const res = await api.get('/accounts/properties-list');
+      return res.data;
+    }, force);
   },
   recalculateBalances: async () => {
     const res = await api.post('/accounts/recalculate-balances');
+    invalidateCacheKey('active-summary');
     return res.data;
   },
 };
@@ -510,16 +568,25 @@ export const reportsAPI = {
 };
 
 export const otherIncomeAPI = {
-  getHeads: async (params = {}) => {
-    const res = await api.get('/other-income/heads', { params });
-    return res.data;
+  getHeads: async (params = {}, force = false) => {
+    const hasParams = Object.keys(params).length > 0;
+    if (hasParams) {
+      const res = await api.get('/other-income/heads', { params });
+      return res.data;
+    }
+    return getCachedOrFetch('other-income-heads', 60000, async () => {
+      const res = await api.get('/other-income/heads');
+      return res.data;
+    }, force);
   },
   createHead: async (data) => {
     const res = await api.post('/other-income/heads', data);
+    invalidateCacheKey('other-income-heads');
     return res.data;
   },
   updateHead: async (id, data) => {
     const res = await api.put(`/other-income/heads/${id}`, data);
+    invalidateCacheKey('other-income-heads');
     return res.data;
   },
   getAll: async (params = {}) => {

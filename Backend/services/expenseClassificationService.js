@@ -248,16 +248,25 @@ export const getOrCreateCanonicalHead = async ({
   return newHead;
 };
 
+let isProvisioning = false;
+let hasProvisioned = false;
+
 /**
  * Automatically provision standard property and unit expense categories
  * for all properties and units in the system if they don't already exist.
  * - Standard Property Expenses: 'Property tax', 'Entertainment'
  * - Standard Unit Expenses: 'Maintenance', 'Electricity', 'Repair Maintenance', 'Commission'
  */
-export const provisionStandardCategories = async () => {
+export const provisionStandardCategories = async (force = false) => {
+  if (hasProvisioned && !force) return { createdCount: 0 };
+  if (isProvisioning) return { createdCount: 0 };
+  isProvisioning = true;
   try {
     const properties = await Property.find({}).lean();
-    if (!properties || properties.length === 0) return { createdCount: 0 };
+    if (!properties || properties.length === 0) {
+      hasProvisioned = true;
+      return { createdCount: 0 };
+    }
 
     const STANDARD_PROPERTY_EXPENSES = ['Property tax', 'Entertainment'];
     const STANDARD_UNIT_EXPENSES = ['Maintenance', 'Electricity', 'Repair Maintenance', 'Commission'];
@@ -346,10 +355,13 @@ export const provisionStandardCategories = async () => {
       }
     }
 
+    hasProvisioned = true;
     return { createdCount };
   } catch (err) {
     console.error('[Provision Standard Categories Error]:', err.message);
     return { createdCount: 0, error: err.message };
+  } finally {
+    isProvisioning = false;
   }
 };
 

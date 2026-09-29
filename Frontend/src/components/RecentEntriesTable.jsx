@@ -346,6 +346,30 @@ export const RecentEntriesTable = ({
     tx.crAccountId?.name?.toLowerCase().includes(q)
   );
 
+  // Pagination for 10 entries per page as requested
+  const [pagePending, setPagePending] = useState(1);
+  const [pageVerified, setPageVerified] = useState(1);
+  const PAGE_SIZE = 10;
+
+  useEffect(() => {
+    setPagePending(1);
+    setPageVerified(1);
+  }, [searchTerm]);
+
+  const totalPendingPages = Math.max(1, Math.ceil(filteredPending.length / PAGE_SIZE));
+  const safePagePending = Math.min(pagePending, totalPendingPages);
+  const paginatedPending = useMemo(() => {
+    const start = (safePagePending - 1) * PAGE_SIZE;
+    return filteredPending.slice(start, start + PAGE_SIZE);
+  }, [filteredPending, safePagePending]);
+
+  const totalVerifiedPages = Math.max(1, Math.ceil(filteredVerified.length / PAGE_SIZE));
+  const safePageVerified = Math.min(pageVerified, totalVerifiedPages);
+  const paginatedVerified = useMemo(() => {
+    const start = (safePageVerified - 1) * PAGE_SIZE;
+    return filteredVerified.slice(start, start + PAGE_SIZE);
+  }, [filteredVerified, safePageVerified]);
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -451,7 +475,7 @@ export const RecentEntriesTable = ({
                   </td>
                 </tr>
               ) : (
-                filteredPending.map((entry) => {
+                paginatedPending.map((entry) => {
                   const formattedDate = entry.date
                     ? new Date(entry.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
                     : 'N/A';
@@ -589,6 +613,57 @@ export const RecentEntriesTable = ({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls for Pending Entries */}
+        {totalPendingPages > 1 && (
+          <div className="mt-3 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+            <div className="text-slate-600 font-medium">
+              Showing <span className="font-bold text-slate-900">{(safePagePending - 1) * PAGE_SIZE + 1}</span> to <span className="font-bold text-slate-900">{Math.min(safePagePending * PAGE_SIZE, filteredPending.length)}</span> of <span className="font-bold text-slate-900">{filteredPending.length}</span> entries (10 per page)
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPagePending((p) => Math.max(1, p - 1))}
+                disabled={safePagePending <= 1}
+                className="px-2.5 py-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-xs transition"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPendingPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPendingPages || Math.abs(p - safePagePending) <= 1)
+                  .map((p, idx, arr) => {
+                    const prevP = arr[idx - 1];
+                    const hasGap = prevP && p - prevP > 1;
+                    return (
+                      <React.Fragment key={p}>
+                        {hasGap && <span className="px-1 text-slate-400">...</span>}
+                        <button
+                          type="button"
+                          onClick={() => setPagePending(p)}
+                          className={`w-6 h-6 rounded text-xs font-bold transition ${
+                            safePagePending === p
+                              ? 'bg-amber-600 text-white shadow-xs'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-300'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setPagePending((p) => Math.min(totalPendingPages, p + 1))}
+                disabled={safePagePending >= totalPendingPages}
+                className="px-2.5 py-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-xs transition"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       )}
 
       {/* ── TAB B: VERIFIED ENTRIES ────────────────────────────────────────── */}
@@ -623,7 +698,7 @@ export const RecentEntriesTable = ({
                   </td>
                 </tr>
               ) : (
-                filteredVerified.map((tx) => {
+                paginatedVerified.map((tx) => {
                   const formattedDate = tx.date
                     ? new Date(tx.date).toISOString().split('T')[0]
                     : 'N/A';
@@ -766,6 +841,57 @@ export const RecentEntriesTable = ({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls for Verified Entries */}
+        {totalVerifiedPages > 1 && (
+          <div className="mt-3 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+            <div className="text-slate-600 font-medium">
+              Showing <span className="font-bold text-slate-900">{(safePageVerified - 1) * PAGE_SIZE + 1}</span> to <span className="font-bold text-slate-900">{Math.min(safePageVerified * PAGE_SIZE, filteredVerified.length)}</span> of <span className="font-bold text-slate-900">{filteredVerified.length}</span> entries (10 per page)
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPageVerified((p) => Math.max(1, p - 1))}
+                disabled={safePageVerified <= 1}
+                className="px-2.5 py-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-xs transition"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalVerifiedPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalVerifiedPages || Math.abs(p - safePageVerified) <= 1)
+                  .map((p, idx, arr) => {
+                    const prevP = arr[idx - 1];
+                    const hasGap = prevP && p - prevP > 1;
+                    return (
+                      <React.Fragment key={p}>
+                        {hasGap && <span className="px-1 text-slate-400">...</span>}
+                        <button
+                          type="button"
+                          onClick={() => setPageVerified(p)}
+                          className={`w-6 h-6 rounded text-xs font-bold transition ${
+                            safePageVerified === p
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-300'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setPageVerified((p) => Math.min(totalVerifiedPages, p + 1))}
+                disabled={safePageVerified >= totalVerifiedPages}
+                className="px-2.5 py-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-xs transition"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       )}
 
       {/* Print Single Voucher Modal */}

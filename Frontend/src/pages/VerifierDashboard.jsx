@@ -101,7 +101,7 @@ const SalaryBreakdown = ({ entry }) => {
 
         {lopDed > 0 && (
           <span className="px-2 py-0.5 rounded bg-rose-950/70 border border-rose-800/70 text-rose-300">
-            Absent: <b className="text-rose-200">−{formatPKR(lopDed)}</b>
+            Absent: <b className="text-white">−{formatPKR(lopDed)}</b>
           </span>
         )}
 
@@ -160,6 +160,11 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   const [accounts, setAccounts] = useState(verifierDataCache.accounts || []);
   const [categories, setCategories] = useState(verifierDataCache.categories || []);
   const [properties, setProperties] = useState(verifierDataCache.properties || []);
+
+  // Pagination state (10 entries per page as requested)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [paginationInfo, setPaginationInfo] = useState({ total: 0, page: 1, limit: 10, pages: 1 });
+  const pageSize = 10;
 
   const [loading, setLoading] = useState(!hasCache);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -324,6 +329,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   // (avoids the stale-closure problem where useEffect captures old state)
   const loadData = async (forceShowLoading = false, overrides = {}) => {
     try {
+      const targetPage    = overrides.page         !== undefined ? overrides.page         : currentPage;
       const currentType   = overrides.filterType   !== undefined ? overrides.filterType   : filterType;
       const currentStatus = overrides.filterStatus !== undefined ? overrides.filterStatus : filterStatus;
       const currentSearch = overrides.searchQuery  !== undefined ? overrides.searchQuery  : searchQuery;
@@ -334,7 +340,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         setIsRefreshing(true);
       }
 
-      const params = { limit: 200 };
+      const params = { limit: pageSize, page: targetPage };
       if (currentType   !== 'ALL') params.entryType = currentType;
       if (currentStatus !== 'ALL') params.status    = currentStatus;
       if (currentSearch.trim())    params.search     = currentSearch.trim();
@@ -361,8 +367,15 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       const sumRes  = results[1];
       const newEntries = listRes.data?.entries || listRes.entries || [];
       const newSummary = sumRes.data || sumRes || null;
+      const newPagination = listRes.data?.pagination || {
+        total: newEntries.length,
+        page: targetPage,
+        limit: pageSize,
+        pages: Math.ceil(newEntries.length / pageSize) || 1,
+      };
 
       setPendingEntries(newEntries);
+      setPaginationInfo(newPagination);
       setSummary(newSummary);
 
       let newAccounts   = accounts;
@@ -403,17 +416,25 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     }
   };
 
-  // Re-fetch whenever type or status filters change, passing the new values
-  // explicitly to avoid the stale-closure problem
+  // Re-fetch whenever type or status filters change, resetting to page 1
   useEffect(() => {
-    loadData(false, { filterType, filterStatus });
+    setCurrentPage(1);
+    loadData(false, { filterType, filterStatus, page: 1 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterType, filterStatus]);
 
   // Handle Search Submission
   const handleSearch = (e) => {
     e.preventDefault();
-    loadData(true);
+    setCurrentPage(1);
+    loadData(true, { page: 1 });
+  };
+
+  // Pagination Change Handler
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > (paginationInfo.pages || 1) || newPage === currentPage) return;
+    setCurrentPage(newPage);
+    loadData(false, { page: newPage });
   };
 
   // Verify / Approve Entry (Atomic post to Ledger)
@@ -1000,7 +1021,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
           <div className="flex items-center gap-2.5">
             <h3 className="font-bold text-white text-sm">Temporary Entries Review Queue</h3>
             <span className="text-xs bg-slate-800 text-indigo-300 border border-slate-700 font-bold px-2.5 py-0.5 rounded-full font-mono">
-              {filteredEntries.length} items
+              {paginationInfo.total > 0
+                ? `${(paginationInfo.page - 1) * paginationInfo.limit + 1}–${Math.min(paginationInfo.page * paginationInfo.limit, paginationInfo.total)} of ${paginationInfo.total} items`
+                : `${filteredEntries.length} items`}
             </span>
           </div>
           <div className="text-xs text-slate-400">
@@ -1579,6 +1602,57 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls */}
+            {paginationInfo.pages > 1 && (
+              <div className="px-5 py-3.5 bg-slate-950/80 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <div className="text-slate-400">
+                  Showing <span className="font-bold text-slate-200">{(paginationInfo.page - 1) * paginationInfo.limit + 1}</span> to <span className="font-bold text-slate-200">{Math.min(paginationInfo.page * paginationInfo.limit, paginationInfo.total)}</span> of <span className="font-bold text-indigo-300 font-mono">{paginationInfo.total}</span> entries (10 per page)
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage <= 1 || loading}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition font-semibold"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: paginationInfo.pages }, (_, i) => i + 1)
+                      .filter((p) => p === 1 || p === paginationInfo.pages || Math.abs(p - currentPage) <= 1)
+                      .map((p, idx, arr) => {
+                        const prevP = arr[idx - 1];
+                        const hasGap = prevP && p - prevP > 1;
+                        return (
+                          <React.Fragment key={p}>
+                            {hasGap && <span className="px-1 text-slate-500">...</span>}
+                            <button
+                              type="button"
+                              onClick={() => handlePageChange(p)}
+                              className={`w-7 h-7 rounded-lg text-xs font-bold transition ${
+                                currentPage === p
+                                  ? 'bg-indigo-600 text-white shadow-sm'
+                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          </React.Fragment>
+                        );
+                      })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage >= paginationInfo.pages || loading}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition font-semibold"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

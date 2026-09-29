@@ -74,7 +74,7 @@ export function MainLayout({
       isMounted = false;
       clearInterval(interval);
     };
-  }, [userIsAdmin, userIsVerifier, currentView]);
+  }, [userIsAdmin, userIsVerifier]);
 
   const navigationItems = [
     {
