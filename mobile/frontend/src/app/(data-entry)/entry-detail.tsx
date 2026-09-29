@@ -61,6 +61,37 @@ export default function EntryDetailScreen() {
       ? entry.propertyId.plazaName
       : 'General / No Property';
 
+  const getExpenseDebitLabel = (entry: any) => {
+    const rawDebit = entry.drAccountId?.name || entry.receivingAccountId?.name || '';
+    const property = entry.propertyId || entry.entryData?.property;
+    const propertyName = typeof property === 'object' ? property?.plazaName || property?.propertyName || '' : '';
+    const unitId = entry.unitId?._id || entry.unitId || entry.entryData?.unitId?._id || entry.entryData?.unitId;
+    const unit = typeof entry.unitId === 'object' && entry.unitId
+      ? entry.unitId
+      : typeof entry.entryData?.unit === 'object' && entry.entryData.unit
+        ? entry.entryData.unit
+        : property && Array.isArray(property.units)
+          ? property.units.find((candidate: any) => (candidate._id || candidate).toString() === String(unitId || ''))
+          : null;
+    const unitName = typeof unit === 'object' ? unit.unitName || unit.unitNumber || '' : '';
+    const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
+    const isPropertyExpense =
+      entry.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+      entry.expenseClassification === 'UNIT_EXPENSE' ||
+      Boolean(entry.propertyId) ||
+      Boolean(unitId);
+
+    if (isPropertyExpense && locationName) return locationName;
+    if (!rawDebit || /Clearing|External Parties/i.test(rawDebit)) {
+      const category = entry.categoryId || entry.entryData?.category;
+      const categoryName = category?.isMainHead
+        ? category.name
+        : category?.parentCategoryId?.name || category?.name || entry.entryData?.category?.name;
+      return categoryName || 'Expense Account';
+    }
+    return rawDebit;
+  };
+
   const accountName =
     entry.receivingAccountId?.name ||
     entry.crAccountId?.name ||
@@ -340,7 +371,7 @@ export default function EntryDetailScreen() {
             {!isRent && entry.drAccountId && (
               <View style={styles.voucherDocTableRow}>
                 <Text style={styles.voucherDocTableCellLabel}>Account (Dr)</Text>
-                <Text style={styles.voucherDocTableCellVal}>{entry.drAccountId?.name || 'Clearing Account'}</Text>
+                <Text style={styles.voucherDocTableCellVal}>{getExpenseDebitLabel(entry)}</Text>
               </View>
             )}
             <View style={styles.voucherDocTableRow}>

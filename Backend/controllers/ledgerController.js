@@ -9,7 +9,7 @@ import Category from '../models/Category.js';
 import OtherIncomeHead from '../models/OtherIncomeHead.js';
 import OtherIncome from '../models/OtherIncome.js';
 import Voucher from '../models/Voucher.js';
-import { round2 } from '../services/ledgerService.js';
+import { round2, resolveTransactionAccountDisplay } from '../services/ledgerService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
 /**
@@ -539,6 +539,7 @@ export const queryLedger = async (req, res) => {
 
       let runningExpenseSum = 0;
       ledgerEntries = transactions.map((tx) => {
+        const display = resolveTransactionAccountDisplay(tx);
         runningExpenseSum = round2(runningExpenseSum + tx.amount);
         totalDebit += tx.amount;
 
@@ -549,8 +550,8 @@ export const queryLedger = async (req, res) => {
           detail: tx.detail,
           transactionType: tx.transactionType,
           categoryName: tx.categoryId?.name || 'Expense',
-          drAccount: tx.drAccountId?.name || 'Expense Head',
-          crAccount: tx.crAccountId?.name || 'Paid From Account',
+          drAccount: display.dr || 'Expense Head',
+          crAccount: display.cr || 'Paid From Account',
           propertyName: tx.propertyId?.propertyName || tx.propertyId?.plazaName || '',
           tenantName: tx.tenantId?.tenantName || tx.tenantId?.name || '',
           reference: tx.reference || '',

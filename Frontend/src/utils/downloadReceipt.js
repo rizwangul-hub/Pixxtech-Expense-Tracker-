@@ -135,6 +135,9 @@ export function extractReceiptMetadata(entry) {
   const mainExpenseHeadName = entry.categoryId?.isMainHead
     ? entry.categoryId.name
     : entry.categoryId?.parentCategoryId?.name || categoryName;
+  const expenseDebitHeadName = [mainExpenseHeadName, categoryName]
+    .filter((name, index, names) => name && names.indexOf(name) === index)
+    .join(' ');
 
   const isRent =
     entry.entryType === 'RENT' ||
@@ -180,8 +183,8 @@ export function extractReceiptMetadata(entry) {
     const expenseLocationName = [propertyName, unitName].filter(Boolean).join(' - ');
     drAccount = isPropertyExpense && expenseLocationName
       ? expenseLocationName
-      : !drAccount || /Clearing|External Parties/i.test(drAccount)
-      ? mainExpenseHeadName
+      : !drAccount || /Clearing|External Parties/i.test(drAccount) || drAccount === mainExpenseHeadName
+      ? expenseDebitHeadName
       : drAccount;
     crAccount = crAccount || 'Paid From (Bank / Cash)';
   }

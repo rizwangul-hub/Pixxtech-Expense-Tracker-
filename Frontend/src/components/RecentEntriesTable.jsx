@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   FileText,
   Clock,
@@ -444,6 +444,7 @@ export const RecentEntriesTable = ({
 
       {/* ── TAB A: PENDING ENTRIES ─────────────────────────────────────────── */}
       {activeTab === 'pending' && (
+        <>
         <div className="overflow-x-auto table-responsive rounded-lg border border-slate-200">
           <table className="custom-table compact-table w-full table-fixed">
             <thead>
@@ -664,10 +665,12 @@ export const RecentEntriesTable = ({
             </div>
           </div>
         )}
+        </>
       )}
 
       {/* ── TAB B: VERIFIED ENTRIES ────────────────────────────────────────── */}
       {activeTab === 'verified' && (
+        <>
         <div className="overflow-x-auto table-responsive rounded-lg border border-slate-200">
           <table className="custom-table compact-table w-full table-fixed">
             <thead>
@@ -892,6 +895,7 @@ export const RecentEntriesTable = ({
             </div>
           </div>
         )}
+        </>
       )}
 
       {/* Print Single Voucher Modal */}

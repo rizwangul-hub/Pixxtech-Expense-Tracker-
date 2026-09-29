@@ -123,13 +123,36 @@ export default function PendingQueueScreen() {
     });
   };
 
+  const getExpenseDebitLabel = (entry: PendingEntryItem) => {
+    const rawDebit = entry.drAccountId?.name || '';
+    const property = entry.propertyId;
+    const propertyName = typeof property === 'object' ? property?.plazaName || property?.propertyName || '' : '';
+    const unitId = entry.unitId?._id || entry.unitId;
+    const unit = typeof entry.unitId === 'object' && entry.unitId
+      ? entry.unitId
+      : property && Array.isArray((property as any)?.units)
+        ? (property as any).units.find((candidate: any) => (candidate._id || candidate).toString() === String(unitId || ''))
+        : null;
+    const unitName = typeof unit === 'object' ? unit.unitName || unit.unitNumber || '' : '';
+    const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
+    const isPropertyExpense =
+      entry.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+      entry.expenseClassification === 'UNIT_EXPENSE' ||
+      Boolean(entry.propertyId) ||
+      Boolean(unitId);
+
+    if (isPropertyExpense && locationName) return locationName;
+    if (!rawDebit || /Clearing|External Parties/i.test(rawDebit)) return entry.categoryId?.name || 'Expense Account';
+    return rawDebit;
+  };
+
   const renderEntryItem = ({ item }: { item: PendingEntryItem }) => {
     const isExpense = item.entryType === 'EXPENSE';
     const isTransfer = item.entryType === 'TRANSFER';
     const isRent = item.entryType === 'RENT';
 
     const accountName = isExpense
-      ? item.drAccountId?.name || 'Expense Account'
+      ? getExpenseDebitLabel(item)
       : isTransfer
       ? `Dr: ${item.drAccountId?.name || item.receivingAccountId?.name || 'Dr'} / Cr: ${item.crAccountId?.name || 'Cr'}`
       : item.receivingAccountId?.name || 'Bank/Cash Account';

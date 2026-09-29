@@ -76,6 +76,29 @@ export default function TransactionsScreen() {
     loadTransactions();
   }, [loadTransactions]);
 
+  const getExpenseDebitLabel = (item: TransactionItem) => {
+    const rawDebit = item.drAccountId?.name || '';
+    const property = item.propertyId;
+    const propertyName = typeof property === 'object' ? property?.plazaName || property?.propertyName || '' : '';
+    const unitId = item.unitId?._id || item.unitId;
+    const unit = typeof item.unitId === 'object' && item.unitId
+      ? item.unitId
+      : property && Array.isArray((property as any)?.units)
+        ? (property as any).units.find((candidate: any) => (candidate._id || candidate).toString() === String(unitId || ''))
+        : null;
+    const unitName = typeof unit === 'object' ? unit.unitName || unit.unitNumber || '' : '';
+    const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
+    const isPropertyExpense =
+      item.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+      item.expenseClassification === 'UNIT_EXPENSE' ||
+      Boolean(item.propertyId) ||
+      Boolean(unitId);
+
+    if (isPropertyExpense && locationName) return locationName;
+    if (!rawDebit || /Clearing|External Parties/i.test(rawDebit)) return item.categoryId?.name || 'Expense Account';
+    return rawDebit;
+  };
+
   const renderTransaction = ({ item }: { item: TransactionItem }) => {
     const isExpense = item.transactionType === 'EXPENSE';
     const isRent = item.transactionType === 'RENT';
@@ -83,7 +106,7 @@ export default function TransactionsScreen() {
     const categoryName = item.categoryId?.name || (isRent ? 'Rental Income' : 'General');
     const propertyName = item.propertyId?.plazaName || 'General / None';
     const creditAccount = item.crAccountId?.name || '—';
-    const debitAccount = item.drAccountId?.name || '—';
+    const debitAccount = isExpense ? getExpenseDebitLabel(item) : item.drAccountId?.name || '—';
 
     return (
       <View style={styles.card}>

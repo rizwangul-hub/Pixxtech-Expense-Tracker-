@@ -508,7 +508,7 @@ export default function VerificationDetailScreen() {
             {!isRent && entry.drAccountId && (
               <View style={styles.voucherDocTableRow}>
                 <Text style={styles.voucherDocTableCellLabel}>Account (Dr)</Text>
-                <Text style={styles.voucherDocTableCellVal}>{entry.drAccountId?.name || 'Clearing Account'}</Text>
+                <Text style={styles.voucherDocTableCellVal}>{getExpenseDebitLabel(entry)}</Text>
               </View>
             )}
             <View style={styles.voucherDocTableRow}>
