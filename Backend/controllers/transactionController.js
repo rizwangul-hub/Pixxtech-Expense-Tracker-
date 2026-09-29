@@ -1,10 +1,11 @@
 import Transaction from '../models/Transaction.js';
 import PendingEntry from '../models/PendingEntry.js';
 import Account from '../models/Account.js';
+import Category from '../models/Category.js';
 import MonthlyReport from '../models/MonthlyReport.js';
 import { createTransaction, round2, suggestNextVoucherNumber, syncAccountBalances } from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
-import { validateExpenseClassification } from '../services/expenseClassificationService.js';
+import { validateExpenseClassification, isOwnerPersonalCategory } from '../services/expenseClassificationService.js';
 
 /**
  * @desc    Record a new double-entry voucher transaction
@@ -124,6 +125,16 @@ export const recordVoucher = async (req, res) => {
       });
     }
 
+    // Detect owner personal category to tag transaction correctly
+    let ownerPersonalTag = {};
+    if (categoryId) {
+      const catDoc = await Category.findById(categoryId).populate('parentCategoryId', 'name').lean();
+      const parentDoc = catDoc?.parentCategoryId && typeof catDoc.parentCategoryId === 'object' ? catDoc.parentCategoryId : null;
+      if (isOwnerPersonalCategory(catDoc) || (parentDoc && isOwnerPersonalCategory(parentDoc))) {
+        ownerPersonalTag = { reportCategory: 'Owner Personal', sourceModule: 'OWNER_PERSONAL' };
+      }
+    }
+
     // 5. Invoke atomic ledger service
     const transaction = await createTransaction({
       date: date ? new Date(date) : new Date(),
@@ -142,6 +153,7 @@ export const recordVoucher = async (req, res) => {
       status: 'PENDING',
       createdBy: req.user._id,
       checkedBy: req.user.name,
+      ...ownerPersonalTag,
     });
 
     // Populate for response

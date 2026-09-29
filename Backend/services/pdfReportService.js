@@ -17,6 +17,7 @@ import {
   round2,
 } from './ledgerService.js';
 import { getUtcMonthDateRange, getUtcMonthEndDate } from './salaryReportingService.js';
+import { isOwnerPersonalTransaction } from './expenseClassificationService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -137,7 +138,8 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   const { grandTotal, rows: matrixRows } = matrixData;
 
   // Query real transactions for income & expenses to compute authoritative macro figures
-  const [rentTxs, otherIncomeTxs, expenseTxs] = await Promise.all([
+  // Query real transactions for income & expenses to compute authoritative macro figures
+  const [rentTxs, rawOtherIncomeTxs, rawExpenseTxs] = await Promise.all([
     Transaction.find({
       date: { $gte: startDate, $lte: endDate },
       transactionType: 'INCOME',
@@ -147,15 +149,23 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     Transaction.find({
       date: { $gte: startDate, $lte: endDate },
       transactionType: 'INCOME',
-      reportCategory: 'Other Income',
+      reportCategory: { $in: ['Other Income', 'Owner Personal'] },
       $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
-    }).lean(),
+    })
+      .populate({ path: 'categoryId', select: 'name parentCategoryId', populate: { path: 'parentCategoryId', select: 'name' } })
+      .lean(),
     Transaction.find({
       date: { $gte: startDate, $lte: endDate },
       transactionType: 'EXPENSE',
       $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
-    }).lean(),
+    })
+      .populate({ path: 'categoryId', select: 'name parentCategoryId', populate: { path: 'parentCategoryId', select: 'name' } })
+      .lean(),
   ]);
+
+  // Exclude owner personal funds from Page 1 business figures
+  const otherIncomeTxs = rawOtherIncomeTxs.filter((tx) => !isOwnerPersonalTransaction(tx));
+  const expenseTxs = rawExpenseTxs.filter((tx) => !isOwnerPersonalTransaction(tx));
 
   const totalRentalIncomeReceived = round2(rentTxs.reduce((sum, t) => sum + (t.amount || 0), 0));
   const totalOtherReceipts = round2(otherIncomeTxs.reduce((sum, t) => sum + (t.amount || 0), 0));

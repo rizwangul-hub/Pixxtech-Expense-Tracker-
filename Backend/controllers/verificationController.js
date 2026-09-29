@@ -25,7 +25,7 @@ import {
   getOrCreateSalariesCategory,
 } from './payrollController.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
-import { validateExpenseClassification } from '../services/expenseClassificationService.js';
+import { validateExpenseClassification, isOwnerPersonalCategory } from '../services/expenseClassificationService.js';
 import { generateReceiptEvidencePDF } from '../services/pdfReportService.js';
 import {
   getSalaryPaymentDetail,
@@ -803,6 +803,16 @@ export const verifyEntry = async (req, res) => {
         });
       }
 
+      // Detect owner personal category to tag transaction correctly
+      let ownerPersonalTag = {};
+      if (entry.categoryId) {
+        const catDoc = await Category.findById(entry.categoryId).populate('parentCategoryId', 'name').lean();
+        const parentDoc = catDoc?.parentCategoryId && typeof catDoc.parentCategoryId === 'object' ? catDoc.parentCategoryId : null;
+        if (isOwnerPersonalCategory(catDoc) || (parentDoc && isOwnerPersonalCategory(parentDoc))) {
+          ownerPersonalTag = { reportCategory: 'Owner Personal', sourceModule: 'OWNER_PERSONAL' };
+        }
+      }
+
       // 1. Post expense voucher transaction on the cash/activity date (report month)
       postedTransaction = await createTransaction({
         date: normalizeBusinessPaymentDate(entry.date),
@@ -821,6 +831,7 @@ export const verifyEntry = async (req, res) => {
         status: 'VERIFIED',
         checkedBy: req.user.name,
         createdBy: entry.submittedBy,
+        ...ownerPersonalTag,
       });
 
       entry.postedTransactionId = postedTransaction._id;

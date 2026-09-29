@@ -355,6 +355,72 @@ export const provisionStandardCategories = async (force = false) => {
       }
     }
 
+    // 3. Provision Boss / Owner Personal Categories (Inflow & Outflow)
+    let expenseMain = await Category.findOne({
+      name: { $regex: /^Boss \/ Owner Personal Expenses$/i },
+      type: 'EXPENSE',
+    });
+    if (!expenseMain) {
+      expenseMain = await Category.create({
+        name: 'Boss / Owner Personal Expenses',
+        type: 'EXPENSE',
+        expenseClassification: 'GENERAL_EXPENSE',
+        propertyId: null,
+        unitId: null,
+        parentCategoryId: null,
+        isMainHead: true,
+        isRentalHead: false,
+      });
+      createdCount++;
+    }
+
+    const subHeads = [
+      'Daughter Education Fee',
+      'Vehicle / Car Purchase & Expenses',
+      'Personal Drawings & Outflows',
+    ];
+    for (const name of subHeads) {
+      const existing = await Category.findOne({
+        name: { $regex: `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+        type: 'EXPENSE',
+      });
+      if (!existing) {
+        await Category.create({
+          name,
+          type: 'EXPENSE',
+          expenseClassification: 'GENERAL_EXPENSE',
+          propertyId: null,
+          unitId: null,
+          parentCategoryId: expenseMain._id,
+          isMainHead: false,
+          isRentalHead: false,
+        });
+        createdCount++;
+      } else if (!existing.parentCategoryId) {
+        existing.parentCategoryId = expenseMain._id;
+        existing.isMainHead = false;
+        await existing.save();
+      }
+    }
+
+    const incomeHead = await Category.findOne({
+      name: { $regex: /^Boss \/ Owner Personal Funds$/i },
+      type: 'INCOME',
+    });
+    if (!incomeHead) {
+      await Category.create({
+        name: 'Boss / Owner Personal Funds',
+        type: 'INCOME',
+        expenseClassification: 'GENERAL_EXPENSE',
+        propertyId: null,
+        unitId: null,
+        parentCategoryId: null,
+        isMainHead: true,
+        isRentalHead: false,
+      });
+      createdCount++;
+    }
+
     hasProvisioned = true;
     return { createdCount };
   } catch (err) {
@@ -369,13 +435,37 @@ export const isSalaryHeadName = (value = '') => /^salar(?:y|ies)$/i.test(String(
 
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+export const isOwnerPersonalCategory = (category = {}) => {
+  if (!category || typeof category !== 'object') return false;
+  const name = String(category.name || '').trim();
+  return /boss|owner personal|kamran ijaz sb personal|drawings/i.test(name);
+};
+
+export const isOwnerPersonalTransaction = (tx = {}) => {
+  if (!tx || typeof tx !== 'object') return false;
+  const category = tx.categoryId && typeof tx.categoryId === 'object' ? tx.categoryId : {};
+  const parent = category.parentCategoryId && typeof category.parentCategoryId === 'object'
+    ? category.parentCategoryId
+    : {};
+  const categoryName = String(category.name || tx.categoryName || '').trim();
+  const parentName = String(parent.name || '').trim();
+  return (
+    isOwnerPersonalCategory(category) ||
+    isOwnerPersonalCategory(parent) ||
+    /boss|owner personal|kamran ijaz sb personal/i.test(categoryName) ||
+    /boss|owner personal|kamran ijaz sb personal/i.test(parentName)
+  );
+};
+
 export const isNonExpenseChartCategory = (category = {}) => {
   if (!category || typeof category !== 'object') return false;
   const type = String(category.type || '').toUpperCase();
   if (type && type !== 'EXPENSE') return true;
   if (category.isRentalHead) return true;
   const name = String(category.name || '').trim();
-  return /^(?:rent|rental income|internal(?: funds?)?\s+transfers?)$/i.test(name);
+  if (/^(?:rent|rental income|internal(?: funds?)?\s+transfers?)$/i.test(name)) return true;
+  if (isOwnerPersonalCategory(category)) return true;
+  return false;
 };
 
 export const isNonExpenseTransaction = (tx = {}) => {
@@ -389,7 +479,11 @@ export const isNonExpenseTransaction = (tx = {}) => {
   const parent = category.parentCategoryId && typeof category.parentCategoryId === 'object'
     ? category.parentCategoryId
     : {};
-  return isNonExpenseChartCategory(category) || isNonExpenseChartCategory(parent);
+  return (
+    isNonExpenseChartCategory(category) ||
+    isNonExpenseChartCategory(parent) ||
+    isOwnerPersonalTransaction(tx)
+  );
 };
 
 export const isFoundationExpenseContext = (categoryName = '', parentName = '') =>
@@ -516,6 +610,8 @@ export default {
   isSalaryHeadName,
   isNonExpenseChartCategory,
   isNonExpenseTransaction,
+  isOwnerPersonalCategory,
+  isOwnerPersonalTransaction,
   isHrSalaryTransaction,
   salaryChildHeadName,
   ensureCanonicalSalaryHead,

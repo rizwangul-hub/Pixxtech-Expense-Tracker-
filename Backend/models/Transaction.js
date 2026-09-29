@@ -116,7 +116,7 @@ const transactionSchema = new mongoose.Schema(
     reportCategory: {
       type: String,
       enum: {
-        values: ['Payments', 'Rent', 'Other Income', 'Transfer', 'Opening Balance'],
+        values: ['Payments', 'Rent', 'Other Income', 'Transfer', 'Opening Balance', 'Owner Personal'],
         message: 'Invalid report category',
       },
       default: null,
@@ -133,6 +133,7 @@ const transactionSchema = new mongoose.Schema(
           'OTHER_PAYMENT',
           'OPENING_BALANCE',
           'MANUAL_VOUCHER',
+          'OWNER_PERSONAL',
         ],
         message: 'Invalid source module',
       },
