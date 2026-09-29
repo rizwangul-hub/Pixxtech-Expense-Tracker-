@@ -640,10 +640,27 @@ export const financialReportsAPI = {
   },
   downloadPDF: async (month) => {
     const params = month ? { month } : {};
-    const res = await api.get('/reports/funds-management-pdf', {
-      params,
-      responseType: 'blob',
-    });
+    let res;
+    try {
+      res = await api.get('/reports/funds-management-pdf', {
+        params,
+        responseType: 'blob',
+      });
+    } catch (error) {
+      const responseData = error?.response?.data;
+      if (typeof Blob !== 'undefined' && responseData instanceof Blob) {
+        const responseText = await responseData.text();
+        let message = responseText || error.message;
+        try {
+          const errorBody = JSON.parse(responseText);
+          message = errorBody?.error || errorBody?.message || message;
+        } catch (parseError) {
+          if (!(parseError instanceof SyntaxError)) throw parseError;
+        }
+        throw new Error(message);
+      }
+      throw error;
+    }
     const blob = new Blob([res.data], { type: 'application/pdf' });
     const downloadUrl = window.URL.createObjectURL(blob);
     const link = document.createElement('a');

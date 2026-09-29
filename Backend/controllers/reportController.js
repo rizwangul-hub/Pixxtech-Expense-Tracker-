@@ -103,6 +103,7 @@ export const downloadFundsReportPDF = async (req, res) => {
     res.setHeader('Content-Length', pdfBuffer.length);
     return res.status(200).send(pdfBuffer);
   } catch (error) {
+    console.error('Failed to generate monthly funds report PDF:', error);
     return res.status(500).json({ success: false, message: 'Failed to generate PDF.', error: error.message });
   }
 };
