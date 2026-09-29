@@ -252,6 +252,73 @@ export const updateIncomeHead = async (req, res) => {
 };
 
 /**
+ * @desc    Delete an Other Income Head
+ * @route   DELETE /api/other-income/heads/:id
+ * @access  Private (Admin Only)
+ */
+export const deleteIncomeHead = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const head = await OtherIncomeHead.findById(id);
+    if (!head) {
+      return res.status(404).json({
+        success: false,
+        message: 'Income Head not found.',
+      });
+    }
+
+    // Check if this head has any existing other income receipts or transactions
+    const existingReceipts = await OtherIncome.countDocuments({
+      incomeHeadId: id,
+      status: { $ne: 'REVERSED' },
+    });
+
+    const matchingCategory = await Category.findOne({ name: head.name });
+    let existingTxCount = 0;
+    if (matchingCategory) {
+      existingTxCount = await Transaction.countDocuments({
+        categoryId: matchingCategory._id,
+        $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+      });
+    }
+
+    if (existingReceipts > 0 || existingTxCount > 0) {
+      // Soft-deactivate to preserve historical financial ledger integrity
+      head.isActive = false;
+      head.updatedBy = req.user?._id;
+      await head.save();
+
+      return res.status(200).json({
+        success: true,
+        message: `Income Head "${head.name}" has ${existingReceipts + existingTxCount} posted financial entries. It has been deactivated to preserve ledger history.`,
+        deactivated: true,
+        data: head,
+      });
+    }
+
+    // Hard delete if no transactions exist
+    await OtherIncomeHead.findByIdAndDelete(id);
+    if (matchingCategory) {
+      await Category.findByIdAndDelete(matchingCategory._id);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Income Head "${head.name}" deleted successfully.`,
+      deleted: true,
+    });
+  } catch (error) {
+    console.error('deleteIncomeHead error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete Income Head',
+      error: error.message,
+    });
+  }
+};
+
+/**
  * @desc    Record an Other Income Receipt (with Central Voucher & Double-Entry Ledger)
  * @route   POST /api/other-income
  * @access  Private (Data Entry, Admin, Admin Publisher)

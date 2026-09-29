@@ -589,6 +589,11 @@ export const otherIncomeAPI = {
     invalidateCacheKey('other-income-heads');
     return res.data;
   },
+  deleteHead: async (id) => {
+    const res = await api.delete(`/other-income/heads/${id}`);
+    invalidateCacheKey('other-income-heads');
+    return res.data;
+  },
   getAll: async (params = {}) => {
     const res = await api.get('/other-income', { params });
     return res.data;

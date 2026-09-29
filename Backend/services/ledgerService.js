@@ -835,8 +835,8 @@ export const getHeadWiseExpenseReport = async (year, month, filters = {}) => {
     date: { $gte: startOfMonth, $lte: endOfMonth },
     categoryId: { $in: expenseCatIds },
     transactionType: 'EXPENSE',
-    reportCategory: { $nin: ['Rent', 'Other Income', 'Transfer', 'Opening Balance'] },
-    sourceModule: { $nin: ['RENT_RECEIVED', 'TRANSFER', 'OTHER_INCOME', 'OPENING_BALANCE'] },
+    reportCategory: { $nin: ['Rent', 'Other Income', 'Transfer', 'Opening Balance', 'Owner Personal'] },
+    sourceModule: { $nin: ['RENT_RECEIVED', 'TRANSFER', 'OTHER_INCOME', 'OPENING_BALANCE', 'OWNER_PERSONAL'] },
     $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   };
   if (filters.propertyId && filters.propertyId !== 'ALL') {

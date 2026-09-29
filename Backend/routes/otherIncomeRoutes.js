@@ -3,6 +3,7 @@ import {
   getIncomeHeads,
   createIncomeHead,
   updateIncomeHead,
+  deleteIncomeHead,
   recordOtherIncome,
   getAllOtherIncome,
   getOtherIncomeById,
@@ -20,6 +21,7 @@ router.use(protect);
 router.get('/heads', getIncomeHeads);
 router.post('/heads', authorize('ADMIN_PUBLISHER', 'ADMIN'), createIncomeHead);
 router.put('/heads/:id', authorize('ADMIN_PUBLISHER', 'ADMIN'), updateIncomeHead);
+router.delete('/heads/:id', authorize('ADMIN_PUBLISHER', 'ADMIN'), deleteIncomeHead);
 
 // 2. Financial Summaries
 router.get('/monthly-summary', getMonthlyOtherIncomeSummary);

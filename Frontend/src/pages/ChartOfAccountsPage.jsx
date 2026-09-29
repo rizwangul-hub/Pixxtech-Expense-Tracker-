@@ -19,8 +19,10 @@ import {
   FileText,
   ChevronRight,
   Eye,
+  Pencil,
+  BookOpen,
 } from 'lucide-react';
-import { accountsAPI, otherIncomeAPI, propertiesAPI, vouchersAPI } from '../services/api.js';
+import { accountsAPI, otherIncomeAPI, propertiesAPI, vouchersAPI, ledgersAPI } from '../services/api.js';
 import { formatPKR, resolveTransactionAccounts } from '../utils/formatters.js';
 
 const initialProperty = {
@@ -76,7 +78,7 @@ const isExpenseChartCategory = (category) => {
   return !isNonExpenseHead(category) && !isNonExpenseHead(parent);
 };
 
-export function ChartOfAccountsPage({ currentUser }) {
+export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
   // Navigation sub-tab state
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'expense' | 'account' | 'property' | 'income'
 
@@ -105,6 +107,13 @@ export function ChartOfAccountsPage({ currentUser }) {
   const [headTransactions, setHeadTransactions] = useState([]);
   const [loadingHeadDetails, setLoadingHeadDetails] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+
+  // Income Head Edit & Ledger states
+  const [editingIncomeHead, setEditingIncomeHead] = useState(null);
+  const [deletingIncomeHeadId, setDeletingIncomeHeadId] = useState(null);
+  const [selectedIncomeHeadForLedger, setSelectedIncomeHeadForLedger] = useState(null);
+  const [incomeHeadLedgerData, setIncomeHeadLedgerData] = useState(null);
+  const [loadingIncomeHeadLedger, setLoadingIncomeHeadLedger] = useState(false);
 
   const handleViewHeadDetails = async (category) => {
     setSelectedHeadForDetails(category);
@@ -350,6 +359,57 @@ export function ChartOfAccountsPage({ currentUser }) {
       notify('error', error.response?.data?.message || error.message || 'Failed to create income head.');
     } finally {
       setSaving('');
+    }
+  };
+
+  // 5. Update Existing Other Income Head
+  const handleUpdateIncomeHead = async (e) => {
+    e.preventDefault();
+    if (!editingIncomeHead?.name?.trim()) return;
+    try {
+      await otherIncomeAPI.updateHead(editingIncomeHead._id, {
+        name: editingIncomeHead.name.trim(),
+        code: editingIncomeHead.code?.trim() || '',
+        description: editingIncomeHead.description?.trim() || '',
+        isActive: editingIncomeHead.isActive !== false,
+      });
+      setEditingIncomeHead(null);
+      notify('success', 'Income Head updated successfully.');
+      await loadChartData();
+    } catch (err) {
+      notify('error', err.response?.data?.message || err.message || 'Failed to update income head.');
+    }
+  };
+
+  // 6. Delete or Deactivate Other Income Head
+  const handleDeleteIncomeHead = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete or deactivate Income Head "${name}"?`)) return;
+    try {
+      setDeletingIncomeHeadId(id);
+      const res = await otherIncomeAPI.deleteHead(id);
+      notify('success', res.message || `Income Head "${name}" removed.`);
+      await loadChartData();
+    } catch (err) {
+      notify('error', err.response?.data?.message || err.message || 'Failed to delete income head.');
+    } finally {
+      setDeletingIncomeHeadId(null);
+    }
+  };
+
+  // 7. View Detailed Income Head Ledger
+  const handleViewIncomeHeadLedger = async (head) => {
+    setSelectedIncomeHeadForLedger(head);
+    setLoadingIncomeHeadLedger(true);
+    try {
+      const res = await ledgersAPI.queryLedger({
+        type: 'OTHER_INCOME',
+        entityId: head._id,
+      });
+      setIncomeHeadLedgerData(res.data || res);
+    } catch (err) {
+      notify('error', 'Failed to load ledger for this Income Head.');
+    } finally {
+      setLoadingIncomeHeadLedger(false);
     }
   };
 
@@ -1271,19 +1331,58 @@ export function ChartOfAccountsPage({ currentUser }) {
                     <div className="p-4 text-center text-xs text-slate-500 font-semibold">No other-income heads found.</div>
                   ) : (
                     filteredIncomeHeads.map((h, i) => (
-                      <div key={h._id || i} className="p-3 flex items-center justify-between hover:bg-slate-50">
-                        <div className="flex items-center gap-3">
-                          <CircleDollarSign size={16} className="text-teal-600" />
-                          <div>
-                            <div className="text-xs font-bold text-slate-900">{h.name}</div>
-                            <div className="text-[10px] text-slate-500 font-medium">{h.description || 'General Income Head'}</div>
+                      <div key={h._id || i} className="p-3 flex items-center justify-between hover:bg-slate-50 transition gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <CircleDollarSign size={18} className="text-teal-600 shrink-0" />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-900 truncate">{h.name}</span>
+                              {h.isActive === false && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold border border-amber-200">
+                                  Inactive
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-medium truncate">{h.description || 'General Income Head'}</div>
                           </div>
                         </div>
-                        {h.code && (
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
-                            {h.code}
-                          </span>
-                        )}
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {h.code && (
+                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
+                              {h.code}
+                            </span>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleViewIncomeHeadLedger(h)}
+                            className="px-2 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-bold text-[11px] flex items-center gap-1 transition shadow-2xs border border-teal-200"
+                            title={`View Ledger for ${h.name}`}
+                          >
+                            <BookOpen size={12} />
+                            Ledger
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditingIncomeHead({ ...h })}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-700 transition"
+                            title="Edit Income Head"
+                          >
+                            <Pencil size={13} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteIncomeHead(h._id, h.name)}
+                            disabled={deletingIncomeHeadId === h._id}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 transition disabled:opacity-50"
+                            title="Delete or Deactivate Income Head"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -1511,6 +1610,211 @@ export function ChartOfAccountsPage({ currentUser }) {
               <button type="submit" className="px-4 py-2 rounded-lg bg-rose-700 text-white text-xs font-bold">Save Changes</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Edit Other Income Head Modal */}
+      {editingIncomeHead && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <form onSubmit={handleUpdateIncomeHead} className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <CircleDollarSign size={20} className="text-teal-600" />
+                <h2 className="text-base font-black text-slate-900">Edit Other Income Head</h2>
+              </div>
+              <button type="button" onClick={() => setEditingIncomeHead(null)} className="p-1 text-slate-400 hover:text-slate-700">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Income Head Name *</label>
+              <input
+                type="text"
+                required
+                value={editingIncomeHead.name || ''}
+                onChange={(e) => setEditingIncomeHead({ ...editingIncomeHead, name: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold"
+                placeholder="e.g. Scrap & Asset Sale"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Head Code / Short Code</label>
+              <input
+                type="text"
+                value={editingIncomeHead.code || ''}
+                onChange={(e) => setEditingIncomeHead({ ...editingIncomeHead, code: e.target.value.toUpperCase() })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold"
+                placeholder="e.g. OIR-SCRAP"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Description / Notes</label>
+              <textarea
+                rows="2"
+                value={editingIncomeHead.description || ''}
+                onChange={(e) => setEditingIncomeHead({ ...editingIncomeHead, description: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg p-2.5 text-xs font-semibold"
+                placeholder="Description of receipts under this head..."
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="edit-head-active"
+                checked={editingIncomeHead.isActive !== false}
+                onChange={(e) => setEditingIncomeHead({ ...editingIncomeHead, isActive: e.target.checked })}
+                className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+              />
+              <label htmlFor="edit-head-active" className="text-xs font-bold text-slate-700 cursor-pointer">
+                Active in System (Shows in Data Entry Dropdowns)
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+              <button type="button" onClick={() => setEditingIncomeHead(null)} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition">
+                Cancel
+              </button>
+              <button type="submit" className="px-4 py-2 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition">
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Detailed Income Head Ledger Modal */}
+      {selectedIncomeHeadForLedger && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-start justify-between border-b border-slate-200 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <CircleDollarSign size={20} className="text-teal-600" />
+                  <h2 className="text-lg font-black text-slate-900">
+                    Income Head Ledger: {selectedIncomeHeadForLedger.name}
+                  </h2>
+                </div>
+                <p className="text-xs font-semibold text-slate-500 mt-1">
+                  Code: {selectedIncomeHeadForLedger.code || 'INC'} &bull; {selectedIncomeHeadForLedger.description || 'Non-Rental Operational Receipts'}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedIncomeHeadForLedger(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Total Aggregate Summary */}
+            <div className="grid grid-cols-3 gap-3 bg-teal-50/60 p-3.5 rounded-xl border border-teal-200">
+              <div>
+                <span className="text-[11px] font-bold uppercase text-slate-500">Total Receipts</span>
+                <div className="text-xl font-black text-slate-900 font-mono mt-0.5">
+                  {incomeHeadLedgerData?.summary?.entryCount || incomeHeadLedgerData?.entries?.length || 0}
+                </div>
+              </div>
+              <div>
+                <span className="text-[11px] font-bold uppercase text-slate-500">Total Inflow Received</span>
+                <div className="text-xl font-black text-teal-700 font-mono mt-0.5">
+                  {formatPKR(incomeHeadLedgerData?.summary?.totalCredit || 0)}
+                </div>
+              </div>
+              <div>
+                <span className="text-[11px] font-bold uppercase text-slate-500">Cumulative Ledger Balance</span>
+                <div className="text-xl font-black text-slate-900 font-mono mt-0.5">
+                  {formatPKR(incomeHeadLedgerData?.summary?.closingBalance || 0)}
+                </div>
+              </div>
+            </div>
+
+            {/* Itemized Transactions Table */}
+            <div className="flex-1 overflow-y-auto border border-slate-200 rounded-xl bg-white">
+              {loadingIncomeHeadLedger ? (
+                <div className="p-8 text-center text-xs font-bold text-slate-500 flex items-center justify-center gap-2">
+                  <RefreshCw size={16} className="animate-spin text-teal-600" />
+                  Loading income head ledger...
+                </div>
+              ) : !incomeHeadLedgerData?.entries || incomeHeadLedgerData.entries.length === 0 ? (
+                <div className="p-8 text-center text-xs font-bold text-slate-500">
+                  No income entries recorded under this head yet.
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-extrabold uppercase text-[10px]">
+                    <tr>
+                      <th className="p-3">Date</th>
+                      <th className="p-3">Voucher #</th>
+                      <th className="p-3">Transaction Detail / Narration</th>
+                      <th className="p-3">Received From</th>
+                      <th className="p-3">Deposited In (Dr)</th>
+                      <th className="p-3 text-right">Credit Inflow (PKR)</th>
+                      <th className="p-3 text-right">Running Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 font-semibold text-slate-900">
+                    {incomeHeadLedgerData.entries.map((tx) => (
+                      <tr key={tx._id} className="hover:bg-slate-50 transition">
+                        <td className="p-3 whitespace-nowrap text-slate-600 font-mono">
+                          {tx.date ? new Date(tx.date).toLocaleDateString('en-GB') : '-'}
+                        </td>
+                        <td className="p-3 font-mono font-bold text-blue-700 whitespace-nowrap">
+                          {tx.voucherNo}
+                        </td>
+                        <td className="p-3 max-w-xs truncate">
+                          <div className="font-bold text-slate-900">{tx.detail}</div>
+                          {tx.propertyName && (
+                            <div className="text-[10px] text-slate-500">
+                              Property: {tx.propertyName}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 whitespace-nowrap text-slate-700 font-medium">
+                          {tx.receivedFrom || '-'}
+                        </td>
+                        <td className="p-3 whitespace-nowrap text-slate-600 font-medium">
+                          {tx.drAccount || '-'}
+                        </td>
+                        <td className="p-3 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
+                          {formatPKR(tx.credit || tx.amount || 0)}
+                        </td>
+                        <td className="p-3 text-right font-mono font-black text-slate-900 whitespace-nowrap">
+                          {formatPKR(tx.balance || 0)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+              {onNavigateToLedgers ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedIncomeHeadForLedger(null);
+                    onNavigateToLedgers('OTHER_INCOME', selectedIncomeHeadForLedger._id);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 font-bold text-xs hover:bg-teal-100 transition flex items-center gap-1.5"
+                >
+                  <BookOpen size={14} /> Open in Central Ledger Screen
+                </button>
+              ) : <div />}
+
+              <button
+                type="button"
+                onClick={() => setSelectedIncomeHeadForLedger(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-white font-bold text-xs hover:bg-slate-900 transition"
+              >
+                Close Ledger
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

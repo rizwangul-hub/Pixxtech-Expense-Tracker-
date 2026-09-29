@@ -85,6 +85,7 @@ export function App() {
   const [selectedPropertyId, setSelectedPropertyId] = useState(null);
   const [selectedTenantId, setSelectedTenantId] = useState(null);
   const [selectedAccountId, setSelectedAccountId] = useState(null);
+  const [ledgerParams, setLedgerParams] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Initialize auth state from localStorage
@@ -333,9 +334,19 @@ export function App() {
           onNavigateToTransactions={() => setCurrentSection('transactions')}
         />
       ) : currentSection === 'chart-of-accounts' && isAdmin(user) ? (
-        <ChartOfAccountsPage currentUser={user} />
+        <ChartOfAccountsPage
+          currentUser={user}
+          onNavigateToLedgers={(type, entityId) => {
+            setLedgerParams({ type, entityId });
+            setCurrentSection('ledgers');
+          }}
+        />
       ) : currentSection === 'ledgers' ? (
-        <LedgersPage currentUser={user} />
+        <LedgersPage
+          currentUser={user}
+          initialType={ledgerParams?.type}
+          initialEntityId={ledgerParams?.entityId}
+        />
       ) : currentSection === 'accounts' || currentSection === 'settings' ? (
         <AccountsPage
           currentUser={user}

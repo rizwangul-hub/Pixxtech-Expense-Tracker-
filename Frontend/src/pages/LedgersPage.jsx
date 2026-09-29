@@ -23,16 +23,16 @@ import { ledgersAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
 import SingleVoucherPrintModal from '../components/SingleVoucherPrintModal.jsx';
 
-export function LedgersPage({ currentUser }) {
+export function LedgersPage({ currentUser, initialType, initialEntityId }) {
   // Ledger Type Selector
-  const [ledgerType, setLedgerType] = useState('BANK');
+  const [ledgerType, setLedgerType] = useState(initialType || 'BANK');
 
   // Print Modal State
   const [printVoucherId, setPrintVoucherId] = useState(null);
 
   // Selectable entities
   const [entities, setEntities] = useState([]);
-  const [selectedEntityId, setSelectedEntityId] = useState('');
+  const [selectedEntityId, setSelectedEntityId] = useState(initialEntityId || '');
 
   // Date Filtering Controls
   const [datePreset, setDatePreset] = useState('THIS_MONTH');
@@ -67,8 +67,10 @@ export function LedgersPage({ currentUser }) {
       else if (type === 'OTHER_INCOME') list = data.otherIncomeHeads || [];
 
       setEntities(list);
-      // Auto select first entity if available
-      if (list.length > 0) {
+      // Auto select initial entity or first entity if available
+      if (initialEntityId && list.some((item) => String(item.id) === String(initialEntityId))) {
+        setSelectedEntityId(initialEntityId);
+      } else if (list.length > 0) {
         setSelectedEntityId(list[0].id);
       } else {
         setSelectedEntityId('');

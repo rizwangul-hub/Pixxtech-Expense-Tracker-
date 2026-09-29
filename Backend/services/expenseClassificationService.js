@@ -438,22 +438,31 @@ const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$
 export const isOwnerPersonalCategory = (category = {}) => {
   if (!category || typeof category !== 'object') return false;
   const name = String(category.name || '').trim();
-  return /boss|owner personal|kamran ijaz sb personal|drawings/i.test(name);
+  return /boss|owner personal|kamran ijaz|drawings|daughter.*fee|vehicle.*purchase|personal.*drawing|aleeha kamran/i.test(name);
 };
 
 export const isOwnerPersonalTransaction = (tx = {}) => {
   if (!tx || typeof tx !== 'object') return false;
+
+  // Direct tags
+  if (tx.reportCategory === 'Owner Personal' || tx.sourceModule === 'OWNER_PERSONAL') {
+    return true;
+  }
+
   const category = tx.categoryId && typeof tx.categoryId === 'object' ? tx.categoryId : {};
   const parent = category.parentCategoryId && typeof category.parentCategoryId === 'object'
     ? category.parentCategoryId
     : {};
   const categoryName = String(category.name || tx.categoryName || '').trim();
   const parentName = String(parent.name || '').trim();
+  const detail = String(tx.detail || '').trim();
+
   return (
     isOwnerPersonalCategory(category) ||
     isOwnerPersonalCategory(parent) ||
-    /boss|owner personal|kamran ijaz sb personal/i.test(categoryName) ||
-    /boss|owner personal|kamran ijaz sb personal/i.test(parentName)
+    /boss|owner personal|kamran ijaz|drawings|daughter.*fee|vehicle.*purchase|personal.*drawing|aleeha kamran/i.test(categoryName) ||
+    /boss|owner personal|kamran ijaz|drawings|daughter.*fee|vehicle.*purchase|personal.*drawing|aleeha kamran/i.test(parentName) ||
+    /boss.*personal|kamran ijaz.*personal/i.test(detail)
   );
 };
 
@@ -472,9 +481,9 @@ export const isNonExpenseTransaction = (tx = {}) => {
   const type = String(tx.transactionType || '').toUpperCase();
   if (['TRANSFER', 'INCOME', 'OPENING_BALANCE'].includes(type)) return true;
   const reportCategory = String(tx.reportCategory || '').toLowerCase();
-  if (['rent', 'other income', 'transfer', 'opening balance'].includes(reportCategory)) return true;
+  if (['rent', 'other income', 'transfer', 'opening balance', 'owner personal'].includes(reportCategory)) return true;
   const sourceModule = String(tx.sourceModule || '').toUpperCase();
-  if (['RENT_RECEIVED', 'TRANSFER', 'OTHER_INCOME', 'OPENING_BALANCE'].includes(sourceModule)) return true;
+  if (['RENT_RECEIVED', 'TRANSFER', 'OTHER_INCOME', 'OPENING_BALANCE', 'OWNER_PERSONAL'].includes(sourceModule)) return true;
   const category = tx.categoryId && typeof tx.categoryId === 'object' ? tx.categoryId : {};
   const parent = category.parentCategoryId && typeof category.parentCategoryId === 'object'
     ? category.parentCategoryId
