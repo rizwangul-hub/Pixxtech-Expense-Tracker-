@@ -16,7 +16,7 @@ import {
   buildHeadWiseReportItems,
   round2,
 } from './ledgerService.js';
-import { getUtcMonthDateRange } from './salaryReportingService.js';
+import { getUtcMonthDateRange, getUtcMonthEndDate } from './salaryReportingService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -122,9 +122,12 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const monthName = monthNames[month - 1];
   const monthNameYear = `${monthName}-${year}`;
-  const asOfDate = `31-${monthName}-${year}`;
-  const shortAsOfDate = `31-${String(month).padStart(2, '0')}-${year}`;
-  const dayDateString = `Monday, ${monthName} 31, ${year}`;
+  const monthEndDate = getUtcMonthEndDate(year, month);
+  const lastDay = monthEndDate.getUTCDate();
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const asOfDate = `${lastDay}-${monthName}-${year}`;
+  const shortAsOfDate = `${lastDay}-${String(month).padStart(2, '0')}-${year}`;
+  const dayDateString = `${dayNames[monthEndDate.getUTCDay()]}, ${monthName} ${lastDay}, ${year}`;
 
   // Fetch report status and audit metadata if available
   const monthlyReport = await MonthlyReport.findOne({ month: periodName }).lean();

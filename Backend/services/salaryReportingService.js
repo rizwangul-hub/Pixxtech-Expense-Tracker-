@@ -10,6 +10,10 @@ export const getUtcMonthDateRange = (year, month) => {
   return { startDate, endDate };
 };
 
+/** Last calendar day of a month, represented at UTC midnight. */
+export const getUtcMonthEndDate = (year, month) =>
+  new Date(Date.UTC(year, month, 0));
+
 /** YYYY-MM bucket for a payment/posting instant in Pakistan local calendar. */
 export const getUtcMonthKey = (value) => {
   if (!value) return null;

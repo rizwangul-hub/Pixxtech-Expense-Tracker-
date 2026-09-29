@@ -6,6 +6,7 @@ import {
   getSalaryPaymentDetail,
   getSalaryPaymentPeriod,
   getUtcMonthDateRange,
+  getUtcMonthEndDate,
   getUtcMonthKey,
   normalizeBusinessPaymentDate,
 } from '../services/salaryReportingService.js';
@@ -132,6 +133,12 @@ test('date-only payment picker values stay in the selected Pakistan business mon
   assert.equal(getUtcMonthKey(normalized), '2026-09');
   const { startDate, endDate } = getUtcMonthDateRange(2026, 9);
   assert.equal(normalized >= startDate && normalized <= endDate, true);
+});
+
+test('monthly report end dates use the actual last day of the selected month', () => {
+  assert.equal(getUtcMonthEndDate(2026, 9).toISOString(), '2026-09-30T00:00:00.000Z');
+  assert.equal(getUtcMonthEndDate(2026, 8).toISOString(), '2026-08-31T00:00:00.000Z');
+  assert.equal(getUtcMonthEndDate(2024, 2).toISOString(), '2024-02-29T00:00:00.000Z');
 });
 
 test('late-evening Pakistan time on the 1st counts in that month, not the prior UTC month', () => {
