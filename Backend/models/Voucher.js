@@ -96,6 +96,7 @@ const voucherSchema = new mongoose.Schema(
           'OTHER_PAYMENT',
           'OPENING_BALANCE',
           'MANUAL_VOUCHER',
+          'OWNER_PERSONAL',
         ],
         message: 'Invalid source module',
       },
