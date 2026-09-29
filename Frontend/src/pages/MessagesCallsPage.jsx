@@ -298,6 +298,15 @@ export function MessagesCallsPage() {
       }));
       setMessages((current) => mergeMessages(current, [result]));
       wasAtBottomRef.current = true;
+      const recipientName = bootstrap?.peer?.name || (user?.role === 'ADMIN' ? 'Sarfraz' : 'Khurshid Anwar');
+      window.dispatchEvent(new CustomEvent('communications:alert', {
+        detail: {
+          title: `Message sent to ${recipientName}`,
+          body: payload.text || (payload.type === 'IMAGE' ? 'Sent an image' : 'Sent a voice message'),
+          type: 'sent',
+          senderRole: 'Sent',
+        },
+      }));
       return true;
     } catch (requestError) {
       setError(messageError(requestError));
@@ -339,6 +348,15 @@ export function MessagesCallsPage() {
       wasAtBottomRef.current = true;
       setVoicePreview(null);
       setImagePreview(null);
+      const recipientName = bootstrap?.peer?.name || (user?.role === 'ADMIN' ? 'Sarfraz' : 'Khurshid Anwar');
+      window.dispatchEvent(new CustomEvent('communications:alert', {
+        detail: {
+          title: `Message sent to ${recipientName}`,
+          body: type === 'IMAGE' ? 'Sent an image' : 'Sent a voice message',
+          type: 'sent',
+          senderRole: 'Sent',
+        },
+      }));
     } catch (requestError) {
       setError(messageError(requestError));
     } finally {

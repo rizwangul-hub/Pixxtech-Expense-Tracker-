@@ -436,3 +436,12 @@ a.bg-emerald-600 {
     max-width: 100vw !important;
   }
 }
+
+@keyframes shrinkWidth {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}

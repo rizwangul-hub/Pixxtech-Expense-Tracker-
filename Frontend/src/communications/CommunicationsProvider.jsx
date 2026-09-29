@@ -1,7 +1,28 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Realtime } from 'ably';
-import { Camera, CameraOff, MessagesSquare, Mic, MicOff, Phone, PhoneOff, X } from 'lucide-react';
+import { Camera, CameraOff, CheckCircle2, MessagesSquare, Mic, MicOff, Phone, PhoneOff, X } from 'lucide-react';
 import { communicationsAPI } from '../services/api.js';
+
+const playChime = () => {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.25);
+  } catch {
+    // Ignore audio permission or autoplay restrictions
+  }
+};
 
 const CommunicationsContext = createContext(null);
 const configuredAdminEmail = import.meta.env.VITE_COMMUNICATION_ADMIN_EMAIL?.trim().toLowerCase();
@@ -64,6 +85,26 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
   useEffect(() => {
     onOpenMessagesRef.current = onOpenMessages;
   }, [onOpenMessages]);
+
+  useEffect(() => {
+    const handleCustomAlert = (event) => {
+      const data = event.detail;
+      if (!data) return;
+      setToast({
+        id: String(Date.now()),
+        title: data.title || 'Message Notification',
+        senderRole: data.senderRole || '',
+        body: data.body || '',
+        type: data.type || 'info',
+        createdAt: new Date().toISOString(),
+      });
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = window.setTimeout(() => setToast(null), 3000);
+      if (data.type !== 'sent') playChime();
+    };
+    window.addEventListener('communications:alert', handleCustomAlert);
+    return () => window.removeEventListener('communications:alert', handleCustomAlert);
+  }, []);
 
   const cleanupMedia = useCallback(() => {
     window.clearTimeout(timeoutRef.current);
@@ -377,6 +418,7 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
     let mounted = true;
     let realtime;
     let channel;
+    let pollTimer = null;
     const subscriptions = [];
     const subscribe = (event, handler) => {
       subscriptions.push(event);
@@ -390,17 +432,24 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
       seenMessagesRef.current.add(key);
       if (seenMessagesRef.current.size > 500) seenMessagesRef.current.delete(seenMessagesRef.current.values().next().value);
       emit('communications:message', message);
-      const selfId = String(selfUserIdRef.current || '');
-      if (String(message.sender?.id || '') === selfId) return;
+      const isSentBySelf = String(message.sender?.id || '') === selfId;
+      if (isSentBySelf) return;
+
+      const senderName = message.sender?.name || (message.sender?.role === 'ADMIN' ? 'Admin Khurshid' : 'Data Entry Sarfraz');
+      const senderRole = message.sender?.role === 'ADMIN' ? 'Admin' : message.sender?.role === 'DATA_ENTRY' ? 'Data Entry' : '';
+
       const notification = {
         id: key,
-        title: message.sender?.name || 'New message',
-        body: message.text || (message.type === 'IMAGE' ? 'Sent an image' : 'Sent a voice message'),
+        title: senderName,
+        senderRole,
+        body: message.text || (message.type === 'IMAGE' ? '📷 Sent an image' : '🎤 Sent a voice message'),
         createdAt: message.createdAt,
+        type: 'incoming',
       };
       setToast(notification);
       window.clearTimeout(toastTimerRef.current);
       toastTimerRef.current = window.setTimeout(() => setToast(null), 3000);
+      playChime();
       communicationsAPI.markDelivered(message.id).catch(() => {});
       if (conversationOpenRef.current) {
         communicationsAPI.markRead().then((result) => {
@@ -511,6 +560,24 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
             if (mounted) setRealtimeReady(true);
           });
         }
+
+        if (mounted) {
+          pollTimer = window.setInterval(async () => {
+            if (!mounted) return;
+            try {
+              const fresh = responseData(await communicationsAPI.getBootstrap());
+              if (!mounted || !fresh) return;
+              setUnreadCount(Number(fresh.unreadCount) || 0);
+              if (Array.isArray(fresh.unreadMessages) && fresh.unreadMessages.length > 0) {
+                fresh.unreadMessages.forEach((msg) => {
+                  onNewMessage(msg);
+                });
+              }
+            } catch {
+              // ignore background poll errors
+            }
+          }, 4000);
+        }
       } catch (error) {
         if (mounted) {
           setConnection(error?.response?.status === 403 ? 'failed' : 'offline');
@@ -522,6 +589,7 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
 
     return () => {
       mounted = false;
+      window.clearInterval(pollTimer);
       subscriptions.forEach((event) => channel?.unsubscribe(event));
       channel?.presence.unsubscribe();
       channel?.presence.leave().catch(() => {});
@@ -604,17 +672,89 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
     <CommunicationsContext.Provider value={contextValue}>
       {children}
       {authorized && toast && (
-        <button
-          type="button"
-          onClick={() => { setToast(null); onOpenMessagesRef.current?.(); }}
-          className="fixed right-4 top-4 z-[70] flex max-w-[calc(100vw-2rem)] items-start gap-3 rounded-2xl border border-indigo-200 bg-white p-4 text-left shadow-xl"
-          aria-label={`Open new message from ${toast.title}`}
-          aria-live="polite"
+        <div
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[94vw] max-w-md pointer-events-auto transition-all duration-300 ease-out animate-in fade-in slide-in-from-top-4"
+          role="alert"
+          aria-live="assertive"
         >
-          <MessagesSquare className="mt-1 shrink-0 text-indigo-600" size={20} />
-          <span className="min-w-0"><strong className="block text-sm text-slate-900">{toast.title}</strong><span className="block truncate text-sm text-slate-600">{toast.body}</span></span>
-          <X className="shrink-0 text-slate-400" size={16} />
-        </button>
+          <div
+            onClick={() => { setToast(null); onOpenMessagesRef.current?.(); }}
+            className={`relative flex items-center justify-between gap-3.5 p-3.5 sm:p-4 rounded-2xl shadow-2xl cursor-pointer border backdrop-blur-md transition-all hover:scale-[1.01] ${
+              toast.type === 'sent'
+                ? 'bg-slate-900/95 border-emerald-500/50 text-white shadow-emerald-950/40 ring-1 ring-emerald-500/20'
+                : 'bg-slate-900/95 border-indigo-500/50 text-white shadow-indigo-950/40 ring-1 ring-indigo-500/20'
+            }`}
+          >
+            {/* Left Icon with badge */}
+            <div className="relative shrink-0">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-md ${
+                toast.type === 'sent'
+                  ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                  : 'bg-gradient-to-br from-indigo-500 to-purple-600'
+              }`}>
+                {toast.type === 'sent' ? (
+                  <CheckCircle2 size={20} className="text-white" />
+                ) : (
+                  <MessagesSquare size={20} className="text-white animate-pulse" />
+                )}
+              </div>
+              <span className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-slate-900 ${
+                toast.type === 'sent' ? 'bg-emerald-400' : 'bg-indigo-400 animate-ping'
+              }`} />
+            </div>
+
+            {/* Content: Title & Message body */}
+            <div className="flex-1 min-w-0 pr-1">
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-sm text-white truncate">
+                  {toast.title}
+                </span>
+                {toast.senderRole && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
+                    toast.senderRole === 'Admin'
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                      : toast.senderRole === 'Data Entry'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  }`}>
+                    {toast.senderRole}
+                  </span>
+                )}
+                <span className="text-[10px] text-slate-400 ml-auto shrink-0 font-mono">
+                  just now
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 truncate mt-0.5 font-medium">
+                {toast.body || 'Click to open messages'}
+              </p>
+            </div>
+
+            {/* Dismiss button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setToast(null);
+              }}
+              className="shrink-0 p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+              aria-label="Dismiss alert"
+            >
+              <X size={16} />
+            </button>
+
+            {/* 3-second animated countdown progress bar at bottom */}
+            <div className="absolute bottom-0 left-3 right-3 h-0.5 bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full ${
+                  toast.type === 'sent' ? 'bg-emerald-400' : 'bg-indigo-400'
+                }`}
+                style={{
+                  animation: 'shrinkWidth 3s linear forwards',
+                }}
+              />
+            </div>
+          </div>
+        </div>
       )}
       {authorized && call && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-sm" role="presentation">
