@@ -129,13 +129,21 @@ export const getLedgerEntities = async (req, res) => {
     }
 
     if (!type || type === 'OTHER_INCOME') {
-      const heads = await OtherIncomeHead.find({}).sort({ name: 1 }).lean();
-      results.otherIncomeHeads = heads.map((h) => ({
-        id: h._id,
-        name: h.name,
-        type: 'OTHER_INCOME',
-        subtext: `Code: ${h.code || 'INC'}`,
-      }));
+      const heads = await OtherIncomeHead.find({ isActive: { $ne: false } }).sort({ name: 1 }).lean();
+      results.otherIncomeHeads = [
+        {
+          id: 'ALL',
+          name: '★ All Other Income Heads (Consolidated)',
+          type: 'OTHER_INCOME',
+          subtext: 'Complete consolidated non-rental receipts ledger',
+        },
+        ...heads.map((h) => ({
+          id: h._id,
+          name: h.name,
+          type: 'OTHER_INCOME',
+          subtext: `Code: ${h.code || 'INC'} &bull; ${h.description || 'Other Income Head'}`,
+        })),
+      ];
     }
 
     return apiSuccess(res, results, 'Ledger entities loaded successfully.');
@@ -574,59 +582,83 @@ export const queryLedger = async (req, res) => {
     // 6. OTHER INCOME LEDGER
     // =========================================================================
     else if (type === 'OTHER_INCOME') {
-      const incQuery = {};
+      const incQuery = { status: { $ne: 'REVERSED' } };
 
-      if (entityId && mongoose.Types.ObjectId.isValid(entityId)) {
-        incQuery.headId = entityId;
+      if (entityId && entityId !== 'ALL' && mongoose.Types.ObjectId.isValid(entityId)) {
+        incQuery.incomeHeadId = entityId;
         targetEntity = await OtherIncomeHead.findById(entityId).lean();
         if (targetEntity) {
           ledgerTitle = `Other Income Ledger: ${targetEntity.name}`;
-          entitySubtext = `Income Code: ${targetEntity.code || 'INC'}`;
+          entitySubtext = `Head Code: ${targetEntity.code || 'INC'} &bull; ${targetEntity.description || 'Non-Rental Receipts'}`;
         }
       } else {
         ledgerTitle = 'Other Income Receipts Ledger';
-        entitySubtext = 'Non-Rental Operational Receipts & Scraps';
+        entitySubtext = 'All Non-Rental Operational Receipts & Miscellaneous Inflows';
       }
 
-      if (periodStart && periodEnd) incQuery.date = { $gte: periodStart, $lte: periodEnd };
+      if (periodStart && periodEnd) {
+        incQuery.receiptDate = { $gte: periodStart, $lte: periodEnd };
+      } else if (periodStart) {
+        incQuery.receiptDate = { $gte: periodStart };
+      } else if (periodEnd) {
+        incQuery.receiptDate = { $lte: periodEnd };
+      }
 
       if (sRegex) {
-        incQuery.$or = [{ detail: sRegex }, { reference: sRegex }, { receivedFrom: sRegex }];
+        incQuery.$or = [
+          { transactionDetail: sRegex },
+          { referenceNumber: sRegex },
+          { receivedFrom: sRegex },
+          { receiptNumber: sRegex },
+          { headName: sRegex },
+        ];
       }
 
       const incomes = await OtherIncome.find(incQuery)
-        .sort({ date: -1 })
-        .populate('headId', 'name code')
-        .populate('accountId', 'name type')
-        .populate('recordedBy', 'name')
+        .sort({ receiptDate: 1, createdAt: 1 })
+        .populate('incomeHeadId', 'name code')
+        .populate('receivingAccountId', 'name type')
+        .populate('propertyId', 'propertyName plazaName')
+        .populate('createdBy', 'name')
         .lean();
 
+      let runningBal = 0;
       ledgerEntries = incomes.map((inc) => {
-        totalCredit += inc.amount || 0;
+        const amt = round2(inc.amount || 0);
+        runningBal = round2(runningBal + amt);
+        totalCredit += amt;
+
+        const propertyName = inc.propertyId
+          ? (inc.propertyId.propertyName || inc.propertyId.plazaName || '')
+          : '';
+
+        const headDisplay = inc.headName || inc.incomeHeadId?.name || 'Other Income';
 
         return {
           _id: inc._id,
-          date: inc.date,
-          voucherNo: inc.reference || `INC-${inc._id.toString().slice(-6)}`,
-          detail: inc.detail || 'Other Income Receipt',
+          date: inc.receiptDate,
+          voucherNo: inc.receiptNumber || inc.referenceNumber || `INC-${inc._id.toString().slice(-6)}`,
+          detail: inc.transactionDetail || inc.description || 'Other Income Receipt',
           transactionType: 'OTHER_INCOME',
-          categoryName: inc.headId?.name || 'Other Income',
-          drAccount: inc.accountId?.name || 'Receiving Account',
-          crAccount: 'Other Income Head',
+          categoryName: headDisplay,
+          propertyName: propertyName,
+          drAccount: inc.receivingAccountId?.name || 'Receiving Account',
+          crAccount: headDisplay,
           receivedFrom: inc.receivedFrom || '',
+          reference: inc.referenceNumber || '',
           debit: 0,
-          credit: round2(inc.amount || 0),
-          amount: round2(inc.amount || 0),
-          balance: round2(totalCredit),
+          credit: amt,
+          amount: amt,
+          balance: runningBal,
           status: inc.status || 'POSTED',
-          createdBy: inc.recordedBy?.name || 'System',
+          createdBy: inc.createdBy?.name || 'System',
         };
       });
 
       openingBalance = 0;
       totalDebit = 0;
       totalCredit = round2(totalCredit);
-      closingBalance = totalCredit;
+      closingBalance = round2(runningBal);
     }
 
     // Return unified central ledger payload

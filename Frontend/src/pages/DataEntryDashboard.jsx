@@ -54,6 +54,7 @@ export const DataEntryDashboard = ({ user }) => {
     date: new Date().toISOString().split('T')[0],
     amount: '',
     headId: '',
+    propertyId: '',
     accountId: '',
     receivedFrom: '',
     detail: '',
@@ -182,6 +183,11 @@ export const DataEntryDashboard = ({ user }) => {
         : [];
       const res = await otherIncomeAPI.record({
         ...otherForm,
+        incomeHeadId: otherForm.headId,
+        receivingAccountId: otherForm.accountId,
+        transactionDetail: otherForm.detail,
+        receiptDate: otherForm.date,
+        propertyId: otherForm.propertyId || null,
         amount: Number(otherForm.amount),
         attachments: uploadedImages,
       });
@@ -192,6 +198,7 @@ export const DataEntryDashboard = ({ user }) => {
           date: new Date().toISOString().split('T')[0],
           amount: '',
           headId: '',
+          propertyId: '',
           accountId: '',
           receivedFrom: '',
           detail: '',
@@ -408,7 +415,7 @@ export const DataEntryDashboard = ({ user }) => {
                 Record Other Income / Other Receipts
               </h2>
               <form onSubmit={handleOtherIncomeSubmit} className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Date</label>
                     <input
@@ -420,7 +427,6 @@ export const DataEntryDashboard = ({ user }) => {
                     />
                   </div>
 
-                  <EvidenceImageUpload files={otherEvidenceFiles} onChange={setOtherEvidenceFiles} disabled={submittingOther} />
                   <div>
                     <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Amount (PKR)</label>
                     <input
@@ -434,13 +440,14 @@ export const DataEntryDashboard = ({ user }) => {
                       className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Income Head</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Income Head (Source)</label>
                     <select
                       value={otherForm.headId}
                       onChange={(e) => setOtherForm({ ...otherForm, headId: e.target.value })}
                       required
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold"
                     >
                       <option value="">Select Income Head...</option>
                       {otherHeads.map((h) => (
@@ -448,6 +455,26 @@ export const DataEntryDashboard = ({ user }) => {
                       ))}
                     </select>
                   </div>
+
+                  <div>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">From Property (Optional)</label>
+                    <select
+                      value={otherForm.propertyId}
+                      onChange={(e) => setOtherForm({ ...otherForm, propertyId: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
+                    >
+                      <option value="">-- General / Boss (No Property) --</option>
+                      {properties.map((p) => (
+                        <option key={p._id} value={p._id}>
+                          {p.plazaName || p.propertyName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mb-2">
+                  <EvidenceImageUpload files={otherEvidenceFiles} onChange={setOtherEvidenceFiles} disabled={submittingOther} />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

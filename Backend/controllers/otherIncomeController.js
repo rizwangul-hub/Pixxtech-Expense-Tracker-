@@ -257,7 +257,7 @@ export const updateIncomeHead = async (req, res) => {
  */
 export const recordOtherIncome = async (req, res) => {
   try {
-    const {
+    let {
       receiptDate,
       voucherNumber,
       incomeHeadId,
@@ -273,6 +273,13 @@ export const recordOtherIncome = async (req, res) => {
       checkedBy,
       attachments = [],
     } = req.body;
+
+    // Normalize field aliases between forms
+    incomeHeadId = incomeHeadId || req.body.headId;
+    receivingAccountId = receivingAccountId || req.body.accountId;
+    transactionDetail = transactionDetail || req.body.detail || req.body.narration || '';
+    receiptDate = receiptDate || req.body.date || new Date();
+    referenceNumber = referenceNumber || req.body.reference || '';
 
     // 1. Mandatory Validations
     if (!transactionDetail || !transactionDetail.trim()) {
