@@ -1539,7 +1539,12 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
       'General';
     const mainExpenseHeadName = entry.categoryId?.isMainHead
       ? entry.categoryId.name
-      : entry.categoryId?.parentCategoryId?.name || categoryName;
+      : entry.categoryId?.parentCategoryId?.name ||
+        entry.entryData?.category?.parentCategoryId?.name ||
+        categoryName;
+    const expenseDebitHeadName = [mainExpenseHeadName, categoryName]
+      .filter((name, index, names) => name && names.indexOf(name) === index)
+      .join(' ');
 
     let drAccountName =
       entry.drAccountId?.name ||
@@ -1575,9 +1580,9 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
         Boolean(entry.propertyId) ||
         Boolean(entry.unitId);
       if (isPropertyExpense && rentLocationName) {
-        drAccountName = rentLocationName;
+        drAccountName = `${rentLocationName} ${expenseDebitHeadName}`.trim();
       } else if (!drAccountName || /Clearing|External Parties/i.test(drAccountName)) {
-        drAccountName = mainExpenseHeadName;
+        drAccountName = expenseDebitHeadName;
       }
       if (!crAccountName || /Clearing|External Parties/i.test(crAccountName)) {
         crAccountName = 'Payment Account (Bank/Cash)';

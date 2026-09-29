@@ -134,7 +134,9 @@ export function extractReceiptMetadata(entry) {
     'General Expense';
   const mainExpenseHeadName = entry.categoryId?.isMainHead
     ? entry.categoryId.name
-    : entry.categoryId?.parentCategoryId?.name || categoryName;
+    : entry.categoryId?.parentCategoryId?.name ||
+      entry.entryData?.category?.parentCategoryId?.name ||
+      categoryName;
   const expenseDebitHeadName = [mainExpenseHeadName, categoryName]
     .filter((name, index, names) => name && names.indexOf(name) === index)
     .join(' ');
@@ -182,7 +184,7 @@ export function extractReceiptMetadata(entry) {
       Boolean(unitId);
     const expenseLocationName = [propertyName, unitName].filter(Boolean).join(' - ');
     drAccount = isPropertyExpense && expenseLocationName
-      ? expenseLocationName
+      ? `${expenseLocationName} ${expenseDebitHeadName}`.trim()
       : !drAccount || /Clearing|External Parties/i.test(drAccount) || drAccount === mainExpenseHeadName
       ? expenseDebitHeadName
       : drAccount;
