@@ -11,12 +11,23 @@ import {
   AlertCircle,
   ArrowRight,
   Receipt,
+  FileText,
+  Sparkles,
 } from 'lucide-react';
 
 const formatPKR = (val) => {
   if (val === '' || val === null || isNaN(val)) return 'Rs. 0';
   return 'Rs. ' + new Intl.NumberFormat('en-PK').format(Number(val));
 };
+
+const RENT_QUICK_TAGS = [
+  'Cash Received',
+  'Bank Transfer',
+  'Online Deposit',
+  'Advance Rent',
+  'Part Payment',
+  'Full Month Rent',
+];
 
 export const RentCollectionModal = ({
   properties = [],
@@ -32,6 +43,7 @@ export const RentCollectionModal = ({
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [receivingAccountId, setReceivingAccountId] = useState('');
   const [amountPaid, setAmountPaid] = useState('');
+  const [narration, setNarration] = useState('');
   const [notes, setNotes] = useState('');
   const [evidenceFiles, setEvidenceFiles] = useState([]);
 
@@ -40,12 +52,23 @@ export const RentCollectionModal = ({
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
+  // Helper to generate clear default narration
+  const generateDefaultNarration = (propId, unitObj, month, noteVal) => {
+    const prop = properties.find((p) => p._id === propId);
+    const propName = prop?.plazaName || prop?.propertyName || 'Property';
+    const uName = unitObj?.unitName || unitObj?.unitNumber || 'Unit';
+    const tName = unitObj?.tenantName || '';
+    const notePart = noteVal ? ` (Ref: ${noteVal})` : '';
+    return `Rent Received: ${propName} - ${uName}${tName ? ` (${tName})` : ''} for ${month}${notePart}`;
+  };
+
   // When property selection changes, load units
   useEffect(() => {
     if (!selectedPropertyId) {
       setUnits([]);
       setSelectedUnitId('');
       setSelectedUnit(null);
+      setNarration('');
       return;
     }
 
@@ -57,15 +80,18 @@ export const RentCollectionModal = ({
         setUnits(res.units || []);
 
         if (res.units && res.units.length > 0) {
-          setSelectedUnitId(res.units[0]._id);
-          setSelectedUnit(res.units[0]);
-          setAmountPaid(String(res.units[0].balanceDue || res.units[0].agreedRent || ''));
-          if (res.units[0].defaultReceivingAccount?._id) {
-            setReceivingAccountId(res.units[0].defaultReceivingAccount._id);
+          const firstUnit = res.units[0];
+          setSelectedUnitId(firstUnit._id);
+          setSelectedUnit(firstUnit);
+          setAmountPaid(String(firstUnit.balanceDue || firstUnit.agreedRent || ''));
+          if (firstUnit.defaultReceivingAccount?._id) {
+            setReceivingAccountId(firstUnit.defaultReceivingAccount._id);
           }
+          setNarration(generateDefaultNarration(selectedPropertyId, firstUnit, rentMonth, notes));
         } else {
           setSelectedUnitId('');
           setSelectedUnit(null);
+          setNarration('');
         }
       } catch (err) {
         setError('Failed to fetch plaza units.');
@@ -89,6 +115,7 @@ export const RentCollectionModal = ({
       if (unit.defaultReceivingAccount?._id) {
         setReceivingAccountId(unit.defaultReceivingAccount._id);
       }
+      setNarration(generateDefaultNarration(selectedPropertyId, unit, rentMonth, notes));
     }
   };
 
@@ -112,6 +139,11 @@ export const RentCollectionModal = ({
       return;
     }
 
+    const finalNarration = (
+      narration ||
+      generateDefaultNarration(selectedPropertyId, selectedUnit, rentMonth, notes)
+    ).trim();
+
     try {
       setSubmitting(true);
       const uploadedImages = evidenceFiles.length
@@ -124,6 +156,8 @@ export const RentCollectionModal = ({
         receivingAccountId,
         amountPaid: numericPaid,
         paymentDate,
+        detail: finalNarration,
+        narration: finalNarration,
         notes,
         attachments: uploadedImages,
       });
@@ -137,8 +171,9 @@ export const RentCollectionModal = ({
         onRentCollected(res);
       }
 
-      // Reset amount
+      // Reset amount and narration
       setAmountPaid('');
+      setNarration('');
       setNotes('');
       setEvidenceFiles([]);
     } catch (err) {
@@ -386,6 +421,49 @@ export const RentCollectionModal = ({
             </div>
           </div>
         )}
+
+        {/* Transaction Detail / Narration */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-bold uppercase text-slate-300 flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-blue-400" />
+              Transaction Detail / Narration <span className="text-rose-400">*</span>
+            </label>
+            <button
+              type="button"
+              onClick={() =>
+                setNarration(generateDefaultNarration(selectedPropertyId, selectedUnit, rentMonth, notes))
+              }
+              className="text-[11px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 transition"
+              title="Auto-generate standard rent narration"
+            >
+              <Sparkles className="w-3.5 h-3.5" /> Auto-generate Narration
+            </button>
+          </div>
+          <textarea
+            rows="2"
+            value={narration}
+            onChange={(e) => setNarration(e.target.value)}
+            placeholder="Type rent receipt narrative (e.g. Rent Received for 4-C Plaza - Unit 201 for Sep 2026 via Online Transfer)..."
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 font-semibold focus:outline-none focus:border-blue-500 transition resize-none"
+            required
+          />
+
+          {/* Quick Narration Tags */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mr-1">Quick Tags:</span>
+            {RENT_QUICK_TAGS.map((tag, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setNarration((prev) => (prev ? `${prev} - ${tag}` : tag))}
+                className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700 font-medium transition"
+              >
+                + {tag}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Optional Notes */}
         <div>

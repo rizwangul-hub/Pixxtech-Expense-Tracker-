@@ -20,6 +20,8 @@ export const collectRent = async (req, res) => {
       amountPaid,
       paymentDate,
       notes,
+      detail,
+      narration,
       attachments = [],
     } = req.body;
 
@@ -57,6 +59,12 @@ export const collectRent = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Unit not found in property.' });
     }
 
+    const finalNarration = (
+      detail ||
+      narration ||
+      `Rent Received: ${property.plazaName} - ${unit.unitName}${unit.tenantName ? ` (${unit.tenantName})` : ''} for ${rentMonth}${notes ? `. Note: ${notes}` : ''}`
+    ).trim();
+
     // If submitted by DATA_ENTRY (Sarfraz), save as temporary pending entry awaiting Khurshid's verification
     if (req.user.role === 'DATA_ENTRY') {
       // Auto-generate voucher number in PT-XXX-MM-YY format (same as expense entries)
@@ -74,8 +82,9 @@ export const collectRent = async (req, res) => {
         attachments,
         tenantId: unit.tenantId || null,
         receivingAccountId,
-        detail: `Rent Received: ${property.plazaName} - ${unit.unitName} for ${rentMonth}. ${notes ? `Note: ${notes}` : ''}`.trim(),
-        entryData: req.body,
+        detail: finalNarration,
+        referenceNumber: notes || '',
+        entryData: { ...req.body, detail: finalNarration, narration: finalNarration, notes: notes || '' },
         status: 'PENDING_VERIFICATION',
         submittedBy: req.user._id,
         submittedByName: req.user.name,
@@ -157,13 +166,11 @@ export const collectRent = async (req, res) => {
     }
     const voucherNo = String(maxVn + 1);
 
-    const detailNarration = `Rent Received: ${property.plazaName} - ${unit.unitName} (${unit.tenantName || 'Tenant'}) for ${rentMonth}. ${notes ? `Note: ${notes}` : ''}`.trim();
-
     // 7. Record transaction via ledgerService
     const transaction = await createTransaction({
       date: paymentDate ? new Date(paymentDate) : new Date(),
       voucherNo,
-      detail: detailNarration,
+      detail: finalNarration,
       categoryId: rentalCategory._id,
       drAccountId: receivingAccount._id, // Bank/Cash receiving rent (Debited -> balance increases)
       crAccountId: clearingAccount._id, // Clearing (Credited)
