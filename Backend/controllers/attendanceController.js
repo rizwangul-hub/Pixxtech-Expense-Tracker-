@@ -52,10 +52,20 @@ export const getDailyAttendance = async (req, res) => {
       const att = attMap.get(emp._id.toString());
       const shiftOpeningTime = att?.shiftOpeningTime || emp.shiftOpeningTime || '12:30';
       const arrivalTime = att?.arrivalTime || '';
-      let status = att?.status || 'PRESENT';
-      let lateMinutes = 0;
 
-      if (status !== 'ABSENT' && status !== 'LEAVE') {
+      // Default status:
+      // If attendance already recorded, use that status.
+      // If not yet recorded and date is before employee joiningDate, default to NOT_JOINED!
+      let status = att ? att.status : 'PRESENT';
+      if (!att && emp.joiningDate) {
+        const empJoinDateStr = new Date(emp.joiningDate).toISOString().split('T')[0];
+        if (dateStr < empJoinDateStr) {
+          status = 'NOT_JOINED';
+        }
+      }
+
+      let lateMinutes = 0;
+      if (status !== 'ABSENT' && status !== 'LEAVE' && status !== 'NOT_JOINED') {
         if (arrivalTime && shiftOpeningTime) {
           lateMinutes = calculateLateMinutes(arrivalTime, shiftOpeningTime);
         } else {
@@ -63,7 +73,7 @@ export const getDailyAttendance = async (req, res) => {
         }
       }
 
-      if (status !== 'ABSENT' && status !== 'LEAVE' && status !== 'HALF_DAY') {
+      if (status !== 'ABSENT' && status !== 'LEAVE' && status !== 'HALF_DAY' && status !== 'NOT_JOINED') {
         status = lateMinutes > 0 ? 'LATE' : 'PRESENT';
       }
 
@@ -72,6 +82,7 @@ export const getDailyAttendance = async (req, res) => {
         name: emp.name,
         designation: emp.designation,
         department: emp.department,
+        joiningDate: emp.joiningDate,
         dateStr,
         shiftOpeningTime,
         arrivalTime,
@@ -103,7 +114,7 @@ export const markAttendance = async (req, res) => {
     }
 
     let lateMins = 0;
-    if (status !== 'ABSENT' && status !== 'LEAVE') {
+    if (status !== 'ABSENT' && status !== 'LEAVE' && status !== 'NOT_JOINED') {
       if (arrivalTime && shiftOpeningTime) {
         lateMins = calculateLateMinutes(arrivalTime, shiftOpeningTime);
       } else if (lateMinutes !== undefined && !isNaN(Number(lateMinutes))) {
@@ -112,7 +123,7 @@ export const markAttendance = async (req, res) => {
     }
 
     const finalStatus =
-      status === 'ABSENT' || status === 'LEAVE' || status === 'HALF_DAY'
+      status === 'ABSENT' || status === 'LEAVE' || status === 'HALF_DAY' || status === 'NOT_JOINED'
         ? status
         : lateMins > 0
         ? 'LATE'
@@ -158,7 +169,7 @@ export const bulkMarkAttendance = async (req, res) => {
     const dateObj = new Date(dateStr);
     const operations = records.map((rec) => {
       let lateMins = 0;
-      if (rec.status !== 'ABSENT' && rec.status !== 'LEAVE') {
+      if (rec.status !== 'ABSENT' && rec.status !== 'LEAVE' && rec.status !== 'NOT_JOINED') {
         if (rec.arrivalTime && rec.shiftOpeningTime) {
           lateMins = calculateLateMinutes(rec.arrivalTime, rec.shiftOpeningTime);
         } else if (rec.lateMinutes !== undefined && !isNaN(Number(rec.lateMinutes))) {
@@ -167,7 +178,7 @@ export const bulkMarkAttendance = async (req, res) => {
       }
 
       const finalStatus =
-        rec.status === 'ABSENT' || rec.status === 'LEAVE' || rec.status === 'HALF_DAY'
+        rec.status === 'ABSENT' || rec.status === 'LEAVE' || rec.status === 'HALF_DAY' || rec.status === 'NOT_JOINED'
           ? rec.status
           : lateMins > 0
           ? 'LATE'
@@ -239,10 +250,15 @@ export const getMonthlyAttendanceSummary = async (req, res) => {
       let halfDays = 0;
 
       records.forEach((r) => {
+        const isNotJoined = r.status === 'NOT_JOINED';
         const isAbsent = r.status === 'ABSENT';
         const isLeave = r.status === 'LEAVE';
         const isHalfDay = r.status === 'HALF_DAY';
 
+        if (isNotJoined) {
+          // Employee had not joined yet on this date: do not count as present, absent, leave, or late!
+          return;
+        }
         if (isLeave) {
           leaveDays += 1;
           return;

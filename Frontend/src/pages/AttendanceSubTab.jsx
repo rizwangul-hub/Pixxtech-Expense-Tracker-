@@ -205,10 +205,13 @@ export const AttendanceSubTab = () => {
             }
           }
 
-          // If status changes to ABSENT, LEAVE, or PRESENT, reset lateMinutes
+          // If status changes to ABSENT, LEAVE, PRESENT, or NOT_JOINED, reset lateMinutes
           if (field === 'status') {
-            if (val === 'ABSENT' || val === 'LEAVE' || val === 'PRESENT') {
+            if (val === 'ABSENT' || val === 'LEAVE' || val === 'PRESENT' || val === 'NOT_JOINED') {
               updated.lateMinutes = 0;
+            }
+            if (val === 'NOT_JOINED') {
+              updated.arrivalTime = '';
             }
           }
           return updated;
@@ -225,6 +228,20 @@ export const AttendanceSubTab = () => {
         const isMatch = activeLocationTab === 'IT Office' ? isITOfficeRow(r) : isBahriaTownRow(r);
 
         if (isMatch) {
+          // If employee hasn't joined yet on this date (status is NOT_JOINED or joined after selectedDate), do not mark present!
+          const isNotYetJoined =
+            r.status === 'NOT_JOINED' ||
+            (r.joiningDate && selectedDate < new Date(r.joiningDate).toISOString().split('T')[0]);
+
+          if (isNotYetJoined) {
+            return {
+              ...r,
+              status: 'NOT_JOINED',
+              arrivalTime: '',
+              lateMinutes: 0,
+            };
+          }
+
           return {
             ...r,
             status: 'PRESENT',
@@ -378,7 +395,11 @@ export const AttendanceSubTab = () => {
         <td style="text-align: center; font-weight: bold; color: ${r.lateMinutes > 0 ? '#dc2626' : '#16a34a'};">
           ${r.lateMinutes > 0 ? `+${r.lateMinutes} mins` : '—'}
         </td>
-        <td style="text-align: center; font-weight: bold;">${r.status}</td>
+        <td style="text-align: center; font-weight: bold; color: ${
+          r.status === 'NOT_JOINED' ? '#8b5cf6' : r.status === 'ABSENT' ? '#dc2626' : r.status === 'LATE' ? '#d97706' : '#16a34a'
+        };">
+          ${r.status === 'NOT_JOINED' ? 'NOT JOINED' : r.status}
+        </td>
         <td>${r.remarks || ''}</td>
       </tr>
     `
@@ -565,9 +586,16 @@ export const AttendanceSubTab = () => {
               ) : (
                 filteredRows.map((row) => {
                   return (
-                    <tr key={row.employeeId} className="hover:bg-slate-900/60 transition">
+                    <tr key={row.employeeId} className={`transition ${row.status === 'NOT_JOINED' ? 'bg-purple-950/20 hover:bg-purple-950/30' : 'hover:bg-slate-900/60'}`}>
                       <td className="py-3 px-4 font-bold text-white text-sm">
-                        {row.name}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>{row.name}</span>
+                          {row.status === 'NOT_JOINED' && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800/80 font-bold uppercase tracking-wider">
+                              Not Joined
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4">
                         <div className="font-semibold text-slate-300">{row.designation}</div>
@@ -585,8 +613,9 @@ export const AttendanceSubTab = () => {
                         <input
                           type="time"
                           value={row.arrivalTime}
+                          disabled={row.status === 'NOT_JOINED'}
                           onChange={(e) => handleRowChange(row.employeeId, 'arrivalTime', e.target.value)}
-                          className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-white font-mono font-bold text-center focus:outline-none focus:border-blue-500"
+                          className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-white font-mono font-bold text-center focus:outline-none focus:border-blue-500 disabled:opacity-30 disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="py-3 px-4 text-center">
@@ -611,6 +640,8 @@ export const AttendanceSubTab = () => {
                               ? 'bg-rose-950 text-rose-300 border-rose-800'
                               : row.status === 'LEAVE'
                               ? 'bg-blue-950 text-blue-300 border-blue-800'
+                              : row.status === 'NOT_JOINED'
+                              ? 'bg-purple-950 text-purple-300 border-purple-800'
                               : 'bg-slate-900 text-slate-300 border-slate-700'
                           }`}
                         >
@@ -619,6 +650,7 @@ export const AttendanceSubTab = () => {
                           <option value="HALF_DAY">HALF DAY</option>
                           <option value="LEAVE">ALLOWED LEAVE</option>
                           <option value="ABSENT">ABSENT / LOP</option>
+                          <option value="NOT_JOINED">NOT JOINED</option>
                         </select>
                       </td>
                       <td className="py-3 px-4">
