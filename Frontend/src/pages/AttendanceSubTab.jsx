@@ -235,6 +235,7 @@ export const AttendanceSubTab = () => {
         shiftOpeningTime: r.shiftOpeningTime || '12:30',
         arrivalTime: r.arrivalTime || '',
         status: r.status,
+        lateMinutes: r.lateMinutes !== undefined ? r.lateMinutes : 0,
         remarks: r.remarks || '',
       }));
 
@@ -252,6 +253,98 @@ export const AttendanceSubTab = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handlePrintMonthlySummary = () => {
+    const printWindow = window.open('', '_blank', 'width=950,height=750');
+    if (!printWindow) {
+      alert('Please allow pop-ups to print monthly summary.');
+      return;
+    }
+
+    const rowsHtml = sortedMonthlySummary
+      .map(
+        (sum, idx) => `
+      <tr>
+        <td style="text-align: center;">${idx + 1}</td>
+        <td style="font-weight: bold;">${sum.name}</td>
+        <td>${sum.designation}</td>
+        <td style="font-weight: bold; color: #7c3aed;">${sum.department}</td>
+        <td style="text-align: center; font-family: monospace;">${sum.totalDays}</td>
+        <td style="text-align: center; font-family: monospace; font-weight: bold; color: #059669;">${sum.presentDays}</td>
+        <td style="text-align: center; font-family: monospace; font-weight: bold; color: #d97706;">${sum.lateDays > 0 ? `${sum.lateDays} days` : '0'}</td>
+        <td style="text-align: center; font-family: monospace; font-weight: bold; color: #dc2626;">
+          ${(sum.totalLateMinutes || 0) > 0 ? `${sum.totalLateMinutes} mins` : '—'}
+        </td>
+        <td style="text-align: center; font-family: monospace; font-weight: bold; color: #0284c7;">${sum.leaveDays}</td>
+        <td style="text-align: center; font-family: monospace; font-weight: bold; color: #e11d48;">
+          ${sum.lopDays > 0 ? `${sum.lopDays} days` : '0'}
+        </td>
+      </tr>
+    `
+      )
+      .join('');
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Monthly Attendance Summary - ${selectedMonth}</title>
+      <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #000; }
+        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+        .company { font-size: 22px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+        .subtitle { font-size: 14px; font-weight: 700; margin-top: 4px; text-transform: uppercase; }
+        .meta { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 12px; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid #000; padding: 6px 8px; text-align: left; }
+        th { background: #f1f5f9; text-transform: uppercase; font-size: 10px; }
+        .footer { margin-top: 50px; display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; }
+        .sig { border-top: 1px solid #000; width: 200px; text-align: center; padding-top: 4px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="company">PIXX TECHNOLOGIES PAKISTAN</div>
+        <div class="subtitle">MONTHLY AGGREGATE ATTENDANCE SUMMARY — ${selectedMonth}</div>
+      </div>
+      <div class="meta">
+        <span>MONTH: ${selectedMonth}</span>
+        <span>TOTAL STAFF: ${sortedMonthlySummary.length}</span>
+        <span>PRINTED: ${new Date().toLocaleDateString('en-GB')}</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 4%;">Sr.</th>
+            <th>Employee Name</th>
+            <th>Designation</th>
+            <th>Location</th>
+            <th style="text-align: center;">Month Days</th>
+            <th style="text-align: center;">Present Days</th>
+            <th style="text-align: center;">Late Arrivals</th>
+            <th style="text-align: center;">Total Late Mins</th>
+            <th style="text-align: center;">Allowed Leaves</th>
+            <th style="text-align: center;">LOP (Absent)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+      <div class="footer">
+        <div class="sig">Prepared By (HR)</div>
+        <div class="sig">Verified By (Manager)</div>
+      </div>
+      <script>
+        window.onload = function() { window.print(); }
+      </script>
+    </body>
+    </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const handlePrintDailySheet = () => {
@@ -543,11 +636,11 @@ export const AttendanceSubTab = () => {
               Monthly Aggregate Attendance Summary
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Tracks total days, present days, late arrivals, allowed leaves & LOP days per month.
+              Tracks total days, present days, late arrivals, total late minutes, allowed leaves & LOP days per month.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-slate-400 font-semibold">Select Month:</span>
             <input
               type="month"
@@ -555,6 +648,15 @@ export const AttendanceSubTab = () => {
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white font-mono font-bold focus:outline-none"
             />
+            <button
+              type="button"
+              onClick={handlePrintMonthlySummary}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm"
+              title="Print Monthly Attendance Summary"
+            >
+              <Printer size={14} />
+              Print Summary
+            </button>
           </div>
         </div>
 
@@ -567,6 +669,7 @@ export const AttendanceSubTab = () => {
                 <th className="py-3 px-4 text-center">Month Days</th>
                 <th className="py-3 px-4 text-center">Present Days</th>
                 <th className="py-3 px-4 text-center">Late Arrivals</th>
+                <th className="py-3 px-4 text-center">Total Late Mins</th>
                 <th className="py-3 px-4 text-center">Allowed Leaves</th>
                 <th className="py-3 px-4 text-center">LOP (Absent Days)</th>
               </tr>
@@ -574,13 +677,13 @@ export const AttendanceSubTab = () => {
             <tbody className="divide-y divide-slate-800/60 font-medium">
               {summaryLoading ? (
                 <tr>
-                  <td colSpan="7" className="py-8 text-center text-slate-500 font-semibold">
+                  <td colSpan="8" className="py-8 text-center text-slate-500 font-semibold">
                     Calculating monthly attendance metrics...
                   </td>
                 </tr>
               ) : monthlySummary.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="py-8 text-center text-slate-500 font-semibold">
+                  <td colSpan="8" className="py-8 text-center text-slate-500 font-semibold">
                     No attendance records for {selectedMonth}.
                   </td>
                 </tr>
@@ -594,7 +697,25 @@ export const AttendanceSubTab = () => {
                     <td className="py-3 px-4 font-bold text-purple-400">{sum.department}</td>
                     <td className="py-3 px-4 text-center font-mono font-bold text-slate-300">{sum.totalDays}</td>
                     <td className="py-3 px-4 text-center font-mono font-extrabold text-emerald-400">{sum.presentDays}</td>
-                    <td className="py-3 px-4 text-center font-mono font-extrabold text-amber-400">{sum.lateDays}</td>
+                    <td className="py-3 px-4 text-center font-mono font-extrabold text-amber-400">
+                      {sum.lateDays > 0 ? `${sum.lateDays} days` : '0'}
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      {(sum.totalLateMinutes || 0) > 0 ? (
+                        <div className="inline-flex flex-col items-center">
+                          <span className="px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-mono font-extrabold text-xs">
+                            {sum.totalLateMinutes} mins
+                          </span>
+                          {sum.totalLateMinutes >= 60 && (
+                            <span className="text-[10px] text-amber-400 font-mono font-bold mt-0.5">
+                              ({Math.floor(sum.totalLateMinutes / 60)}h {sum.totalLateMinutes % 60}m)
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-600 font-mono">—</span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-center font-mono font-extrabold text-sky-400">{sum.leaveDays}</td>
                     <td className="py-3 px-4 text-center font-mono font-extrabold text-rose-400">
                       {sum.lopDays > 0 ? `${sum.lopDays} days` : '0'}

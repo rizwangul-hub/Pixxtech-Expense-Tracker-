@@ -71,13 +71,20 @@ export const getDailyAttendance = async (req, res) => {
  */
 export const markAttendance = async (req, res) => {
   try {
-    const { employeeId, dateStr, shiftOpeningTime = '12:30', arrivalTime = '', status = 'PRESENT', remarks = '' } = req.body;
+    const { employeeId, dateStr, shiftOpeningTime = '12:30', arrivalTime = '', status = 'PRESENT', lateMinutes, remarks = '' } = req.body;
 
     if (!employeeId || !dateStr) {
       return apiError(res, 'Employee ID and date string (YYYY-MM-DD) are required.', 400);
     }
 
-    const lateMins = calculateLateMinutes(arrivalTime, shiftOpeningTime);
+    let lateMins = 0;
+    if (status !== 'ABSENT' && status !== 'LEAVE') {
+      if (lateMinutes !== undefined && !isNaN(Number(lateMinutes))) {
+        lateMins = Math.max(0, Number(lateMinutes));
+      } else {
+        lateMins = calculateLateMinutes(arrivalTime, shiftOpeningTime);
+      }
+    }
 
     const dateObj = new Date(dateStr);
 
@@ -118,7 +125,14 @@ export const bulkMarkAttendance = async (req, res) => {
 
     const dateObj = new Date(dateStr);
     const operations = records.map((rec) => {
-      const lateMins = calculateLateMinutes(rec.arrivalTime, rec.shiftOpeningTime || '12:30');
+      let lateMins = 0;
+      if (rec.status !== 'ABSENT' && rec.status !== 'LEAVE') {
+        if (rec.lateMinutes !== undefined && !isNaN(Number(rec.lateMinutes))) {
+          lateMins = Math.max(0, Number(rec.lateMinutes));
+        } else {
+          lateMins = calculateLateMinutes(rec.arrivalTime, rec.shiftOpeningTime || '12:30');
+        }
+      }
       return {
         updateOne: {
           filter: { employeeId: rec.employeeId, dateStr },
@@ -179,6 +193,7 @@ export const getMonthlyAttendanceSummary = async (req, res) => {
 
       let presentDays = 0;
       let lateDays = 0;
+      let totalLateMinutes = 0;
       let leaveDays = 0;
       let lopDays = 0;
       let halfDays = 0;
@@ -195,6 +210,14 @@ export const getMonthlyAttendanceSummary = async (req, res) => {
           halfDays += 1;
           presentDays += 0.5;
         }
+
+        let lateMins = Number(r.lateMinutes) || 0;
+        if (lateMins <= 0 && r.arrivalTime && r.shiftOpeningTime && r.status !== 'ABSENT' && r.status !== 'LEAVE') {
+          lateMins = calculateLateMinutes(r.arrivalTime, r.shiftOpeningTime);
+        }
+        if (lateMins > 0) {
+          totalLateMinutes += lateMins;
+        }
       });
 
       return {
@@ -205,6 +228,7 @@ export const getMonthlyAttendanceSummary = async (req, res) => {
         totalDays: daysInMonth,
         presentDays,
         lateDays,
+        totalLateMinutes,
         leaveDays,
         lopDays,
         halfDays,
