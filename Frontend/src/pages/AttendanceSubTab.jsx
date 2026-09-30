@@ -189,14 +189,26 @@ export const AttendanceSubTab = () => {
               const arrMins = arrH * 60 + arrM;
 
               // Grace period: 15 mins
+              // If employee comes within 15 mins (e.g. shift 12:30, arrival <= 12:45), not late (0 mins).
+              // If employee comes after 15 mins (e.g. 12:50), count minutes after grace period: 12:50 - 12:45 = 5 mins.
               const graceLimit = openMins + 15;
               if (arrMins > graceLimit) {
-                updated.lateMinutes = arrMins - openMins;
+                updated.lateMinutes = arrMins - graceLimit;
                 updated.status = 'LATE';
               } else {
                 updated.lateMinutes = 0;
                 if (updated.status === 'LATE') updated.status = 'PRESENT';
               }
+            } else if (!arr) {
+              updated.lateMinutes = 0;
+              if (updated.status === 'LATE') updated.status = 'PRESENT';
+            }
+          }
+
+          // If status changes to ABSENT, LEAVE, or PRESENT, reset lateMinutes
+          if (field === 'status') {
+            if (val === 'ABSENT' || val === 'LEAVE' || val === 'PRESENT') {
+              updated.lateMinutes = 0;
             }
           }
           return updated;

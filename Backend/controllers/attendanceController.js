@@ -4,6 +4,10 @@ import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
 /**
  * Helper to calculate late minutes between arrivalTime and shiftOpeningTime (HH:mm format)
+ * Rule:
+ * 15-minute grace period:
+ * If arrival <= shiftOpeningTime + 15 minutes (e.g. 12:30 shift, arrived <= 12:45), late = 0 mins.
+ * If arrival > shiftOpeningTime + 15 minutes (e.g. 12:50), late = arrival - (shiftStart + 15) = 5 mins.
  */
 const calculateLateMinutes = (arrivalTime, shiftOpeningTime) => {
   if (!arrivalTime || !shiftOpeningTime) return 0;
@@ -15,7 +19,11 @@ const calculateLateMinutes = (arrivalTime, shiftOpeningTime) => {
   const openTotal = openH * 60 + openM;
   const arrTotal = arrH * 60 + arrM;
 
-  return Math.max(0, arrTotal - openTotal);
+  const graceLimit = openTotal + 15;
+  if (arrTotal > graceLimit) {
+    return arrTotal - graceLimit;
+  }
+  return 0;
 };
 
 /**
@@ -42,16 +50,33 @@ export const getDailyAttendance = async (req, res) => {
 
     const rows = employees.map((emp) => {
       const att = attMap.get(emp._id.toString());
+      const shiftOpeningTime = att?.shiftOpeningTime || emp.shiftOpeningTime || '12:30';
+      const arrivalTime = att?.arrivalTime || '';
+      let status = att?.status || 'PRESENT';
+      let lateMinutes = 0;
+
+      if (status !== 'ABSENT' && status !== 'LEAVE') {
+        if (arrivalTime && shiftOpeningTime) {
+          lateMinutes = calculateLateMinutes(arrivalTime, shiftOpeningTime);
+        } else {
+          lateMinutes = att?.lateMinutes || 0;
+        }
+      }
+
+      if (status !== 'ABSENT' && status !== 'LEAVE' && status !== 'HALF_DAY') {
+        status = lateMinutes > 0 ? 'LATE' : 'PRESENT';
+      }
+
       return {
         employeeId: emp._id,
         name: emp.name,
         designation: emp.designation,
         department: emp.department,
         dateStr,
-        shiftOpeningTime: att?.shiftOpeningTime || emp.shiftOpeningTime || '12:30',
-        arrivalTime: att?.arrivalTime || '',
-        status: att?.status || 'PRESENT',
-        lateMinutes: att?.lateMinutes || 0,
+        shiftOpeningTime,
+        arrivalTime,
+        status,
+        lateMinutes,
         remarks: att?.remarks || '',
         attendanceId: att?._id || null,
       };
@@ -79,12 +104,19 @@ export const markAttendance = async (req, res) => {
 
     let lateMins = 0;
     if (status !== 'ABSENT' && status !== 'LEAVE') {
-      if (lateMinutes !== undefined && !isNaN(Number(lateMinutes))) {
-        lateMins = Math.max(0, Number(lateMinutes));
-      } else {
+      if (arrivalTime && shiftOpeningTime) {
         lateMins = calculateLateMinutes(arrivalTime, shiftOpeningTime);
+      } else if (lateMinutes !== undefined && !isNaN(Number(lateMinutes))) {
+        lateMins = Math.max(0, Number(lateMinutes));
       }
     }
+
+    const finalStatus =
+      status === 'ABSENT' || status === 'LEAVE' || status === 'HALF_DAY'
+        ? status
+        : lateMins > 0
+        ? 'LATE'
+        : 'PRESENT';
 
     const dateObj = new Date(dateStr);
 
@@ -96,7 +128,7 @@ export const markAttendance = async (req, res) => {
         dateStr,
         shiftOpeningTime,
         arrivalTime,
-        status,
+        status: finalStatus,
         lateMinutes: lateMins,
         remarks: remarks.trim(),
       },
@@ -127,12 +159,20 @@ export const bulkMarkAttendance = async (req, res) => {
     const operations = records.map((rec) => {
       let lateMins = 0;
       if (rec.status !== 'ABSENT' && rec.status !== 'LEAVE') {
-        if (rec.lateMinutes !== undefined && !isNaN(Number(rec.lateMinutes))) {
+        if (rec.arrivalTime && rec.shiftOpeningTime) {
+          lateMins = calculateLateMinutes(rec.arrivalTime, rec.shiftOpeningTime);
+        } else if (rec.lateMinutes !== undefined && !isNaN(Number(rec.lateMinutes))) {
           lateMins = Math.max(0, Number(rec.lateMinutes));
-        } else {
-          lateMins = calculateLateMinutes(rec.arrivalTime, rec.shiftOpeningTime || '12:30');
         }
       }
+
+      const finalStatus =
+        rec.status === 'ABSENT' || rec.status === 'LEAVE' || rec.status === 'HALF_DAY'
+          ? rec.status
+          : lateMins > 0
+          ? 'LATE'
+          : 'PRESENT';
+
       return {
         updateOne: {
           filter: { employeeId: rec.employeeId, dateStr },
@@ -143,7 +183,7 @@ export const bulkMarkAttendance = async (req, res) => {
               dateStr,
               shiftOpeningTime: rec.shiftOpeningTime || '12:30',
               arrivalTime: rec.arrivalTime || '',
-              status: rec.status || 'PRESENT',
+              status: finalStatus,
               lateMinutes: lateMins,
               remarks: (rec.remarks || '').trim(),
             },
@@ -199,23 +239,35 @@ export const getMonthlyAttendanceSummary = async (req, res) => {
       let halfDays = 0;
 
       records.forEach((r) => {
-        if (r.status === 'PRESENT') presentDays += 1;
-        if (r.status === 'LATE') {
-          presentDays += 1;
-          lateDays += 1;
+        const isAbsent = r.status === 'ABSENT';
+        const isLeave = r.status === 'LEAVE';
+        const isHalfDay = r.status === 'HALF_DAY';
+
+        if (isLeave) {
+          leaveDays += 1;
+          return;
         }
-        if (r.status === 'LEAVE') leaveDays += 1;
-        if (r.status === 'ABSENT') lopDays += 1;
-        if (r.status === 'HALF_DAY') {
+        if (isAbsent) {
+          lopDays += 1;
+          return;
+        }
+        if (isHalfDay) {
           halfDays += 1;
           presentDays += 0.5;
+          return;
         }
 
-        let lateMins = Number(r.lateMinutes) || 0;
-        if (lateMins <= 0 && r.arrivalTime && r.shiftOpeningTime && r.status !== 'ABSENT' && r.status !== 'LEAVE') {
+        // Present or Late arrival:
+        let lateMins = 0;
+        if (r.arrivalTime && r.shiftOpeningTime) {
           lateMins = calculateLateMinutes(r.arrivalTime, r.shiftOpeningTime);
+        } else {
+          lateMins = Number(r.lateMinutes) || 0;
         }
+
+        presentDays += 1;
         if (lateMins > 0) {
+          lateDays += 1;
           totalLateMinutes += lateMins;
         }
       });
@@ -242,3 +294,4 @@ export const getMonthlyAttendanceSummary = async (req, res) => {
     return apiError(res, 'Failed to calculate monthly attendance summary.', 500);
   }
 };
+
