@@ -533,7 +533,14 @@ export const updatePendingEntry = async (req, res) => {
 
     const updates = req.body;
     if (updates.amount !== undefined) entry.amount = round2(Number(updates.amount));
-    if (updates.date) entry.date = new Date(updates.date);
+    if (updates.date || updates.paymentDate) {
+      const normalized = normalizeBusinessPaymentDate(updates.date || updates.paymentDate);
+      entry.date = normalized;
+      if (entry.entryData) {
+        entry.entryData.paymentDate = normalized;
+        entry.markModified('entryData');
+      }
+    }
     if (updates.rentMonth) entry.rentMonth = updates.rentMonth;
     if (updates.detail !== undefined) entry.detail = updates.detail.trim();
     if (updates.voucherNo !== undefined) entry.voucherNo = updates.voucherNo.trim();
@@ -1138,6 +1145,47 @@ export const verifyEntry = async (req, res) => {
         disbursementMonth: paymentPeriod.paymentMonth,
       };
       entry.markModified('entryData');
+    } else if (entry.entryType === 'OTHER_INCOME') {
+      const oiDate = normalizeBusinessPaymentDate(entry.date);
+      const clearingAccount = await getOrCreateOtherIncomeClearingAccount();
+      const receivingAcc = entry.receivingAccountId || entry.drAccountId;
+
+      let category = entry.categoryId ? await Category.findById(entry.categoryId) : null;
+      if (!category) {
+        category = await Category.findOne({ type: 'INCOME', isRentalHead: false });
+        if (!category) {
+          category = await Category.create({
+            name: 'Other Income',
+            type: 'INCOME',
+            isRentalHead: false,
+          });
+        }
+      }
+
+      const isOwnerPersonal = /boss|owner personal|kamran ijaz sb personal/i.test(category.name);
+
+      postedTransaction = await createTransaction({
+        date: oiDate,
+        voucherNo: entry.voucherNo,
+        detail: entry.detail || `Other Income Receipt #${entry.voucherNo}`,
+        categoryId: category._id,
+        drAccountId: receivingAcc,
+        crAccountId: clearingAccount._id,
+        amount: entry.amount,
+        propertyId: entry.propertyId || null,
+        unitId: entry.unitId || null,
+        transactionType: 'INCOME',
+        reportCategory: isOwnerPersonal ? 'Owner Personal' : 'Other Income',
+        sourceModule: isOwnerPersonal ? 'OWNER_PERSONAL' : 'OTHER_INCOME',
+        attachments: entry.attachments || [],
+        reference: entry.referenceNumber || '',
+        checkedBy: verifierName,
+        status: 'VERIFIED',
+        createdBy: entry.submittedBy,
+      });
+
+      entry.postedTransactionId = postedTransaction._id;
+      entry.date = oiDate;
     }
 
     entry.status = 'VERIFIED';

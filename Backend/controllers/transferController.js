@@ -4,6 +4,7 @@ import Transaction from '../models/Transaction.js';
 import Category from '../models/Category.js';
 import PendingEntry from '../models/PendingEntry.js';
 import { createTransaction, round2 } from '../services/ledgerService.js';
+import { normalizeBusinessPaymentDate } from '../services/salaryReportingService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
 /**
@@ -31,7 +32,7 @@ const getOrCreateTransferCategory = async () => {
  */
 export const executeTransfer = async (req, res) => {
   try {
-    const { fromAccountId, toAccountId, date, reference, voucherNo, attachments = [] } = req.body;
+    const { fromAccountId, toAccountId, date, transferDate: reqTransferDate, reference, voucherNo, attachments = [] } = req.body;
     const amount = req.transferAmount;
     const detail = req.transferNarration;
 
@@ -39,7 +40,8 @@ export const executeTransfer = async (req, res) => {
     const transferCategory = await getOrCreateTransferCategory();
 
     // 2. Generate sequential or timestamped voucher number if omitted
-    const transferDate = date ? new Date(date) : new Date();
+    const rawDate = date || reqTransferDate || req.body.transferDate || req.body.date;
+    const transferDate = normalizeBusinessPaymentDate(rawDate);
     const dateStr = transferDate.toISOString().slice(0, 10).replace(/-/g, '');
     const vNo =
       voucherNo ||

@@ -1041,7 +1041,7 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
 
             <div className="space-y-1.5 text-xs">
               <label className="text-slate-300 font-bold flex items-center justify-between">
-                <span>Actual Payment Date:</span>
+                <span>Entry Date (Actual Payment Date):</span>
                 <span className="text-[11px] font-normal text-slate-400">
                   Financial Report Month: <strong className="text-cyan-300 font-mono">{payDate ? payDate.slice(0, 7) : 'Select date'}</strong>
                 </span>

@@ -83,7 +83,7 @@ export function TransfersPage({ currentUser, onSelectAccount }) {
       fromAccountId: firstAcc,
       toAccountId: secondAcc,
       amount: '',
-      date: '2026-08-15',
+      date: new Date().toISOString().split('T')[0],
       voucherNo: '',
       detail: '',
     });
@@ -510,8 +510,9 @@ export function TransfersPage({ currentUser, onSelectAccount }) {
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1 font-semibold">
-                    Transfer Date <span className="text-rose-400">*</span>
+                  <label className="block text-slate-400 mb-1 font-semibold flex items-center justify-between">
+                    <span>Entry Date (Transfer Date) <span className="text-rose-400">*</span></span>
+                    <span className="text-[11px] font-mono text-indigo-400">Month: {formData.date ? formData.date.slice(0, 7) : ''}</span>
                   </label>
                   <input
                     type="date"
@@ -520,6 +521,9 @@ export function TransfersPage({ currentUser, onSelectAccount }) {
                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1 font-normal">
+                    Saved & reported in this entry date&apos;s financial month.
+                  </p>
                 </div>
               </div>
 

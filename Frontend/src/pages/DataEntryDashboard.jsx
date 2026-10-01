@@ -235,6 +235,7 @@ export const DataEntryDashboard = ({ user }) => {
         : [];
       const res = await transfersAPI.executeTransfer({
         ...transferForm,
+        date: transferForm.transferDate,
         amount: Number(transferForm.amount),
         attachments: uploadedImages,
       });
@@ -422,7 +423,10 @@ export const DataEntryDashboard = ({ user }) => {
               <form onSubmit={handleOtherIncomeSubmit} className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Date</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Entry Date (Receipt Date) <span className="text-red-500">*</span></span>
+                      <span className="text-[10px] font-mono text-amber-600 font-bold">Month: {otherForm.date ? otherForm.date.slice(0, 7) : ''}</span>
+                    </label>
                     <input
                       type="date"
                       value={otherForm.date}
@@ -430,6 +434,9 @@ export const DataEntryDashboard = ({ user }) => {
                       required
                       className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     />
+                    <p className="text-[10px] text-slate-500 mt-0.5 font-normal">
+                      Saved & reported in this entry date&apos;s month.
+                    </p>
                   </div>
 
                   <div>
@@ -588,7 +595,10 @@ export const DataEntryDashboard = ({ user }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Transfer Date</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Entry Date (Transfer Date) <span className="text-red-500">*</span></span>
+                      <span className="text-[10px] font-mono text-sky-600 font-bold">Month: {transferForm.transferDate ? transferForm.transferDate.slice(0, 7) : ''}</span>
+                    </label>
                     <input
                       type="date"
                       value={transferForm.transferDate}
@@ -596,6 +606,9 @@ export const DataEntryDashboard = ({ user }) => {
                       required
                       className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     />
+                    <p className="text-[10px] text-slate-500 mt-0.5 font-normal">
+                      Saved & reported in this entry date&apos;s month.
+                    </p>
                   </div>
                   <div>
                     <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Reference / Cheque No.</label>

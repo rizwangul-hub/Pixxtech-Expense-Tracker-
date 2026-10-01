@@ -52,9 +52,7 @@ export const resolveSalaryPaymentDateOnVerification = (entry, now = new Date()) 
   if (!submittedRaw) return verificationInstant;
 
   const submittedDate = normalizeBusinessPaymentDate(submittedRaw);
-  const submittedMonth = getUtcMonthKey(submittedDate);
-  const verificationMonth = getUtcMonthKey(verificationInstant);
-  if (submittedMonth && submittedMonth === verificationMonth) {
+  if (submittedDate && !Number.isNaN(submittedDate.getTime())) {
     return submittedDate;
   }
   return verificationInstant;

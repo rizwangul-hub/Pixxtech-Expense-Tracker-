@@ -341,8 +341,9 @@ export const RentCollectionModal = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-              Payment Date
+            <label className="block text-xs font-semibold uppercase text-slate-400 mb-1 flex items-center justify-between">
+              <span>Entry Date (Payment Date) <span className="text-emerald-400">*</span></span>
+              <span className="text-[11px] font-mono text-emerald-400">Month: {paymentDate ? paymentDate.slice(0, 7) : ''}</span>
             </label>
             <input
               type="date"
@@ -351,6 +352,9 @@ export const RentCollectionModal = ({
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition"
               required
             />
+            <p className="text-[10px] text-slate-500 mt-1 font-normal">
+              Income will be saved & reported in this entry date&apos;s month.
+            </p>
           </div>
         </div>
 

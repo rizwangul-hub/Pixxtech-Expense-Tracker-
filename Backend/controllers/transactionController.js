@@ -6,6 +6,7 @@ import MonthlyReport from '../models/MonthlyReport.js';
 import { createTransaction, round2, suggestNextVoucherNumber, syncAccountBalances } from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
 import { validateExpenseClassification, isOwnerPersonalCategory } from '../services/expenseClassificationService.js';
+import { normalizeBusinessPaymentDate, getUtcMonthKey } from '../services/salaryReportingService.js';
 
 /**
  * @desc    Record a new double-entry voucher transaction
@@ -76,12 +77,15 @@ export const recordVoucher = async (req, res) => {
       unitId,
     });
 
+    const entryDate = date ? normalizeBusinessPaymentDate(date) : new Date();
+    const effectiveRentMonth = rentMonth || getUtcMonthKey(entryDate);
+
     // 4. If submitted by DATA_ENTRY (Sarfraz), save as temporary pending entry awaiting Khurshid's verification
     if (req.user.role === 'DATA_ENTRY') {
       const pending = await PendingEntry.create({
         entryType: 'EXPENSE',
         amount: numericAmount,
-        date: date ? new Date(date) : new Date(),
+        date: entryDate,
         voucherNo: voucherNo.trim(),
         detail: detail.trim(),
         categoryId,
@@ -91,8 +95,8 @@ export const recordVoucher = async (req, res) => {
         unitId: unitId || null,
         expenseClassification: classification.expenseClassification,
         attachments,
-        rentMonth: rentMonth || null,
-        entryData: req.body,
+        rentMonth: effectiveRentMonth,
+        entryData: { ...req.body, rentMonth: effectiveRentMonth, date: entryDate },
         status: 'PENDING_VERIFICATION',
         submittedBy: req.user._id,
         submittedByName: req.user.name,
@@ -137,7 +141,7 @@ export const recordVoucher = async (req, res) => {
 
     // 5. Invoke atomic ledger service
     const transaction = await createTransaction({
-      date: date ? new Date(date) : new Date(),
+      date: entryDate,
       voucherNo: voucherNo.trim(),
       detail: detail.trim(),
       categoryId,
@@ -149,7 +153,7 @@ export const recordVoucher = async (req, res) => {
       unitId: unitId || null,
       expenseClassification: classification.expenseClassification,
       attachments,
-      rentMonth: rentMonth || null,
+      rentMonth: effectiveRentMonth,
       status: 'PENDING',
       createdBy: req.user._id,
       checkedBy: req.user.name,

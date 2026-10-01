@@ -8,6 +8,7 @@ import Transaction from '../models/Transaction.js';
 import Voucher from '../models/Voucher.js';
 import RentReceived from '../models/RentReceived.js';
 import { createTransaction, round2, suggestNextVoucherNumber, syncAccountBalances } from '../services/ledgerService.js';
+import { normalizeBusinessPaymentDate } from '../services/salaryReportingService.js';
 
 /**
  * In-memory short-term idempotency cache to prevent double-click / rapid submission duplicates
@@ -346,7 +347,7 @@ export const recordOtherIncome = async (req, res) => {
     incomeHeadId = incomeHeadId || req.body.headId;
     receivingAccountId = receivingAccountId || req.body.accountId;
     transactionDetail = transactionDetail || req.body.detail || req.body.narration || '';
-    receiptDate = receiptDate || req.body.date || new Date();
+    receiptDate = receiptDate || req.body.date || req.body.entryDate || req.body.receiptDate || new Date();
     referenceNumber = referenceNumber || req.body.reference || '';
 
     // 1. Mandatory Validations
@@ -443,7 +444,7 @@ export const recordOtherIncome = async (req, res) => {
     recentSubmissions.set(submissionKey, Date.now());
 
     // 6. Generate Receipt & Voucher Numbers
-    const validReceiptDate = receiptDate ? new Date(receiptDate) : new Date();
+    const validReceiptDate = normalizeBusinessPaymentDate(receiptDate);
     const receiptNumber = await generateOtherIncomeReceiptNumber(validReceiptDate);
 
     let cleanVn = (voucherNumber || '').trim().toUpperCase();

@@ -27,7 +27,8 @@ export const validateTransfer = async (req, res, next) => {
       errors.amount = 'Transfer amount must be strictly greater than 0.';
     }
 
-    if (date && isNaN(new Date(date).getTime())) {
+    const rawDate = date || req.body.transferDate;
+    if (rawDate && isNaN(new Date(rawDate).getTime())) {
       errors.date = 'Valid transfer date is required.';
     }
 

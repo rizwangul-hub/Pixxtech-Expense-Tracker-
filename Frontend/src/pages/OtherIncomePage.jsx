@@ -54,7 +54,7 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
   const [successMsg, setSuccessMsg] = useState('');
 
   const [recordForm, setRecordForm] = useState({
-    receiptDate: '2026-08-15',
+    receiptDate: new Date().toISOString().split('T')[0],
     voucherNumber: '',
     incomeHeadId: '',
     amount: '',
@@ -670,8 +670,9 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Receipt Date */}
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
-                    Receipt Date <span className="text-amber-400">*</span>
+                  <label className="block text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                    <span>Entry Date (Receipt Date) <span className="text-amber-400">*</span></span>
+                    <span className="text-[11px] font-mono text-amber-400">Month: {recordForm.receiptDate ? recordForm.receiptDate.slice(0, 7) : ''}</span>
                   </label>
                   <input
                     type="date"
@@ -680,6 +681,9 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
                     onChange={(e) => setRecordForm({ ...recordForm, receiptDate: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1 font-normal">
+                    Saved & reported in this entry date&apos;s financial month.
+                  </p>
                 </div>
 
                 {/* Voucher Number (Auto-Suggested or Manual) */}

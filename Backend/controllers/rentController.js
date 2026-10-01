@@ -4,6 +4,7 @@ import Category from '../models/Category.js';
 import Transaction from '../models/Transaction.js';
 import PendingEntry from '../models/PendingEntry.js';
 import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
+import { normalizeBusinessPaymentDate } from '../services/salaryReportingService.js';
 
 /**
  * @desc    Collect property rent and automatically record double-entry voucher
@@ -68,7 +69,7 @@ export const collectRent = async (req, res) => {
     // If submitted by DATA_ENTRY (Sarfraz), save as temporary pending entry awaiting Khurshid's verification
     if (req.user.role === 'DATA_ENTRY') {
       // Auto-generate voucher number in PT-XXX-MM-YY format (same as expense entries)
-      const entryDate = paymentDate ? new Date(paymentDate) : new Date();
+      const entryDate = normalizeBusinessPaymentDate(paymentDate);
       const autoVoucherNo = await suggestNextVoucherNumber(entryDate);
 
       const pending = await PendingEntry.create({
@@ -84,7 +85,7 @@ export const collectRent = async (req, res) => {
         receivingAccountId,
         detail: finalNarration,
         referenceNumber: notes || '',
-        entryData: { ...req.body, detail: finalNarration, narration: finalNarration, notes: notes || '' },
+        entryData: { ...req.body, paymentDate: entryDate, detail: finalNarration, narration: finalNarration, notes: notes || '' },
         status: 'PENDING_VERIFICATION',
         submittedBy: req.user._id,
         submittedByName: req.user.name,
@@ -168,7 +169,7 @@ export const collectRent = async (req, res) => {
 
     // 7. Record transaction via ledgerService
     const transaction = await createTransaction({
-      date: paymentDate ? new Date(paymentDate) : new Date(),
+      date: normalizeBusinessPaymentDate(paymentDate),
       voucherNo,
       detail: finalNarration,
       categoryId: rentalCategory._id,

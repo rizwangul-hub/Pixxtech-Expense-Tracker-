@@ -233,7 +233,7 @@ export const VoucherEntryForm = ({
         expenseScope,
         propertyExpenseType,
         attachments: uploadedImages,
-        rentMonth: rentMonth || null,
+        rentMonth: date ? date.slice(0, 7) : null,
       });
 
       setSuccess(`Voucher #${voucherNo} recorded successfully!`);
@@ -323,8 +323,11 @@ export const VoucherEntryForm = ({
         {/* Row 1: Date & Voucher No */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1 flex items-center gap-1">
-              <Calendar className="w-4 h-4 text-blue-600" /> Date
+            <label className="block text-xs font-bold uppercase text-slate-700 mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1">
+                <Calendar className="w-4 h-4 text-blue-600" /> Entry Date (Voucher Date) <span className="text-red-500">*</span>
+              </span>
+              <span className="text-[11px] font-mono text-blue-600 font-bold">Month: {date ? date.slice(0, 7) : ''}</span>
             </label>
             <input
               type="date"
@@ -333,6 +336,9 @@ export const VoucherEntryForm = ({
               className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
               required
             />
+            <p className="text-[10px] text-slate-500 mt-1 font-normal">
+              Transaction will be saved & reported in this entry date&apos;s month.
+            </p>
           </div>
 
           <div>
