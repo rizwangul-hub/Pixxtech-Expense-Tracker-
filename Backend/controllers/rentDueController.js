@@ -3,7 +3,94 @@ import RentDue from '../models/RentDue.js';
 import RentalAgreement from '../models/RentalAgreement.js';
 import Property from '../models/Property.js';
 import Tenant from '../models/Tenant.js';
+import RentReceived from '../models/RentReceived.js';
+import Transaction from '../models/Transaction.js';
+import { round2 } from '../services/ledgerService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
+
+/**
+ * Automatically synchronize RentDue records with actual RentReceived and Transaction records
+ */
+export const syncRentDueWithCollections = async (filter = {}) => {
+  const query = {};
+  if (filter.month || filter.rentMonth) {
+    query.rentMonth = filter.month || filter.rentMonth;
+  }
+  if (filter.agreementId) query.agreementId = filter.agreementId;
+  if (filter.unitId) query.unitId = filter.unitId;
+  if (filter.propertyId) query.propertyId = filter.propertyId;
+
+  const rentDues = await RentDue.find(query);
+  if (!rentDues || rentDues.length === 0) return;
+
+  const distinctMonths = [...new Set(rentDues.map((rd) => rd.rentMonth))];
+
+  // Fetch all non-reversed rent receipts for these months
+  const [rentReceipts, rentTransactions] = await Promise.all([
+    RentReceived.find({
+      rentMonth: { $in: distinctMonths },
+      status: { $ne: 'REVERSED' },
+    }).lean(),
+    Transaction.find({
+      rentMonth: { $in: distinctMonths },
+      transactionType: 'INCOME',
+      reportCategory: 'Rent',
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+    }).lean(),
+  ]);
+
+  for (const rd of rentDues) {
+    const agreementIdStr = rd.agreementId?.toString();
+    const unitIdStr = rd.unitId?.toString();
+    const targetMonth = rd.rentMonth;
+
+    // Payments from RentReceived
+    const matchingReceipts = rentReceipts.filter((rr) => {
+      if (rr.rentMonth !== targetMonth) return false;
+      if (agreementIdStr && rr.agreementId?.toString() === agreementIdStr) return true;
+      if (unitIdStr && rr.unitId?.toString() === unitIdStr) return true;
+      return false;
+    });
+
+    let paidTotal = matchingReceipts.reduce((sum, r) => sum + (r.amount || 0), 0);
+
+    // Fallback: If no RentReceived but matching verified Transactions exist
+    if (paidTotal === 0) {
+      const matchingTxs = rentTransactions.filter((tx) => {
+        if (tx.rentMonth !== targetMonth) return false;
+        if (agreementIdStr && tx.agreementId?.toString() === agreementIdStr) return true;
+        if (unitIdStr && tx.unitId?.toString() === unitIdStr) return true;
+        return false;
+      });
+      paidTotal = matchingTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
+    }
+
+    paidTotal = round2(paidTotal);
+    const expected = round2(rd.expectedRentAmount || 0);
+    const remaining = round2(Math.max(0, expected - paidTotal));
+
+    let newStatus = rd.status;
+    if (remaining <= 0) {
+      newStatus = 'PAID';
+    } else if (paidTotal > 0) {
+      newStatus = 'PARTIAL';
+    } else {
+      const now = new Date();
+      if (rd.dueDate && now > new Date(rd.dueDate)) {
+        newStatus = 'OVERDUE';
+      } else {
+        newStatus = 'DUE';
+      }
+    }
+
+    if (rd.paidAmount !== paidTotal || rd.remainingAmount !== remaining || rd.status !== newStatus) {
+      rd.paidAmount = paidTotal;
+      rd.remainingAmount = remaining;
+      rd.status = newStatus;
+      await rd.save();
+    }
+  }
+};
 
 /**
  * Calculate valid due date capping day at month-end for shorter months (e.g. Feb 28/29)
@@ -104,6 +191,9 @@ export const generateMonthlyRentDue = async (req, res) => {
       generatedRecords.push(created);
     }
 
+    // Sync newly generated records against any already collected rent for this month
+    await syncRentDueWithCollections({ rentMonth: month, propertyId, agreementId });
+
     return apiSuccess(
       res,
       {
@@ -145,6 +235,9 @@ export const getRentDue = async (req, res) => {
       query.tenantId = tenantId;
     }
 
+    // Automatically synchronize RentDue records with real collections before returning
+    await syncRentDueWithCollections(query);
+
     if (status) {
       query.status = status;
     }
@@ -174,8 +267,14 @@ export const getRentDue = async (req, res) => {
     const enrichedRecords = rentDueRecords.map((rd) => {
       const prop = propertyMap.get(rd.propertyId?._id?.toString());
       const unit = prop?.units?.find((u) => u._id.toString() === rd.unitId?.toString());
+      const expected = round2(rd.expectedRentAmount || 0);
+      const paid = round2(rd.paidAmount || 0);
+      const remaining = rd.remainingAmount !== undefined ? rd.remainingAmount : Math.max(0, expected - paid);
       return {
         ...rd,
+        expectedRentAmount: expected,
+        paidAmount: paid,
+        remainingAmount: remaining,
         unitDetails: unit
           ? {
               unitName: unit.unitName,
@@ -188,16 +287,22 @@ export const getRentDue = async (req, res) => {
     });
 
     // Aggregates for the filtered dataset
-    const allMatching = await RentDue.find(query).select('expectedRentAmount status').lean();
-    const totalExpectedAmount = allMatching.reduce((sum, r) => sum + (r.expectedRentAmount || 0), 0);
+    const allMatching = await RentDue.find(query).select('expectedRentAmount paidAmount remainingAmount status').lean();
+    const totalExpectedAmount = round2(allMatching.reduce((sum, r) => sum + (r.expectedRentAmount || 0), 0));
+    const totalPaidAmount = round2(allMatching.reduce((sum, r) => sum + (r.paidAmount || 0), 0));
+    const totalRemainingAmount = round2(allMatching.reduce((sum, r) => sum + (r.remainingAmount !== undefined ? r.remainingAmount : Math.max(0, (r.expectedRentAmount || 0) - (r.paidAmount || 0))), 0));
     const dueCount = allMatching.filter((r) => r.status === 'DUE').length;
+    const partialCount = allMatching.filter((r) => r.status === 'PARTIAL').length;
     const overdueCount = allMatching.filter((r) => r.status === 'OVERDUE').length;
     const paidCount = allMatching.filter((r) => r.status === 'PAID').length;
 
     const summary = {
       totalRecords: totalCount,
       totalExpectedAmount,
+      totalPaidAmount,
+      totalRemainingAmount,
       dueCount,
+      partialCount,
       overdueCount,
       paidCount,
       filteredMonth: month || 'ALL',
@@ -236,17 +341,29 @@ export const getRentDueSummary = async (req, res) => {
       query.rentMonth = month.trim();
     }
 
-    const records = await RentDue.find(query).select('expectedRentAmount status rentMonth').lean();
-    const totalExpectedRent = records.reduce((sum, r) => sum + (r.expectedRentAmount || 0), 0);
+    await syncRentDueWithCollections(query);
+
+    const records = await RentDue.find(query).select('expectedRentAmount paidAmount remainingAmount status rentMonth').lean();
+    const totalExpectedRent = round2(records.reduce((sum, r) => sum + (r.expectedRentAmount || 0), 0));
+    const totalPaidRent = round2(records.reduce((sum, r) => sum + (r.paidAmount || 0), 0));
+    const totalRemainingDue = round2(records.reduce((sum, r) => sum + (r.remainingAmount !== undefined ? r.remainingAmount : Math.max(0, (r.expectedRentAmount || 0) - (r.paidAmount || 0))), 0));
     const activeAgreements = await RentalAgreement.countDocuments({ status: 'ACTIVE' });
     const overdueRecords = records.filter((r) => r.status === 'OVERDUE').length;
+    const paidRecords = records.filter((r) => r.status === 'PAID').length;
+    const partialRecords = records.filter((r) => r.status === 'PARTIAL').length;
+    const dueRecords = records.filter((r) => r.status === 'DUE').length;
 
     return apiSuccess(
       res,
       {
         month: month || 'ALL',
         totalExpectedRent,
+        totalPaidRent,
+        totalRemainingDue,
         totalRecords: records.length,
+        paidRecords,
+        partialRecords,
+        dueRecords,
         activeAgreements,
         overdueRecords,
       },

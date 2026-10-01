@@ -22,8 +22,8 @@ import { isAdmin } from '../utils/permissions.js';
 export function RentDuePage({ currentUser, onSelectTenant }) {
   const userIsAdmin = isAdmin(currentUser);
 
-  // Default month to 2026-08 matching current reporting cycle
-  const [selectedMonth, setSelectedMonth] = useState('2026-08');
+  // Default month to 2026-09 matching current active month
+  const [selectedMonth, setSelectedMonth] = useState('2026-09');
   const [propertyFilter, setPropertyFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
@@ -36,7 +36,7 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
 
   // Generate Modal State
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
-  const [genTargetMonth, setGenTargetMonth] = useState('2026-08');
+  const [genTargetMonth, setGenTargetMonth] = useState('2026-09');
   const [genPropertyId, setGenPropertyId] = useState('');
   const [generating, setGenerating] = useState(false);
   const [genResult, setGenResult] = useState(null);
@@ -166,41 +166,49 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-600 font-bold uppercase tracking-wider">Total Expected Rent</span>
-              <Receipt size={18} className="text-emerald-600" />
+              <Receipt size={18} className="text-blue-600" />
             </div>
             <div className="text-2xl font-bold text-slate-900 font-mono mt-1">
               {formatPKR(summary.totalExpectedAmount)}
             </div>
-            <div className="text-xs text-slate-500 mt-1 font-medium">For {summary.filteredMonth}</div>
+            <div className="text-xs text-slate-500 mt-1 font-medium">{summary.totalRecords} billable units in {summary.filteredMonth}</div>
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-600 font-bold uppercase tracking-wider">Billable Units</span>
-              <Building size={18} className="text-blue-600" />
+              <span className="text-xs text-slate-600 font-bold uppercase tracking-wider">Paid / Collected</span>
+              <CheckCircle2 size={18} className="text-emerald-600" />
             </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1">{summary.totalRecords}</div>
-            <div className="text-xs text-slate-500 mt-1 font-medium">Active agreement units</div>
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-600 font-bold uppercase tracking-wider">Due Status</span>
-              <Clock size={18} className="text-amber-600" />
+            <div className="text-2xl font-bold text-emerald-600 font-mono mt-1">
+              {formatPKR(summary.totalPaidAmount || 0)}
             </div>
-            <div className="text-2xl font-bold text-amber-700 mt-1">{summary.dueCount}</div>
-            <div className="text-xs text-slate-500 mt-1 font-medium">Awaiting rent receipt</div>
+            <div className="text-xs text-emerald-700 mt-1 font-semibold">{summary.paidCount || 0} units paid in full</div>
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-600 font-bold uppercase tracking-wider">Target Month</span>
+              <span className="text-xs text-slate-600 font-bold uppercase tracking-wider">Remaining Due</span>
+              <AlertCircle size={18} className="text-rose-600" />
+            </div>
+            <div className="text-2xl font-bold text-rose-600 font-mono mt-1">
+              {formatPKR(summary.totalRemainingAmount !== undefined ? summary.totalRemainingAmount : Math.max(0, (summary.totalExpectedAmount || 0) - (summary.totalPaidAmount || 0)))}
+            </div>
+            <div className="text-xs text-slate-500 mt-1 font-medium">
+              {(summary.dueCount || 0) + (summary.overdueCount || 0)} unpaid, {summary.partialCount || 0} partial
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-600 font-bold uppercase tracking-wider">Collection Rate</span>
               <CalendarDays size={18} className="text-indigo-600" />
             </div>
-            <div className="text-2xl font-bold text-slate-900 font-mono mt-1">
-              {summary.filteredMonth}
+            <div className="text-2xl font-bold text-indigo-600 font-mono mt-1">
+              {summary.totalExpectedAmount > 0 
+                ? `${Math.round(((summary.totalPaidAmount || 0) / summary.totalExpectedAmount) * 100)}%` 
+                : '0%'}
             </div>
-            <div className="text-xs text-slate-500 mt-1 font-medium">Active billing period</div>
+            <div className="text-xs text-slate-500 mt-1 font-medium">Month: {summary.filteredMonth}</div>
           </div>
         </div>
       )}
@@ -262,6 +270,7 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
             >
               <option value="">All Statuses</option>
               <option value="DUE">DUE</option>
+              <option value="PARTIAL">PARTIAL</option>
               <option value="OVERDUE">OVERDUE</option>
               <option value="PAID">PAID</option>
             </select>
@@ -309,6 +318,8 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
                   <th className="text-left">Tenant / Payer</th>
                   <th className="text-left">Property & Leased Unit</th>
                   <th className="text-right">Expected Rent</th>
+                  <th className="text-right">Paid Amount</th>
+                  <th className="text-right">Remaining Due</th>
                   <th className="text-center">Status</th>
                   <th className="text-right">Agreement #</th>
                 </tr>
@@ -357,9 +368,36 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
                       </div>
                     </td>
 
+                    {/* Paid Amount */}
+                    <td className="text-right">
+                      <div className="currency-amount text-emerald-700 font-mono font-bold">
+                        {formatPKR(rd.paidAmount || 0)}
+                      </div>
+                    </td>
+
+                    {/* Remaining Due */}
+                    <td className="text-right">
+                      <div className={`currency-amount font-mono font-bold ${
+                        (rd.remainingAmount || 0) > 0 ? 'text-rose-700' : 'text-slate-400'
+                      }`}>
+                        {formatPKR(rd.remainingAmount ?? (rd.expectedRentAmount - (rd.paidAmount || 0)))}
+                      </div>
+                    </td>
+
                     {/* Status */}
                     <td className="text-center">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                        rd.status === 'PAID'
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          : rd.status === 'PARTIAL'
+                          ? 'bg-amber-100 text-amber-800 border-amber-300'
+                          : rd.status === 'OVERDUE'
+                          ? 'bg-rose-100 text-rose-800 border-rose-300'
+                          : 'bg-slate-100 text-slate-800 border-slate-300'
+                      }`}>
+                        {rd.status === 'PAID' && <CheckCircle2 size={12} className="text-emerald-600" />}
+                        {rd.status === 'PARTIAL' && <Clock size={12} className="text-amber-600" />}
+                        {rd.status === 'OVERDUE' && <AlertCircle size={12} className="text-rose-600" />}
                         {rd.status}
                       </span>
                     </td>
@@ -406,7 +444,7 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
                   pattern="\d{4}-(0[1-9]|1[0-2])"
                   value={genTargetMonth}
                   onChange={(e) => setGenTargetMonth(e.target.value)}
-                  placeholder="2026-08"
+                  placeholder="2026-09"
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
                 />
                 <p className="text-[11px] text-slate-500 mt-1">

@@ -5,6 +5,7 @@ import Transaction from '../models/Transaction.js';
 import PendingEntry from '../models/PendingEntry.js';
 import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
 import { normalizeBusinessPaymentDate } from '../services/salaryReportingService.js';
+import { syncRentDueWithCollections } from './rentDueController.js';
 
 /**
  * @desc    Collect property rent and automatically record double-entry voucher
@@ -184,6 +185,9 @@ export const collectRent = async (req, res) => {
       checkedBy: req.user.name,
       createdBy: req.user._id,
     });
+
+    // Synchronize RentDue record for this unit and month
+    await syncRentDueWithCollections({ rentMonth, propertyId: property._id, unitId: unit._id });
 
     return res.status(201).json({
       success: true,

@@ -47,6 +47,20 @@ const rentDueSchema = new mongoose.Schema(
       min: [0, 'Expected rent amount cannot be negative'],
       set: (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100,
     },
+    paidAmount: {
+      type: Number,
+      default: 0,
+      min: [0, 'Paid amount cannot be negative'],
+      set: (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100,
+    },
+    remainingAmount: {
+      type: Number,
+      default: function () {
+        return Math.max(0, (this.expectedRentAmount || 0) - (this.paidAmount || 0));
+      },
+      min: [0, 'Remaining amount cannot be negative'],
+      set: (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100,
+    },
     status: {
       type: String,
       enum: {

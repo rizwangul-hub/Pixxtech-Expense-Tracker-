@@ -19,6 +19,7 @@ import {
   syncAccountBalances,
 } from '../services/ledgerService.js';
 import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
+import { syncRentDueWithCollections } from './rentDueController.js';
 import {
   getOrCreateEmployeeSalaryCategory,
   getOrCreateSalaryExpenseAccount,
@@ -943,6 +944,9 @@ export const verifyEntry = async (req, res) => {
 
       entry.postedTransactionId = postedTransaction._id;
       entry.postedRentReceivedId = postedRentReceived._id;
+
+      // Synchronize RentDue status and paid amount
+      await syncRentDueWithCollections({ rentMonth: cleanMonth, agreementId: resolvedAgreementId, unitId: entry.unitId });
     } else if (entry.entryType === 'TRANSFER') {
       const transferCategory = await getOrCreateTransferCategory();
       const drAcc = entry.drAccountId || entry.receivingAccountId;
@@ -1814,20 +1818,13 @@ export const unverifyEntry = async (req, res) => {
       // Revert RentDue dues allocation if agreement exists
       const cleanMonth = entry?.rentMonth || tx?.rentMonth;
       const agreementId = entry?.agreementId || rentRec?.agreementId || tx?.agreementId;
-      const rentAmount = entry?.amount || tx?.amount || 0;
 
-      if (agreementId && cleanMonth) {
-        const currentRentDue = await RentDue.findOne({ agreementId, rentMonth: cleanMonth });
-        if (currentRentDue) {
-          const newTotalPaid = round2(Math.max(0, (currentRentDue.paidAmount || 0) - rentAmount));
-          currentRentDue.paidAmount = newTotalPaid;
-          currentRentDue.status = newTotalPaid >= currentRentDue.expectedRentAmount
-            ? 'PAID'
-            : newTotalPaid > 0
-            ? 'PARTIAL'
-            : 'UNPAID';
-          await currentRentDue.save();
-        }
+      if (cleanMonth) {
+        await syncRentDueWithCollections({
+          rentMonth: cleanMonth,
+          agreementId: agreementId || undefined,
+          unitId: entry?.unitId || rentRec?.unitId || tx?.unitId || undefined,
+        });
       }
     }
 
