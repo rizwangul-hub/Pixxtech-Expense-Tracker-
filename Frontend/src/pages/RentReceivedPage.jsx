@@ -61,13 +61,13 @@ export function RentReceivedPage({
   // Form Data
   const [formData, setFormData] = useState({
     tenantId: '',
-    rentMonth: '2026-08',
+    rentMonth: '2026-09',
     amount: '',
     paymentMethod: 'CASH',
     receivingAccountId: '',
-    receiptDate: '2026-08-05',
+    receiptDate: new Date().toISOString().split('T')[0],
     referenceNumber: '',
-    checkedBy: 'Fahad',
+    checkedBy: currentUser?.name || 'Sarfraz',
     description: '',
     allocatePriorReceivable: true,
   });
@@ -89,7 +89,7 @@ export function RentReceivedPage({
 
       const [receiptsRes, summaryRes] = await Promise.all([
         rentReceivedAPI.getRentReceipts(params),
-        rentReceivedAPI.getSummary({ month: selectedMonth === 'ALL' ? '2026-08' : selectedMonth }),
+        rentReceivedAPI.getSummary({ month: selectedMonth === 'ALL' ? '2026-09' : selectedMonth }),
       ]);
 
       if (receiptsRes?.success && receiptsRes.data) {
@@ -175,13 +175,13 @@ export function RentReceivedPage({
 
     setFormData({
       tenantId: '',
-      rentMonth: selectedMonth === 'ALL' ? '2026-08' : selectedMonth,
+      rentMonth: selectedMonth === 'ALL' ? '2026-09' : selectedMonth,
       amount: '',
       paymentMethod: 'CASH',
       receivingAccountId: defaultCash,
-      receiptDate: '2026-08-05',
+      receiptDate: new Date().toISOString().split('T')[0],
       referenceNumber: '',
-      checkedBy: 'Fahad',
+      checkedBy: currentUser?.name || 'Sarfraz',
       description: '',
       allocatePriorReceivable: true,
     });
@@ -225,8 +225,10 @@ export function RentReceivedPage({
 
       const res = await rentReceivedAPI.recordRentReceived(payload);
       if (res?.success) {
+        const rcNum = res.data?.receipt?.receiptNumber || res.receipt?.receiptNumber || res.pendingEntry?.voucherNo || res.data?.pendingEntry?.voucherNo || '';
+        const pendingNote = (res.isPending || res.data?.isPending) ? ' (Pending Verification)' : '';
         setSuccessMsg(
-          `Rent receipt ${res.data.receipt?.receiptNumber} for ${formatPKR(numAmount)} recorded successfully!`
+          `Rent receipt ${rcNum ? rcNum + ' ' : ''}for ${formatPKR(numAmount)} recorded successfully!${pendingNote}`
         );
         setIsModalOpen(false);
         fetchReceiptsAndSummary();

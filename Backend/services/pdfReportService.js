@@ -300,9 +300,15 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     .sort({ plazaName: 1 })
     .lean();
 
+  const [repYear, repMonth] = periodName.split('-').map(Number);
+  const currentMonthLabel = `${monthNames[repMonth - 1]}-${repYear}`;
+  const prevDate = new Date(Date.UTC(repYear, repMonth - 2, 1));
+  const priorMonthLabel = `${monthNames[prevDate.getUTCMonth()]}-${prevDate.getUTCFullYear()}`;
+  const isBaselineJuly = periodName === '2026-08';
+
   let totAgreed = 0;
-  let totJulyPrior = 0;
-  let totAugustActual = 0;
+  let totPrior = 0;
+  let totCurrentDue = 0;
   let totReceived = 0;
   let totReceivable = 0;
   let totAdvance = 0;
@@ -310,15 +316,21 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   const plazaList = properties.map(plaza => {
     const units = (plaza.units || []).map(unit => {
       const agreed = round2(unit.agreedRent || 0);
-      const prior = round2(unit.julyReceivable || 0);
       const currentDue = agreed;
 
-      const matchingTxs = transactions.filter(
-        t =>
-          (t.reportCategory === 'Rent' || t.sourceModule === 'RENT_RECEIVED') &&
-          t.propertyId?._id?.toString() === plaza._id.toString() &&
-          t.unitId?.toString() === unit._id.toString()
-      );
+      let prior = 0;
+      if (isBaselineJuly) {
+        prior = round2(unit.julyReceivable || 0);
+      } else {
+        prior = round2(Math.max(0, unit.julyReceivable || 0));
+      }
+
+      const matchingTxs = transactions.filter(t => {
+        const pId = t.propertyId?._id?.toString() || t.propertyId?.toString();
+        const uId = t.unitId?.toString();
+        const isRent = t.reportCategory === 'Rent' || t.sourceModule === 'RENT_RECEIVED';
+        return isRent && pId === plaza._id.toString() && uId === unit._id.toString();
+      });
 
       const received = round2(
         matchingTxs.reduce((sum, t) => sum + (t.amount || 0), 0)
@@ -331,17 +343,38 @@ export const generateMonthlyFundsReport = async (monthYear) => {
       const receivedDate = (latestTx && received > 0 && latestTx.date) ? formatReportDate(latestTx.date) : '-';
       const renewalDate = unit.renewalDate ? formatReportDate(unit.renewalDate) : '-';
 
-      const priorArrears = prior > 0 ? prior : 0;
-      const priorAdvance = prior < 0 ? Math.abs(prior) : 0;
-      const totalPayable = round2(currentDue + priorArrears);
-      const totalCovered = round2(received + priorAdvance);
+      let receivable = 0;
+      let advanceRent = 0;
 
-      const receivable = round2(Math.max(0, totalPayable - totalCovered));
-      const advanceRent = round2(Math.max(0, totalCovered - totalPayable));
+      // Special corporate bank handling when rent received is 0
+      const isCorporateBank = unit.unitName && /Allied Bank/i.test(unit.unitName);
+
+      if (isCorporateBank && received === 0) {
+        receivable = 0;
+        advanceRent = 0;
+      } else if (isBaselineJuly && prior < 0) {
+        const priorAdvance = Math.abs(prior);
+        const totalCovered = round2(received + priorAdvance);
+        receivable = round2(Math.max(0, currentDue - totalCovered));
+        advanceRent = round2(Math.max(0, totalCovered - currentDue));
+      } else {
+        // Standard proper accounting allocation:
+        // 1. Received covers prior arrears first
+        // 2. Remaining received covers current month rent
+        // 3. Any surplus received is Advance Rent (e.g. October rent collected in September)
+        const totalPayable = round2(currentDue + Math.max(0, prior));
+        if (received >= totalPayable) {
+          receivable = 0;
+          advanceRent = round2(received - totalPayable);
+        } else {
+          receivable = round2(totalPayable - received);
+          advanceRent = 0;
+        }
+      }
 
       totAgreed += agreed;
-      totJulyPrior += prior;
-      totAugustActual += currentDue;
+      totPrior += prior;
+      totCurrentDue += currentDue;
       totReceived += received;
       totReceivable += receivable;
       totAdvance += advanceRent;
@@ -350,9 +383,11 @@ export const generateMonthlyFundsReport = async (monthYear) => {
         unitName: `${unit.unitName}${unit.tenantName ? ' - ' + unit.tenantName : ''}`,
         dueDay: unit.dueDay ? `${unit.dueDay}th` : '1st',
         agreedRent: agreed,
-        julyReceivable: prior,
+        priorReceivable: prior,
+        julyReceivable: prior, // backward compatibility
         isPriorNeg: prior < 0,
-        augustActualRent: currentDue,
+        currentActualRent: currentDue,
+        augustActualRent: currentDue, // backward compatibility
         receivedAmount: received,
         receivedDate,
         receivingBank,
@@ -369,12 +404,16 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   });
 
   const page3Tenancy = {
+    priorMonthLabel,
+    currentMonthLabel,
     plazas: plazaList,
     totals: {
       agreedRent: round2(totAgreed),
-      julyReceivable: round2(totJulyPrior),
-      isPriorNeg: totJulyPrior < 0,
-      augustActualRent: round2(totAugustActual),
+      priorReceivable: round2(totPrior),
+      julyReceivable: round2(totPrior),
+      isPriorNeg: totPrior < 0,
+      currentActualRent: round2(totCurrentDue),
+      augustActualRent: round2(totCurrentDue),
       receivedAmount: round2(totReceived),
       receivable: round2(totReceivable),
       advanceRent: round2(totAdvance),
@@ -428,12 +467,15 @@ export const generateMonthlyFundsReport = async (monthYear) => {
       isNeg: e.runningBalance < 0,
     }));
 
+    const priorDayDate = new Date(startDate.getTime() - 86400000);
+    const priorDateStr = `${String(priorDayDate.getUTCDate()).padStart(2, '0')}-${String(priorDayDate.getUTCMonth() + 1).padStart(2, '0')}-${String(priorDayDate.getUTCFullYear()).slice(-2)}`;
+
     accountStatements.push({
       bankOrCashTitle,
       accountSubtitle,
       accountNumber: acc.accountNumber,
       isCashCustodian: isCash,
-      priorDate: `31-07-${String(year).slice(-2)}`,
+      priorDate: priorDateStr,
       openingBalance: statement.previousBalance,
       entries,
       totalDr: isCash ? statement.totalDebits : statement.totalCredits, // deposits for bank

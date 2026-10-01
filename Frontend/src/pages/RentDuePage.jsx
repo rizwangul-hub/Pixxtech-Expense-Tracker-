@@ -17,10 +17,10 @@ import {
 } from 'lucide-react';
 import { rentDueAPI, propertiesAPI } from '../services/api.js';
 import { formatPKR, formatDate } from '../utils/formatters.js';
-import { isAdmin } from '../utils/permissions.js';
+import { isAdmin, isDataEntry } from '../utils/permissions.js';
 
 export function RentDuePage({ currentUser, onSelectTenant }) {
-  const userIsAdmin = isAdmin(currentUser);
+  const canManageRentDue = isAdmin(currentUser) || isDataEntry(currentUser);
 
   // Default month to 2026-09 matching current active month
   const [selectedMonth, setSelectedMonth] = useState('2026-09');
@@ -128,10 +128,10 @@ export function RentDuePage({ currentUser, onSelectTenant }) {
         </div>
 
         <div className="flex items-center gap-2">
-          {userIsAdmin && (
+          {canManageRentDue && (
             <button
               onClick={() => {
-                setGenTargetMonth(selectedMonth || '2026-08');
+                setGenTargetMonth(selectedMonth || '2026-09');
                 setGenPropertyId('');
                 setGenResult(null);
                 setGenerateModalOpen(true);

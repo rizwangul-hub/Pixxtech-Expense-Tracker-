@@ -18,7 +18,7 @@ router.get('/summary', getRentDueSummary);
 
 // Collection routes
 router.get('/', getRentDue);
-router.post('/generate', requireRole('ADMIN'), validateRentDueGeneration, generateMonthlyRentDue);
+router.post('/generate', requireRole('ADMIN', 'DATA_ENTRY', 'ADMIN_PUBLISHER'), validateRentDueGeneration, generateMonthlyRentDue);
 
 // Single record route
 router.get('/:id', getRentDueById);

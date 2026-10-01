@@ -9,7 +9,9 @@ import Category from '../models/Category.js';
 import Transaction from '../models/Transaction.js';
 import Voucher from '../models/Voucher.js';
 import PendingEntry from '../models/PendingEntry.js';
+import User from '../models/User.js';
 import { createTransaction, round2, syncAccountBalances } from '../services/ledgerService.js';
+import { syncRentDueWithCollections } from './rentDueController.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
 /**
@@ -158,12 +160,19 @@ export const recordRentReceived = async (req, res) => {
         ],
       });
 
-      return res.status(201).json({
-        success: true,
-        isPending: true,
-        message: 'Rent receipt submitted as temporary pending entry. Awaiting review and verification by Khurshid Anwar.',
-        pendingEntry: pending,
-      });
+      return apiSuccess(
+        res,
+        {
+          isPending: true,
+          pendingEntry: pending,
+          receipt: {
+            receiptNumber: pending.voucherNo || 'PENDING',
+            amount: pending.amount,
+          },
+        },
+        'Rent receipt submitted as temporary pending entry. Awaiting review and verification by Khurshid Anwar.',
+        201
+      );
     }
 
     // 1. Locate current RentDue record if exists or provided
@@ -340,6 +349,13 @@ export const recordRentReceived = async (req, res) => {
     for (const pUpdate of priorDueUpdates) {
       await RentDue.findByIdAndUpdate(pUpdate.rentDue._id, { status: pUpdate.newStatus });
     }
+
+    // Keep RentDue paid amounts and status synchronized with verified collections
+    await syncRentDueWithCollections({
+      rentMonth: cleanMonth,
+      agreementId: agreement._id,
+      unitId: agreement.unitId,
+    });
 
     // 8. Fetch updated receiving account balance
     const updatedAccount = await Account.findById(receivingAccount._id).lean();
@@ -991,6 +1007,14 @@ export const reverseRentReceipt = async (req, res) => {
         }
         await RentDue.findByIdAndUpdate(receipt.rentDueId, { status: restoredStatus });
       }
+    }
+
+    if (receipt.rentMonth) {
+      await syncRentDueWithCollections({
+        rentMonth: receipt.rentMonth,
+        agreementId: receipt.agreementId || undefined,
+        unitId: receipt.unitId || undefined,
+      });
     }
 
     const updatedAccount = await Account.findById(receipt.receivingAccountId).lean();

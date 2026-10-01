@@ -42,9 +42,9 @@ const SECTION_PERMISSIONS = {
   properties: PERMISSIONS.VIEW_FINANCIALS,
   tenants: PERMISSIONS.VIEW_FINANCIALS,
   agreements: PERMISSIONS.VIEW_FINANCIALS,
-  'rent-due': PERMISSIONS.VIEW_FINANCIALS,
-  income: PERMISSIONS.VIEW_FINANCIALS,
-  'rent-received': PERMISSIONS.VIEW_FINANCIALS,
+  'rent-due': PERMISSIONS.ENTER_DATA,
+  income: PERMISSIONS.ENTER_DATA,
+  'rent-received': PERMISSIONS.ENTER_DATA,
   'other-income': PERMISSIONS.ENTER_DATA,
   expenses: PERMISSIONS.ENTER_DATA,
   operational: PERMISSIONS.ENTER_DATA,
@@ -67,6 +67,9 @@ const getAccessibleSection = (section, user) => {
     return 'dashboard';
   }
   if (section === 'tenants' && isDataEntry(user)) {
+    return section;
+  }
+  if ((section === 'rent-due' || section === 'income' || section === 'rent-received') && isDataEntry(user)) {
     return section;
   }
   if (section === 'expenses' && !isAdmin(user)) {

@@ -392,9 +392,9 @@
           <th style="width: 17%;">Properties Detail</th>
           <th style="width: 4.5%;">Due Dates</th>
           <th style="width: 8%;" class="text-right">Actual Rent as<br>per Agreements</th>
-          <th style="width: 8%;" class="text-right">July-2026<br>Receivable</th>
-          <th style="width: 8%;" class="text-right">August-2026<br>Actual Rent</th>
-          <th style="width: 8%;" class="text-right">Received In<br>August-2026</th>
+          <th style="width: 8%;" class="text-right">{{page3Tenancy.priorMonthLabel}}<br>Receivable</th>
+          <th style="width: 8%;" class="text-right">{{page3Tenancy.currentMonthLabel}}<br>Actual Rent</th>
+          <th style="width: 8%;" class="text-right">Received In<br>{{page3Tenancy.currentMonthLabel}}</th>
           <th style="width: 9%;">Checked By<br>Fahad</th>
           <th style="width: 7%;">Received<br>Date</th>
           <th style="width: 13%;">Receiving Bank</th>
@@ -414,8 +414,8 @@
             <td style="padding-left: 6px;">{{this.unitName}}</td>
             <td class="text-center">{{this.dueDay}}</td>
             <td class="text-right font-mono">{{formatPKR this.agreedRent}}</td>
-            <td class="text-right font-mono {{#if this.isPriorNeg}}negative{{/if}}">{{formatPKR this.julyReceivable}}</td>
-            <td class="text-right font-mono">{{formatPKR this.augustActualRent}}</td>
+            <td class="text-right font-mono {{#if this.isPriorNeg}}negative{{/if}}">{{formatPKR this.priorReceivable}}</td>
+            <td class="text-right font-mono">{{formatPKR this.currentActualRent}}</td>
             <td class="text-right font-mono font-bold">{{formatPKR this.receivedAmount}}</td>
             <td class="text-center" style="font-size: 5.5pt;">Checked By Fahad</td>
             <td class="text-center font-mono">{{this.receivedDate}}</td>
@@ -431,8 +431,8 @@
         <tr style="background: #f8fafc; font-weight: bold; border-top: 1.5px solid #000000;">
           <td colspan="2" class="text-center">TOTAL INCOME</td>
           <td class="text-right font-mono">{{formatPKR page3Tenancy.totals.agreedRent}}</td>
-          <td class="text-right font-mono {{#if page3Tenancy.totals.isPriorNeg}}negative{{/if}}">{{formatPKR page3Tenancy.totals.julyReceivable}}</td>
-          <td class="text-right font-mono">{{formatPKR page3Tenancy.totals.augustActualRent}}</td>
+          <td class="text-right font-mono {{#if page3Tenancy.totals.isPriorNeg}}negative{{/if}}">{{formatPKR page3Tenancy.totals.priorReceivable}}</td>
+          <td class="text-right font-mono">{{formatPKR page3Tenancy.totals.currentActualRent}}</td>
           <td class="text-right font-mono font-bold">{{formatPKR page3Tenancy.totals.receivedAmount}}</td>
           <td colspan="4"></td>
           <td class="text-right font-mono font-bold negative">{{formatPKR page3Tenancy.totals.receivable}}</td>
@@ -478,12 +478,12 @@
     <table class="page-3-table" style="font-weight: bold; margin-top: 2px; margin-bottom: 0;">
       <tr class="bg-yellow-highlight" style="border: 2px solid #000000;">
         <td style="width: 21.5%; font-size: 7.5pt;" class="text-center">Grand Total</td>
-        <td style="width: 8%;" class="text-right font-mono {{#if page3Tenancy.totals.isPriorNeg}}negative{{/if}}">{{formatPKR page3Tenancy.totals.julyReceivable}}</td>
-        <td style="width: 8%;" class="text-right font-mono">{{formatPKR page3Tenancy.totals.augustActualRent}}</td>
+        <td style="width: 8%;" class="text-right font-mono {{#if page3Tenancy.totals.isPriorNeg}}negative{{/if}}">{{formatPKR page3Tenancy.totals.priorReceivable}}</td>
+        <td style="width: 8%;" class="text-right font-mono">{{formatPKR page3Tenancy.totals.currentActualRent}}</td>
         <td style="width: 8%;" class="text-right font-mono">{{formatPKR page3Tenancy.totals.receivedAmount}}</td>
         <td style="width: 36.5%;"></td>
         <td style="width: 8%;" class="text-right font-mono negative">{{formatPKR page3Tenancy.totals.receivable}}</td>
-        <td style="width: 8%;" class="text-right font-mono"></td>
+        <td style="width: 8%;" class="text-right font-mono">{{formatPKR page3Tenancy.totals.advanceRent}}</td>
       </tr>
     </table>
   </div>

@@ -50,11 +50,11 @@ export function DashboardHome({
  propertiesAPI.getProperties({ limit: 1 }),
  tenantsAPI.getTenants({ limit: 1 }),
  agreementsAPI.getAgreements({ limit: 1 }),
- rentDueAPI.getRentDueSummary({ month: '2026-08' }),
+ rentDueAPI.getRentDueSummary({ month: '2026-09' }),
  accountsAPI.getAccounts({ limit: 1 }),
- rentReceivedAPI.getSummary({ month: '2026-08' }),
- otherIncomeAPI.getMonthlySummary({ month: '2026-08' }),
- vouchersAPI.getAllTransactions({ month: '2026-08', limit: 1 }),
+ rentReceivedAPI.getSummary({ month: '2026-09' }),
+ otherIncomeAPI.getMonthlySummary({ month: '2026-09' }),
+ vouchersAPI.getAllTransactions({ month: '2026-09', limit: 1 }),
  ]);
 
  if (propsRes?.success && propsRes.data?.summary) {
@@ -227,7 +227,7 @@ export function DashboardHome({
  </div>
 
  <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3">
- <div className="text-[11px] text-amber-400 font-medium">August 2026 Expected</div>
+ <div className="text-[11px] text-amber-400 font-medium">September 2026 Expected</div>
  <div className="text-lg font-black text-amber-400 font-mono mt-0.5">
  {formatPKR(rentDueStats?.totalExpectedRent ?? 0)}
  </div>
@@ -254,7 +254,7 @@ export function DashboardHome({
  </span>
  </div>
  <p className="text-xs text-slate-400 mt-0.5">
- Real database tenant rental collections, 3-tier allocations, advance surplus, and net outstanding receivables for August 2026.
+ Real database tenant rental collections, 3-tier allocations, advance surplus, and net outstanding receivables for September 2026.
  </p>
  </div>
 
