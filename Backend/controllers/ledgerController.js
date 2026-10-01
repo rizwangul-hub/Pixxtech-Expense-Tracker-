@@ -270,7 +270,11 @@ export const queryLedger = async (req, res) => {
         .sort({ date: 1, createdAt: 1, _id: 1 })
         .populate('drAccountId', 'name type')
         .populate('crAccountId', 'name type')
-        .populate('categoryId', 'name type')
+        .populate({
+          path: 'categoryId',
+          select: 'name type isRentalHead parentCategoryId isMainHead',
+          populate: { path: 'parentCategoryId', select: 'name' },
+        })
         .populate('propertyId', 'propertyName plazaName propertyCode')
         .populate('tenantId', 'tenantName name')
         .populate('createdBy', 'name email role')
@@ -419,50 +423,68 @@ export const queryLedger = async (req, res) => {
       }
 
       ledgerTitle = `Tenant Ledger: ${targetEntity.tenantName || targetEntity.name}`;
-      entitySubtext = `CNIC: ${targetEntity.cnic || 'N/A'} &bull; Phone: ${targetEntity.phone || 'N/A'} &bull; Emergency Contact: ${targetEntity.emergencyContact || 'N/A'}`;
+      entitySubtext = `CNIC: ${targetEntity.cnic || 'N/A'} &bull; Phone: ${targetEntity.phone || 'N/A'}`;
 
       // Query RentDue (Billed) and RentReceived (Collections)
       const dueQuery = { tenantId: entityId };
       const recQuery = { tenantId: entityId, status: { $ne: 'REVERSED' } };
 
       if (periodStart && periodEnd) {
-        dueQuery.createdAt = { $gte: periodStart, $lte: periodEnd };
-        recQuery.date = { $gte: periodStart, $lte: periodEnd };
+        dueQuery.dueDate = { $gte: periodStart, $lte: periodEnd };
+        recQuery.receiptDate = { $gte: periodStart, $lte: periodEnd };
+      } else if (periodStart) {
+        dueQuery.dueDate = { $gte: periodStart };
+        recQuery.receiptDate = { $gte: periodStart };
+      } else if (periodEnd) {
+        dueQuery.dueDate = { $lte: periodEnd };
+        recQuery.receiptDate = { $lte: periodEnd };
       }
 
       const [rentDues, rentReceipts] = await Promise.all([
-        RentDue.find(dueQuery).populate('propertyId', 'propertyName').lean(),
-        RentReceived.find(recQuery).populate('receivingAccountId', 'name').lean(),
+        RentDue.find(dueQuery)
+          .populate('propertyId', 'propertyName plazaName')
+          .populate('unitId', 'unitNumber floorName')
+          .lean(),
+        RentReceived.find(recQuery)
+          .populate('propertyId', 'propertyName plazaName')
+          .populate('unitId', 'unitNumber floorName')
+          .populate('receivingAccountId', 'name')
+          .lean(),
       ]);
 
       // Combine dues and receipts into chronological tenant ledger
       const combined = [];
 
       rentDues.forEach((d) => {
+        const propLabel = d.propertyId?.propertyName || d.propertyId?.plazaName || '';
+        const unitLabel = d.unitId?.unitNumber || d.unitId?.floorName || '';
         combined.push({
-          date: d.createdAt || new Date(),
-          voucherNo: `DUE-${d.rentMonth}`,
+          date: d.dueDate || d.createdAt || new Date(),
+          voucherNo: `INV-${d.rentMonth}`,
           type: 'RENT_DUE',
-          detail: `Rent Invoice for ${d.rentMonth}`,
+          detail: `Rent Invoice — ${d.rentMonth}${propLabel ? ` | ${propLabel}` : ''}${unitLabel ? ` (${unitLabel})` : ''}`,
           rentMonth: d.rentMonth,
-          dueAmount: d.totalAmount || d.rentAmount || 0,
+          propertyName: propLabel,
+          dueAmount: round2(d.expectedRentAmount || d.totalAmount || d.rentAmount || 0),
           receivedAmount: 0,
-          receivingAccount: '-',
+          receivingAccount: '—',
           status: d.status || 'UNPAID',
         });
       });
 
       rentReceipts.forEach((r) => {
+        const propLabel = r.propertyId?.propertyName || r.propertyId?.plazaName || '';
         combined.push({
-          date: r.date || r.createdAt,
-          voucherNo: r.receiptNo || r.voucherNo || `RCV-${r.rentMonth}`,
+          date: r.receiptDate || r.createdAt,
+          voucherNo: r.receiptNumber || `RCV-${r.rentMonth}`,
           type: 'RENT_RECEIVED',
-          detail: r.narration || `Rent Payment for ${r.rentMonth}`,
+          detail: r.description || `Rent Payment — ${r.rentMonth}${propLabel ? ` | ${propLabel}` : ''}`,
           rentMonth: r.rentMonth,
+          propertyName: propLabel,
           dueAmount: 0,
-          receivedAmount: r.amount || 0,
-          receivingAccount: r.receivingAccountId?.name || 'Bank/Cash',
-          status: r.status || 'POSTED',
+          receivedAmount: round2(r.amount || 0),
+          receivingAccount: r.receivingAccountId?.name || 'Cash / Bank',
+          status: r.status || 'RECEIVED',
         });
       });
 
@@ -481,13 +503,16 @@ export const queryLedger = async (req, res) => {
           detail: entry.detail,
           transactionType: entry.type,
           rentMonth: entry.rentMonth,
-          drAccount: '-',
-          crAccount: entry.receivingAccount,
-          debit: round2(entry.dueAmount), // Billed Due
-          credit: round2(entry.receivedAmount), // Cash Received
+          categoryName: entry.type === 'RENT_DUE' ? 'Rent Invoice' : 'Rent Payment',
+          propertyName: entry.propertyName,
+          drAccount: entry.type === 'RENT_DUE' ? 'Tenant Receivable' : entry.receivingAccount,
+          crAccount: entry.type === 'RENT_DUE' ? 'Rent Revenue' : 'Tenant Receivable Cleared',
+          debit: round2(entry.dueAmount),    // Invoice issued = Debit Tenant Receivable
+          credit: round2(entry.receivedAmount), // Cash received = Credit Receivable
           amount: round2(entry.dueAmount || entry.receivedAmount),
           balance: round2(receivableBal),
           status: entry.status,
+          createdBy: 'System',
         };
       });
 
@@ -502,48 +527,61 @@ export const queryLedger = async (req, res) => {
     // =========================================================================
     else if (type === 'RENT') {
       ledgerTitle = 'Rent Receipts & Collection Ledger';
-      entitySubtext = 'Official Rent Allocation & Payments Journal';
+      entitySubtext = 'Official Rent Allocation &amp; Payments Journal';
 
       const rentQuery = { status: { $ne: 'REVERSED' } };
-      if (periodStart && periodEnd) rentQuery.date = { $gte: periodStart, $lte: periodEnd };
+      if (periodStart && periodEnd) rentQuery.receiptDate = { $gte: periodStart, $lte: periodEnd };
+      else if (periodStart) rentQuery.receiptDate = { $gte: periodStart };
+      else if (periodEnd) rentQuery.receiptDate = { $lte: periodEnd };
+
       if (sRegex) {
-        rentQuery.$or = [{ receiptNo: sRegex }, { narration: sRegex }, { rentMonth: sRegex }];
+        rentQuery.$or = [{ receiptNumber: sRegex }, { description: sRegex }, { rentMonth: sRegex }];
       }
 
       const receipts = await RentReceived.find(rentQuery)
-        .sort({ date: -1 })
+        .sort({ receiptDate: 1, createdAt: 1 })   // ascending for correct running total
         .populate('propertyId', 'propertyName plazaName')
+        .populate('unitId', 'unitNumber floorName')
         .populate('tenantId', 'tenantName name')
         .populate('receivingAccountId', 'name type')
-        .populate('recordedBy', 'name')
+        .populate('createdBy', 'name')
         .lean();
 
+      let runningTotal = 0;
       ledgerEntries = receipts.map((r) => {
-        totalCredit += r.amount || 0;
+        const amt = round2(r.amount || 0);
+        runningTotal = round2(runningTotal + amt);
+        totalDebit += amt;
+
+        const unitLabel = r.unitId?.unitNumber || r.unitId?.floorName || '';
+        const propLabel = r.propertyId?.propertyName || r.propertyId?.plazaName || '';
+        const locationLabel = [propLabel, unitLabel].filter(Boolean).join(' — ');
+
         return {
           _id: r._id,
-          date: r.date,
-          voucherNo: r.receiptNo || `RCV-${r._id.toString().slice(-6)}`,
-          detail: r.narration || `Rent Collected for ${r.rentMonth}`,
+          date: r.receiptDate,
+          voucherNo: r.receiptNumber || `RCV-${r._id.toString().slice(-6)}`,
+          detail: r.description || `Rent Collected — ${r.rentMonth}`,
           transactionType: 'RENT_RECEIVED',
           rentMonth: r.rentMonth,
-          propertyName: r.propertyId?.propertyName || r.propertyId?.plazaName || '',
+          categoryName: 'Rental Income',
+          propertyName: propLabel,
           tenantName: r.tenantId?.tenantName || r.tenantId?.name || '',
-          crAccount: r.receivingAccountId?.name || 'Cash/Bank',
-          drAccount: 'Rent Revenue Account',
-          debit: 0,
-          credit: round2(r.amount || 0),
-          amount: round2(r.amount || 0),
-          balance: round2(totalCredit),
-          status: r.status || 'POSTED',
-          createdBy: r.recordedBy?.name || 'System',
+          drAccount: r.receivingAccountId?.name || 'Cash / Bank',  // Money received INTO bank → Dr bank
+          crAccount: locationLabel || 'Rental Income',              // Cr the property/unit rental income
+          debit: amt,
+          credit: 0,
+          amount: amt,
+          balance: runningTotal,
+          status: r.status || 'RECEIVED',
+          createdBy: r.createdBy?.name || 'System',
         };
       });
 
       openingBalance = 0;
-      totalDebit = 0;
-      totalCredit = round2(totalCredit);
-      closingBalance = totalCredit;
+      totalDebit = round2(totalDebit);
+      totalCredit = 0;
+      closingBalance = round2(runningTotal);
     }
 
     // =========================================================================
