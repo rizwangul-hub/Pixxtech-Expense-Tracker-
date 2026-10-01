@@ -58,6 +58,27 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
   // The effective entity ID to query (sub-category overrides main head if selected)
   const effectiveEntityId = selectedSubCategoryId || selectedEntityId;
 
+  // Validate if entity is suitable for query to avoid firing with stale/invalid entity
+  const isValidEntityForQuery = (type, entityId, currentEntities) => {
+    if (loadingEntities) return false;
+    if (type === 'RENT') return true;
+    if (!entityId) return false;
+    if (type === 'OTHER_INCOME') return true;
+    if (type === 'ACCOUNT_HEAD') return true;
+    // For BANK, CASH, PROPERTY, TENANT: ensure entityId belongs to current entity list
+    return currentEntities.some((e) => String(e.id) === String(entityId));
+  };
+
+  // Handler when user switches ledger type tab
+  const handleLedgerTypeChange = (newType) => {
+    setLedgerType(newType);
+    setSelectedEntityId('');
+    setSelectedSubCategoryId('');
+    setEntities([]);
+    setSubCategories([]);
+    setLedgerData(null);
+  };
+
   // Load available entities when ledgerType changes
   const loadEntities = async (type) => {
     try {
@@ -112,6 +133,9 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
 
   // Fetch actual ledger data from backend source of truth
   const fetchLedger = async () => {
+    if (!isValidEntityForQuery(ledgerType, effectiveEntityId, entities)) {
+      return;
+    }
     try {
       setLoading(true);
       setErrorMsg('');
@@ -138,10 +162,10 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
 
   // Trigger query when options change
   useEffect(() => {
-    if (effectiveEntityId || ledgerType === 'RENT' || ledgerType === 'OTHER_INCOME') {
+    if (isValidEntityForQuery(ledgerType, effectiveEntityId, entities)) {
       fetchLedger();
     }
-  }, [ledgerType, selectedEntityId, selectedSubCategoryId, datePreset]);
+  }, [ledgerType, effectiveEntityId, datePreset, entities]);
 
   const handleManualSearchSubmit = (e) => {
     e.preventDefault();
@@ -202,7 +226,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
             <label className="block font-bold text-slate-700 mb-1">Ledger Type</label>
             <select
               value={ledgerType}
-              onChange={(e) => setLedgerType(e.target.value)}
+              onChange={(e) => handleLedgerTypeChange(e.target.value)}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-blue-600"
             >
               <option value="BANK">Bank Account Ledger</option>
@@ -218,16 +242,22 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
           {/* 2. Main Entity / Head Selector */}
           <div>
             <label className="block font-bold text-slate-700 mb-1">
-              {isAccountHead ? 'Select Main Head' : 'Select Specific Entity'}
+              {isAccountHead
+                ? 'Select Main Head'
+                : ledgerType === 'RENT'
+                ? 'Rent Scope'
+                : 'Select Specific Entity'}
             </label>
             <select
               value={selectedEntityId}
               onChange={(e) => setSelectedEntityId(e.target.value)}
-              disabled={loadingEntities}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-blue-600 disabled:opacity-50"
+              disabled={loadingEntities || ledgerType === 'RENT'}
+              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-blue-600 disabled:opacity-50 disabled:bg-slate-50"
             >
-              {entities.length === 0 ? (
-                <option value="">No entities available</option>
+              {ledgerType === 'RENT' ? (
+                <option value="">★ All Properties &amp; Units (Consolidated)</option>
+              ) : entities.length === 0 ? (
+                <option value="">{loadingEntities ? 'Loading entities...' : 'No entities available'}</option>
               ) : (
                 entities.map((item) => (
                   <option key={String(item.id)} value={String(item.id)}>

@@ -139,8 +139,8 @@ export const getLedgerEntities = async (req, res) => {
       ];
     }
 
-    if (!type || type === 'CATEGORY' || type === 'EXPENSE') {
-      // Return all categories (sub-categories) for the sub-category drilldown
+    if (!type || type === 'CATEGORY' || type === 'EXPENSE' || type === 'ACCOUNT_HEAD') {
+      // Return all sub-categories (non main-heads) for the sub-category drilldown
       const cats = await Category.find({ isMainHead: { $ne: true } })
         .sort({ name: 1 })
         .populate('parentCategoryId', 'name')
@@ -220,12 +220,34 @@ export const queryLedger = async (req, res) => {
     // =========================================================================
     if (type === 'BANK' || type === 'CASH') {
       if (!entityId || !mongoose.Types.ObjectId.isValid(entityId)) {
-        return apiError(res, `Please select a valid ${type === 'BANK' ? 'Bank Account' : 'Cash Custodian'}.`, 400);
+        return apiSuccess(
+          res,
+          {
+            type,
+            ledgerTitle: type === 'BANK' ? 'Bank Account Ledger' : 'Cash Custodian Ledger',
+            entitySubtext: 'Please select an account',
+            datePreset,
+            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+            entries: [],
+          },
+          'No account selected.'
+        );
       }
 
       targetEntity = await Account.findById(entityId).lean();
       if (!targetEntity) {
-        return apiError(res, 'Account not found.', 404);
+        return apiSuccess(
+          res,
+          {
+            type,
+            ledgerTitle: type === 'BANK' ? 'Bank Account Ledger' : 'Cash Custodian Ledger',
+            entitySubtext: 'Account not found',
+            datePreset,
+            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+            entries: [],
+          },
+          'Account not found.'
+        );
       }
 
       ledgerTitle = targetEntity.name;
@@ -329,12 +351,34 @@ export const queryLedger = async (req, res) => {
     // =========================================================================
     else if (type === 'PROPERTY') {
       if (!entityId || !mongoose.Types.ObjectId.isValid(entityId)) {
-        return apiError(res, 'Please select a valid Property.', 400);
+        return apiSuccess(
+          res,
+          {
+            type,
+            ledgerTitle: 'Property / Plaza Ledger',
+            entitySubtext: 'Please select a property',
+            datePreset,
+            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+            entries: [],
+          },
+          'No property selected.'
+        );
       }
 
       targetEntity = await Property.findById(entityId).lean();
       if (!targetEntity) {
-        return apiError(res, 'Property not found.', 404);
+        return apiSuccess(
+          res,
+          {
+            type,
+            ledgerTitle: 'Property / Plaza Ledger',
+            entitySubtext: 'Property not found',
+            datePreset,
+            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+            entries: [],
+          },
+          'Property not found.'
+        );
       }
 
       ledgerTitle = `Property Ledger: ${targetEntity.propertyName || targetEntity.plazaName}`;
@@ -414,12 +458,34 @@ export const queryLedger = async (req, res) => {
     // =========================================================================
     else if (type === 'TENANT') {
       if (!entityId || !mongoose.Types.ObjectId.isValid(entityId)) {
-        return apiError(res, 'Please select a valid Tenant.', 400);
+        return apiSuccess(
+          res,
+          {
+            type,
+            ledgerTitle: 'Tenant / Rental Ledger',
+            entitySubtext: 'Please select a tenant',
+            datePreset,
+            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+            entries: [],
+          },
+          'No tenant selected.'
+        );
       }
 
       targetEntity = await Tenant.findById(entityId).lean();
       if (!targetEntity) {
-        return apiError(res, 'Tenant not found.', 404);
+        return apiSuccess(
+          res,
+          {
+            type,
+            ledgerTitle: 'Tenant / Rental Ledger',
+            entitySubtext: 'Tenant not found',
+            datePreset,
+            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+            entries: [],
+          },
+          'Tenant not found.'
+        );
       }
 
       ledgerTitle = `Tenant Ledger: ${targetEntity.tenantName || targetEntity.name}`;
