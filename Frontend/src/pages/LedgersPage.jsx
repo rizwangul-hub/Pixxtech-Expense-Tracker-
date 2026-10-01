@@ -18,6 +18,7 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Printer,
+  ChevronRight,
 } from 'lucide-react';
 import { ledgersAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
@@ -33,6 +34,10 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
   // Selectable entities
   const [entities, setEntities] = useState([]);
   const [selectedEntityId, setSelectedEntityId] = useState(initialEntityId || '');
+
+  // Sub-category drill-down (for ACCOUNT_HEAD type)
+  const [subCategories, setSubCategories] = useState([]);
+  const [selectedSubCategoryId, setSelectedSubCategoryId] = useState('');
 
   // Date Filtering Controls
   const [datePreset, setDatePreset] = useState('THIS_MONTH');
@@ -50,6 +55,9 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
   // Modal for Viewing Source Voucher Details
   const [activeModalTx, setActiveModalTx] = useState(null);
 
+  // The effective entity ID to query (sub-category overrides main head if selected)
+  const effectiveEntityId = selectedSubCategoryId || selectedEntityId;
+
   // Load available entities when ledgerType changes
   const loadEntities = async (type) => {
     try {
@@ -63,15 +71,20 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
       else if (type === 'CASH') list = data.custodians || [];
       else if (type === 'PROPERTY') list = data.properties || [];
       else if (type === 'TENANT') list = data.tenants || [];
-      else if (type === 'ACCOUNT_HEAD' || type === 'CATEGORY' || type === 'EXPENSE') list = data.categories || [];
+      else if (type === 'ACCOUNT_HEAD') {
+        list = data.categories || [];
+        setSubCategories(data.subCategories || []);
+      }
       else if (type === 'OTHER_INCOME') list = data.otherIncomeHeads || [];
 
       setEntities(list);
+      setSelectedSubCategoryId('');
+
       // Auto select initial entity or first entity if available
       if (initialEntityId && list.some((item) => String(item.id) === String(initialEntityId))) {
         setSelectedEntityId(initialEntityId);
       } else if (list.length > 0) {
-        setSelectedEntityId(list[0].id);
+        setSelectedEntityId(String(list[0].id));
       } else {
         setSelectedEntityId('');
       }
@@ -87,6 +100,16 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
     loadEntities(ledgerType);
   }, [ledgerType]);
 
+  // When main head changes, reset sub-category selection
+  useEffect(() => {
+    setSelectedSubCategoryId('');
+  }, [selectedEntityId]);
+
+  // Sub-categories filtered to the current main head
+  const filteredSubCategories = subCategories.filter(
+    (sc) => selectedEntityId && String(sc.parentId) === String(selectedEntityId)
+  );
+
   // Fetch actual ledger data from backend source of truth
   const fetchLedger = async () => {
     try {
@@ -94,7 +117,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
       setErrorMsg('');
       const res = await ledgersAPI.queryLedger({
         type: ledgerType,
-        entityId: selectedEntityId,
+        entityId: effectiveEntityId,
         datePreset,
         startDate,
         endDate,
@@ -115,10 +138,10 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
 
   // Trigger query when options change
   useEffect(() => {
-    if (selectedEntityId || ledgerType === 'RENT' || ledgerType === 'EXPENSE' || ledgerType === 'OTHER_INCOME') {
+    if (effectiveEntityId || ledgerType === 'RENT' || ledgerType === 'OTHER_INCOME') {
       fetchLedger();
     }
-  }, [ledgerType, selectedEntityId, datePreset]);
+  }, [ledgerType, selectedEntityId, selectedSubCategoryId, datePreset]);
 
   const handleManualSearchSubmit = (e) => {
     e.preventDefault();
@@ -134,6 +157,8 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
   };
 
   const entries = ledgerData?.entries || [];
+
+  const isAccountHead = ledgerType === 'ACCOUNT_HEAD';
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-full font-sans text-slate-900">
@@ -165,7 +190,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
         </div>
       </div>
 
-      {/* Part 1 & 2: Search & Filter Interface */}
+      {/* Search & Filter Interface */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
         <h2 className="text-xs uppercase font-extrabold text-slate-700 tracking-wider flex items-center gap-2">
           <Search size={16} className="text-blue-600" /> Select Financial Entity &amp; Search Controls
@@ -185,50 +210,75 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
               <option value="PROPERTY">Property / Plaza Ledger</option>
               <option value="TENANT">Tenant / Rental Ledger</option>
               <option value="RENT">Rent Collection Journal</option>
-              <option value="EXPENSE">Individual Expense Ledger</option>
               <option value="ACCOUNT_HEAD">Account Head Ledger</option>
-              <option value="CATEGORY">Category Ledger</option>
               <option value="OTHER_INCOME">Other Income Ledger</option>
             </select>
           </div>
 
-          {/* 2. Entity Selector */}
+          {/* 2. Main Entity / Head Selector */}
           <div>
-            <label className="block font-bold text-slate-700 mb-1">Select Specific Entity</label>
+            <label className="block font-bold text-slate-700 mb-1">
+              {isAccountHead ? 'Select Main Head' : 'Select Specific Entity'}
+            </label>
             <select
               value={selectedEntityId}
               onChange={(e) => setSelectedEntityId(e.target.value)}
-              disabled={loadingEntities || (ledgerType !== 'BANK' && ledgerType !== 'CASH' && ledgerType !== 'PROPERTY' && ledgerType !== 'TENANT' && ledgerType !== 'ACCOUNT_HEAD' && ledgerType !== 'OTHER_INCOME')}
+              disabled={loadingEntities}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-blue-600 disabled:opacity-50"
             >
               {entities.length === 0 ? (
                 <option value="">No entities available</option>
               ) : (
                 entities.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} {item.subtext ? `(${item.subtext})` : ''}
+                  <option key={String(item.id)} value={String(item.id)}>
+                    {item.name}
                   </option>
                 ))
               )}
             </select>
           </div>
 
-          {/* 3. Date Range Preset */}
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Date Period</label>
-            <select
-              value={datePreset}
-              onChange={(e) => setDatePreset(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-blue-600"
-            >
-              <option value="THIS_MONTH">This Month</option>
-              <option value="PREVIOUS_MONTH">Previous Month</option>
-              <option value="TODAY">Today</option>
-              <option value="THIS_WEEK">This Week</option>
-              <option value="CUSTOM">Custom Date Range</option>
-              <option value="AS_ON_DATE">As On Date</option>
-            </select>
-          </div>
+          {/* 3. Sub-category selector (only for Account Head) */}
+          {isAccountHead ? (
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Drill Down to Sub-Head
+                {filteredSubCategories.length > 0 && (
+                  <span className="ml-1 text-blue-600">({filteredSubCategories.length} sub-heads)</span>
+                )}
+              </label>
+              <select
+                value={selectedSubCategoryId}
+                onChange={(e) => setSelectedSubCategoryId(e.target.value)}
+                disabled={filteredSubCategories.length === 0}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-semibold text-slate-900 focus:outline-none focus:border-blue-600 disabled:opacity-50 disabled:bg-slate-50"
+              >
+                <option value="">— All sub-heads of this main head —</option>
+                {filteredSubCategories.map((sc) => (
+                  <option key={String(sc.id)} value={String(sc.id)}>
+                    {sc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            /* 3b. Date Range Preset when not account head */
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Date Period</label>
+              <select
+                value={datePreset}
+                onChange={(e) => setDatePreset(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-blue-600"
+              >
+                <option value="THIS_MONTH">This Month</option>
+                <option value="PREVIOUS_MONTH">Previous Month</option>
+                <option value="TODAY">Today</option>
+                <option value="THIS_WEEK">This Week</option>
+                <option value="CUSTOM">Custom Date Range</option>
+                <option value="AS_ON_DATE">As On Date</option>
+              </select>
+            </div>
+          )}
 
           {/* 4. Keyword / Voucher Search */}
           <div>
@@ -251,40 +301,87 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
           </div>
         </form>
 
-        {/* Custom Date Inputs if CUSTOM selected */}
-        {datePreset === 'CUSTOM' && (
+        {/* Date Range row for Account Head type */}
+        {isAccountHead && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-100 text-xs">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Date Period</label>
+              <select
+                value={datePreset}
+                onChange={(e) => setDatePreset(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-blue-600"
+              >
+                <option value="THIS_MONTH">This Month</option>
+                <option value="PREVIOUS_MONTH">Previous Month</option>
+                <option value="TODAY">Today</option>
+                <option value="THIS_WEEK">This Week</option>
+                <option value="CUSTOM">Custom Date Range</option>
+                <option value="AS_ON_DATE">As On Date</option>
+              </select>
+            </div>
+            {datePreset === 'CUSTOM' && (
+              <>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Start Date</label>
+                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-semibold text-slate-900" />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">End Date</label>
+                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-semibold text-slate-900" />
+                </div>
+              </>
+            )}
+            {datePreset === 'AS_ON_DATE' && (
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">As On Date</label>
+                <input type="date" value={asOnDate} onChange={(e) => setAsOnDate(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-semibold text-slate-900" />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Custom Date Inputs if CUSTOM selected (non-account-head) */}
+        {!isAccountHead && datePreset === 'CUSTOM' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200 text-xs">
             <div>
               <label className="block font-bold text-slate-700 mb-1">Start Date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-semibold text-slate-900"
-              />
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-semibold text-slate-900" />
             </div>
             <div>
               <label className="block font-bold text-slate-700 mb-1">End Date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-semibold text-slate-900"
-              />
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-semibold text-slate-900" />
             </div>
           </div>
         )}
 
-        {/* As On Date input if AS_ON_DATE selected */}
-        {datePreset === 'AS_ON_DATE' && (
+        {!isAccountHead && datePreset === 'AS_ON_DATE' && (
           <div className="pt-2 border-t border-slate-200 text-xs max-w-xs">
             <label className="block font-bold text-slate-700 mb-1">As On Date</label>
-            <input
-              type="date"
-              value={asOnDate}
-              onChange={(e) => setAsOnDate(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-semibold text-slate-900"
-            />
+            <input type="date" value={asOnDate} onChange={(e) => setAsOnDate(e.target.value)}
+              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-semibold text-slate-900" />
+          </div>
+        )}
+
+        {/* Breadcrumb for Account Head drill-down */}
+        {isAccountHead && selectedEntityId && (
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+            <Tag size={12} className="text-blue-600" />
+            <span className="text-blue-700 font-bold">
+              {entities.find((e) => String(e.id) === String(selectedEntityId))?.name || 'All Expenses'}
+            </span>
+            {selectedSubCategoryId && (
+              <>
+                <ChevronRight size={12} className="text-slate-400" />
+                <span className="text-slate-800 font-bold">
+                  {filteredSubCategories.find((s) => String(s.id) === String(selectedSubCategoryId))?.name || ''}
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -350,11 +447,11 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
             </div>
           </div>
 
-          {/* Part 3 & 4: Exact Real Data Transaction Table */}
+          {/* Transaction Table */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="text-sm font-bold text-slate-900">
-                Posted Transactions History ({summary.entryCount} Entries)
+                Posted Transactions History ({summary.entryCount || entries.length} Entries)
               </h3>
               <span className="text-xs font-semibold text-slate-500">
                 Official Real Database Records Only
@@ -387,7 +484,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
                       <th className="p-3">Cr Account</th>
                       <th className="p-3 text-right">Debit (PKR)</th>
                       <th className="p-3 text-right">Credit (PKR)</th>
-                      <th className="p-3 text-right">Running Balance</th>
+                      <th className="p-3 text-right">Running Total</th>
                       <th className="p-3 text-center">Action</th>
                     </tr>
                   </thead>
@@ -412,6 +509,11 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
                           <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold border border-slate-200">
                             {tx.categoryName}
                           </span>
+                          {tx.parentCategoryName && tx.parentCategoryName !== tx.categoryName && (
+                            <div className="text-[10px] text-slate-400 font-medium mt-0.5">
+                              under {tx.parentCategoryName}
+                            </div>
+                          )}
                         </td>
                         <td className="p-3 whitespace-nowrap text-slate-600">{tx.drAccount || '-'}</td>
                         <td className="p-3 whitespace-nowrap text-slate-600">{tx.crAccount || '-'}</td>
@@ -452,7 +554,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
         </>
       )}
 
-      {/* Part 16: Source Voucher Traceability Modal */}
+      {/* Source Voucher Traceability Modal */}
       {activeModalTx && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
@@ -504,7 +606,11 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-500">Category Head</span>
-                  <div className="font-bold text-slate-900">{activeModalTx.categoryName}</div>
+                  <div className="font-bold text-slate-900">
+                    {activeModalTx.parentCategoryName && activeModalTx.parentCategoryName !== activeModalTx.categoryName
+                      ? `${activeModalTx.parentCategoryName} → ${activeModalTx.categoryName}`
+                      : activeModalTx.categoryName}
+                  </div>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-500">Amount (PKR)</span>

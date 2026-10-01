@@ -118,13 +118,41 @@ export const getLedgerEntities = async (req, res) => {
       }));
     }
 
-    if (!type || type === 'ACCOUNT_HEAD' || type === 'CATEGORY' || type === 'EXPENSE') {
-      const cats = await Category.find({}).sort({ name: 1 }).lean();
-      results.categories = cats.map((c) => ({
+    if (!type || type === 'ACCOUNT_HEAD') {
+      // Return only main expense heads (top-level categories)
+      const mainHeads = await Category.find({ isMainHead: true }).sort({ name: 1 }).lean();
+      results.categories = [
+        {
+          id: 'ALL_EXPENSES',
+          name: '★ All Expenses (Consolidated)',
+          type: 'ACCOUNT_HEAD',
+          subtext: 'Complete expense ledger across all heads',
+          isMainHead: true,
+        },
+        ...mainHeads.map((c) => ({
+          id: c._id,
+          name: c.name,
+          type: c.type || 'EXPENSE',
+          subtext: `Main Head • ${c.type || 'EXPENSE'}`,
+          isMainHead: true,
+        })),
+      ];
+    }
+
+    if (!type || type === 'CATEGORY' || type === 'EXPENSE') {
+      // Return all categories (sub-categories) for the sub-category drilldown
+      const cats = await Category.find({ isMainHead: { $ne: true } })
+        .sort({ name: 1 })
+        .populate('parentCategoryId', 'name')
+        .lean();
+      results.subCategories = cats.map((c) => ({
         id: c._id,
         name: c.name,
         type: c.type || 'EXPENSE',
-        subtext: `Category Type: ${c.type || 'EXPENSE'}`,
+        subtext: `Under: ${c.parentCategoryId?.name || 'General'}`,
+        parentId: c.parentCategoryId?._id || null,
+        parentName: c.parentCategoryId?.name || '',
+        isMainHead: false,
       }));
     }
 
@@ -524,20 +552,48 @@ export const queryLedger = async (req, res) => {
     else if (type === 'EXPENSE' || type === 'ACCOUNT_HEAD' || type === 'CATEGORY') {
       const txQuery = { ...baseStatusFilter };
 
-      if (entityId && mongoose.Types.ObjectId.isValid(entityId)) {
-        txQuery.categoryId = entityId;
+      if (entityId === 'ALL_EXPENSES') {
+        // Consolidated: all expense transactions
+        txQuery.transactionType = 'EXPENSE';
+        ledgerTitle = 'All Expenses — Consolidated Ledger';
+        entitySubtext = 'Complete expense ledger across all heads';
+      } else if (entityId && mongoose.Types.ObjectId.isValid(entityId)) {
         targetEntity = await Category.findById(entityId).lean();
         if (targetEntity) {
-          ledgerTitle = `Expense & Head Ledger: ${targetEntity.name}`;
-          entitySubtext = `Category Type: ${targetEntity.type || 'EXPENSE'}`;
+          if (targetEntity.isMainHead) {
+            // Main head selected → include all its child categories too
+            const childIds = await Category.find({ parentCategoryId: entityId })
+              .select('_id')
+              .lean()
+              .then((docs) => docs.map((d) => d._id));
+
+            const categoryIds = [targetEntity._id, ...childIds];
+            txQuery.categoryId = { $in: categoryIds };
+            ledgerTitle = `Main Head Ledger: ${targetEntity.name}`;
+            entitySubtext = `All expenses under <strong>${targetEntity.name}</strong> (${childIds.length} sub-heads included)`;
+          } else {
+            // Sub-category selected → just that category
+            txQuery.categoryId = entityId;
+            const parentName = targetEntity.parentCategoryId
+              ? (await Category.findById(targetEntity.parentCategoryId).select('name').lean())?.name || ''
+              : '';
+            ledgerTitle = `Expense Sub-Head Ledger: ${targetEntity.name}`;
+            entitySubtext = parentName ? `Under Main Head: <strong>${parentName}</strong>` : `Category Type: ${targetEntity.type || 'EXPENSE'}`;
+          }
+        } else {
+          txQuery.transactionType = 'EXPENSE';
+          ledgerTitle = 'Expense Ledger';
+          entitySubtext = '';
         }
       } else {
         txQuery.transactionType = 'EXPENSE';
-        ledgerTitle = 'Individual Expense Journal Ledger';
-        entitySubtext = 'All Posted Business & Operational Expenses';
+        ledgerTitle = 'All Expenses — Consolidated Ledger';
+        entitySubtext = 'All Posted Business &amp; Operational Expenses';
       }
 
       if (periodStart && periodEnd) txQuery.date = { $gte: periodStart, $lte: periodEnd };
+      else if (periodStart) txQuery.date = { $gte: periodStart };
+      else if (periodEnd) txQuery.date = { $lte: periodEnd };
 
       if (sRegex) {
         txQuery.$and = txQuery.$and || [];
@@ -545,10 +601,14 @@ export const queryLedger = async (req, res) => {
       }
 
       const transactions = await Transaction.find(txQuery)
-        .sort({ date: 1, createdAt: 1 })
+        .sort({ date: 1, createdAt: 1, _id: 1 })
         .populate('drAccountId', 'name type')
         .populate('crAccountId', 'name type')
-        .populate('categoryId', 'name type')
+        .populate({
+          path: 'categoryId',
+          select: 'name type isRentalHead parentCategoryId isMainHead',
+          populate: { path: 'parentCategoryId', select: 'name' },
+        })
         .populate('propertyId', 'propertyName plazaName')
         .populate('tenantId', 'tenantName name')
         .populate('createdBy', 'name email role')
@@ -567,6 +627,7 @@ export const queryLedger = async (req, res) => {
           detail: tx.detail,
           transactionType: tx.transactionType,
           categoryName: tx.categoryId?.name || 'Expense',
+          parentCategoryName: tx.categoryId?.parentCategoryId?.name || '',
           drAccount: display.dr || 'Expense Head',
           crAccount: display.cr || 'Paid From Account',
           propertyName: tx.propertyId?.propertyName || tx.propertyId?.plazaName || '',
