@@ -261,6 +261,8 @@ export const queryLedger = async (req, res) => {
         totalDebit += debit;
         totalCredit += credit;
 
+        const display = resolveTransactionAccountDisplay(tx);
+
         return {
           _id: tx._id,
           date: tx.date,
@@ -270,8 +272,8 @@ export const queryLedger = async (req, res) => {
           transactionType: tx.transactionType,
           sourceModule: tx.sourceModule,
           categoryName: tx.categoryId?.name || 'General',
-          drAccount: tx.drAccountId?.name || 'Account',
-          crAccount: tx.crAccountId?.name || 'Account',
+          drAccount: display.dr || tx.drAccountId?.name || 'Account',
+          crAccount: display.cr || tx.crAccountId?.name || 'Account',
           propertyName: tx.propertyId?.propertyName || tx.propertyId?.plazaName || '',
           tenantName: tx.tenantId?.tenantName || tx.tenantId?.name || '',
           reference: tx.reference || '',
@@ -324,7 +326,12 @@ export const queryLedger = async (req, res) => {
         .sort({ date: 1, createdAt: 1, _id: 1 })
         .populate('drAccountId', 'name type')
         .populate('crAccountId', 'name type')
-        .populate('categoryId', 'name type')
+        .populate({
+          path: 'categoryId',
+          select: 'name type isRentalHead parentCategoryId isMainHead',
+          populate: { path: 'parentCategoryId', select: 'name' },
+        })
+        .populate('propertyId', 'plazaName propertyName propertyCode')
         .populate('tenantId', 'tenantName name')
         .populate('createdBy', 'name email role')
         .lean();
@@ -341,6 +348,8 @@ export const queryLedger = async (req, res) => {
         totalDebit += debit;
         totalCredit += credit;
 
+        const display = resolveTransactionAccountDisplay(tx);
+
         return {
           _id: tx._id,
           date: tx.date,
@@ -348,8 +357,8 @@ export const queryLedger = async (req, res) => {
           detail: tx.detail,
           transactionType: tx.transactionType,
           categoryName: tx.categoryId?.name || 'General',
-          drAccount: tx.drAccountId?.name || '',
-          crAccount: tx.crAccountId?.name || '',
+          drAccount: display.dr || tx.drAccountId?.name || '',
+          crAccount: display.cr || tx.crAccountId?.name || '',
           tenantName: tx.tenantId?.tenantName || tx.tenantId?.name || '',
           rentMonth: tx.rentMonth || '',
           reference: tx.reference || '',

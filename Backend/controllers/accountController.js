@@ -5,7 +5,7 @@ import Category from '../models/Category.js';
 import Property from '../models/Property.js';
 import PendingEntry from '../models/PendingEntry.js';
 import MonthlyReport from '../models/MonthlyReport.js';
-import { round2 } from '../services/ledgerService.js';
+import { round2, resolveTransactionAccountDisplay } from '../services/ledgerService.js';
 import { getOrCreateCanonicalHead, provisionStandardCategories } from '../services/expenseClassificationService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
@@ -534,7 +534,12 @@ export const getAccountLedger = async (req, res) => {
       .sort({ date: 1, createdAt: 1, _id: 1 })
       .populate('drAccountId', 'name type')
       .populate('crAccountId', 'name type')
-      .populate('categoryId', 'name type isRentalHead')
+      .populate({
+        path: 'categoryId',
+        select: 'name type isRentalHead parentCategoryId isMainHead',
+        populate: { path: 'parentCategoryId', select: 'name' },
+      })
+      .populate('propertyId', 'plazaName propertyName propertyCode')
       .lean();
 
     // 3. Compute running balance sequentially. Reversed transactions are
@@ -553,14 +558,16 @@ export const getAccountLedger = async (req, res) => {
       totalMoneyIn += debit;
       totalMoneyOut += credit;
 
+      const display = resolveTransactionAccountDisplay(tx);
+
       return {
         _id: tx._id,
         date: tx.date,
         voucherNo: tx.voucherNo,
         detail: tx.detail,
         transactionType: tx.transactionType,
-        drAccount: tx.drAccountId?.name || 'Account',
-        crAccount: tx.crAccountId?.name || 'Account',
+        drAccount: display.dr || tx.drAccountId?.name || 'Account',
+        crAccount: display.cr || tx.crAccountId?.name || 'Account',
         categoryName: tx.categoryId?.name || 'General',
         // Show original amounts in the row for audit trail visibility
         debit: round2(isDr ? tx.amount : 0),

@@ -104,6 +104,68 @@ const getBrowserExecutablePath = () => {
 };
 
 /**
+ * Sort transactions by voucher number in sequential order:
+ * 1. Target report month vouchers first (e.g. PT-001-09-26, PT-002-09-26...) strictly by sequence number
+ * 2. Other PT vouchers (e.g. prior month adjustments) grouped by month and sequence
+ * 3. Non-PT vouchers (e.g. TRF, Cheques) sorted naturally, then by date
+ */
+export const sortTransactionsByVoucher = (txs, targetMonthStr) => {
+  return [...txs].sort((a, b) => {
+    const vnA = (a.voucherNo || '').trim();
+    const vnB = (b.voucherNo || '').trim();
+
+    if (!vnA && !vnB) return (new Date(a.date) - new Date(b.date));
+    if (!vnA) return 1;
+    if (!vnB) return -1;
+
+    const matchA = vnA.match(/^PT-(\d+)(?:-(\d{2})-(\d{2}))?$/i);
+    const matchB = vnB.match(/^PT-(\d+)(?:-(\d{2})-(\d{2}))?$/i);
+
+    if (matchA && matchB) {
+      const numA = parseInt(matchA[1], 10);
+      const numB = parseInt(matchB[1], 10);
+      const monthCodeA = matchA[2] && matchA[3] ? `${matchA[2]}-${matchA[3]}` : null;
+      const monthCodeB = matchB[2] && matchB[3] ? `${matchB[2]}-${matchB[3]}` : null;
+
+      const isTargetA = monthCodeA === targetMonthStr;
+      const isTargetB = monthCodeB === targetMonthStr;
+
+      // Group 1: Vouchers matching the target report month (e.g. 09-26) come first
+      if (isTargetA && !isTargetB) return -1;
+      if (!isTargetA && isTargetB) return 1;
+
+      // If both match target month, sort strictly by sequential number (PT-001, PT-002, PT-003...)
+      if (isTargetA && isTargetB) {
+        return numA - numB;
+      }
+
+      // If neither matches target month:
+      // Group by month code, then by sequential number
+      if (monthCodeA && monthCodeB) {
+        if (monthCodeA !== monthCodeB) {
+          return monthCodeA.localeCompare(monthCodeB);
+        }
+        return numA - numB;
+      }
+
+      if (monthCodeA && !monthCodeB) return -1;
+      if (!monthCodeA && monthCodeB) return 1;
+
+      return numA - numB;
+    }
+
+    // Standard PT vouchers come before non-PT vouchers
+    if (matchA && !matchB) return -1;
+    if (!matchA && matchB) return 1;
+
+    // Fallback: natural alphanumeric sort, then date
+    const cmp = vnA.localeCompare(vnB, undefined, { numeric: true, sensitivity: 'base' });
+    if (cmp !== 0) return cmp;
+    return new Date(a.date) - new Date(b.date);
+  });
+};
+
+/**
  * Generates official multi-page PDF report matching the user's PDF report
  * @param {string} monthYear - Format 'YYYY-MM', e.g. '2026-08'
  * @returns {Promise<Buffer>} - Generated PDF binary buffer
@@ -230,7 +292,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   };
 
   // 3. Fetch Master Transactions for Journal (Pages 4 & 5)
-  const transactions = await Transaction.find({
+  const rawTransactions = await Transaction.find({
     date: { $gte: startDate, $lte: endDate },
     $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   })
@@ -242,8 +304,10 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     .populate('drAccountId', 'name type')
     .populate('crAccountId', 'name type')
     .populate('propertyId', 'plazaName units')
-    .sort({ date: 1, voucherNo: 1 })
     .lean();
+
+  const activeMonthCode = `${String(month).padStart(2, '0')}-${String(year).slice(-2)}`;
+  const transactions = sortTransactionsByVoucher(rawTransactions, activeMonthCode);
 
   const masterJournalList = transactions.map(tx => {
     const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
