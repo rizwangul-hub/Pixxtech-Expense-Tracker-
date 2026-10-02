@@ -72,7 +72,7 @@ const getAccessibleSection = (section, user) => {
   if ((section === 'rent-due' || section === 'income' || section === 'rent-received') && isDataEntry(user)) {
     return section;
   }
-  if ((section === 'ledgers' || section === 'reports' || section === 'monthly-reports') && isDataEntry(user)) {
+  if ((section === 'ledgers' || section === 'reports' || section === 'monthly-reports' || section === 'account-ledger') && isDataEntry(user)) {
     return section;
   }
   if (section === 'expenses' && !isAdmin(user)) {
