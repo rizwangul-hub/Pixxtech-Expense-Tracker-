@@ -305,7 +305,7 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
       };
       await accountsAPI.createAccount(payload);
       setAccount(initialAccount);
-      notify('success', `${payload.accountType === 'BANK' ? 'Bank Account' : 'Cash Custodian'} created successfully.`);
+      notify('success', `${payload.accountType === 'BANK' ? 'Bank Account' : payload.accountType === 'SUSPENSE' ? 'Suspense Account' : 'Cash Custodian'} created successfully.`);
       await loadChartData();
     } catch (error) {
       notify('error', error.response?.data?.message || error.message || 'Failed to create financial account.');
@@ -1043,6 +1043,7 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                     >
                       <option value="BANK">Bank Account</option>
                       <option value="CASH">Cash in Hand / Custodian</option>
+                      <option value="SUSPENSE">Suspense Account</option>
                     </select>
                   </div>
                   <div>
@@ -1063,7 +1064,7 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                   <input
                     type="text"
                     required
-                    placeholder={account.accountType === 'BANK' ? 'e.g. Bank Al Falah (Kamran Ijaz)' : 'e.g. Cash in Hand (Majid Javed)'}
+                    placeholder={account.accountType === 'BANK' ? 'e.g. Bank Al Falah (Kamran Ijaz)' : account.accountType === 'SUSPENSE' ? 'e.g. Suspense Account' : 'e.g. Cash in Hand (Majid Javed)'}
                     value={account.accountName}
                     onChange={(e) => setAccount({ ...account, accountName: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600"
@@ -1096,7 +1097,7 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                       </div>
                     </div>
                   </>
-                ) : (
+                ) : account.accountType === 'CASH' ? (
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">Cash Custodian / Holder Name *</label>
                     <input
@@ -1108,7 +1109,7 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                       className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600"
                     />
                   </div>
-                )}
+                ) : null}
 
                 <button
                   type="submit"
@@ -1130,17 +1131,33 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                     filteredAccounts.map((a, i) => (
                       <div key={a._id || i} className="p-3 flex items-center justify-between hover:bg-slate-50">
                         <div className="flex items-center gap-3">
-                          {a.type === 'CASH' ? <Wallet size={16} className="text-amber-600" /> : <Landmark size={16} className="text-blue-600" />}
+                          {a.type === 'CASH' ? (
+                            <Wallet size={16} className="text-amber-600" />
+                          ) : a.type === 'SUSPENSE' ? (
+                            <Layers size={16} className="text-violet-600" />
+                          ) : (
+                            <Landmark size={16} className="text-blue-600" />
+                          )}
                           <div>
                             <div className="text-xs font-bold text-slate-900">{a.name}</div>
                             <div className="text-[10px] text-slate-500 font-medium">
-                              {a.type === 'CASH' ? `Custodian: ${a.cashHolder || 'General Cash'}` : `Bank: ${a.bankName || 'Bank'} ${a.accountNumber ? `(${a.accountNumber})` : ''}`}
+                              {a.type === 'CASH'
+                                ? `Custodian: ${a.cashHolder || 'General Cash'}`
+                                : a.type === 'SUSPENSE'
+                                ? 'Suspense / Holding Account'
+                                : `Bank: ${a.bankName || 'Bank'} ${a.accountNumber ? `(${a.accountNumber})` : ''}`}
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="text-xs font-extrabold font-mono text-slate-900">{formatPKR(a.currentBalance)}</div>
-                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
+                            a.type === 'CASH'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : a.type === 'SUSPENSE'
+                              ? 'bg-violet-50 text-violet-700 border-violet-200'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                          }`}>
                             {a.type}
                           </span>
                         </div>

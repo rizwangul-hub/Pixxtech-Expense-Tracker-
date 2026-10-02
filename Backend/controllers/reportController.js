@@ -120,6 +120,7 @@ export const getMonthlyFinancialSummary = async (req, res) => {
     const matrixData = await getMonthlyOpeningClosingMatrix(year, month);
     const bankRows = matrixData.rows.filter((r) => r.accountType === 'BANK');
     const cashRows = matrixData.rows.filter((r) => r.accountType === 'CASH');
+    const suspenseRows = matrixData.rows.filter((r) => r.accountType === 'SUSPENSE');
     const accountSummary = matrixData.rows.map((r) => ({
       accountId: r.accountId,
       accountName: r.accountName,
@@ -209,7 +210,8 @@ export const getMonthlyFinancialSummary = async (req, res) => {
     const netSurplusDeficit = round2(totalIncome - totalExpenses);
     const totalBankBalance = round2(bankRows.reduce((sum, r) => sum + r.closingBalance, 0));
     const totalCashBalance = round2(cashRows.reduce((sum, r) => sum + r.closingBalance, 0));
-    const grandClosingBalance = round2(totalBankBalance + totalCashBalance);
+    const totalSuspenseBalance = round2(suspenseRows.reduce((sum, r) => sum + r.closingBalance, 0));
+    const grandClosingBalance = round2(totalBankBalance + totalCashBalance + totalSuspenseBalance);
 
     const transferTxns = await Transaction.find({
       date: { $gte: startDate, $lte: endDate },
@@ -220,7 +222,7 @@ export const getMonthlyFinancialSummary = async (req, res) => {
 
     return res.status(200).json({
       success: true, period: periodString,
-      accountMatrix: { accounts: accountSummary, bankRows, cashRows, grandTotal, totalBankBalance, totalCashBalance, grandClosingBalance },
+      accountMatrix: { accounts: accountSummary, bankRows, cashRows, suspenseRows, grandTotal, totalBankBalance, totalCashBalance, totalSuspenseBalance, grandClosingBalance },
       rentalIncomeSummary: { grandTotalAgreed: grandTotalRentalAgreed, grandTotalReceived: grandTotalRentalReceived, grandTotalOutstanding: grandTotalRentalOutstanding, collectionRate: rentalCollectionRate, properties: rentalByProperty },
       otherIncomeSummary: { totalOtherIncome, breakdown: Array.from(otherIncomeByHead.entries()).map(([head, amount]) => ({ head, amount })), transactionCount: otherIncomeTxns.length },
       expenseSummary: {

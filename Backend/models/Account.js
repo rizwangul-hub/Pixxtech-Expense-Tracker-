@@ -152,7 +152,8 @@ accountSchema.pre('validate', function () {
   // Auto-generate a clean accountCode if not provided
   if (!this.accountCode && this.name) {
     const isCash = this.type === 'CASH';
-    const prefix = isCash ? 'CSH' : 'BNK';
+    const isSuspense = this.type === 'SUSPENSE';
+    const prefix = isCash ? 'CSH' : isSuspense ? 'SUS' : 'BNK';
     const cleanLetters = this.name
       .replace(/[^a-zA-Z0-9]/g, '')
       .slice(0, 4)

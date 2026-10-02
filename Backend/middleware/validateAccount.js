@@ -26,8 +26,8 @@ export const validateAccount = (req, res, next) => {
   }
 
   if (!isUpdate || accountType !== undefined || type !== undefined) {
-    if (!effectiveType || !['BANK', 'CASH'].includes(effectiveType)) {
-      errors.accountType = 'Account type must be either BANK or CASH.';
+    if (!effectiveType || !['BANK', 'CASH', 'SUSPENSE'].includes(effectiveType)) {
+      errors.accountType = 'Account type must be BANK, CASH, or SUSPENSE.';
     }
   }
 
