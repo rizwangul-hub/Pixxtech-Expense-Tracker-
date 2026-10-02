@@ -31,6 +31,7 @@ import {
 import { adminAPI, reportsAPI, accountsAPI, propertiesAPI, otherIncomeAPI } from '../services/api.js';
 import { MonthlyReportsHistoryPage } from './MonthlyReportsHistoryPage.jsx';
 import { resolveTransactionAccounts } from '../utils/formatters.js';
+import { isAdmin } from '../utils/permissions.js';
 
 // Format Pakistani Rupees with standard comma separation
 const formatPKR = (val) => {
@@ -813,7 +814,7 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                             </td>
                             <td className="py-2.5 px-3 text-center whitespace-nowrap">
                               <div className="flex items-center justify-center gap-1.5">
-                                {tx.status === 'PENDING' && (
+                                {isAdmin(user) && tx.status === 'PENDING' && (
                                   <button
                                     onClick={() => handleVerify(tx._id)}
                                     title="Verify & Stamp as Fahad Sb"
@@ -822,35 +823,42 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                                     <CheckCircle2 className="w-3.5 h-3.5" />
                                   </button>
                                 )}
-                                <button
-                                  onClick={() => {
-                                    const catName = (tx.categoryId?.name || '').trim().toLowerCase();
-                                    const matchedHead = otherIncomeHeadsList.find(
-                                      (h) => h.name?.trim().toLowerCase() === catName
-                                    );
-                                    setEditingTransaction({
-                                      ...tx,
-                                      categoryId: tx.categoryId?._id || tx.categoryId,
-                                      incomeHeadId: tx.sourceId?.incomeHeadId || matchedHead?._id || '',
-                                      drAccountId: tx.drAccountId?._id || tx.drAccountId,
-                                      crAccountId: tx.crAccountId?._id || tx.crAccountId,
-                                      propertyId: tx.propertyId?._id || tx.propertyId || '',
-                                      unitId: tx.unitId?._id || tx.unitId || '',
-                                      date: tx.date ? new Date(tx.date).toISOString().split('T')[0] : '',
-                                    });
-                                  }}
-                                  title="Master Edit (Rebalances Accounts)"
-                                  className="p-1 text-blue-400 hover:bg-blue-950/40 rounded transition"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(tx._id, tx.voucherNo)}
-                                  title="Delete & Reverse Balances"
-                                  className="p-1 text-rose-400 hover:bg-rose-950/40 rounded transition"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {isAdmin(user) && (
+                                  <button
+                                    onClick={() => {
+                                      const catName = (tx.categoryId?.name || '').trim().toLowerCase();
+                                      const matchedHead = otherIncomeHeadsList.find(
+                                        (h) => h.name?.trim().toLowerCase() === catName
+                                      );
+                                      setEditingTransaction({
+                                        ...tx,
+                                        categoryId: tx.categoryId?._id || tx.categoryId,
+                                        incomeHeadId: tx.sourceId?.incomeHeadId || matchedHead?._id || '',
+                                        drAccountId: tx.drAccountId?._id || tx.drAccountId,
+                                        crAccountId: tx.crAccountId?._id || tx.crAccountId,
+                                        propertyId: tx.propertyId?._id || tx.propertyId || '',
+                                        unitId: tx.unitId?._id || tx.unitId || '',
+                                        date: tx.date ? new Date(tx.date).toISOString().split('T')[0] : '',
+                                      });
+                                    }}
+                                    title="Master Edit (Rebalances Accounts)"
+                                    className="p-1 text-blue-400 hover:bg-blue-950/40 rounded transition"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {isAdmin(user) && (
+                                  <button
+                                    onClick={() => handleDelete(tx._id, tx.voucherNo)}
+                                    title="Delete & Reverse Balances"
+                                    className="p-1 text-rose-400 hover:bg-rose-950/40 rounded transition"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {!isAdmin(user) && (
+                                  <span className="text-[10px] text-slate-500 font-medium">Read-Only</span>
+                                )}
                               </div>
                             </td>
                           </tr>

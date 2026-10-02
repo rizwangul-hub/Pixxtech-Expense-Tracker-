@@ -72,7 +72,10 @@ const getAccessibleSection = (section, user) => {
   if ((section === 'rent-due' || section === 'income' || section === 'rent-received') && isDataEntry(user)) {
     return section;
   }
-  if ((section === 'ledgers' || section === 'reports' || section === 'monthly-reports' || section === 'account-ledger') && isDataEntry(user)) {
+  if ((section === 'ledgers' || section === 'reports' || section === 'monthly-reports' || section === 'account-ledger' || section === 'transactions') && isDataEntry(user)) {
+    return section;
+  }
+  if (section === 'expenses' && (isAdmin(user) || isDataEntry(user))) {
     return section;
   }
   if (section === 'expenses' && !isAdmin(user)) {
@@ -285,11 +288,11 @@ export function App() {
         />
       ) : currentSection === 'operational' ? (
         <DataEntryDashboard user={user} />
-      ) : currentSection === 'expenses' && isAdmin(user) ? (
+      ) : currentSection === 'expenses' && (isAdmin(user) || isDataEntry(user)) ? (
         <AdminPublisherDashboard
           user={user}
           onLogout={handleLogout}
-          onSwitchToDataEntry={() => setCurrentSection('verification')}
+          onSwitchToDataEntry={() => setCurrentSection('operational')}
         />
       ) : currentSection === 'users' && isAdmin(user) ? (
         <UserManager currentUser={user} />

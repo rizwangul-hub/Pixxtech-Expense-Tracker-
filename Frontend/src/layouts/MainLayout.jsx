@@ -227,14 +227,14 @@ export function MainLayout({
       badge: 'Active',
       badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
     },
-    ...(userIsAdmin
+    ...(userIsAdmin || userIsDataEntry
       ? [
           {
             id: 'expenses',
-            label: 'Expenses',
-            icon: Receipt,
+            label: 'Publisher & Audit Center',
+            icon: BarChart3,
             status: 'active',
-            badge: 'Audit',
+            badge: userIsAdmin ? 'Admin' : 'Audit',
             badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
           },
         ]
@@ -244,7 +244,7 @@ export function MainLayout({
       label: 'Accounts',
       icon: Landmark,
       status: 'active',
-      permission: PERMISSIONS.MANAGE_MASTER_DATA,
+      permission: (userIsDataEntry || userIsAdmin || userIsVerifier) ? undefined : PERMISSIONS.MANAGE_MASTER_DATA,
       badge: 'Active',
       badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
     },
