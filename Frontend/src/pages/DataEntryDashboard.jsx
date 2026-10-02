@@ -198,7 +198,7 @@ export const DataEntryDashboard = ({ user }) => {
       });
       setOtherEvidenceFiles([]);
       if (res.success) {
-        setActionMessage({ text: 'Other income recorded successfully.', type: 'success' });
+        setActionMessage({ text: 'Other income submitted and is waiting for admin verification.', type: 'success' });
         setOtherForm({
           date: new Date().toISOString().split('T')[0],
           amount: '',

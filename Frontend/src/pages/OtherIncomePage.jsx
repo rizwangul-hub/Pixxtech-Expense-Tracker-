@@ -23,7 +23,7 @@ import {
   X,
   FileSpreadsheet,
 } from 'lucide-react';
-import { otherIncomeAPI, accountsAPI, propertiesAPI, vouchersAPI } from '../services/api.js';
+import { otherIncomeAPI, accountsAPI, propertiesAPI, vouchersAPI, verificationAPI } from '../services/api.js';
 import { formatPKR, formatDate } from '../utils/formatters.js';
 import { isAdmin } from '../utils/permissions.js';
 
@@ -65,8 +65,6 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
     referenceNumber: '',
     transactionDetail: '',
     description: '',
-    status: 'POSTED',
-    checkedBy: currentUser?.name || 'Authorized Auditor',
   });
 
   // Manage Heads Modal
@@ -78,6 +76,7 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
   // View Detail Modal
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [reversing, setReversing] = useState(false);
+  const [returningForApproval, setReturningForApproval] = useState(null);
   const [reversalReason, setReversalReason] = useState('');
   const [showReversalPrompt, setShowReversalPrompt] = useState(false);
 
@@ -193,7 +192,7 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
 
       const res = await otherIncomeAPI.record(payload);
       if (res?.success) {
-        setSuccessMsg('Other income receipt successfully posted with central double-entry voucher!');
+        setSuccessMsg('Other income submitted and waiting for administrator approval.');
         setTimeout(() => {
           setIsRecordModalOpen(false);
           setSuccessMsg('');
@@ -247,6 +246,28 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
       alert(err.response?.data?.message || err.message || 'Error reversing record');
     } finally {
       setReversing(false);
+    }
+  };
+
+  const handleReturnForApproval = async (record) => {
+    if (!record.voucherNo) {
+      alert('This receipt has no voucher number and cannot be returned to verification.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Return voucher #${record.voucherNo} to admin verification?\n\nThis removes it from the posted ledger, restores account balances, and puts it back in the pending approval queue.`
+    );
+    if (!confirmed) return;
+
+    setReturningForApproval(record._id);
+    try {
+      const res = await verificationAPI.unverifyEntry(record.voucherNo);
+      if (!res?.success) throw new Error(res?.message || 'Failed to return receipt for approval.');
+      await loadData();
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to return receipt for approval.');
+    } finally {
+      setReturningForApproval(null);
     }
   };
 
@@ -474,7 +495,7 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
             >
               <option value="all">Status: Active (Posted & Draft)</option>
               <option value="POSTED">POSTED Only</option>
-              <option value="DRAFT">DRAFT Only</option>
+              <option value="DRAFT">Pending Admin Approval</option>
               <option value="REVERSED">REVERSED Only</option>
             </select>
           </div>
@@ -608,23 +629,36 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
                               : 'bg-red-950 text-red-400 border-red-800/60'
                           }`}
                         >
-                          {r.status}
+                          {r.status === 'DRAFT' ? 'PENDING APPROVAL' : r.status}
                         </span>
                       </td>
 
                       {/* 10. Actions */}
                       <td className="py-3 px-3.5 whitespace-nowrap text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedRecord(r);
-                            setShowReversalPrompt(false);
-                          }}
-                          className="px-2.5 py-1 text-[11px] font-semibold rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition inline-flex items-center gap-1"
-                        >
-                          <Eye size={12} />
-                          Details
-                        </button>
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedRecord(r);
+                              setShowReversalPrompt(false);
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-semibold rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition inline-flex items-center gap-1"
+                          >
+                            <Eye size={12} />
+                            Details
+                          </button>
+                          {userIsAdmin && r.status === 'POSTED' && (
+                            <button
+                              type="button"
+                              onClick={() => handleReturnForApproval(r)}
+                              disabled={returningForApproval === r._id}
+                              className="px-2.5 py-1 text-[11px] font-semibold rounded bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-800 transition inline-flex items-center gap-1 disabled:opacity-50"
+                            >
+                              <RotateCcw size={12} className={returningForApproval === r._id ? 'animate-spin' : ''} />
+                              Return for approval
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -857,20 +891,11 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
                 />
               </div>
 
-              {/* Status and Action Buttons */}
+              {/* Approval workflow and action buttons */}
               <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400 font-medium">Status:</span>
-                  <select
-                    value={recordForm.status}
-                    onChange={(e) => setRecordForm({ ...recordForm, status: e.target.value })}
-                    className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200"
-                  >
-                    <option value="POSTED">POSTED (Immediate Ledger Effect)</option>
-                    <option value="DRAFT">DRAFT (Save for review)</option>
-                  </select>
-                </div>
-
+                <span className="text-amber-300 font-medium">
+                  This receipt will stay pending until an administrator approves it.
+                </span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -884,7 +909,7 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
                     disabled={submitting}
                     className="px-5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white transition font-bold disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                   >
-                    {submitting ? 'Posting Voucher...' : 'Save & Post Other Income'}
+                    {submitting ? 'Submitting...' : 'Submit for Admin Approval'}
                   </button>
                 </div>
               </div>
@@ -1053,7 +1078,7 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
                         : 'bg-red-950 text-red-400 border-red-800/60'
                     }`}
                   >
-                    {selectedRecord.status}
+                    {selectedRecord.status === 'DRAFT' ? 'PENDING APPROVAL' : selectedRecord.status}
                   </span>
                 </div>
               </div>

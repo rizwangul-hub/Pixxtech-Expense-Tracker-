@@ -6,8 +6,8 @@ import Property from '../models/Property.js';
 import Category from '../models/Category.js';
 import Transaction from '../models/Transaction.js';
 import Voucher from '../models/Voucher.js';
-import RentReceived from '../models/RentReceived.js';
-import { createTransaction, round2, suggestNextVoucherNumber, syncAccountBalances } from '../services/ledgerService.js';
+import PendingEntry from '../models/PendingEntry.js';
+import { round2, suggestNextVoucherNumber, syncAccountBalances } from '../services/ledgerService.js';
 import { normalizeBusinessPaymentDate } from '../services/salaryReportingService.js';
 
 /**
@@ -64,22 +64,27 @@ export const generateOtherIncomeReceiptNumber = async (date) => {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const monthPrefix = `OI-${year}${month}-`;
 
-  const lastReceipt = await OtherIncome.findOne({
-    receiptNumber: { $regex: `^${monthPrefix}` },
-  })
-    .sort({ receiptNumber: -1 })
-    .collation({ locale: 'en', numericOrdering: true });
+  const [lastReceipt, pendingReceipts] = await Promise.all([
+    OtherIncome.findOne({ receiptNumber: { $regex: `^${monthPrefix}` } })
+      .sort({ receiptNumber: -1 })
+      .collation({ locale: 'en', numericOrdering: true })
+      .lean(),
+    PendingEntry.find({
+      entryType: 'OTHER_INCOME',
+      'entryData.receiptNumber': { $regex: `^${monthPrefix}` },
+    })
+      .select('entryData.receiptNumber')
+      .lean(),
+  ]);
+  const highestSequence = [
+    lastReceipt?.receiptNumber,
+    ...pendingReceipts.map((entry) => entry.entryData?.receiptNumber),
+  ].reduce((highest, receiptNumber) => {
+    const sequence = Number(receiptNumber?.split('-').at(-1));
+    return Number.isFinite(sequence) ? Math.max(highest, sequence) : highest;
+  }, 0);
 
-  let nextSequence = 1;
-  if (lastReceipt && lastReceipt.receiptNumber) {
-    const parts = lastReceipt.receiptNumber.split('-');
-    const lastSeq = parseInt(parts[parts.length - 1], 10);
-    if (!isNaN(lastSeq)) {
-      nextSequence = lastSeq + 1;
-    }
-  }
-
-  return `${monthPrefix}${String(nextSequence).padStart(4, '0')}`;
+  return `${monthPrefix}${String(highestSequence + 1).padStart(4, '0')}`;
 };
 
 /**
@@ -338,8 +343,6 @@ export const recordOtherIncome = async (req, res) => {
       referenceNumber = '',
       transactionDetail,
       description = '',
-      status = 'POSTED',
-      checkedBy,
       attachments = [],
     } = req.body;
 
@@ -454,9 +457,19 @@ export const recordOtherIncome = async (req, res) => {
 
     // Check if voucher number is already used by a non-other-income voucher
     const existingVoucher = await Voucher.findOne({ voucherNumber: cleanVn });
-    if (existingVoucher && existingVoucher.sourceModule !== 'OTHER_INCOME' && existingVoucher.sourceId) {
+    if (existingVoucher) {
       // Pick next sequential
       cleanVn = await suggestNextVoucherNumber();
+    }
+    const duplicatePendingVoucher = await PendingEntry.exists({
+      voucherNo: cleanVn,
+      status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
+    });
+    if (duplicatePendingVoucher) {
+      return res.status(409).json({
+        success: false,
+        message: `Voucher number '${cleanVn}' is already awaiting verification.`,
+      });
     }
 
     // 7. Ensure Category exists for this Income Head
@@ -469,41 +482,7 @@ export const recordOtherIncome = async (req, res) => {
       });
     }
 
-    // 8. Financial Accounting Double-Entry
-    // If status is POSTED, create transaction + voucher + update account balance
-    let createdTransaction = null;
-    let createdVoucherId = null;
-
-    if (status === 'POSTED') {
-      const clearingAccount = await getOrCreateOtherIncomeClearingAccount();
-
-      const narration = transactionDetail.trim();
-
-      createdTransaction = await createTransaction({
-        date: validReceiptDate,
-        voucherNo: cleanVn,
-        detail: narration,
-        categoryId: category._id,
-        drAccountId: receivingAccount._id, // Debit Asset -> increases Bank/Cash balance
-        crAccountId: clearingAccount._id,  // Credit Clearing / Revenue
-        amount: numericAmount,
-        propertyId: propertyId || null,
-        unitId: unitId || null,
-        transactionType: 'INCOME',
-        reportCategory: /boss|owner personal|kamran ijaz sb personal/i.test(incomeHead.name) ? 'Owner Personal' : 'Other Income',
-        sourceModule: /boss|owner personal|kamran ijaz sb personal/i.test(incomeHead.name) ? 'OWNER_PERSONAL' : 'OTHER_INCOME',
-        attachments,
-        reference: referenceNumber || '',
-        checkedBy: checkedBy || req.user?.name || 'Authorized Auditor',
-        status: 'POSTED',
-        createdBy: req.user?._id,
-      });
-
-      createdVoucherId = createdTransaction.voucherId;
-    }
-
-    // 9. Save Other Income Document
-    const otherIncome = await OtherIncome.create({
+    const draftOtherIncome = await OtherIncome.create({
       receiptNumber,
       receiptDate: validReceiptDate,
       incomeHeadId: incomeHead._id,
@@ -517,28 +496,61 @@ export const recordOtherIncome = async (req, res) => {
       referenceNumber: referenceNumber ? referenceNumber.trim() : '',
       transactionDetail: transactionDetail.trim(),
       description: description ? description.trim() : '',
-      status: status === 'DRAFT' ? 'DRAFT' : 'POSTED',
-      voucherId: createdVoucherId,
+      status: 'DRAFT',
       voucherNo: cleanVn,
-      transactionId: createdTransaction ? createdTransaction._id : null,
-      checkedBy: checkedBy || req.user?.name || null,
+      checkedBy: null,
       createdBy: req.user?._id,
       updatedBy: req.user?._id,
       attachments,
     });
 
-    // Update Voucher sourceId if newly created
-    if (createdVoucherId) {
-      await Voucher.findByIdAndUpdate(createdVoucherId, {
-        sourceId: otherIncome._id,
-        sourceModule: 'OTHER_INCOME',
+    let pendingEntry;
+    try {
+      pendingEntry = await PendingEntry.create({
+        entryType: 'OTHER_INCOME',
+        amount: numericAmount,
+        date: validReceiptDate,
+        voucherNo: cleanVn,
+        categoryId: category._id,
+        drAccountId: receivingAccount._id,
+        receivingAccountId: receivingAccount._id,
+        propertyId: propertyId || null,
+        unitId: unitId || null,
+        detail: transactionDetail.trim(),
+        referenceNumber: referenceNumber ? referenceNumber.trim() : '',
+        attachments,
+        entryData: {
+          ...req.body,
+          incomeHeadId: incomeHead._id,
+          receiptNumber,
+          otherIncomeRecordId: draftOtherIncome._id,
+          receivedFrom: receivedFrom ? receivedFrom.trim() : '',
+          referenceNumber: referenceNumber ? referenceNumber.trim() : '',
+          transactionDetail: transactionDetail.trim(),
+          description: description ? description.trim() : '',
+        },
+        status: 'PENDING_VERIFICATION',
+        submittedBy: req.user._id,
+        submittedByName: req.user.name,
+        submittedAt: new Date(),
+        auditLog: [{
+          action: 'SUBMITTED',
+          performedBy: req.user.name,
+          performedById: req.user._id,
+          timestamp: new Date(),
+          notes: 'Other income submitted for admin verification. No ledger transaction or account balance has been posted.',
+        }],
       });
+    } catch (error) {
+      await OtherIncome.findByIdAndDelete(draftOtherIncome._id);
+      throw error;
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: 'Other Income receipt recorded successfully with double-entry voucher',
-      data: otherIncome,
+      isPending: true,
+      message: 'Other Income receipt submitted for admin verification. It will not be posted until approved.',
+      data: pendingEntry,
     });
   } catch (error) {
     console.error('recordOtherIncome error:', error);

@@ -25,7 +25,7 @@ import StatusBadge from '@/components/StatusBadge';
 type UnifiedEntry = {
   id: string;
   isPending: boolean;
-  type: 'RENT' | 'EXPENSE' | 'TRANSFER';
+  type: 'RENT' | 'EXPENSE' | 'TRANSFER' | 'OTHER_INCOME' | 'SALARY';
   voucherNo: string;
   date: string;
   amount: number;
@@ -40,7 +40,7 @@ type UnifiedEntry = {
 export default function MyEntriesScreen() {
   const router = useRouter();
 
-  const [filterType, setFilterType] = useState<'ALL' | 'PENDING' | 'RENT' | 'EXPENSE' | 'VERIFIED'>('ALL');
+  const [filterType, setFilterType] = useState<'ALL' | 'PENDING' | 'RENT' | 'EXPENSE' | 'OTHER_INCOME' | 'VERIFIED'>('ALL');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -122,6 +122,7 @@ export default function MyEntriesScreen() {
       if (filterType === 'VERIFIED' && (item.isPending || item.status === 'PENDING_VERIFICATION')) return false;
       if (filterType === 'RENT' && item.type !== 'RENT') return false;
       if (filterType === 'EXPENSE' && item.type !== 'EXPENSE') return false;
+      if (filterType === 'OTHER_INCOME' && item.type !== 'OTHER_INCOME') return false;
 
       if (!search.trim()) return true;
       const q = search.trim().toLowerCase();
@@ -208,6 +209,15 @@ export default function MyEntriesScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[styles.tabChip, filterType === 'OTHER_INCOME' && styles.tabChipActive]}
+            onPress={() => setFilterType('OTHER_INCOME')}
+          >
+            <Text style={[styles.tabText, filterType === 'OTHER_INCOME' && styles.tabTextActive]}>
+              Other Income ({unifiedEntries.filter((e) => e.type === 'OTHER_INCOME').length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.tabChip, filterType === 'VERIFIED' && styles.tabChipActive]}
             onPress={() => setFilterType('VERIFIED')}
           >
@@ -264,6 +274,8 @@ export default function MyEntriesScreen() {
           }
           renderItem={({ item }) => {
             const isRent = item.type === 'RENT';
+            const isOtherIncome = item.type === 'OTHER_INCOME';
+            const isIncome = isRent || isOtherIncome;
             return (
               <TouchableOpacity
                 style={styles.entryCard}
@@ -275,24 +287,24 @@ export default function MyEntriesScreen() {
                     <View
                       style={[
                         styles.typeIconBox,
-                        isRent ? styles.typeIconRent : styles.typeIconExpense,
+                        isIncome ? styles.typeIconRent : styles.typeIconExpense,
                       ]}
                     >
                       <Feather
-                        name={isRent ? 'dollar-sign' : 'file-text'}
+                        name={isIncome ? 'dollar-sign' : 'file-text'}
                         size={16}
-                        color={isRent ? '#16A34A' : '#DC2626'}
+                        color={isIncome ? '#16A34A' : '#DC2626'}
                       />
                     </View>
                     <View>
                       <Text style={styles.voucherNo}>
-                        {isRent ? 'Rent Receipt' : `VN #${item.voucherNo}`}
+                        {isRent ? 'Rent Receipt' : isOtherIncome ? 'Other Income' : `VN #${item.voucherNo}`}
                       </Text>
                       <Text style={styles.entryDate}>{item.date}</Text>
                     </View>
                   </View>
                   <View style={styles.amountBox}>
-                    <Text style={[styles.amountText, isRent && styles.amountTextRent]}>
+                    <Text style={[styles.amountText, isIncome && styles.amountTextRent]}>
                       PKR {item.amount?.toLocaleString()}
                     </Text>
                     <StatusBadge status={item.status} size="small" />

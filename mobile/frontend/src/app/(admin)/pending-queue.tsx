@@ -47,13 +47,14 @@ export default function PendingQueueScreen() {
     pendingRentCount: number;
     pendingExpenseCount: number;
     pendingTransferCount?: number;
+    pendingOtherIncomeCount?: number;
     totalPendingCount: number;
   } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'ALL' | 'RENT' | 'EXPENSE' | 'TRANSFER'>('ALL');
+  const [activeTab, setActiveTab] = useState<'ALL' | 'RENT' | 'EXPENSE' | 'TRANSFER' | 'OTHER_INCOME'>('ALL');
 
   // Instant client-side memoized filtering for 0ms tab switching
   const filteredEntries = useMemo(() => {
@@ -101,6 +102,7 @@ export default function PendingQueueScreen() {
           pendingRentCount: summaryRes.data.pendingRentCount || 0,
           pendingExpenseCount: summaryRes.data.pendingExpenseCount || 0,
           pendingTransferCount: summaryRes.data.pendingTransferCount || 0,
+          pendingOtherIncomeCount: summaryRes.data.pendingOtherIncomeCount || 0,
           totalPendingCount: summaryRes.data.totalPendingCount || 0,
         });
       }
@@ -150,6 +152,7 @@ export default function PendingQueueScreen() {
     const isExpense = item.entryType === 'EXPENSE';
     const isTransfer = item.entryType === 'TRANSFER';
     const isRent = item.entryType === 'RENT';
+    const isOtherIncome = item.entryType === 'OTHER_INCOME';
 
     const accountName = isExpense
       ? getExpenseDebitLabel(item)
@@ -173,27 +176,27 @@ export default function PendingQueueScreen() {
             <View
               style={[
                 styles.typeIconBox,
-                { backgroundColor: isExpense ? '#FFE4E6' : isTransfer ? '#F3E8FF' : '#DBEAFE' },
+                { backgroundColor: isExpense ? '#FFE4E6' : isTransfer ? '#F3E8FF' : isOtherIncome ? '#FEF3C7' : '#DBEAFE' },
               ]}
             >
               <Feather
-                name={isExpense ? 'file-text' : isTransfer ? 'repeat' : 'home'}
+                name={isExpense ? 'file-text' : isTransfer ? 'repeat' : isOtherIncome ? 'dollar-sign' : 'home'}
                 size={14}
-                color={isExpense ? '#9F1239' : isTransfer ? '#6B21A8' : '#1E40AF'}
+                color={isExpense ? '#9F1239' : isTransfer ? '#6B21A8' : isOtherIncome ? '#B45309' : '#1E40AF'}
               />
             </View>
             <Text
               style={[
                 styles.typeBadgeText,
-                { color: isExpense ? '#9F1239' : isTransfer ? '#6B21A8' : '#1E40AF' },
+                { color: isExpense ? '#9F1239' : isTransfer ? '#6B21A8' : isOtherIncome ? '#B45309' : '#1E40AF' },
               ]}
             >
-              {isExpense ? 'EXPENSE' : isTransfer ? 'TRANSFER' : 'RENT'}
+              {isExpense ? 'EXPENSE' : isTransfer ? 'TRANSFER' : isOtherIncome ? 'OTHER INCOME' : isRent ? 'RENT' : 'SALARY'}
             </Text>
             <StatusBadge status={item.status} />
           </View>
 
-          <Text style={[styles.amountText, { color: isExpense ? '#DC2626' : isTransfer ? '#9333EA' : '#16A34A' }]}>
+          <Text style={[styles.amountText, { color: isExpense ? '#DC2626' : isTransfer ? '#9333EA' : isOtherIncome ? '#B45309' : '#16A34A' }]}>
             {formatPKR(item.amount)}
           </Text>
         </View>
@@ -207,6 +210,13 @@ export default function PendingQueueScreen() {
             <Feather name="calendar" size={13} color="#64748B" style={styles.metaIcon} />
             <Text style={styles.metaText}>{formatDate(item.date)}</Text>
           </View>
+
+          {isOtherIncome && item.categoryId?.name ? (
+            <View style={styles.metaRow}>
+              <Feather name="tag" size={13} color="#64748B" style={styles.metaIcon} />
+              <Text style={styles.metaText} numberOfLines={1}>{item.categoryId.name}</Text>
+            </View>
+          ) : null}
 
           {propertyName ? (
             <View style={styles.metaRow}>
@@ -297,6 +307,13 @@ export default function PendingQueueScreen() {
           </Text>
           <Text style={styles.counterLabel}>Transfers</Text>
         </View>
+        <View style={styles.counterDivider} />
+        <View style={styles.counterItem}>
+          <Text style={[styles.counterValue, { color: '#B45309' }]}>
+            {summary?.pendingOtherIncomeCount ?? '—'}
+          </Text>
+          <Text style={styles.counterLabel}>Other Income</Text>
+        </View>
       </View>
 
       <View style={styles.searchContainer}>
@@ -371,6 +388,19 @@ export default function PendingQueueScreen() {
             ]}
           >
             Transfers ({summary?.pendingTransferCount ?? 0})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'OTHER_INCOME' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('OTHER_INCOME')}
+        >
+          <Text
+            style={[
+              styles.tabButtonText,
+              activeTab === 'OTHER_INCOME' && styles.tabButtonTextActive,
+            ]}
+          >
+            Other Income ({summary?.pendingOtherIncomeCount ?? 0})
           </Text>
         </TouchableOpacity>
       </View>

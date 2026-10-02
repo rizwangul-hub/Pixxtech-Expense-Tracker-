@@ -920,7 +920,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       )}
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition">
           <div className="flex items-center justify-between text-slate-400 text-xs mb-1.5">
             <span className="font-semibold">Pending Total</span>
@@ -965,6 +965,17 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
           <div className="text-[11px] text-slate-500 mt-1">Internal transfers</div>
         </div>
 
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1.5">
+            <span className="font-semibold">Pending Other Income</span>
+            <DollarSign size={16} className="text-amber-400" />
+          </div>
+          <div className="text-2xl font-black font-mono text-amber-300">
+            {summary?.pendingOtherIncomeCount ?? 0}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">Requires admin approval</div>
+        </div>
+
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 col-span-2 sm:col-span-1 hover:border-slate-700 transition">
           <div className="flex items-center justify-between text-slate-400 text-xs mb-1.5">
             <span className="font-semibold">Verified (7 Days)</span>
@@ -988,6 +999,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
               { id: 'EXPENSE', label: 'Expense Vouchers' },
               { id: 'SALARY', label: '💼 Staff Salaries' },
               { id: 'TRANSFER', label: 'Internal Transfers' },
+              { id: 'OTHER_INCOME', label: 'Other Income' },
             ].map((t) => (
               <button
                 key={t.id}
@@ -1095,6 +1107,10 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           {entry.entryType === 'RENT' ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-blue-950/80 text-blue-300 border border-blue-700/60">
                               <Building2 size={12} /> Rent Receipt
+                            </span>
+                          ) : entry.entryType === 'OTHER_INCOME' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700/60">
+                              <DollarSign size={12} /> Other Income
                             </span>
                           ) : entry.entryType === 'TRANSFER' ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-purple-950/80 text-purple-300 border border-purple-700/60">
@@ -1295,14 +1311,20 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                     {/* Actions Row */}
                     {isPending && (
                       <div className="pt-2 border-t border-slate-800 flex items-center gap-2 flex-wrap">
-                        <button
-                          onClick={() => handleVerify(entry)}
-                          disabled={savingEntryId === entry._id}
-                          className="flex-1 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition disabled:opacity-50"
-                        >
-                          <Check size={15} />
-                          <span>Verify / OK</span>
-                        </button>
+                        {(entry.entryType !== 'OTHER_INCOME' || isAdmin) ? (
+                          <button
+                            onClick={() => handleVerify(entry)}
+                            disabled={savingEntryId === entry._id}
+                            className="flex-1 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition disabled:opacity-50"
+                          >
+                            <Check size={15} />
+                            <span>Verify / OK</span>
+                          </button>
+                        ) : (
+                          <span className="flex-1 text-center py-2 text-xs font-semibold text-amber-300">
+                            Administrator approval required
+                          </span>
+                        )}
 
                         <button
                           onClick={() => handleOpenEdit(entry)}
@@ -1413,6 +1435,10 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           {entry.entryType === 'RENT' ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-950/70 text-blue-300 border border-blue-700/50">
                               <Building2 size={11} /> Rent
+                            </span>
+                          ) : entry.entryType === 'OTHER_INCOME' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950/70 text-amber-300 border border-amber-700/50">
+                              <DollarSign size={11} /> Other Income
                             </span>
                           ) : entry.entryType === 'TRANSFER' ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950/70 text-purple-300 border border-purple-700/50">
@@ -1586,15 +1612,21 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                         <td className="py-2.5 px-3 text-center whitespace-nowrap align-middle">
                           {isPending ? (
                             <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => handleVerify(entry)}
-                                disabled={savingEntryId === entry._id}
-                                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow transition disabled:opacity-50"
-                                title="Verify & Post to Ledger"
-                              >
-                                <Check size={13} />
-                                <span>Verify / OK</span>
-                              </button>
+                              {(entry.entryType !== 'OTHER_INCOME' || isAdmin) ? (
+                                <button
+                                  onClick={() => handleVerify(entry)}
+                                  disabled={savingEntryId === entry._id}
+                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow transition disabled:opacity-50"
+                                  title="Verify & Post to Ledger"
+                                >
+                                  <Check size={13} />
+                                  <span>Verify / OK</span>
+                                </button>
+                              ) : (
+                                <span className="px-2 text-[10px] font-semibold text-amber-300">
+                                  Admin approval required
+                                </span>
+                              )}
 
                               <button
                                 onClick={() => handleOpenEdit(entry)}

@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 import PendingEntry from '../models/PendingEntry.js';
+import OtherIncome from '../models/OtherIncome.js';
+import OtherIncomeHead from '../models/OtherIncomeHead.js';
+import Voucher from '../models/Voucher.js';
 import Transaction from '../models/Transaction.js';
 import RentReceived from '../models/RentReceived.js';
 import RentDue from '../models/RentDue.js';
@@ -18,7 +21,10 @@ import {
   suggestNextVoucherNumber,
   syncAccountBalances,
 } from '../services/ledgerService.js';
-import { getOrCreateOtherIncomeClearingAccount } from './otherIncomeController.js';
+import {
+  generateOtherIncomeReceiptNumber,
+  getOrCreateOtherIncomeClearingAccount,
+} from './otherIncomeController.js';
 import { syncRentDueWithCollections } from './rentDueController.js';
 import {
   getOrCreateEmployeeSalaryCategory,
@@ -373,6 +379,7 @@ export const getVerificationSummary = async (req, res) => {
       pendingRentCount,
       pendingExpenseCount,
       pendingTransferCount,
+      pendingOtherIncomeCount,
       totalPendingCount,
       submittedTodayCount,
       submittedBySarfrazCount,
@@ -382,6 +389,7 @@ export const getVerificationSummary = async (req, res) => {
       PendingEntry.countDocuments({ status: { $in: ['PENDING_VERIFICATION', 'EDITED'] }, entryType: 'RENT' }),
       PendingEntry.countDocuments({ status: { $in: ['PENDING_VERIFICATION', 'EDITED'] }, entryType: 'EXPENSE' }),
       PendingEntry.countDocuments({ status: { $in: ['PENDING_VERIFICATION', 'EDITED'] }, entryType: 'TRANSFER' }),
+      PendingEntry.countDocuments({ status: { $in: ['PENDING_VERIFICATION', 'EDITED'] }, entryType: 'OTHER_INCOME' }),
       PendingEntry.countDocuments({ status: { $in: ['PENDING_VERIFICATION', 'EDITED'] } }),
       PendingEntry.countDocuments({ submittedAt: { $gte: today } }),
       PendingEntry.countDocuments({
@@ -399,6 +407,7 @@ export const getVerificationSummary = async (req, res) => {
         pendingRentCount,
         pendingExpenseCount,
         pendingTransferCount,
+        pendingOtherIncomeCount,
         totalPendingCount,
         submittedTodayCount,
         submittedBySarfrazCount,
@@ -576,6 +585,16 @@ export const updatePendingEntry = async (req, res) => {
     if (updates.drAccountId) entry.drAccountId = updates.drAccountId;
     if (updates.crAccountId) entry.crAccountId = updates.crAccountId;
     if (updates.receivingAccountId) entry.receivingAccountId = updates.receivingAccountId;
+    if (entry.entryType === 'OTHER_INCOME') {
+      if (updates.referenceNumber !== undefined) entry.referenceNumber = updates.referenceNumber.trim();
+      entry.entryData = {
+        ...entry.entryData,
+        ...(updates.receivedFrom !== undefined ? { receivedFrom: updates.receivedFrom.trim() } : {}),
+        ...(updates.description !== undefined ? { description: updates.description.trim() } : {}),
+        ...(updates.referenceNumber !== undefined ? { referenceNumber: updates.referenceNumber.trim() } : {}),
+      };
+      entry.markModified('entryData');
+    }
 
     const paidFromAcc = updates.paidFromAccountId || updates.crAccountId;
     if (paidFromAcc) {
@@ -599,6 +618,17 @@ export const updatePendingEntry = async (req, res) => {
       entry.expenseClassification = classification.expenseClassification;
       entry.propertyId = classification.propertyId;
       entry.unitId = classification.unitId;
+    } else if (entry.entryType === 'OTHER_INCOME' && updates.categoryId) {
+      const category = await Category.findById(entry.categoryId).select('name type').lean();
+      if (!category || category.type !== 'INCOME') {
+        return apiError(res, 'Select a valid Other Income head.', 400);
+      }
+      const incomeHead = await OtherIncomeHead.findOne({ name: category.name }).select('_id').lean();
+      if (!incomeHead) {
+        return apiError(res, 'The selected category is not a configured Other Income head.', 400);
+      }
+      entry.entryData = { ...entry.entryData, incomeHeadId: incomeHead._id };
+      entry.markModified('entryData');
     } else if (entry.entryType === 'RENT' && (updates.propertyId !== undefined || updates.unitId !== undefined)) {
       if (!entry.propertyId || !entry.unitId) {
         return apiError(res, 'A property and unit are required for rent entries.', 400);
@@ -711,6 +741,24 @@ export const updatePendingEntry = async (req, res) => {
     });
 
     await entry.save();
+    if (entry.entryType === 'OTHER_INCOME' && entry.entryData?.otherIncomeRecordId) {
+      const category = await Category.findById(entry.categoryId).select('name').lean();
+      await OtherIncome.findByIdAndUpdate(entry.entryData.otherIncomeRecordId, {
+        receiptDate: entry.date,
+        headName: category?.name || 'Other Income',
+        incomeHeadId: entry.entryData.incomeHeadId,
+        amount: entry.amount,
+        receivingAccountId: entry.receivingAccountId || entry.drAccountId,
+        propertyId: entry.propertyId || null,
+        unitId: entry.unitId || null,
+        receivedFrom: entry.entryData?.receivedFrom || '',
+        referenceNumber: entry.referenceNumber || '',
+        transactionDetail: entry.detail,
+        description: entry.entryData?.description || '',
+        attachments: entry.attachments || [],
+        updatedBy: req.user?._id,
+      });
+    }
 
     const populated = await PendingEntry.findById(entry._id)
       .populate('propertyId', 'plazaName propertyName units._id units.unitName units.unitNumber')
@@ -745,6 +793,7 @@ export const updatePendingEntry = async (req, res) => {
 export const verifyEntry = async (req, res) => {
   let postedTransaction = null;
   let postedRentReceived = null;
+  let postedOtherIncome = null;
   let entry = null;
   let claimedEntryId = null;
 
@@ -754,9 +803,16 @@ export const verifyEntry = async (req, res) => {
       return apiError(res, 'Invalid entry ID.', 400);
     }
 
-    const existingEntry = await PendingEntry.findById(id).select('status').lean();
+    const existingEntry = await PendingEntry.findById(id).select('status entryType').lean();
     if (!existingEntry) {
       return apiError(res, 'Pending entry not found.', 404);
+    }
+
+    if (
+      existingEntry.entryType === 'OTHER_INCOME' &&
+      !['ADMIN', 'ADMIN_PUBLISHER'].includes(req.user?.role)
+    ) {
+      return apiError(res, 'Only an administrator can verify other income entries.', 403);
     }
 
     // Strict idempotency: prevent double posting
@@ -1167,6 +1223,48 @@ export const verifyEntry = async (req, res) => {
       }
 
       const isOwnerPersonal = /boss|owner personal|kamran ijaz sb personal/i.test(category.name);
+      const incomeHead = entry.entryData?.incomeHeadId
+        ? await OtherIncomeHead.findById(entry.entryData.incomeHeadId)
+        : await OtherIncomeHead.findOne({ name: category.name });
+      if (!incomeHead) {
+        throw new Error('The Other Income head for this entry could not be found.');
+      }
+      const receiptNumber =
+        entry.entryData?.receiptNumber ||
+        await generateOtherIncomeReceiptNumber(oiDate);
+      postedOtherIncome = entry.entryData?.otherIncomeRecordId
+        ? await OtherIncome.findById(entry.entryData.otherIncomeRecordId)
+        : await OtherIncome.findOne({ voucherNo: entry.voucherNo, status: 'DRAFT' });
+      if (!postedOtherIncome) {
+        postedOtherIncome = await OtherIncome.create({
+          receiptNumber,
+          receiptDate: oiDate,
+          incomeHeadId: incomeHead._id,
+          headName: incomeHead.name,
+          category: 'Other Income',
+          amount: entry.amount,
+          receivingAccountId: receivingAcc,
+          propertyId: entry.propertyId || null,
+          unitId: entry.unitId || null,
+          receivedFrom: entry.entryData?.receivedFrom || '',
+          referenceNumber: entry.referenceNumber || entry.entryData?.referenceNumber || '',
+          transactionDetail: entry.detail || entry.entryData?.transactionDetail || '',
+          description: entry.entryData?.description || '',
+          status: 'DRAFT',
+          voucherNo: entry.voucherNo,
+          attachments: entry.attachments || [],
+          createdBy: entry.submittedBy,
+          updatedBy: verifierId,
+        });
+      }
+      entry.entryData = {
+        ...entry.entryData,
+        incomeHeadId: incomeHead._id,
+        receiptNumber: postedOtherIncome.receiptNumber,
+        otherIncomeRecordId: postedOtherIncome._id,
+      };
+      entry.markModified('entryData');
+      await entry.save();
 
       postedTransaction = await createTransaction({
         date: oiDate,
@@ -1186,10 +1284,37 @@ export const verifyEntry = async (req, res) => {
         checkedBy: verifierName,
         status: 'VERIFIED',
         createdBy: entry.submittedBy,
+        sourceId: postedOtherIncome._id,
       });
 
       entry.postedTransactionId = postedTransaction._id;
       entry.date = oiDate;
+      postedOtherIncome.receiptDate = oiDate;
+      postedOtherIncome.headName = incomeHead.name;
+      postedOtherIncome.incomeHeadId = incomeHead._id;
+      postedOtherIncome.amount = entry.amount;
+      postedOtherIncome.receivingAccountId = receivingAcc;
+      postedOtherIncome.propertyId = entry.propertyId || null;
+      postedOtherIncome.unitId = entry.unitId || null;
+      postedOtherIncome.receivedFrom = entry.entryData?.receivedFrom || '';
+      postedOtherIncome.referenceNumber = entry.referenceNumber || entry.entryData?.referenceNumber || '';
+      postedOtherIncome.transactionDetail = entry.detail || entry.entryData?.transactionDetail || '';
+      postedOtherIncome.description = entry.entryData?.description || '';
+      postedOtherIncome.attachments = entry.attachments || [];
+      postedOtherIncome.status = 'POSTED';
+      postedOtherIncome.transactionId = postedTransaction._id;
+      postedOtherIncome.voucherId = postedTransaction.voucherId;
+      postedOtherIncome.checkedBy = verifierName;
+      postedOtherIncome.updatedBy = verifierId;
+      await postedOtherIncome.save();
+      if (postedTransaction.voucherId) {
+        await Voucher.findByIdAndUpdate(postedTransaction.voucherId, {
+          sourceId: postedOtherIncome._id,
+          sourceModule: isOwnerPersonal ? 'OWNER_PERSONAL' : 'OTHER_INCOME',
+          checkedBy: verifierName,
+          status: 'POSTED',
+        });
+      }
     }
 
     entry.status = 'VERIFIED';
@@ -1233,6 +1358,13 @@ export const verifyEntry = async (req, res) => {
       }
       if (postedRentReceived) {
         await RentReceived.findByIdAndDelete(postedRentReceived._id);
+      }
+      if (postedOtherIncome) {
+        postedOtherIncome.status = 'DRAFT';
+        postedOtherIncome.transactionId = null;
+        postedOtherIncome.voucherId = null;
+        postedOtherIncome.checkedBy = null;
+        await postedOtherIncome.save();
       }
     } catch (rollbackErr) {
       console.error('[Verify Rollback Error]:', rollbackErr);
@@ -1290,6 +1422,12 @@ export const rejectEntry = async (req, res) => {
     });
 
     await entry.save();
+    if (entry.entryType === 'OTHER_INCOME' && entry.entryData?.otherIncomeRecordId) {
+      await OtherIncome.findByIdAndUpdate(entry.entryData.otherIncomeRecordId, {
+        status: 'VOID',
+        updatedBy: req.user._id,
+      });
+    }
 
     return apiSuccess(
       res,
@@ -1323,6 +1461,12 @@ export const deletePendingEntry = async (req, res) => {
       return apiError(res, 'Cannot delete an entry that has already been posted to the central ledger.', 400);
     }
 
+    if (entry.entryType === 'OTHER_INCOME' && entry.entryData?.otherIncomeRecordId) {
+      await OtherIncome.findByIdAndUpdate(entry.entryData.otherIncomeRecordId, {
+        status: 'VOID',
+        updatedBy: req.user._id,
+      });
+    }
     await PendingEntry.findByIdAndDelete(id);
 
     return apiSuccess(res, { id }, 'Pending entry deleted.');
@@ -1725,15 +1869,17 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
 export const unverifyEntry = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    const isEntryId = mongoose.Types.ObjectId.isValid(id);
+    const voucherNumber = String(id || '').trim().replace(/^#+/, '').toUpperCase();
+    if (!isEntryId && !/^[A-Z0-9-]{1,80}$/.test(voucherNumber)) {
       return apiError(res, 'Invalid ID provided.', 400);
     }
 
-    // Try finding by PendingEntry ID first, then by Transaction ID
-    let entry = await PendingEntry.findById(id);
-    let tx = null;
+    // Accept either a pending/transaction ID or a voucher number for legacy direct posts.
+    let entry = isEntryId ? await PendingEntry.findById(id) : null;
+    let tx = isEntryId ? null : await Transaction.findOne({ voucherNo: voucherNumber });
 
-    if (!entry) {
+    if (!entry && isEntryId) {
       tx = await Transaction.findById(id);
       if (tx) {
         entry = await PendingEntry.findOne({
@@ -1771,6 +1917,20 @@ export const unverifyEntry = async (req, res) => {
       }
     }
 
+    let otherIncomeRecord = tx
+      ? await OtherIncome.findOne({
+          $or: [{ transactionId: tx._id }, { voucherNo: tx.voucherNo }],
+        }).populate('createdBy', 'name').lean()
+      : null;
+    const isOtherIncome =
+      entry?.entryType === 'OTHER_INCOME' ||
+      Boolean(otherIncomeRecord) ||
+      tx?.sourceModule === 'OTHER_INCOME' ||
+      tx?.reportCategory === 'Other Income';
+    if (isOtherIncome && !['ADMIN', 'ADMIN_PUBLISHER'].includes(req.user?.role)) {
+      return apiError(res, 'Only an administrator can return other income to pending verification.', 403);
+    }
+
     // 1. Check if the period is locked by a published monthly report
     const checkDate = entry?.date || tx?.date || new Date();
     const d = new Date(checkDate);
@@ -1794,6 +1954,12 @@ export const unverifyEntry = async (req, res) => {
     // 2. Reverse/Delete the posted Transaction
     if (tx) {
       await Transaction.findByIdAndDelete(tx._id);
+      if (isOtherIncome && tx.voucherId) {
+        const remainingVoucherTransactions = await Transaction.exists({ voucherId: tx.voucherId });
+        if (!remainingVoucherTransactions) {
+          await Voucher.findByIdAndDelete(tx.voucherId);
+        }
+      }
     }
 
     // 3. Handle Rent Reversal (RentReceived & RentDue)
@@ -1891,6 +2057,21 @@ export const unverifyEntry = async (req, res) => {
       await syncAccountBalances(accountIdArray);
     }
 
+    if (isOtherIncome && otherIncomeRecord) {
+      otherIncomeRecord.status = 'DRAFT';
+      otherIncomeRecord.transactionId = null;
+      otherIncomeRecord.voucherId = null;
+      otherIncomeRecord.checkedBy = null;
+      otherIncomeRecord.updatedBy = req.user?._id || null;
+      await OtherIncome.findByIdAndUpdate(otherIncomeRecord._id, {
+        status: 'DRAFT',
+        transactionId: null,
+        voucherId: null,
+        checkedBy: null,
+        updatedBy: req.user?._id || null,
+      });
+    }
+
     // 6. Reset or recreate PendingEntry back to PENDING_VERIFICATION
     const operatorName = req.user?.name || 'Administrator';
     const operatorId = req.user?._id || null;
@@ -1914,14 +2095,21 @@ export const unverifyEntry = async (req, res) => {
       });
       await entry.save();
     } else if (tx) {
+      const recoveredOtherIncome = isOtherIncome ? otherIncomeRecord : null;
       entry = await PendingEntry.create({
         voucherNo: tx.voucherNo,
         date: tx.date,
-        entryType: tx.reportCategory === 'Rent' ? 'RENT' : tx.transactionType === 'TRANSFER' ? 'TRANSFER' : 'EXPENSE',
+        entryType: isOtherIncome
+          ? 'OTHER_INCOME'
+          : tx.reportCategory === 'Rent'
+            ? 'RENT'
+            : tx.transactionType === 'TRANSFER'
+              ? 'TRANSFER'
+              : 'EXPENSE',
         categoryId: tx.categoryId,
         drAccountId: tx.drAccountId,
         crAccountId: tx.crAccountId,
-        receivingAccountId: tx.drAccountId,
+        receivingAccountId: recoveredOtherIncome?.receivingAccountId || tx.drAccountId,
         amount: tx.amount,
         detail: tx.detail,
         propertyId: tx.propertyId,
@@ -1930,17 +2118,37 @@ export const unverifyEntry = async (req, res) => {
         agreementId: tx.agreementId,
         rentMonth: tx.rentMonth,
         attachments: tx.attachments || [],
-        submittedBy: tx.createdBy || operatorId,
-        submittedByName: operatorName,
+        referenceNumber: recoveredOtherIncome?.referenceNumber || tx.reference || '',
+        entryData: isOtherIncome
+          ? {
+              otherIncomeRecordId: recoveredOtherIncome?._id || null,
+              incomeHeadId: recoveredOtherIncome?.incomeHeadId || null,
+              receiptNumber: recoveredOtherIncome?.receiptNumber || tx.voucherNo,
+              receivedFrom: recoveredOtherIncome?.receivedFrom || '',
+              description: recoveredOtherIncome?.description || '',
+              referenceNumber: recoveredOtherIncome?.referenceNumber || tx.reference || '',
+              transactionDetail: tx.detail,
+            }
+          : { unverifiedTransactionId: tx._id },
+        submittedBy: recoveredOtherIncome?.createdBy?._id || tx.createdBy || operatorId,
+        submittedByName: recoveredOtherIncome?.createdBy?.name || operatorName,
+        submittedAt: new Date(),
         status: 'PENDING_VERIFICATION',
         auditLog: [{
           action: 'RECREATED_AND_UNVERIFIED',
           performedBy: operatorName,
           performedById: operatorId,
           timestamp: new Date(),
-          notes: `Created pending draft from reversed transaction #${tx.voucherNo}.`,
+          notes: `Created pending draft from unverified transaction #${tx.voucherNo}.`,
         }],
       });
+      if (isOtherIncome && recoveredOtherIncome) {
+        entry.entryData = {
+          ...entry.entryData,
+          otherIncomeRecordId: recoveredOtherIncome._id,
+        };
+        await entry.save();
+      }
     }
 
     return apiSuccess(
