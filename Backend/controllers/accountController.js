@@ -82,13 +82,15 @@ export const getAccounts = async (req, res) => {
     const getLiveBalance = (account) =>
       round2((account.openingBalance || 0) + (netMovementByAccount.get(account._id.toString()) || 0));
 
-    // Calculate portfolio liquidity totals from all active bank & cash accounts
+    // Calculate portfolio liquidity totals from all active bank, cash & suspense accounts
     const activeAccounts = await Account.find({ isActive: true, isClearing: { $ne: true } }).lean();
     let totalCompanyLiquidity = 0;
     let bankTotal = 0;
     let cashTotal = 0;
+    let suspenseTotal = 0;
     let bankCount = 0;
     let cashCount = 0;
+    let suspenseCount = 0;
 
     activeAccounts.forEach((acc) => {
       const bal = getLiveBalance(acc);
@@ -99,6 +101,9 @@ export const getAccounts = async (req, res) => {
       } else if (acc.type === 'CASH') {
         cashTotal += bal;
         cashCount += 1;
+      } else if (acc.type === 'SUSPENSE') {
+        suspenseTotal += bal;
+        suspenseCount += 1;
       }
     });
 
@@ -125,9 +130,11 @@ export const getAccounts = async (req, res) => {
       activeAccountsCount: activeAccounts.length,
       bankCount,
       cashCount,
+      suspenseCount,
       totalCompanyLiquidity: round2(totalCompanyLiquidity),
       bankTotal: round2(bankTotal),
       cashTotal: round2(cashTotal),
+      suspenseTotal: round2(suspenseTotal),
     };
 
     return apiSuccess(
@@ -656,6 +663,7 @@ export const getMonthlySummary = async (req, res) => {
 
     let bankTotalClosing = 0;
     let cashTotalClosing = 0;
+    let suspenseTotalClosing = 0;
 
     const accountRows = accounts.map((acc) => {
       const accIdStr = acc._id.toString();
@@ -690,6 +698,7 @@ export const getMonthlySummary = async (req, res) => {
 
       if (acc.type === 'BANK') bankTotalClosing += closing;
       if (acc.type === 'CASH') cashTotalClosing += closing;
+      if (acc.type === 'SUSPENSE') suspenseTotalClosing += closing;
 
       return {
         _id: acc._id,
@@ -711,6 +720,7 @@ export const getMonthlySummary = async (req, res) => {
       totalCompanyFunds: round2(totalClosing),
       bankTotalClosing: round2(bankTotalClosing),
       cashTotalClosing: round2(cashTotalClosing),
+      suspenseTotalClosing: round2(suspenseTotalClosing),
       totalAccounts: accounts.length,
     };
 
@@ -770,6 +780,7 @@ export const getActiveAccountsSummary = async (req, res) => {
 
     const bankAccounts = categorized.filter((a) => a.type === 'BANK');
     const cashCustodians = categorized.filter((a) => a.isCashCustodian);
+    const suspenseAccounts = categorized.filter((a) => a.type === 'SUSPENSE');
     const otherAccounts = categorized.filter(
       (a) => a.type === 'CASH' && !a.isCashCustodian
     );
@@ -781,6 +792,7 @@ export const getActiveAccountsSummary = async (req, res) => {
       grouped: {
         banks: bankAccounts,
         custodians: cashCustodians,
+        suspense: suspenseAccounts,
         other: otherAccounts,
       },
     });

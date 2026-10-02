@@ -30,8 +30,8 @@ const accountSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Account type is required'],
       enum: {
-        values: ['BANK', 'CASH'],
-        message: 'Account type must be either BANK or CASH',
+        values: ['BANK', 'CASH', 'SUSPENSE'],
+        message: 'Account type must be BANK, CASH, or SUSPENSE',
       },
       default: 'BANK',
       index: true,
@@ -39,8 +39,8 @@ const accountSchema = new mongoose.Schema(
     accountType: {
       type: String,
       enum: {
-        values: ['BANK', 'CASH'],
-        message: 'Account type must be either BANK or CASH',
+        values: ['BANK', 'CASH', 'SUSPENSE'],
+        message: 'Account type must be BANK, CASH, or SUSPENSE',
       },
       index: true,
     },

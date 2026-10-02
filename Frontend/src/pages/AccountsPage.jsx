@@ -3,6 +3,7 @@ import {
   Landmark,
   Wallet,
   Building2,
+  Layers,
   User,
   Plus,
   Search,
@@ -384,6 +385,17 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
             <Wallet size={13} />
             Cash Holders ({summary?.cashCount ?? summary?.cashAccountsCount ?? 0})
           </button>
+          <button
+            onClick={() => setActiveTab('SUSPENSE')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 ${
+              activeTab === 'SUSPENSE'
+                ? 'bg-violet-600 text-white'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Layers size={13} />
+            Suspense ({summary?.suspenseCount ?? 0})
+          </button>
         </div>
 
         {/* Search */}
@@ -433,6 +445,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
               ) : (
                 accounts.map((acc) => {
                   const isBank = acc.type === 'BANK';
+                  const isSuspense = acc.type === 'SUSPENSE';
                   const bal = acc.currentBalance ?? 0;
                   const isPositive = bal >= 0;
 
@@ -443,6 +456,8 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
                         <div className="font-bold text-white text-sm flex items-center gap-2">
                           {isBank ? (
                             <Building2 size={15} className="text-sky-400 shrink-0" />
+                          ) : isSuspense ? (
+                            <Layers size={15} className="text-violet-400 shrink-0" />
                           ) : (
                             <Wallet size={15} className="text-amber-400 shrink-0" />
                           )}
@@ -451,6 +466,8 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
                         <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
                           {isBank ? (
                             <span>Bank: <strong className="text-slate-300">{acc.bankName || acc.name}</strong></span>
+                          ) : isSuspense ? (
+                            <span>Holding Account: <strong className="text-violet-300 font-semibold">{acc.name}</strong></span>
                           ) : (
                             <span>Custodian: <strong className="text-amber-300 font-semibold">{acc.cashHolder || acc.name}</strong></span>
                           )}
@@ -466,6 +483,8 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
                           className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider border ${
                             isBank
                               ? 'bg-sky-950/80 text-sky-300 border-sky-800/60'
+                              : isSuspense
+                              ? 'bg-violet-950/80 text-violet-300 border-violet-800/60'
                               : 'bg-amber-950/80 text-amber-300 border-amber-800/60'
                           }`}
                         >
@@ -599,30 +618,42 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
                 <label className="block text-slate-400 mb-1 font-semibold">
                   Account Type <span className="text-rose-400">*</span>
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setFormData({ ...formData, accountType: 'BANK' })}
-                    className={`py-2 px-3 rounded-lg font-bold border flex items-center justify-center gap-2 transition ${
+                    className={`py-2 px-2.5 rounded-lg font-bold border flex items-center justify-center gap-1.5 transition text-xs ${
                       formData.accountType === 'BANK'
                         ? 'bg-sky-600 text-white border-sky-500 shadow-sm'
                         : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
                     }`}
                   >
-                    <Building2 size={14} />
-                    Bank Account
+                    <Building2 size={13} />
+                    Bank
                   </button>
                   <button
                     type="button"
                     onClick={() => setFormData({ ...formData, accountType: 'CASH' })}
-                    className={`py-2 px-3 rounded-lg font-bold border flex items-center justify-center gap-2 transition ${
+                    className={`py-2 px-2.5 rounded-lg font-bold border flex items-center justify-center gap-1.5 transition text-xs ${
                       formData.accountType === 'CASH'
                         ? 'bg-amber-600 text-white border-amber-500 shadow-sm'
                         : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
                     }`}
                   >
-                    <Wallet size={14} />
+                    <Wallet size={13} />
                     Cash Custodian
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, accountType: 'SUSPENSE' })}
+                    className={`py-2 px-2.5 rounded-lg font-bold border flex items-center justify-center gap-1.5 transition text-xs ${
+                      formData.accountType === 'SUSPENSE'
+                        ? 'bg-violet-600 text-white border-violet-500 shadow-sm'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <Layers size={13} />
+                    Suspense
                   </button>
                 </div>
               </div>
@@ -638,6 +669,8 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
                   placeholder={
                     formData.accountType === 'BANK'
                       ? 'e.g. Bank Al Falah (Kamran Ijaz Sb)'
+                      : formData.accountType === 'SUSPENSE'
+                      ? 'e.g. Suspense Account / Clearing Account'
                       : 'e.g. Cash in Hand (Majid Javed)'
                   }
                   value={formData.accountName}
@@ -675,7 +708,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
                     />
                   </div>
                 </div>
-              ) : (
+              ) : formData.accountType === 'CASH' ? (
                 <div>
                   <label className="block text-slate-400 mb-1 font-semibold">
                     Cash Custodian / Holder Name <span className="text-rose-400">*</span>
@@ -708,7 +741,7 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
                     ))}
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* Owner / Account Signatory */}
               <div>

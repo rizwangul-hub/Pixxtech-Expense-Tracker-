@@ -97,6 +97,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
         setSubCategories(data.subCategories || []);
       }
       else if (type === 'OTHER_INCOME') list = data.otherIncomeHeads || [];
+      else if (type === 'SUSPENSE') list = data.suspenseAccounts || [];
 
       setEntities(list);
       setSelectedSubCategoryId('');
@@ -231,6 +232,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
             >
               <option value="BANK">Bank Account Ledger</option>
               <option value="CASH">Cash in Hand / Custodian</option>
+              <option value="SUSPENSE">Suspense Account Ledger</option>
               <option value="PROPERTY">Property / Plaza Ledger</option>
               <option value="TENANT">Tenant / Rental Ledger</option>
               <option value="RENT">Rent Collection Journal</option>

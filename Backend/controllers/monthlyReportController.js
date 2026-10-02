@@ -49,10 +49,12 @@ export const computeMonthSnapshot = async (year, month) => {
 
   const bankRows = matrixData.rows.filter((r) => r.accountType === 'BANK');
   const cashRows = matrixData.rows.filter((r) => r.accountType === 'CASH');
+  const suspenseRows = matrixData.rows.filter((r) => r.accountType === 'SUSPENSE');
 
   const totalBankClosing = round2(bankRows.reduce((s, r) => s + (r.closingBalance || 0), 0));
   const totalCashClosing = round2(cashRows.reduce((s, r) => s + (r.closingBalance || 0), 0));
-  const closingBalance = round2(totalBankClosing + totalCashClosing);
+  const totalSuspenseClosing = round2(suspenseRows.reduce((s, r) => s + (r.closingBalance || 0), 0));
+  const closingBalance = round2(totalBankClosing + totalCashClosing + totalSuspenseClosing);
 
   const openingBalance = grand.openingBalance;
   const netPosition = round2(totalIncome - totalExpenses);
@@ -68,10 +70,10 @@ export const computeMonthSnapshot = async (year, month) => {
     );
   }
 
-  // Check 2: Bank Closing + Cash Closing = Grand Closing
+  // Check 2: Bank + Cash + Suspense Closing = Grand Closing
   if (Math.abs(closingBalance - grand.closingBalance) > 0.05) {
     discrepancies.push(
-      `Liquidity sum mismatch: Bank (${totalBankClosing}) + Cash (${totalCashClosing}) = ${closingBalance}, but Grand Closing is ${grand.closingBalance}`
+      `Liquidity sum mismatch: Bank (${totalBankClosing}) + Cash (${totalCashClosing}) + Suspense (${totalSuspenseClosing}) = ${closingBalance}, but Grand Closing is ${grand.closingBalance}`
     );
   }
 
@@ -89,6 +91,7 @@ export const computeMonthSnapshot = async (year, month) => {
       netPosition,
       totalBankClosing,
       totalCashClosing,
+      totalSuspenseClosing,
     },
     reconciliationStatus: isReconciled ? 'RECONCILED' : 'DISCREPANCY',
     reconciliationNotes: discrepancies.join(' | ') || 'All ledger totals mathematically reconciled.',

@@ -73,6 +73,7 @@ export const VoucherEntryForm = ({
   // Group accounts for dropdowns
   const bankAccounts = accounts.filter((a) => a.type === 'BANK');
   const cashAccounts = accounts.filter((a) => a.type === 'CASH');
+  const suspenseAccounts = accounts.filter((a) => a.type === 'SUSPENSE');
   const selectedProperty = properties.find((property) => property._id === propertyId);
   const units = selectedProperty?.units || [];
   const generalMainHeads = categories.filter(
@@ -565,6 +566,15 @@ export const VoucherEntryForm = ({
                   </option>
                 ))}
               </optgroup>
+              {suspenseAccounts.length > 0 && (
+                <optgroup label="Suspense Accounts">
+                  {suspenseAccounts.map((a) => (
+                    <option key={a._id} value={a._id}>
+                      {a.name} (PKR {a.currentBalance?.toLocaleString()})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
         </div>

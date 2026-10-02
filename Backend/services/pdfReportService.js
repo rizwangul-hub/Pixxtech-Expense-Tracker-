@@ -512,6 +512,9 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     } else if (acc.name.includes('ABL (Uraan')) {
       bankOrCashTitle = 'Allied Bank';
       accountSubtitle = 'Uraan Ventures';
+    } else if (acc.type === 'SUSPENSE') {
+      bankOrCashTitle = acc.name;
+      accountSubtitle = 'Suspense / Holding Account';
     } else if (isCash) {
       bankOrCashTitle = 'Pixx Technologies';
       accountSubtitle = acc.name;

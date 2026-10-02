@@ -15,10 +15,10 @@ import { protect, authorize } from '../middleware/auth.js';
 const router = express.Router();
 
 // Reports require authentication and financial-view access.
-// Include the supported administrator and verification roles explicitly so
-// role names remain compatible with both current and legacy user records.
+// Include administrator, verifier, and data-entry roles explicitly so
+// Sarfraz (DATA_ENTRY) can view reports and ledger summaries exactly like admin.
 router.use(protect);
-router.use(authorize('ADMIN', 'ADMIN_PUBLISHER', 'VERIFIER', 'VERIFICATION_MANAGER'));
+router.use(authorize('ADMIN', 'ADMIN_PUBLISHER', 'VERIFIER', 'VERIFICATION_MANAGER', 'DATA_ENTRY'));
 
 // ── Phase 7 (existing) — PDF Funds Report ──────────────────────────────────
 router.get('/funds-management-pdf', downloadFundsReportPDF);

@@ -88,7 +88,7 @@ export const getLedgerEntities = async (req, res) => {
       otherIncomeHeads: [],
     };
 
-    if (!type || type === 'BANK' || type === 'CASH') {
+    if (!type || type === 'BANK' || type === 'CASH' || type === 'SUSPENSE') {
       const accounts = await Account.find({}).sort({ type: 1, name: 1 }).lean();
       results.accounts = accounts
         .filter((a) => a.type === 'BANK')
@@ -96,6 +96,9 @@ export const getLedgerEntities = async (req, res) => {
       results.custodians = accounts
         .filter((a) => a.type === 'CASH')
         .map((a) => ({ id: a._id, name: a.name, type: 'CASH', subtext: `Custodian: ${a.cashHolder || a.name}` }));
+      results.suspenseAccounts = accounts
+        .filter((a) => a.type === 'SUSPENSE')
+        .map((a) => ({ id: a._id, name: a.name, type: 'SUSPENSE', subtext: `Suspense Account: ${a.name}` }));
     }
 
     if (!type || type === 'PROPERTY') {
@@ -216,15 +219,15 @@ export const queryLedger = async (req, res) => {
     const baseStatusFilter = { status: { $in: ['POSTED', 'VERIFIED'] } };
 
     // =========================================================================
-    // 1. BANK ACCOUNT & CASH CUSTODIAN LEDGER
+    // 1. BANK ACCOUNT, CASH CUSTODIAN & SUSPENSE ACCOUNT LEDGER
     // =========================================================================
-    if (type === 'BANK' || type === 'CASH') {
+    if (type === 'BANK' || type === 'CASH' || type === 'SUSPENSE') {
       if (!entityId || !mongoose.Types.ObjectId.isValid(entityId)) {
         return apiSuccess(
           res,
           {
             type,
-            ledgerTitle: type === 'BANK' ? 'Bank Account Ledger' : 'Cash Custodian Ledger',
+            ledgerTitle: type === 'BANK' ? 'Bank Account Ledger' : type === 'CASH' ? 'Cash Custodian Ledger' : 'Suspense Account Ledger',
             entitySubtext: 'Please select an account',
             datePreset,
             summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
@@ -240,7 +243,7 @@ export const queryLedger = async (req, res) => {
           res,
           {
             type,
-            ledgerTitle: type === 'BANK' ? 'Bank Account Ledger' : 'Cash Custodian Ledger',
+            ledgerTitle: type === 'BANK' ? 'Bank Account Ledger' : type === 'CASH' ? 'Cash Custodian Ledger' : 'Suspense Account Ledger',
             entitySubtext: 'Account not found',
             datePreset,
             summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
@@ -253,7 +256,9 @@ export const queryLedger = async (req, res) => {
       ledgerTitle = targetEntity.name;
       entitySubtext = type === 'BANK'
         ? `Bank Account &bull; ${targetEntity.bankName || ''} ${targetEntity.accountNumber ? `(${targetEntity.accountNumber})` : ''}`
-        : `Cash-in-Hand Custodian &bull; ${targetEntity.cashHolder || targetEntity.name}`;
+        : type === 'CASH'
+        ? `Cash-in-Hand Custodian &bull; ${targetEntity.cashHolder || targetEntity.name}`
+        : `Suspense / Holding Account &bull; ${targetEntity.accountCode || targetEntity.name}`;
 
       // Calculate initial opening balance at openingBalanceDate
       let calcOpening = targetEntity.openingBalance || 0;
