@@ -72,6 +72,7 @@ export const DataEntryDashboard = ({ user }) => {
     amount: '',
     headId: '',
     propertyId: '',
+    unitId: '',
     accountId: '',
     receivedFrom: '',
     detail: '',
@@ -345,6 +346,7 @@ export const DataEntryDashboard = ({ user }) => {
         transactionDetail: otherForm.detail,
         receiptDate: otherForm.date,
         propertyId: otherForm.propertyId || null,
+        unitId: otherForm.unitId || null,
         amount: Number(otherForm.amount),
         attachments: uploadedImages,
       });
@@ -356,6 +358,7 @@ export const DataEntryDashboard = ({ user }) => {
           amount: '',
           headId: '',
           propertyId: '',
+          unitId: '',
           accountId: '',
           receivedFrom: '',
           detail: '',
@@ -697,6 +700,48 @@ export const DataEntryDashboard = ({ user }) => {
                       required
                       className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">
+                      Property Allocation (Optional)
+                    </label>
+                    <select
+                      value={otherForm.propertyId}
+                      onChange={(e) => {
+                        const newPropId = e.target.value;
+                        setOtherForm({ ...otherForm, propertyId: newPropId, unitId: '' });
+                      }}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
+                    >
+                      <option value="">-- General Company (No Property) --</option>
+                      {properties.map((p) => (
+                        <option key={p._id} value={p._id}>
+                          {p.plazaName || p.propertyName || p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">
+                      Shop / Unit Allocation (Optional)
+                    </label>
+                    <select
+                      value={otherForm.unitId}
+                      onChange={(e) => setOtherForm({ ...otherForm, unitId: e.target.value })}
+                      disabled={!otherForm.propertyId}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold disabled:opacity-50"
+                    >
+                      <option value="">-- Entire Property (No Specific Shop) --</option>
+                      {(properties.find((p) => String(p._id) === String(otherForm.propertyId))?.units || []).map((u) => (
+                        <option key={u._id || u.unitName} value={u._id}>
+                          {u.unitName || u.unitNumber || u.name || 'Unit'} {u.tenantName ? `(${u.tenantName})` : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -1769,6 +1814,7 @@ export const DataEntryDashboard = ({ user }) => {
             properties={properties}
             categories={categories}
             accounts={accounts}
+            otherHeads={otherHeads}
             loading={refreshingEntries || loadingData}
             onRefresh={refreshEntries}
             onEntryUpdated={refreshEntries}

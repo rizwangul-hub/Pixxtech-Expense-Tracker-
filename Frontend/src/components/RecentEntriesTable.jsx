@@ -25,7 +25,7 @@ import {
   Building2,
   Landmark,
 } from 'lucide-react';
-import { transactionsAPI, vouchersAPI, verificationAPI, uploadAPI } from '../services/api.js';
+import { transactionsAPI, vouchersAPI, verificationAPI, uploadAPI, otherIncomeAPI } from '../services/api.js';
 import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
 import { ReceiptViewerModal } from './ReceiptViewerModal.jsx';
 import { downloadReceiptEvidenceDocument, downloadReceiptImage } from '../utils/downloadReceipt.js';
@@ -58,12 +58,25 @@ export const RecentEntriesTable = ({
   properties = [],
   categories = [],
   accounts = [],
+  otherHeads = [],
   loading = false,
   onRefresh,
   onEntryUpdated,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'verified'
+
+  const [internalOtherHeads, setInternalOtherHeads] = useState(otherHeads || []);
+  useEffect(() => {
+    if (otherHeads && otherHeads.length > 0) {
+      setInternalOtherHeads(otherHeads);
+    } else {
+      otherIncomeAPI.getHeads().then((res) => {
+        const raw = res?.data || res?.heads || res || [];
+        setInternalOtherHeads(Array.isArray(raw) ? raw : []);
+      }).catch(() => {});
+    }
+  }, [otherHeads]);
 
   // Verified/posted transaction states
   const [printingTx, setPrintingTx] = useState(null);
@@ -80,6 +93,9 @@ export const RecentEntriesTable = ({
   const [editUnitId, setEditUnitId] = useState('');
   const [editParentCategoryId, setEditParentCategoryId] = useState('');
   const [editCategoryId, setEditCategoryId] = useState('');
+  const [editIncomeHeadId, setEditIncomeHeadId] = useState('');
+  const [editReceivedFrom, setEditReceivedFrom] = useState('');
+  const [editReferenceNumber, setEditReferenceNumber] = useState('');
   const [editAccountId, setEditAccountId] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState(null);
@@ -177,11 +193,23 @@ export const RecentEntriesTable = ({
       entry.entryData?.paidFromAccountId ||
       '';
 
+    let initialIncomeHeadId = entry.incomeHeadId?._id || entry.incomeHeadId || entry.entryData?.incomeHeadId || '';
+    if (!initialIncomeHeadId && entry.entryType === 'OTHER_INCOME') {
+      const catName = (entry.categoryId?.name || currentCat?.name || '').trim().toLowerCase();
+      const matchedHead = (internalOtherHeads || otherHeads || []).find(
+        (h) => h.name?.trim().toLowerCase() === catName
+      );
+      if (matchedHead) initialIncomeHeadId = matchedHead._id || matchedHead.id;
+    }
+
     setEditPropertyId(propId);
     setEditUnitId(unitId);
     setEditParentCategoryId(parentId);
     setEditCategoryId(catId);
     setEditAccountId(accId ? String(accId) : '');
+    setEditIncomeHeadId(initialIncomeHeadId);
+    setEditReceivedFrom(entry.entryData?.receivedFrom || entry.receivedFrom || '');
+    setEditReferenceNumber(entry.referenceNumber || entry.entryData?.referenceNumber || '');
 
     setEditAttachments(getItemAttachments(entry) || []);
     setEditNewFiles([]);
@@ -200,6 +228,9 @@ export const RecentEntriesTable = ({
     setEditParentCategoryId('');
     setEditCategoryId('');
     setEditAccountId('');
+    setEditIncomeHeadId('');
+    setEditReceivedFrom('');
+    setEditReferenceNumber('');
     setEditAttachments([]);
     setEditNewFiles([]);
     setUploadingEvidence(false);
@@ -283,6 +314,15 @@ export const RecentEntriesTable = ({
         if (editParentCategoryId) {
           payload.parentCategoryId = editParentCategoryId;
         }
+      } else if (editingPending.entryType === 'OTHER_INCOME') {
+        payload.incomeHeadId = editIncomeHeadId || null;
+        payload.propertyId = editPropertyId || null;
+        payload.unitId = editUnitId || null;
+        if (editCategoryId) {
+          payload.categoryId = editCategoryId;
+        }
+        payload.receivedFrom = editReceivedFrom ? editReceivedFrom.trim() : '';
+        payload.referenceNumber = editReferenceNumber ? editReferenceNumber.trim() : '';
       }
 
       if (editAccountId) {
@@ -1118,6 +1158,129 @@ export const RecentEntriesTable = ({
                 </div>
               )}
 
+              {editingPending?.entryType === 'OTHER_INCOME' && (
+                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-lg space-y-3">
+                  <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Building2 size={14} className="text-amber-400" />
+                      Other Income Head & Property / Shop Allocation
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950/80 border border-amber-800/60 px-2 py-0.5 rounded">
+                      {editUnitId ? 'Shop / Unit Income' : editPropertyId ? 'Property Income' : 'General Income'}
+                    </span>
+                  </div>
+
+                  {/* Income Head Selector */}
+                  <div>
+                    <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                      Other Income Head *
+                    </label>
+                    <select
+                      value={editIncomeHeadId}
+                      onChange={(e) => {
+                        const headId = e.target.value;
+                        const headsList = (internalOtherHeads && internalOtherHeads.length > 0) ? internalOtherHeads : otherHeads;
+                        const selectedHead = headsList.find((h) => String(h._id || h.id) === String(headId));
+                        const matchedCat = categories.find((c) => c.name?.trim().toLowerCase() === selectedHead?.name?.trim().toLowerCase());
+                        setEditIncomeHeadId(headId);
+                        if (matchedCat) {
+                          setEditCategoryId(matchedCat._id);
+                        }
+                        if (selectedHead && !editReceivedFrom) {
+                          setEditReceivedFrom(selectedHead.name);
+                        }
+                      }}
+                      required
+                      className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white font-medium text-xs"
+                    >
+                      <option value="">-- Select Other Income Head --</option>
+                      {((internalOtherHeads && internalOtherHeads.length > 0) ? internalOtherHeads : otherHeads)
+                        .filter((h) => h.isActive !== false)
+                        .map((head) => (
+                          <option key={head._id || head.id} value={head._id || head.id}>
+                            {head.name} {head.code ? `(${head.code})` : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* Property & Shop / Unit Selector */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                        Select Property (Optional)
+                      </label>
+                      <select
+                        value={editPropertyId}
+                        onChange={(e) => {
+                          const newPropId = e.target.value;
+                          setEditPropertyId(newPropId);
+                          setEditUnitId(''); // Reset unit when property changes
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 text-xs"
+                      >
+                        <option value="">-- None (General Company) --</option>
+                        {properties.map((p) => (
+                          <option key={p._id} value={p._id}>
+                            {p.plazaName || p.propertyName || p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                        Select Shop / Unit (Optional)
+                      </label>
+                      <select
+                        value={editUnitId}
+                        onChange={(e) => setEditUnitId(e.target.value)}
+                        disabled={!editPropertyId}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono text-xs disabled:opacity-50"
+                      >
+                        <option value="">-- None (Entire Property) --</option>
+                        {(properties.find((p) => String(p._id) === String(editPropertyId))?.units || []).map((u) => (
+                          <option key={u._id || u.unitName} value={u._id}>
+                            {u.unitName || u.unitNumber || u.name || 'Unit'} {u.tenantName ? `(${u.tenantName})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="col-span-2 text-[10px] text-slate-400">
+                      Change the property or unit here before saving. You can convert this income from one shop to another.
+                    </p>
+                  </div>
+
+                  {/* Received From / Payer & Reference Number */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                        Received From / Payer
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Boss Kamran Ijaz, Tenant Name"
+                        value={editReceivedFrom}
+                        onChange={(e) => setEditReceivedFrom(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                        Reference / Receipt No.
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Slip #12345"
+                        value={editReferenceNumber}
+                        onChange={(e) => setEditReferenceNumber(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Disbursing / Payment Bank or Cash Account */}
               <div>
                 <label className="block text-slate-400 mb-1 font-semibold flex items-center justify-between">
@@ -1126,7 +1289,7 @@ export const RecentEntriesTable = ({
                     <span>
                       {editingPending?.entryType === 'SALARY'
                         ? 'Paid From Bank / Cash Account *'
-                        : editingPending?.entryType === 'RENT' || editingPending?.entryType === 'RENT_RECEIVED'
+                        : editingPending?.entryType === 'RENT' || editingPending?.entryType === 'RENT_RECEIVED' || editingPending?.entryType === 'OTHER_INCOME'
                         ? 'Receiving Bank / Cash Account *'
                         : 'Payment Bank / Cash Account *'}
                     </span>
