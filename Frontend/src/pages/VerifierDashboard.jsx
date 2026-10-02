@@ -30,7 +30,7 @@ import {
   X,
   ImagePlus,
 } from 'lucide-react';
-import { verificationAPI, accountsAPI, propertiesAPI, uploadAPI } from '../services/api.js';
+import { verificationAPI, accountsAPI, propertiesAPI, uploadAPI, otherIncomeAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
 import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 import { RentCollectionModal } from '../components/RentCollectionModal.jsx';
@@ -49,6 +49,7 @@ let verifierDataCache = {
   accounts: [],
   categories: [],
   properties: [],
+  otherIncomeHeads: [],
 };
 
 const SalaryBreakdown = ({ entry }) => {
@@ -161,6 +162,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   const [accounts, setAccounts] = useState(verifierDataCache.accounts || []);
   const [categories, setCategories] = useState(verifierDataCache.categories || []);
   const [properties, setProperties] = useState(verifierDataCache.properties || []);
+  const [otherIncomeHeads, setOtherIncomeHeads] = useState(verifierDataCache.otherIncomeHeads || []);
 
   // Pagination state (10 entries per page as requested)
   const [currentPage, setCurrentPage] = useState(1);
@@ -346,8 +348,8 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       if (currentStatus !== 'ALL') params.status    = currentStatus;
       if (currentSearch.trim())    params.search     = currentSearch.trim();
 
-      // Only fetch heavy master dropdown data (accounts, categories, properties) if not loaded yet
-      const needsMaster = accounts.length === 0 || categories.length === 0 || properties.length === 0;
+      // Only fetch heavy master dropdown data (accounts, categories, properties, otherIncomeHeads) if not loaded yet
+      const needsMaster = accounts.length === 0 || categories.length === 0 || properties.length === 0 || otherIncomeHeads.length === 0;
 
       const promises = [
         verificationAPI.getPending(params),
@@ -358,7 +360,8 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         promises.push(
           accountsAPI.getActiveSummary().catch(() => ({ accounts: [] })),
           accountsAPI.getCategories().catch(() => ({ categories: [] })),
-          accountsAPI.getProperties().catch(() => ({ properties: [] }))
+          accountsAPI.getProperties().catch(() => ({ properties: [] })),
+          otherIncomeAPI.getHeads().catch(() => ({ heads: [] }))
         );
       }
 
@@ -382,19 +385,23 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       let newAccounts   = accounts;
       let newCategories = categories;
       let newProperties = properties;
+      let newOtherIncomeHeads = otherIncomeHeads;
 
       if (needsMaster) {
-        const accRes  = results[2] || {};
-        const catRes  = results[3] || {};
-        const propRes = results[4] || {};
+        const accRes   = results[2] || {};
+        const catRes   = results[3] || {};
+        const propRes  = results[4] || {};
+        const headsRes = results[5] || {};
 
-        newAccounts   = accRes.accounts   || [];
-        newCategories = catRes.categories || [];
-        newProperties = propRes.properties || [];
+        newAccounts         = accRes.accounts   || [];
+        newCategories       = catRes.categories || [];
+        newProperties       = propRes.properties || [];
+        newOtherIncomeHeads = headsRes.heads || headsRes.data || (Array.isArray(headsRes) ? headsRes : []);
 
         setAccounts(newAccounts);
         setCategories(newCategories);
         setProperties(newProperties);
+        setOtherIncomeHeads(newOtherIncomeHeads);
       }
 
       // Save to cache
@@ -404,6 +411,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         accounts: newAccounts,
         categories: newCategories,
         properties: newProperties,
+        otherIncomeHeads: newOtherIncomeHeads,
       };
     } catch (err) {
       console.error('Failed to load verifier data:', err);
@@ -538,6 +546,15 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     const currentCat = categories.find((c) => String(c._id) === String(entry.categoryId?._id || entry.categoryId));
     const initialParentId = entry.parentCategoryId?._id || entry.parentCategoryId || entry.entryData?.parentCategoryId || currentCat?.parentCategoryId?._id || currentCat?.parentCategoryId || '';
 
+    let initialIncomeHeadId = entry.entryData?.incomeHeadId || '';
+    if (!initialIncomeHeadId && entry.entryType === 'OTHER_INCOME') {
+      const catName = (entry.categoryId?.name || currentCat?.name || '').trim().toLowerCase();
+      const matchedHead = otherIncomeHeads.find(
+        (h) => h.name?.trim().toLowerCase() === catName
+      );
+      if (matchedHead) initialIncomeHeadId = matchedHead._id;
+    }
+
     setEditForm({
       amount: entry.amount || '',
       detail: entry.detail || '',
@@ -549,6 +566,9 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       unitId: entry.unitId?._id || entry.unitId || '',
       parentCategoryId: initialParentId,
       categoryId: entry.categoryId?._id || entry.categoryId || '',
+      incomeHeadId: initialIncomeHeadId,
+      receivedFrom: entry.entryData?.receivedFrom || '',
+      referenceNumber: entry.referenceNumber || entry.entryData?.referenceNumber || '',
       crAccountId: crAcc,
       drAccountId: drAcc,
       receivingAccountId: recAcc,
@@ -671,6 +691,21 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                       attachments: finalAttachments,
                       propertyId: editForm.propertyId,
                       unitId: editForm.unitId,
+                    },
+                  } : {}),
+                  ...(e.entryType === 'OTHER_INCOME' ? {
+                    propertyId: savedEntry.propertyId || selectedProperty || (editForm.propertyId ? { _id: editForm.propertyId, plazaName: selectedProperty?.plazaName } : null),
+                    unitId: savedEntry.unitId || selectedUnit || editForm.unitId || null,
+                    categoryId: categories.find((c) => String(c._id) === String(editForm.categoryId)) || e.categoryId,
+                    entryData: {
+                      ...(e.entryData || {}),
+                      ...(savedEntry.entryData || {}),
+                      attachments: finalAttachments,
+                      incomeHeadId: editForm.incomeHeadId,
+                      receivedFrom: editForm.receivedFrom,
+                      referenceNumber: editForm.referenceNumber,
+                      propertyId: editForm.propertyId || null,
+                      unitId: editForm.unitId || null,
                     },
                   } : {}),
                   crAccountId: accounts.find((a) => String(a._id) === String(editForm.crAccountId)) || e.crAccountId,
@@ -1816,7 +1851,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 </div>
               )}
 
-              {(editingEntry?.entryType === 'EXPENSE' || editingEntry?.entryType === 'RENT' || editingEntry?.entryType === 'SALARY') && (
+              {(editingEntry?.entryType === 'EXPENSE' || editingEntry?.entryType === 'RENT' || editingEntry?.entryType === 'SALARY' || editingEntry?.entryType === 'OTHER_INCOME') && (
                 <div>
                   <label className="block text-slate-400 font-semibold mb-1">
                     Narration / Description
@@ -1831,6 +1866,8 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                         ? 'Enter the rent receipt narration or description'
                         : editingEntry.entryType === 'SALARY'
                         ? 'Enter salary payout narration or notes'
+                        : editingEntry.entryType === 'OTHER_INCOME'
+                        ? 'Enter other income narration or description'
                         : 'Enter the expense narration or description'
                     }
                     className="w-full resize-y bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white leading-relaxed"
@@ -1907,6 +1944,127 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                   <p className="col-span-2 text-[11px] text-slate-400">
                     Change the property or unit here before saving. Selecting a different property clears the unit so you can choose a unit from that property.
                   </p>
+                </div>
+              )}
+
+              {editingEntry?.entryType === 'OTHER_INCOME' && (
+                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
+                  <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Building2 size={14} className="text-amber-400" />
+                      Other Income Head & Property / Shop Allocation
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950/80 border border-amber-800/60 px-2 py-0.5 rounded">
+                      {editForm.unitId ? 'Shop / Unit Income' : editForm.propertyId ? 'Property Income' : 'General Income'}
+                    </span>
+                  </div>
+
+                  {/* Income Head Selector */}
+                  <div>
+                    <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                      Other Income Head *
+                    </label>
+                    <select
+                      value={editForm.incomeHeadId}
+                      onChange={(e) => {
+                        const headId = e.target.value;
+                        const selectedHead = otherIncomeHeads.find((h) => String(h._id) === String(headId));
+                        const matchedCat = categories.find((c) => c.name?.trim().toLowerCase() === selectedHead?.name?.trim().toLowerCase());
+                        setEditForm({
+                          ...editForm,
+                          incomeHeadId: headId,
+                          categoryId: matchedCat?._id || editForm.categoryId,
+                        });
+                      }}
+                      required
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
+                    >
+                      <option value="">-- Select Other Income Head --</option>
+                      {otherIncomeHeads.filter((h) => h.isActive !== false).map((head) => (
+                        <option key={head._id} value={head._id}>
+                          {head.name} {head.code ? `(${head.code})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Property & Shop / Unit Selector */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                        Select Property (Optional)
+                      </label>
+                      <select
+                        value={editForm.propertyId}
+                        onChange={(e) => {
+                          const newPropId = e.target.value;
+                          setEditForm({
+                            ...editForm,
+                            propertyId: newPropId,
+                            unitId: '', // Reset unit when property changes
+                          });
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      >
+                        <option value="">-- None (General Company) --</option>
+                        {properties.map((p) => (
+                          <option key={p._id} value={p._id}>
+                            {p.plazaName || p.propertyName || p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                        Select Shop / Unit (Optional)
+                      </label>
+                      <select
+                        value={editForm.unitId}
+                        onChange={(e) => setEditForm({ ...editForm, unitId: e.target.value })}
+                        disabled={!editForm.propertyId}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono disabled:opacity-50"
+                      >
+                        <option value="">-- None (Entire Property) --</option>
+                        {(properties.find((p) => String(p._id) === String(editForm.propertyId))?.units || []).map((u) => (
+                          <option key={u._id || u.unitName} value={u._id}>
+                            {u.unitName || u.unitNumber || u.name || 'Unit'} {u.tenantName ? `(${u.tenantName})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="col-span-2 text-[11px] text-slate-400">
+                      Change the property or unit here before saving. You can convert this income from one shop to another.
+                    </p>
+                  </div>
+
+                  {/* Received From / Payer & Reference Number */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                        Received From / Payer
+                      </label>
+                      <input
+                        type="text"
+                        value={editForm.receivedFrom || ''}
+                        onChange={(e) => setEditForm({ ...editForm, receivedFrom: e.target.value })}
+                        placeholder="e.g. Shop Tenant / Contractor / Boss"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                        Reference Number
+                      </label>
+                      <input
+                        type="text"
+                        value={editForm.referenceNumber || ''}
+                        onChange={(e) => setEditForm({ ...editForm, referenceNumber: e.target.value })}
+                        placeholder="Cheque #, deposit slip, online ref"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 

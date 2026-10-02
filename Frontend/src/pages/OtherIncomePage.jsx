@@ -858,6 +858,52 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500"
                   />
                 </div>
+
+                {/* Property (Optional) */}
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    Property / Plaza (Optional)
+                  </label>
+                  <select
+                    value={recordForm.propertyId}
+                    onChange={(e) => {
+                      const newPropId = e.target.value;
+                      setRecordForm({
+                        ...recordForm,
+                        propertyId: newPropId,
+                        unitId: '',
+                      });
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="">-- None (General Company) --</option>
+                    {propertiesList.map((p) => (
+                      <option key={p._id} value={p._id}>
+                        {p.plazaName || p.propertyName || p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Unit / Shop (Optional) */}
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    Shop / Unit (Optional)
+                  </label>
+                  <select
+                    value={recordForm.unitId}
+                    onChange={(e) => setRecordForm({ ...recordForm, unitId: e.target.value })}
+                    disabled={!recordForm.propertyId}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                  >
+                    <option value="">-- None (Entire Property) --</option>
+                    {availableUnits.map((u) => (
+                      <option key={u._id || u.unitName} value={u._id}>
+                        {u.unitName || u.unitNumber || u.name || 'Unit'} {u.tenantName ? `(${u.tenantName})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Transaction Detail (Required Narration) */}

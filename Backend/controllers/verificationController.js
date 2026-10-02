@@ -618,17 +618,49 @@ export const updatePendingEntry = async (req, res) => {
       entry.expenseClassification = classification.expenseClassification;
       entry.propertyId = classification.propertyId;
       entry.unitId = classification.unitId;
-    } else if (entry.entryType === 'OTHER_INCOME' && updates.categoryId) {
-      const category = await Category.findById(entry.categoryId).select('name type').lean();
-      if (!category || category.type !== 'INCOME') {
-        return apiError(res, 'Select a valid Other Income head.', 400);
+    } else if (entry.entryType === 'OTHER_INCOME') {
+      let incomeHead = null;
+      if (updates.incomeHeadId) {
+        incomeHead = await OtherIncomeHead.findById(updates.incomeHeadId).lean();
+        if (!incomeHead) {
+          return apiError(res, 'Selected Other Income head was not found.', 400);
+        }
+        let category = await Category.findOne({ name: incomeHead.name, type: 'INCOME' });
+        if (!category) {
+          category = await Category.create({
+            name: incomeHead.name,
+            type: 'INCOME',
+            isRentalHead: false,
+          });
+        }
+        entry.categoryId = category._id;
+      } else if (updates.categoryId) {
+        const category = await Category.findById(entry.categoryId).select('name type').lean();
+        if (!category || category.type !== 'INCOME') {
+          return apiError(res, 'Select a valid Other Income head.', 400);
+        }
+        incomeHead = await OtherIncomeHead.findOne({ name: category.name }).lean();
+        if (!incomeHead) {
+          return apiError(res, 'The selected category is not a configured Other Income head.', 400);
+        }
       }
-      const incomeHead = await OtherIncomeHead.findOne({ name: category.name }).select('_id').lean();
-      if (!incomeHead) {
-        return apiError(res, 'The selected category is not a configured Other Income head.', 400);
+
+      if (incomeHead) {
+        entry.entryData = {
+          ...entry.entryData,
+          incomeHeadId: incomeHead._id,
+          headName: incomeHead.name,
+        };
+        entry.markModified('entryData');
       }
-      entry.entryData = { ...entry.entryData, incomeHeadId: incomeHead._id };
-      entry.markModified('entryData');
+
+      if (entry.unitId && entry.propertyId) {
+        const property = await Property.findById(entry.propertyId).select('units._id').lean();
+        const unitExists = property?.units?.some((unit) => String(unit._id) === String(entry.unitId));
+        if (!unitExists) {
+          return apiError(res, 'The selected unit does not belong to the selected property.', 400);
+        }
+      }
     } else if (entry.entryType === 'RENT' && (updates.propertyId !== undefined || updates.unitId !== undefined)) {
       if (!entry.propertyId || !entry.unitId) {
         return apiError(res, 'A property and unit are required for rent entries.', 400);

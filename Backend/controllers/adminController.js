@@ -3,6 +3,8 @@ import Transaction from '../models/Transaction.js';
 import Account from '../models/Account.js';
 import Property from '../models/Property.js';
 import Category from '../models/Category.js';
+import OtherIncome from '../models/OtherIncome.js';
+import OtherIncomeHead from '../models/OtherIncomeHead.js';
 import MonthlyReport from '../models/MonthlyReport.js';
 import {
   getMonthlyOpeningClosingMatrix,
@@ -164,7 +166,7 @@ export const getMasterLedger = async (req, res) => {
         .populate('categoryId', 'name type isRentalHead')
         .populate('drAccountId', 'name type currentBalance')
         .populate('crAccountId', 'name type currentBalance')
-        .populate('propertyId', 'plazaName')
+        .populate('propertyId', 'plazaName propertyName units')
         .populate('createdBy', 'name email role')
         .sort({ date: -1, voucherNo: -1 })
         .skip(skip)
@@ -319,16 +321,64 @@ export const updateTransactionMaster = async (req, res) => {
         if (unitId === undefined) tx.unitId = category.unitId || null;
       }
     }
+    if (req.body.incomeHeadId) {
+      const incomeHead = await OtherIncomeHead.findById(req.body.incomeHeadId).lean();
+      if (incomeHead) {
+        let category = await Category.findOne({ name: incomeHead.name, type: 'INCOME' });
+        if (!category) {
+          category = await Category.create({
+            name: incomeHead.name,
+            type: 'INCOME',
+            isRentalHead: false,
+          });
+        }
+        tx.categoryId = category._id;
+      }
+    }
     if (drAccountId) tx.drAccountId = drAccountId;
     if (crAccountId) tx.crAccountId = crAccountId;
     tx.amount = newAmount;
-    tx.propertyId = propertyId || null;
-    tx.unitId = unitId || null;
-    tx.rentMonth = rentMonth || null;
+    if (propertyId !== undefined) tx.propertyId = propertyId || null;
+    if (unitId !== undefined) tx.unitId = unitId || null;
+    if (rentMonth !== undefined) tx.rentMonth = rentMonth || null;
     if (status) tx.status = status;
     if (checkedBy !== undefined) tx.checkedBy = checkedBy;
 
     await tx.save();
+
+    // Synchronize Other Income if this transaction represents Other Income
+    const isOtherIncome =
+      tx.transactionType === 'INCOME' ||
+      tx.reportCategory === 'Other Income' ||
+      tx.sourceModule === 'OTHER_INCOME';
+
+    if (isOtherIncome) {
+      const category = await Category.findById(tx.categoryId).select('name').lean();
+      const incomeHead = req.body.incomeHeadId
+        ? await OtherIncomeHead.findById(req.body.incomeHeadId).lean()
+        : await OtherIncomeHead.findOne({ name: category?.name }).lean();
+
+      await OtherIncome.findOneAndUpdate(
+        {
+          $or: [
+            { transactionId: tx._id },
+            { voucherNo: tx.voucherNo },
+            ...(tx.sourceId ? [{ _id: tx.sourceId }] : []),
+          ],
+        },
+        {
+          receiptDate: tx.date,
+          amount: tx.amount,
+          propertyId: tx.propertyId || null,
+          unitId: tx.unitId || null,
+          receivingAccountId: tx.drAccountId,
+          transactionDetail: tx.detail,
+          ...(category ? { headName: category.name } : {}),
+          ...(incomeHead ? { incomeHeadId: incomeHead._id, headName: incomeHead.name } : {}),
+          updatedBy: req.user?._id,
+        }
+      );
+    }
 
     // Reliably synchronize account balances from active ledger
     await syncAccountBalances([oldDrId, oldCrId, newDrId, newCrId]);
@@ -337,7 +387,7 @@ export const updateTransactionMaster = async (req, res) => {
       .populate('categoryId', 'name type')
       .populate('drAccountId', 'name type currentBalance')
       .populate('crAccountId', 'name type currentBalance')
-      .populate('propertyId', 'plazaName');
+      .populate('propertyId', 'plazaName propertyName units');
 
     return res.status(200).json({
       success: true,

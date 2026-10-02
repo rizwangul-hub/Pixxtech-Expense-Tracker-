@@ -28,7 +28,7 @@ import {
   Receipt,
   Layers,
 } from 'lucide-react';
-import { adminAPI, reportsAPI, accountsAPI } from '../services/api.js';
+import { adminAPI, reportsAPI, accountsAPI, propertiesAPI, otherIncomeAPI } from '../services/api.js';
 import { MonthlyReportsHistoryPage } from './MonthlyReportsHistoryPage.jsx';
 import { resolveTransactionAccounts } from '../utils/formatters.js';
 
@@ -62,6 +62,8 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
   const [ledgerCategory, setLedgerCategory] = useState('');
   const [categoriesList, setCategoriesList] = useState([]);
   const [accountsList, setAccountsList] = useState([]);
+  const [propertiesList, setPropertiesList] = useState([]);
+  const [otherIncomeHeadsList, setOtherIncomeHeadsList] = useState([]);
   const [loadingLedger, setLoadingLedger] = useState(false);
 
   // Tab 2: Edit Modal State
@@ -96,14 +98,20 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
   useEffect(() => {
     const loadDropdownData = async () => {
       try {
-        const [catRes, accRes] = await Promise.all([
+        const [catRes, accRes, propRes, headsRes] = await Promise.all([
           accountsAPI.getCategories(),
           accountsAPI.getActiveSummary(),
+          propertiesAPI.getProperties({ limit: 100 }),
+          otherIncomeAPI.getHeads(),
         ]);
         const cats = catRes.categories || catRes.data?.categories || [];
         const accs = accRes.accounts || accRes.data?.accounts || [];
+        const props = propRes.properties || propRes.data?.properties || (Array.isArray(propRes) ? propRes : []);
+        const heads = headsRes.heads || headsRes.data || (Array.isArray(headsRes) ? headsRes : []);
         setCategoriesList(cats);
         setAccountsList(accs);
+        setPropertiesList(props);
+        setOtherIncomeHeadsList(heads);
         if (accs.length > 0) {
           setReconcileAccountId((prev) => prev || accs[0]._id);
         }
@@ -266,6 +274,9 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
         drAccountId: editingTransaction.drAccountId,
         crAccountId: editingTransaction.crAccountId,
         amount: editingTransaction.amount,
+        propertyId: editingTransaction.propertyId || null,
+        unitId: editingTransaction.unitId || null,
+        incomeHeadId: editingTransaction.incomeHeadId || null,
         status: editingTransaction.status,
         checkedBy: editingTransaction.checkedBy,
       });
@@ -812,15 +823,22 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                                   </button>
                                 )}
                                 <button
-                                  onClick={() =>
+                                  onClick={() => {
+                                    const catName = (tx.categoryId?.name || '').trim().toLowerCase();
+                                    const matchedHead = otherIncomeHeadsList.find(
+                                      (h) => h.name?.trim().toLowerCase() === catName
+                                    );
                                     setEditingTransaction({
                                       ...tx,
                                       categoryId: tx.categoryId?._id || tx.categoryId,
+                                      incomeHeadId: tx.sourceId?.incomeHeadId || matchedHead?._id || '',
                                       drAccountId: tx.drAccountId?._id || tx.drAccountId,
                                       crAccountId: tx.crAccountId?._id || tx.crAccountId,
+                                      propertyId: tx.propertyId?._id || tx.propertyId || '',
+                                      unitId: tx.unitId?._id || tx.unitId || '',
                                       date: tx.date ? new Date(tx.date).toISOString().split('T')[0] : '',
-                                    })
-                                  }
+                                    });
+                                  }}
                                   title="Master Edit (Rebalances Accounts)"
                                   className="p-1 text-blue-400 hover:bg-blue-950/40 rounded transition"
                                 >
@@ -1474,22 +1492,103 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                 />
               </div>
 
-              <div>
-                <label className="block text-slate-400 mb-1">Account Head / Category</label>
-                <select
-                  value={editingTransaction.categoryId}
-                  onChange={(e) =>
-                    setEditingTransaction((p) => ({ ...p, categoryId: e.target.value }))
-                  }
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-slate-200"
-                  required
-                >
-                  {categoriesList.map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+              {editingTransaction.transactionType === 'INCOME' ||
+              editingTransaction.reportCategory === 'Other Income' ||
+              editingTransaction.sourceModule === 'OTHER_INCOME' ? (
+                <div>
+                  <label className="block text-slate-400 mb-1">Other Income Head</label>
+                  <select
+                    value={editingTransaction.incomeHeadId || ''}
+                    onChange={(e) => {
+                      const headId = e.target.value;
+                      const selectedHead = otherIncomeHeadsList.find((h) => String(h._id) === String(headId));
+                      const matchedCat = categoriesList.find((c) => c.name?.trim().toLowerCase() === selectedHead?.name?.trim().toLowerCase());
+                      setEditingTransaction((p) => ({
+                        ...p,
+                        incomeHeadId: headId,
+                        categoryId: matchedCat?._id || p.categoryId,
+                      }));
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-slate-200"
+                    required
+                  >
+                    <option value="">-- Select Other Income Head --</option>
+                    {otherIncomeHeadsList.map((h) => (
+                      <option key={h._id} value={h._id}>
+                        {h.name} {h.code ? `(${h.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-slate-400 mb-1">Account Head / Category</label>
+                  <select
+                    value={editingTransaction.categoryId}
+                    onChange={(e) =>
+                      setEditingTransaction((p) => ({ ...p, categoryId: e.target.value }))
+                    }
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-slate-200"
+                    required
+                  >
+                    {categoriesList.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Property & Shop/Unit allocation in Master Edit */}
+              <div className="grid grid-cols-2 gap-3 p-2.5 bg-slate-950/60 border border-slate-800/80 rounded-lg">
+                <div>
+                  <label className="block text-slate-400 mb-1">Property / Plaza (Optional)</label>
+                  <select
+                    value={editingTransaction.propertyId || ''}
+                    onChange={(e) => {
+                      const newPropId = e.target.value;
+                      setEditingTransaction((p) => ({
+                        ...p,
+                        propertyId: newPropId,
+                        unitId: '', // Reset unit when property changes
+                      }));
+                    }}
+                    className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-slate-200"
+                  >
+                    <option value="">-- None (General Company) --</option>
+                    {propertiesList.map((prop) => (
+                      <option key={prop._id} value={prop._id}>
+                        {prop.plazaName || prop.propertyName || prop.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-1">Shop / Unit (Optional)</label>
+                  <select
+                    value={editingTransaction.unitId || ''}
+                    onChange={(e) =>
+                      setEditingTransaction((p) => ({ ...p, unitId: e.target.value }))
+                    }
+                    disabled={!editingTransaction.propertyId}
+                    className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-slate-200 font-mono disabled:opacity-50"
+                  >
+                    <option value="">-- None (Entire Property) --</option>
+                    {(
+                      propertiesList.find(
+                        (prop) => String(prop._id) === String(editingTransaction.propertyId)
+                      )?.units || []
+                    ).map((u) => (
+                      <option key={u._id || u.unitName} value={u._id}>
+                        {u.unitName || u.unitNumber || u.name || 'Unit'} {u.tenantName ? `(${u.tenantName})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="col-span-2 text-[10px] text-slate-500">
+                  Convert or assign this transaction to a specific shop/unit or property.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
