@@ -75,10 +75,7 @@ const getAccessibleSection = (section, user) => {
   if ((section === 'ledgers' || section === 'reports' || section === 'monthly-reports' || section === 'account-ledger' || section === 'transactions') && isDataEntry(user)) {
     return section;
   }
-  if (section === 'expenses' && (isAdmin(user) || isDataEntry(user))) {
-    return section;
-  }
-  if (section === 'expenses' && !isAdmin(user)) {
+  if (section === 'expenses') {
     return 'dashboard';
   }
   const requiredPermission = SECTION_PERMISSIONS[section];

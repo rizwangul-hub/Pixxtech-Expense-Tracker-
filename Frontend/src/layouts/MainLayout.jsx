@@ -227,18 +227,6 @@ export function MainLayout({
       badge: 'Active',
       badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
     },
-    ...(userIsAdmin || userIsDataEntry
-      ? [
-          {
-            id: 'expenses',
-            label: 'Publisher & Audit Center',
-            icon: BarChart3,
-            status: 'active',
-            badge: userIsAdmin ? 'Admin' : 'Audit',
-            badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
-          },
-        ]
-      : []),
     {
       id: 'accounts',
       label: 'Accounts',
@@ -367,7 +355,7 @@ export function MainLayout({
             >
               <Sparkles size={14} className="text-amber-300" />
               <span className="hidden md:inline">
-                {userIsAdmin ? 'Publisher Control Center' : 'Voucher Entry Terminal'}
+                Voucher Entry Terminal
               </span>
               <span className="md:hidden">Terminal</span>
             </button>
