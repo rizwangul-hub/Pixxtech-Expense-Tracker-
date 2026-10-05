@@ -189,6 +189,7 @@ export const getLedgerEntities = async (req, res) => {
  * @desc    Get Central Financial Ledger Data by Type & Entity
  */
 export const getLedgerReportData = async (queryParams = {}) => {
+  try {
   const {
     type = 'BANK',
     entityId,
