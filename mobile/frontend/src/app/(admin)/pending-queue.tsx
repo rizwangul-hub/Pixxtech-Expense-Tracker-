@@ -244,7 +244,7 @@ export default function PendingQueueScreen() {
           <View style={styles.submittedByRow}>
             <Feather name="user" size={13} color="#64748B" />
             <Text style={styles.submittedByText}>
-              By: {item.submittedByName || item.submittedBy?.name || 'Sarfraz'}
+              By: {item.submittedByName || item.submittedBy?.name || 'Sarfraz Khan'}
             </Text>
           </View>
           <View style={styles.reviewButton}>

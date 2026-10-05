@@ -19,6 +19,7 @@ import {
   ArrowDownLeft,
   Printer,
   ChevronRight,
+  Download,
 } from 'lucide-react';
 import { ledgersAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
@@ -49,6 +50,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
   // Ledger Payload State from Backend
   const [ledgerData, setLedgerData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [loadingEntities, setLoadingEntities] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -173,6 +175,40 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
     fetchLedger();
   };
 
+  const handleDownloadPDF = async () => {
+    if (!isValidEntityForQuery(ledgerType, effectiveEntityId, entities)) {
+      return;
+    }
+    try {
+      setDownloadingPdf(true);
+      setErrorMsg('');
+      const safeTitle = (ledgerData?.ledgerTitle || 'Ledger')
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .replace(/__+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 50);
+      const filename = `Pixx_Technologies_Ledger_${safeTitle || 'Statement'}.pdf`;
+
+      await ledgersAPI.downloadLedgerPDF(
+        {
+          type: ledgerType,
+          entityId: effectiveEntityId,
+          datePreset,
+          startDate,
+          endDate,
+          asOnDate,
+          search: searchQuery,
+        },
+        filename
+      );
+    } catch (err) {
+      console.error('Failed to download ledger PDF:', err);
+      setErrorMsg(err.response?.data?.message || err.message || 'Failed to generate PDF. Please try again.');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const summary = ledgerData?.summary || {
     openingBalance: 0,
     totalDebit: 0,
@@ -211,6 +247,19 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
           >
             <RefreshCw size={14} className={loading ? 'animate-spin text-blue-600' : 'text-slate-600'} />
             Refresh Ledger
+          </button>
+          <button
+            onClick={handleDownloadPDF}
+            disabled={downloadingPdf || !ledgerData || loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white font-bold text-xs shadow-sm transition"
+            title="Download Official A4 PDF Statement of this Head Ledger"
+          >
+            {downloadingPdf ? (
+              <RefreshCw size={14} className="animate-spin text-white" />
+            ) : (
+              <Download size={14} className="text-white" />
+            )}
+            <span>{downloadingPdf ? 'Exporting PDF...' : 'Download Head Ledger PDF'}</span>
           </button>
         </div>
       </div>

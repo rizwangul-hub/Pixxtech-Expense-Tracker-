@@ -408,18 +408,18 @@ export function SingleVoucherPrintModal({ transactionId, voucherId, initialData,
             <div className="pt-6 space-y-4 border-t border-slate-300">
               {/* Official Signatures Row */}
               <div className="grid grid-cols-2 gap-8 border border-slate-300 rounded-lg p-4 bg-slate-50">
-                {/* Prepared By (Sarfraz) */}
+                {/* Prepared By (Sarfraz Khan) */}
                 <div className="text-center space-y-1">
                   <div className="text-[10px] uppercase font-bold text-slate-500 border-b border-slate-300 pb-1 mb-2">
                     Prepared By
                   </div>
                   <img
                     src={sarfrazSign}
-                    alt="Sarfraz Signature"
+                    alt="Sarfraz Khan Signature"
                     className="h-12 mx-auto object-contain"
                   />
-                  <div className="text-xs font-black text-slate-900 mt-1">Sarfraz</div>
-                  <div className="text-[10px] text-slate-500 font-semibold">Data Entry &amp; Operations</div>
+                  <div className="text-xs font-black text-slate-900 mt-1">Sarfraz Khan</div>
+                  <div className="text-[10px] text-slate-500 font-semibold">Accountant (Data Entry) &amp; Operations</div>
                 </div>
 
                 {/* Checked By (Khurshid Anwar) */}

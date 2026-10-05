@@ -67,7 +67,7 @@ export function RentReceivedPage({
     receivingAccountId: '',
     receiptDate: new Date().toISOString().split('T')[0],
     referenceNumber: '',
-    checkedBy: currentUser?.name || 'Sarfraz',
+    checkedBy: currentUser?.name || 'Sarfraz Khan',
     description: '',
     allocatePriorReceivable: true,
   });
@@ -181,7 +181,7 @@ export function RentReceivedPage({
       receivingAccountId: defaultCash,
       receiptDate: new Date().toISOString().split('T')[0],
       referenceNumber: '',
-      checkedBy: currentUser?.name || 'Sarfraz',
+      checkedBy: currentUser?.name || 'Sarfraz Khan',
       description: '',
       allocatePriorReceivable: true,
     });

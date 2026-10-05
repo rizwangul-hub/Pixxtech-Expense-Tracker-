@@ -144,7 +144,7 @@ export function UserManager({ currentUser }) {
             System User Accounts
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            Manage authenticated operators, assign roles (ADMIN or DATA_ENTRY), and control system access.
+            Manage authenticated operators, assign roles (ADMIN or Accountant / DATA_ENTRY), and control system access.
           </p>
         </div>
 
@@ -240,7 +240,7 @@ export function UserManager({ currentUser }) {
                               : 'bg-teal-950 text-teal-300 border-teal-700/60'
                           }`}
                         >
-                          {isUserAdmin ? 'ADMIN' : 'DATA ENTRY'}
+                          {isUserAdmin ? 'ADMIN' : 'ACCOUNTANT (DATA ENTRY)'}
                         </span>
                       </td>
 
@@ -387,7 +387,7 @@ export function UserManager({ currentUser }) {
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="DATA_ENTRY">DATA_ENTRY (Voucher entry & rent collection)</option>
+                  <option value="DATA_ENTRY">ACCOUNTANT (DATA_ENTRY — voucher entry & rent collection)</option>
                   <option value="ADMIN">ADMIN (Full audit, report export & user management)</option>
                 </select>
                 {formErrors.role && (

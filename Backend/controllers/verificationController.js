@@ -344,6 +344,10 @@ export const getPendingEntries = async (req, res) => {
       });
     }
 
+    entries.forEach((entry) => {
+      if (entry.submittedByName === 'Sarfraz') entry.submittedByName = 'Sarfraz Khan';
+    });
+
     return apiSuccess(
       res,
       {
@@ -451,6 +455,10 @@ export const getMySubmissions = async (req, res) => {
       .sort({ submittedAt: -1 })
       .limit(req.query.limit ? parseInt(req.query.limit, 10) : 500)
       .lean();
+
+    entries.forEach((entry) => {
+      if (entry.submittedByName === 'Sarfraz') entry.submittedByName = 'Sarfraz Khan';
+    });
 
     return apiSuccess(res, entries, `Found ${entries.length} submissions.`);
   } catch (error) {
@@ -1765,7 +1773,7 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
       entry.submittedByName ||
       entry.submittedBy?.name ||
       entry.createdBy?.name ||
-      'Sarfraz';
+      'Sarfraz Khan (Accountant - Data Entry)';
 
     const verifiedByName =
       entry.verifiedByName ||

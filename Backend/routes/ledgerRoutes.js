@@ -1,5 +1,5 @@
 import express from 'express';
-import { getLedgerEntities, queryLedger } from '../controllers/ledgerController.js';
+import { getLedgerEntities, queryLedger, downloadLedgerPDF } from '../controllers/ledgerController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -9,6 +9,12 @@ router.use(protect);
 
 // Require permitted financial roles (Admin, Verifier, Data Entry, Manager)
 router.use(authorize('ADMIN', 'ADMIN_PUBLISHER', 'VERIFIER', 'VERIFICATION_MANAGER', 'DATA_ENTRY'));
+
+/**
+ * GET /api/ledgers/download-pdf
+ * @desc Download official A4 PDF Statement for a specific ledger head
+ */
+router.get('/download-pdf', downloadLedgerPDF);
 
 /**
  * GET /api/ledgers/entities

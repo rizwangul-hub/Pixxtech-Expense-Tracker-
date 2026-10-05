@@ -11,6 +11,7 @@ import OtherIncome from '../models/OtherIncome.js';
 import Voucher from '../models/Voucher.js';
 import { round2, resolveTransactionAccountDisplay } from '../services/ledgerService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
+import { generateLedgerPDF } from '../services/pdfReportService.js';
 
 /**
  * Utility to parse date presets (TODAY, THIS_WEEK, THIS_MONTH, PREVIOUS_MONTH, CUSTOM, AS_ON_DATE)
@@ -185,73 +186,62 @@ export const getLedgerEntities = async (req, res) => {
 };
 
 /**
- * @desc    Query Central Financial Ledger by Type & Entity
- * @route   GET /api/ledgers/query
- * @access  Private (Authenticated)
+ * @desc    Get Central Financial Ledger Data by Type & Entity
  */
-export const queryLedger = async (req, res) => {
-  try {
-    const {
-      type = 'BANK',
-      entityId,
-      datePreset = 'THIS_MONTH',
-      startDate,
-      endDate,
-      asOnDate,
-      search,
-      page = 1,
-      limit = 100,
-    } = req.query;
+export const getLedgerReportData = async (queryParams = {}) => {
+  const {
+    type = 'BANK',
+    entityId,
+    datePreset = 'THIS_MONTH',
+    startDate,
+    endDate,
+    asOnDate,
+    search,
+    page = 1,
+    limit = 100,
+  } = queryParams;
 
-    const { periodStart, periodEnd } = parseDateRange(datePreset, startDate, endDate, asOnDate);
-    const sRegex = search && search.trim() ? new RegExp(search.trim(), 'i') : null;
+  const { periodStart, periodEnd } = parseDateRange(datePreset, startDate, endDate, asOnDate);
+  const sRegex = search && search.trim() ? new RegExp(search.trim(), 'i') : null;
 
-    let targetEntity = null;
-    let ledgerTitle = 'General Central Ledger';
-    let entitySubtext = '';
-    let ledgerEntries = [];
-    let openingBalance = 0;
-    let totalDebit = 0;
-    let totalCredit = 0;
-    let closingBalance = 0;
+  let targetEntity = null;
+  let ledgerTitle = 'General Central Ledger';
+  let entitySubtext = '';
+  let ledgerEntries = [];
+  let openingBalance = 0;
+  let totalDebit = 0;
+  let totalCredit = 0;
+  let closingBalance = 0;
 
-    // Base query filter: include both POSTED and VERIFIED transactions for official ledger
-    const baseStatusFilter = { status: { $in: ['POSTED', 'VERIFIED'] } };
+  // Base query filter: include both POSTED and VERIFIED transactions for official ledger
+  const baseStatusFilter = { status: { $in: ['POSTED', 'VERIFIED'] } };
 
-    // =========================================================================
-    // 1. BANK ACCOUNT, CASH CUSTODIAN & SUSPENSE ACCOUNT LEDGER
-    // =========================================================================
-    if (type === 'BANK' || type === 'CASH' || type === 'SUSPENSE') {
-      if (!entityId || !mongoose.Types.ObjectId.isValid(entityId)) {
-        return apiSuccess(
-          res,
-          {
-            type,
-            ledgerTitle: type === 'BANK' ? 'Bank Account Ledger' : type === 'CASH' ? 'Cash Custodian Ledger' : 'Suspense Account Ledger',
-            entitySubtext: 'Please select an account',
-            datePreset,
-            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
-            entries: [],
-          },
-          'No account selected.'
-        );
-      }
+  // =========================================================================
+  // 1. BANK ACCOUNT, CASH CUSTODIAN & SUSPENSE ACCOUNT LEDGER
+  // =========================================================================
+  if (type === 'BANK' || type === 'CASH' || type === 'SUSPENSE') {
+    if (!entityId || !mongoose.Types.ObjectId.isValid(entityId)) {
+      return {
+        type,
+        ledgerTitle: type === 'BANK' ? 'Bank Account Ledger' : type === 'CASH' ? 'Cash Custodian Ledger' : 'Suspense Account Ledger',
+        entitySubtext: 'Please select an account',
+        datePreset,
+        summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+        entries: [],
+      };
+    }
 
-      targetEntity = await Account.findById(entityId).lean();
-      if (!targetEntity) {
-        return apiSuccess(
-          res,
-          {
-            type,
-            ledgerTitle: type === 'BANK' ? 'Bank Account Ledger' : type === 'CASH' ? 'Cash Custodian Ledger' : 'Suspense Account Ledger',
-            entitySubtext: 'Account not found',
-            datePreset,
-            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
-            entries: [],
-          },
-          'Account not found.'
-        );
-      }
+    targetEntity = await Account.findById(entityId).lean();
+    if (!targetEntity) {
+      return {
+        type,
+        ledgerTitle: type === 'BANK' ? 'Bank Account Ledger' : type === 'CASH' ? 'Cash Custodian Ledger' : 'Suspense Account Ledger',
+        entitySubtext: 'Account not found',
+        datePreset,
+        summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+        entries: [],
+      };
+    }
 
       ledgerTitle = targetEntity.name;
       entitySubtext = type === 'BANK'
@@ -356,34 +346,26 @@ export const queryLedger = async (req, res) => {
     // =========================================================================
     else if (type === 'PROPERTY') {
       if (!entityId || !mongoose.Types.ObjectId.isValid(entityId)) {
-        return apiSuccess(
-          res,
-          {
-            type,
-            ledgerTitle: 'Property / Plaza Ledger',
-            entitySubtext: 'Please select a property',
-            datePreset,
-            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
-            entries: [],
-          },
-          'No property selected.'
-        );
+        return {
+          type,
+          ledgerTitle: 'Property / Plaza Ledger',
+          entitySubtext: 'Please select a property',
+          datePreset,
+          summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+          entries: [],
+        };
       }
 
       targetEntity = await Property.findById(entityId).lean();
       if (!targetEntity) {
-        return apiSuccess(
-          res,
-          {
-            type,
-            ledgerTitle: 'Property / Plaza Ledger',
-            entitySubtext: 'Property not found',
-            datePreset,
-            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
-            entries: [],
-          },
-          'Property not found.'
-        );
+        return {
+          type,
+          ledgerTitle: 'Property / Plaza Ledger',
+          entitySubtext: 'Property not found',
+          datePreset,
+          summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+          entries: [],
+        };
       }
 
       ledgerTitle = `Property Ledger: ${targetEntity.propertyName || targetEntity.plazaName}`;
@@ -463,34 +445,26 @@ export const queryLedger = async (req, res) => {
     // =========================================================================
     else if (type === 'TENANT') {
       if (!entityId || !mongoose.Types.ObjectId.isValid(entityId)) {
-        return apiSuccess(
-          res,
-          {
-            type,
-            ledgerTitle: 'Tenant / Rental Ledger',
-            entitySubtext: 'Please select a tenant',
-            datePreset,
-            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
-            entries: [],
-          },
-          'No tenant selected.'
-        );
+        return {
+          type,
+          ledgerTitle: 'Tenant / Rental Ledger',
+          entitySubtext: 'Please select a tenant',
+          datePreset,
+          summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+          entries: [],
+        };
       }
 
       targetEntity = await Tenant.findById(entityId).lean();
       if (!targetEntity) {
-        return apiSuccess(
-          res,
-          {
-            type,
-            ledgerTitle: 'Tenant / Rental Ledger',
-            entitySubtext: 'Tenant not found',
-            datePreset,
-            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
-            entries: [],
-          },
-          'Tenant not found.'
-        );
+        return {
+          type,
+          ledgerTitle: 'Tenant / Rental Ledger',
+          entitySubtext: 'Tenant not found',
+          datePreset,
+          summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+          entries: [],
+        };
       }
 
       ledgerTitle = `Tenant Ledger: ${targetEntity.tenantName || targetEntity.name}`;
@@ -841,31 +815,75 @@ export const queryLedger = async (req, res) => {
     }
 
     // Return unified central ledger payload
+    return {
+      type,
+      ledgerTitle,
+      entitySubtext,
+      datePreset,
+      summary: {
+        openingBalance,
+        totalDebit,
+        totalCredit,
+        closingBalance,
+        entryCount: ledgerEntries.length,
+      },
+      entries: ledgerEntries,
+    };
+  } catch (error) {
+    console.error('[Central Ledger Report Data Error]:', error);
+    throw error;
+  }
+};
+
+/**
+ * @desc    Query Central Financial Ledger by Type & Entity
+ * @route   GET /api/ledgers/query
+ * @access  Private (Authenticated)
+ */
+export const queryLedger = async (req, res) => {
+  try {
+    const payload = await getLedgerReportData(req.query);
     return apiSuccess(
       res,
-      {
-        type,
-        ledgerTitle,
-        entitySubtext,
-        datePreset,
-        summary: {
-          openingBalance,
-          totalDebit,
-          totalCredit,
-          closingBalance,
-          entryCount: ledgerEntries.length,
-        },
-        entries: ledgerEntries,
-      },
-      `Retrieved ledger for ${ledgerTitle} with ${ledgerEntries.length} entries.`
+      payload,
+      `Retrieved ledger for ${payload.ledgerTitle} with ${payload.entries.length} entries.`
     );
   } catch (error) {
     console.error('[Central Ledger Query Error]:', error);
-    return apiError(res, 'Failed to query central ledger.', 500);
+    return apiError(res, error.message || 'Failed to query central ledger.', 500);
+  }
+};
+
+/**
+ * @desc    Download Official PDF for Individual Head Ledger Statement
+ * @route   GET /api/ledgers/download-pdf
+ * @access  Private (Authenticated)
+ */
+export const downloadLedgerPDF = async (req, res) => {
+  try {
+    const payload = await getLedgerReportData(req.query);
+    const pdfBuffer = await generateLedgerPDF(payload, req.user);
+
+    const safeTitle = (payload.ledgerTitle || 'Ledger')
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .replace(/__+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 50);
+    const filename = `Pixx_Technologies_Ledger_${safeTitle || 'Statement'}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.status(200).send(pdfBuffer);
+  } catch (error) {
+    console.error('[Download Ledger PDF Error]:', error);
+    return apiError(res, error.message || 'Failed to generate ledger PDF.', 500);
   }
 };
 
 export default {
   getLedgerEntities,
+  getLedgerReportData,
   queryLedger,
+  downloadLedgerPDF,
 };

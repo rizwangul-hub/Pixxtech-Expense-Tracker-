@@ -463,7 +463,7 @@ export default function VerificationDetailScreen() {
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Prepared By</Text>
             <Text style={styles.infoValue}>
-              {entry.submittedByName || entry.submittedBy?.name || 'Sarfraz'}
+              {entry.submittedByName || entry.submittedBy?.name || 'Sarfraz Khan'}
             </Text>
           </View>
           <View style={styles.divider} />
@@ -565,8 +565,8 @@ export default function VerificationDetailScreen() {
                 style={styles.signatureImage}
                 resizeMode="contain"
               />
-              <Text style={styles.signaturePersonName}>Sarfraz</Text>
-              <Text style={styles.signaturePersonRole}>Data Entry & Operations</Text>
+              <Text style={styles.signaturePersonName}>Sarfraz Khan</Text>
+              <Text style={styles.signaturePersonRole}>Accountant (Data Entry) &amp; Operations</Text>
             </View>
 
             <View style={styles.signatureBox}>

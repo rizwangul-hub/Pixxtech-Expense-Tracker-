@@ -843,6 +843,22 @@ export const ledgersAPI = {
     const res = await api.get('/ledgers/query', { params });
     return res.data;
   },
+  downloadLedgerPDF: async (params = {}, fallbackFilename) => {
+    const res = await api.get('/ledgers/download-pdf', {
+      params,
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = fallbackFilename || 'Pixx_Technologies_Ledger_Statement.pdf';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+    return true;
+  },
 };
 
 // Staff Management API

@@ -301,7 +301,7 @@ export default function EntryDetailScreen() {
           <View style={styles.fieldRow}>
             <Text style={styles.fieldLabel}>Submitted By</Text>
             <Text style={styles.fieldValue}>
-              {entry.submittedByName || entry.submittedBy?.name || entry.createdBy?.name || 'Sarfraz'}
+              {entry.submittedByName || entry.submittedBy?.name || entry.createdBy?.name || 'Sarfraz Khan'}
             </Text>
           </View>
           <View style={styles.divider} />
@@ -397,8 +397,8 @@ export default function EntryDetailScreen() {
                 style={styles.signatureImage}
                 resizeMode="contain"
               />
-              <Text style={styles.signaturePersonName}>Sarfraz</Text>
-              <Text style={styles.signaturePersonRole}>Data Entry & Operations</Text>
+              <Text style={styles.signaturePersonName}>Sarfraz Khan</Text>
+              <Text style={styles.signaturePersonRole}>Accountant (Data Entry) &amp; Operations</Text>
             </View>
 
             <View style={styles.signatureBox}>

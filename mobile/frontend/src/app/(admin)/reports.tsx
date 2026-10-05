@@ -608,7 +608,7 @@ export default function ReportsScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.launcherTitle}>Cash in Hand Ledgers</Text>
                   <Text style={styles.launcherSubtitle}>
-                    Running balances for Majid Javed, Sabir Nawaz, Sarfraz, and Naveed
+                    Running balances for Majid Javed, Sabir Nawaz, Sarfraz Khan, and Naveed
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={20} color="#94A3B8" />

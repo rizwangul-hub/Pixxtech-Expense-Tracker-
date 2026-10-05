@@ -27,7 +27,7 @@ const provisionUsers = async () => {
         role: 'ADMIN',
       },
       {
-        name: 'Sarfraz',
+        name: 'Sarfraz Khan',
         email: 'sarfraz@pixxtechnologies.com',
         password: 'sarfraz12345',
         role: 'DATA_ENTRY',

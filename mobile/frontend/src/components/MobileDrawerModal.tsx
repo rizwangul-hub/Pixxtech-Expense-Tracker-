@@ -102,7 +102,7 @@ export default function MobileDrawerModal({
     },
     {
       id: 'operational',
-      label: 'Data Entry Terminal',
+      label: 'Accountant (Data Entry) Terminal',
       iconName: 'file-text',
       badge: 'Operator',
       badgeColor: '#D1FAE5',
@@ -291,7 +291,7 @@ export default function MobileDrawerModal({
               <Text style={styles.userName}>{user?.name || 'Authorized User'}</Text>
               <View style={styles.rolePill}>
                 <Text style={styles.rolePillText}>
-                  {isAdmin ? 'ADMINISTRATOR' : isVerifier ? 'VERIFIER' : 'DATA ENTRY OPERATOR'}
+                  {isAdmin ? 'ADMINISTRATOR' : isVerifier ? 'VERIFIER' : 'ACCOUNTANT (DATA ENTRY)'}
                 </Text>
               </View>
             </View>

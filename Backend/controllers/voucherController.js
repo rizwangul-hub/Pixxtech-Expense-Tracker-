@@ -424,7 +424,7 @@ export const getVoucherPrintDetail = async (req, res) => {
         type: tx.categoryId?.type || (isRent ? 'INCOME' : 'EXPENSE'),
         isRentalHead: tx.categoryId?.isRentalHead || isRent,
       },
-      preparedBy: tx.createdBy?.name || 'Sarfraz',
+      preparedBy: tx.createdBy?.name || 'Sarfraz Khan (Accountant - Data Entry)',
       checkedBy: tx.checkedBy || 'Khurshid Anwar',
       attachments: tx.attachments || [],
     };
@@ -602,7 +602,7 @@ export const downloadSingleVoucherPDF = async (req, res) => {
         type: tx.categoryId?.type || (isRent ? 'INCOME' : 'EXPENSE'),
         isRentalHead: tx.categoryId?.isRentalHead || isRent,
       },
-      preparedBy: tx.createdBy?.name || 'Sarfraz',
+      preparedBy: tx.createdBy?.name || 'Sarfraz Khan (Accountant - Data Entry)',
       checkedBy: tx.checkedBy || 'Khurshid Anwar',
     };
 

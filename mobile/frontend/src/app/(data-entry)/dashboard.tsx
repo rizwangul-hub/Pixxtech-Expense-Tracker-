@@ -152,12 +152,12 @@ export default function DataEntryDashboardScreen() {
             </Text>
           </View>
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user?.name || 'Sarfraz'}</Text>
+            <Text style={styles.userName}>{user?.name || 'Sarfraz Khan'}</Text>
             <Text style={styles.userEmail}>{user?.email || 'sarfraz@pixxtechnologies.com'}</Text>
             <View style={styles.badgeRow}>
               <View style={styles.roleBadge}>
                 <Feather name="edit-3" size={11} color="#1D4ED8" style={{ marginRight: 4 }} />
-                <Text style={styles.roleBadgeText}>DATA ENTRY</Text>
+                <Text style={styles.roleBadgeText}>ACCOUNTANT (DATA ENTRY)</Text>
               </View>
               <View style={styles.statusBadge}>
                 <View style={styles.statusDot} />

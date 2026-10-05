@@ -83,6 +83,8 @@ handlebars.registerHelper('formatReportDate', formatReportDate);
 handlebars.registerHelper('formatShortDate', formatShortDate);
 handlebars.registerHelper('isNegative', (val) => Number(val) < 0);
 handlebars.registerHelper('isEven', (index) => index % 2 === 0);
+handlebars.registerHelper('addOne', (val) => Number(val) + 1);
+handlebars.registerHelper('gtZero', (val) => Number(val) > 0);
 
 /**
  * Locate a valid browser executable (Edge, Chrome, or default Puppeteer Chromium)
@@ -571,7 +573,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     accountStatements,
     reportStatus: monthlyReport?.status || 'DRAFT',
     isPublished: monthlyReport?.status === 'PUBLISHED',
-    dataEnteredByName: 'Sarfraz Khan',
+    dataEnteredByName: 'Sarfraz Khan (Accountant - Data Entry)',
     checkedByName: 'Khurshid Anwar',
     preparedByName: 'Pixx Tech Expense Tracker System',
     publishedByName: monthlyReport?.publishedByName || '',
@@ -822,4 +824,79 @@ export const generateReceiptEvidencePDF = async (evidenceData) => {
   }
 };
 
-export default { generateMonthlyFundsReport, generateSingleVoucherPDF, generateReceiptEvidencePDF };
+/**
+  * Generate A4 Individual Account / Head Ledger Statement PDF Buffer
+  */
+export const generateLedgerPDF = async (ledgerData, requestedUser) => {
+  const templatePath = path.join(__dirname, '..', 'templates', 'headLedgerTemplate.html');
+  const templateSource = fs.readFileSync(templatePath, 'utf8');
+  const compiledTemplate = handlebars.compile(templateSource);
+
+  // Clean entity subtext from HTML tags if any (e.g. <strong>, &bull;)
+  const cleanSubtext = (ledgerData.entitySubtext || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&bull;/g, '•')
+    .replace(/&amp;/g, '&');
+
+  const htmlContent = compiledTemplate({
+    ...ledgerData,
+    entitySubtextClean: cleanSubtext,
+    generatedDate: new Date().toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    generatedBy: requestedUser?.name || 'Sarfraz Khan (Accountant - Data Entry)',
+    logoBase64,
+    sarfrazSignBase64,
+    khurshidSignBase64,
+  });
+
+  const chromium = (await import('@sparticuz/chromium')).default;
+  const puppeteer = (await import('puppeteer-core')).default;
+
+  const localExecutablePath = getBrowserExecutablePath();
+  const executablePath = localExecutablePath || (await chromium.executablePath());
+  const launchOptions = {
+    headless: true,
+    args: localExecutablePath
+      ? [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ]
+      : chromium.args,
+    executablePath,
+  };
+
+  const browser = await puppeteer.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: 45000 });
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '10mm',
+        right: '10mm',
+        bottom: '12mm',
+        left: '10mm',
+      },
+    });
+
+    return pdfBuffer;
+  } finally {
+    await browser.close();
+  }
+};
+
+export default {
+  generateMonthlyFundsReport,
+  generateSingleVoucherPDF,
+  generateReceiptEvidencePDF,
+  generateLedgerPDF,
+};

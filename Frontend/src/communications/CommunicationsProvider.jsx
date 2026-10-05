@@ -435,8 +435,8 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
       const isSentBySelf = String(message.sender?.id || '') === selfId;
       if (isSentBySelf) return;
 
-      const senderName = message.sender?.name || (message.sender?.role === 'ADMIN' ? 'Admin Khurshid' : 'Data Entry Sarfraz');
-      const senderRole = message.sender?.role === 'ADMIN' ? 'Admin' : message.sender?.role === 'DATA_ENTRY' ? 'Data Entry' : '';
+      const senderName = message.sender?.name || (message.sender?.role === 'ADMIN' ? 'Admin Khurshid' : 'Sarfraz Khan');
+      const senderRole = message.sender?.role === 'ADMIN' ? 'Admin' : message.sender?.role === 'DATA_ENTRY' ? 'Accountant (Data Entry)' : '';
 
       const notification = {
         id: key,
@@ -713,7 +713,7 @@ export function CommunicationsProvider({ user, onOpenMessages, children }) {
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
                     toast.senderRole === 'Admin'
                       ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                      : toast.senderRole === 'Data Entry'
+                      : toast.senderRole === 'Accountant (Data Entry)'
                       ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                       : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                   }`}>

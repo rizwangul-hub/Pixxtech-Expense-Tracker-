@@ -525,12 +525,12 @@ export async function downloadReceiptEvidenceImage(entry, attachmentIndex = 0) {
   ctx.lineTo(width - 40, footY);
   ctx.stroke();
 
-  // Prepared By (Sarfraz)
+  // Prepared By (Sarfraz Khan)
   ctx.fillStyle = '#64748b';
   ctx.font = '11px Arial, sans-serif';
   ctx.fillText('Prepared By: ' + meta.submitter, 60, footY + 28);
   ctx.font = '10px Arial, sans-serif';
-  ctx.fillText('Data Entry & Operations', 60, footY + 44);
+  ctx.fillText('Accountant (Data Entry) & Operations', 60, footY + 44);
 
   // Verified By (Khurshid Anwar)
   ctx.fillStyle = '#64748b';

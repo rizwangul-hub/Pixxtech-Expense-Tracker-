@@ -82,7 +82,7 @@ export const isVerifier = (user) => {
 };
 
 /**
- * Check if a user is data entry role (Sarfraz)
+ * Check if a user has the Accountant (Data Entry) role
  * @param {Object} user
  * @returns {boolean}
  */

@@ -1393,7 +1393,7 @@ export const generateSalarySlipPDF = async (req, res) => {
         <tr>
           <td>
             ${sarfrazSignBase64 ? `<img src="${sarfrazSignBase64}" alt="Sarfraz Sign" />` : '<div style="height:36px;"></div>'}
-            <div class="sign-line">Sarfraz (Accountant)<br/><span>Prepared &amp; Checked By</span></div>
+            <div class="sign-line">Sarfraz Khan (Accountant - Data Entry)<br/><span>Prepared &amp; Checked By</span></div>
           </td>
           <td>
             ${khurshidSignBase64 ? `<img src="${khurshidSignBase64}" alt="Khurshid Sign" />` : '<div style="height:36px;"></div>'}
@@ -2803,7 +2803,7 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
       <div class="sign-section">
         <div class="sign-block">
           ${sarfrazSignBase64 ? `<img src="${sarfrazSignBase64}" alt="Sarfraz Sign" />` : '<div style="height:32px;"></div>'}
-          <div class="sign-line">Sarfraz (Accountant)<br/><span>Prepared &amp; Disbursed</span></div>
+          <div class="sign-line">Sarfraz Khan (Accountant - Data Entry)<br/><span>Prepared &amp; Disbursed</span></div>
         </div>
         <div class="sign-block">
           ${khurshidSignBase64 ? `<img src="${khurshidSignBase64}" alt="Khurshid Sign" />` : '<div style="height:32px;"></div>'}

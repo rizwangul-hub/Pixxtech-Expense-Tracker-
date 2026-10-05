@@ -839,7 +839,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
               Verification & Operations Control Center
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              Logged in as <span className="text-white font-semibold">{user?.name || 'Khurshid Anwar'}</span>. Review temporary entries submitted by Sarfraz, verify into central ledger, or record direct entries.
+              Logged in as <span className="text-white font-semibold">{user?.name || 'Khurshid Anwar'}</span>. Review temporary entries submitted by Sarfraz Khan (Accountant - Data Entry), verify into central ledger, or record direct entries.
             </p>
           </div>
 
@@ -854,7 +854,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
               }`}
             >
               <PlusCircle size={16} />
-              <span>{directEntryMode ? 'Close Direct Entry Mode' : 'Direct Data Entry Mode (Sarfraz View)'}</span>
+              <span>{directEntryMode ? 'Close Direct Entry Mode' : 'Direct Data Entry Mode (Accountant View)'}</span>
             </button>
 
             <button
@@ -1227,7 +1227,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                       {entry.entryType === 'SALARY' && <SalaryBreakdown entry={entry} />}
                     </div>
 
-                    {/* Attached Evidence (Uploaded by Sarfraz / Admin) */}
+                    {/* Attached Evidence (Uploaded by the Accountant or Admin) */}
                     {entryAttachments.length === 0 && (
                       <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 font-semibold mt-1">
                         <ImageIcon size={13} className="shrink-0 text-amber-300" />
@@ -1339,7 +1339,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
 
                     {/* Submitter & Time */}
                     <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                      <span>Submitted by: <strong className="text-slate-300">{entry.submittedByName || entry.submittedBy?.name || 'Sarfraz'}</strong></span>
+                      <span>Submitted by: <strong className="text-slate-300">{entry.submittedByName || entry.submittedBy?.name || 'Sarfraz Khan'}</strong></span>
                       <span>{new Date(entry.submittedAt || entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
 
@@ -1506,7 +1506,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
 
                         <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                           <div className="font-semibold text-slate-200">
-                            {entry.submittedByName || entry.submittedBy?.name || 'Sarfraz'}
+                            {entry.submittedByName || entry.submittedBy?.name || 'Sarfraz Khan'}
                           </div>
                           <div className="text-[10px] text-slate-500">
                             {new Date(entry.submittedAt || entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1528,7 +1528,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           )}
                           {entry.entryType === 'SALARY' && <SalaryBreakdown entry={entry} />}
 
-                          {/* Attached Evidence (Sarfraz / Admin) */}
+                          {/* Attached Evidence (Accountant / Admin) */}
                           {entryAttachments.length === 0 && (
                             <div className="mt-1 inline-flex items-center gap-1.5 rounded bg-slate-800 px-1.5 py-1 text-[11px] font-semibold text-slate-200">
                               <ImageIcon size={11} className="text-amber-300" />

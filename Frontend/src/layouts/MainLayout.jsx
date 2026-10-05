@@ -151,7 +151,7 @@ export function MainLayout({
       ? [
           {
             id: 'operational',
-            label: 'Data Entry Terminal',
+            label: 'Accountant (Data Entry) Terminal',
             icon: Receipt,
             status: 'active',
             badge: 'Operator',
@@ -439,7 +439,7 @@ export function MainLayout({
                       : 'bg-emerald-50 text-emerald-800 border-emerald-200/90'
                   }`}
                 >
-                  {userIsAdmin ? 'ADMINISTRATOR' : userIsVerifier ? 'VERIFIER' : 'DATA ENTRY'}
+                  {userIsAdmin ? 'ADMINISTRATOR' : userIsVerifier ? 'VERIFIER' : 'ACCOUNTANT (DATA ENTRY)'}
                 </span>
               </div>
             </div>

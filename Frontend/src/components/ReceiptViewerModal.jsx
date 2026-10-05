@@ -452,7 +452,7 @@ export function ReceiptViewerModal({ entry, onClose }) {
               onClick={handleDownloadRawPhoto}
               disabled={downloading}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700 disabled:opacity-50"
-              title="Download original raw photo uploaded by Sarfraz"
+              title="Download original raw photo uploaded by Sarfraz Khan"
             >
               <Download size={13} />
               <span>Original Photo</span>

@@ -298,7 +298,7 @@ export function MessagesCallsPage() {
       }));
       setMessages((current) => mergeMessages(current, [result]));
       wasAtBottomRef.current = true;
-      const recipientName = bootstrap?.peer?.name || (user?.role === 'ADMIN' ? 'Sarfraz' : 'Khurshid Anwar');
+      const recipientName = bootstrap?.peer?.name || (user?.role === 'ADMIN' ? 'Sarfraz Khan' : 'Khurshid Anwar');
       window.dispatchEvent(new CustomEvent('communications:alert', {
         detail: {
           title: `Message sent to ${recipientName}`,
@@ -348,7 +348,7 @@ export function MessagesCallsPage() {
       wasAtBottomRef.current = true;
       setVoicePreview(null);
       setImagePreview(null);
-      const recipientName = bootstrap?.peer?.name || (user?.role === 'ADMIN' ? 'Sarfraz' : 'Khurshid Anwar');
+      const recipientName = bootstrap?.peer?.name || (user?.role === 'ADMIN' ? 'Sarfraz Khan' : 'Khurshid Anwar');
       window.dispatchEvent(new CustomEvent('communications:alert', {
         detail: {
           title: `Message sent to ${recipientName}`,
