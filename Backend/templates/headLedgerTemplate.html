@@ -170,6 +170,10 @@
 
     .kpi-debit { color: #047857; }
     .kpi-credit { color: #b91c1c; }
+    .liquidity-ledger .kpi-debit,
+    .liquidity-ledger .debit-val { color: #b91c1c; }
+    .liquidity-ledger .kpi-credit,
+    .liquidity-ledger .credit-val { color: #047857; }
     .kpi-closing .kpi-val { color: #1e3a8a; }
 
     /* Transactions Table */
@@ -311,7 +315,7 @@
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="container{{#if isLiquidityLedger}} liquidity-ledger{{/if}}">
     <!-- Header -->
     <div class="header">
       <div class="header-left">
@@ -350,11 +354,15 @@
         <div class="kpi-val">{{formatPKR summary.openingBalance}}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Total Debit / In</div>
+        <div class="kpi-label">
+          {{#if isLiquidityLedger}}Total Debit / Out{{else}}Total Debit / In{{/if}}
+        </div>
         <div class="kpi-val kpi-debit">{{formatPKR summary.totalDebit}}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Total Credit / Out</div>
+        <div class="kpi-label">
+          {{#if isLiquidityLedger}}Total Credit / In{{else}}Total Credit / Out{{/if}}
+        </div>
         <div class="kpi-val kpi-credit">{{formatPKR summary.totalCredit}}</div>
       </div>
       <div class="kpi-card kpi-closing">

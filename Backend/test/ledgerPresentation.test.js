@@ -1,0 +1,53 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { getLiquidityLedgerAmounts } from '../services/ledgerPresentation.js';
+
+const bankAccountId = 'bank-account';
+
+test('liquidity ledger presents expenses and salary payments as debit/out', () => {
+  const amounts = getLiquidityLedgerAmounts({
+    drAccountId: 'salary-expense',
+    crAccountId: bankAccountId,
+    amount: 12500,
+  }, bankAccountId);
+
+  assert.deepEqual(amounts, {
+    debit: 12500,
+    credit: 0,
+    balanceChange: -12500,
+  });
+});
+
+test('liquidity ledger presents rent and other income as credit/in', () => {
+  const amounts = getLiquidityLedgerAmounts({
+    drAccountId: bankAccountId,
+    crAccountId: 'income-clearing',
+    amount: 8400,
+  }, bankAccountId);
+
+  assert.deepEqual(amounts, {
+    debit: 0,
+    credit: 8400,
+    balanceChange: 8400,
+  });
+});
+
+test('liquidity ledger preserves normal account balance movement on transfers', () => {
+  const outgoing = getLiquidityLedgerAmounts({
+    drAccountId: 'cash-account',
+    crAccountId: bankAccountId,
+    amount: 2500,
+  }, bankAccountId);
+  const incoming = getLiquidityLedgerAmounts({
+    drAccountId: bankAccountId,
+    crAccountId: 'cash-account',
+    amount: 2500,
+  }, bankAccountId);
+
+  assert.equal(outgoing.debit, 2500);
+  assert.equal(outgoing.credit, 0);
+  assert.equal(outgoing.balanceChange, -2500);
+  assert.equal(incoming.debit, 0);
+  assert.equal(incoming.credit, 2500);
+  assert.equal(incoming.balanceChange, 2500);
+});

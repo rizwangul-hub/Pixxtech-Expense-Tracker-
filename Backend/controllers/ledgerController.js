@@ -10,6 +10,7 @@ import OtherIncomeHead from '../models/OtherIncomeHead.js';
 import OtherIncome from '../models/OtherIncome.js';
 import Voucher from '../models/Voucher.js';
 import { round2, resolveTransactionAccountDisplay, getTransactionsFiltered } from '../services/ledgerService.js';
+import { getLiquidityLedgerAmounts } from '../services/ledgerPresentation.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { generateLedgerPDF, generateAllTransactionsPDF } from '../services/pdfReportService.js';
 
@@ -334,13 +335,18 @@ export const getLedgerReportData = async (queryParams = {}) => {
 
       let runningBal = openingBalance;
       ledgerEntries = transactions.map((tx) => {
-        const isDr = tx.drAccountId?._id?.toString() === entityId.toString();
-        const isCr = tx.crAccountId?._id?.toString() === entityId.toString();
+        const actualDebit = tx.drAccountId?._id?.toString() === entityId.toString() ? tx.amount : 0;
+        const actualCredit = tx.crAccountId?._id?.toString() === entityId.toString() ? tx.amount : 0;
+        const amounts = type === 'SUSPENSE'
+          ? {
+              debit: actualDebit,
+              credit: actualCredit,
+              balanceChange: actualDebit - actualCredit,
+            }
+          : getLiquidityLedgerAmounts(tx, entityId);
+        const { debit, credit, balanceChange } = amounts;
 
-        const debit = isDr ? tx.amount : 0;
-        const credit = isCr ? tx.amount : 0;
-
-        runningBal = round2(runningBal + debit - credit);
+        runningBal = round2(runningBal + balanceChange);
         totalDebit += debit;
         totalCredit += credit;
 
@@ -867,6 +873,7 @@ export const getLedgerReportData = async (queryParams = {}) => {
       entitySubtext,
       datePreset: datePresetDisplay,
       rawDatePreset: datePreset,
+      isLiquidityLedger: type === 'BANK' || type === 'CASH',
       summary: {
         openingBalance,
         totalDebit,
@@ -1024,4 +1031,3 @@ export default {
   downloadLedgerPDF,
   downloadAllTransactionsPDF,
 };
-

@@ -529,18 +529,28 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
 
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
                 <div className="text-[11px] font-bold uppercase text-slate-500 flex items-center gap-1">
-                  <ArrowDownLeft size={14} className="text-emerald-600" /> Total Debit / In
+                  {ledgerData.isLiquidityLedger ? (
+                    <ArrowUpRight size={14} className="text-rose-600" />
+                  ) : (
+                    <ArrowDownLeft size={14} className="text-emerald-600" />
+                  )}
+                  Total Debit / {ledgerData.isLiquidityLedger ? 'Out' : 'In'}
                 </div>
-                <div className="text-xl font-black font-mono text-emerald-700 mt-1">
+                <div className={`text-xl font-black font-mono mt-1 ${ledgerData.isLiquidityLedger ? 'text-rose-700' : 'text-emerald-700'}`}>
                   {formatPKR(summary.totalDebit)}
                 </div>
               </div>
 
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
                 <div className="text-[11px] font-bold uppercase text-slate-500 flex items-center gap-1">
-                  <ArrowUpRight size={14} className="text-rose-600" /> Total Credit / Out
+                  {ledgerData.isLiquidityLedger ? (
+                    <ArrowDownLeft size={14} className="text-emerald-600" />
+                  ) : (
+                    <ArrowUpRight size={14} className="text-rose-600" />
+                  )}
+                  Total Credit / {ledgerData.isLiquidityLedger ? 'In' : 'Out'}
                 </div>
-                <div className="text-xl font-black font-mono text-rose-700 mt-1">
+                <div className={`text-xl font-black font-mono mt-1 ${ledgerData.isLiquidityLedger ? 'text-emerald-700' : 'text-rose-700'}`}>
                   {formatPKR(summary.totalCredit)}
                 </div>
               </div>
@@ -639,10 +649,10 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
                         </td>
                         <td className="p-3 whitespace-nowrap text-slate-600">{tx.drAccount || '-'}</td>
                         <td className="p-3 whitespace-nowrap text-slate-600">{tx.crAccount || '-'}</td>
-                        <td className="p-3 whitespace-nowrap text-right font-mono font-bold text-emerald-700">
+                        <td className={`p-3 whitespace-nowrap text-right font-mono font-bold ${ledgerData.isLiquidityLedger ? 'text-rose-700' : 'text-emerald-700'}`}>
                           {tx.debit > 0 ? formatPKR(tx.debit) : '-'}
                         </td>
-                        <td className="p-3 whitespace-nowrap text-right font-mono font-bold text-rose-700">
+                        <td className={`p-3 whitespace-nowrap text-right font-mono font-bold ${ledgerData.isLiquidityLedger ? 'text-emerald-700' : 'text-rose-700'}`}>
                           {tx.credit > 0 ? formatPKR(tx.credit) : '-'}
                         </td>
                         <td className="p-3 whitespace-nowrap text-right font-mono font-black text-slate-900">
