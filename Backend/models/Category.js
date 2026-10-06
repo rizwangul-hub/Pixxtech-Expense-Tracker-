@@ -56,6 +56,11 @@ const categorySchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    excludeFromReports: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
   {
     timestamps: true,

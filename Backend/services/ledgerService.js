@@ -13,6 +13,8 @@ import {
   isSalaryHeadName,
   isNonExpenseChartCategory,
   isNonExpenseTransaction,
+  isOwnerPersonalCategory,
+  isOwnerPersonalTransaction,
   isHrSalaryTransaction,
   salaryChildHeadName,
 } from './expenseClassificationService.js';
@@ -270,10 +272,20 @@ export const createTransaction = async (data, externalSession = null) => {
     const categoryDoc = await Category.findById(data.categoryId).session(session || null);
     if (!categoryDoc) throw new Error(`Category not found with ID: ${data.categoryId}`);
 
+    // Check if category or its parent is Owner Personal or excluded from reports
+    let parentDoc = null;
+    if (categoryDoc?.parentCategoryId) {
+      parentDoc = await Category.findById(categoryDoc.parentCategoryId).session(session || null);
+    }
+    const isOwnerPersonalExpense =
+      data.transactionType === 'EXPENSE' &&
+      (isOwnerPersonalCategory(categoryDoc) || (parentDoc && isOwnerPersonalCategory(parentDoc)));
+
     // Determine report category
     let repCategory = data.reportCategory;
     if (!repCategory) {
-      if (data.transactionType === 'EXPENSE') repCategory = 'Payments';
+      if (isOwnerPersonalExpense) repCategory = 'Owner Personal';
+      else if (data.transactionType === 'EXPENSE') repCategory = 'Payments';
       else if (data.transactionType === 'INCOME') {
         repCategory = categoryDoc?.isRentalHead || data.rentMonth ? 'Rent' : 'Other Income';
       } else if (data.transactionType === 'TRANSFER') repCategory = 'Transfer';
@@ -284,7 +296,8 @@ export const createTransaction = async (data, externalSession = null) => {
     // Determine source module
     let srcModule = data.sourceModule;
     if (!srcModule) {
-      if (data.transactionType === 'INCOME') {
+      if (isOwnerPersonalExpense || repCategory === 'Owner Personal') srcModule = 'OWNER_PERSONAL';
+      else if (data.transactionType === 'INCOME') {
         srcModule = repCategory === 'Rent' ? 'RENT_RECEIVED' : 'OTHER_INCOME';
       } else if (data.transactionType === 'TRANSFER') srcModule = 'TRANSFER';
       else if (data.transactionType === 'OPENING_BALANCE') srcModule = 'OPENING_BALANCE';
@@ -661,7 +674,8 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
           // Only real EXPENSE transactions split into Rental vs Other Expenses
           const isOwnerPersonal =
             tx.sourceModule === 'OWNER_PERSONAL' ||
-            tx.reportCategory === 'Owner Personal';
+            tx.reportCategory === 'Owner Personal' ||
+            isOwnerPersonalTransaction(tx);
           if (isOwnerPersonal) {
             otherExpenses += tx.amount;
           } else {
@@ -1121,9 +1135,18 @@ export const createVoucherWithLines = async (payload, externalSession = null) =>
       const categoryDoc = await Category.findById(line.categoryId).session(session || null);
       if (!categoryDoc) throw new Error(`Category not found with ID: ${line.categoryId}`);
 
+      let parentDoc = null;
+      if (categoryDoc?.parentCategoryId) {
+        parentDoc = await Category.findById(categoryDoc.parentCategoryId).session(session || null);
+      }
+      const isOwnerPersonalExpense =
+        (categoryDoc.type === 'EXPENSE' || voucherType === 'EXPENSE') &&
+        (isOwnerPersonalCategory(categoryDoc) || (parentDoc && isOwnerPersonalCategory(parentDoc)));
+
       let repCat = line.reportCategory;
       if (!repCat) {
-        if (voucherType === 'EXPENSE') repCat = 'Payments';
+        if (isOwnerPersonalExpense) repCat = 'Owner Personal';
+        else if (voucherType === 'EXPENSE') repCat = 'Payments';
         else if (voucherType === 'RENT_RECEIPT') repCat = 'Rent';
         else if (voucherType === 'TRANSFER') repCat = 'Transfer';
         else if (voucherType === 'OPENING_BALANCE') repCat = 'Opening Balance';
@@ -1140,6 +1163,10 @@ export const createVoucherWithLines = async (payload, externalSession = null) =>
         else txType = 'EXPENSE';
       }
 
+      const lineSourceModule = isOwnerPersonalExpense || repCat === 'Owner Personal'
+        ? 'OWNER_PERSONAL'
+        : (line.sourceModule || sourceModule);
+
       // Create transaction line
       const [tx] = await Transaction.create(
         [
@@ -1151,7 +1178,7 @@ export const createVoucherWithLines = async (payload, externalSession = null) =>
             transactionType: txType,
             categoryId: line.categoryId,
             reportCategory: repCat,
-            sourceModule,
+            sourceModule: lineSourceModule,
             sourceId,
             drAccountId: line.drAccountId,
             crAccountId: line.crAccountId,
@@ -1473,7 +1500,8 @@ export const getTransactionsFiltered = async (filters = {}) => {
     } else if (t.transactionType === 'EXPENSE') {
       const isOwnerPersonal =
         t.sourceModule === 'OWNER_PERSONAL' ||
-        t.reportCategory === 'Owner Personal';
+        t.reportCategory === 'Owner Personal' ||
+        isOwnerPersonalTransaction(t);
       if (isOwnerPersonal) {
         // Boss/Owner Personal expenses → Other Expenses only
         totalOtherExpenses = round2(totalOtherExpenses + amt);

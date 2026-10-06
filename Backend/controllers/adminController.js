@@ -13,6 +13,7 @@ import {
   syncAccountBalances,
   round2,
 } from '../services/ledgerService.js';
+import { isOwnerPersonalCategory, isOwnerPersonalTransaction } from '../services/expenseClassificationService.js';
 
 /**
  * Helper to parse month query (defaults to current month)
@@ -319,6 +320,14 @@ export const updateTransactionMaster = async (req, res) => {
         tx.expenseClassification = category.expenseClassification || 'GENERAL_EXPENSE';
         if (propertyId === undefined) tx.propertyId = category.propertyId || null;
         if (unitId === undefined) tx.unitId = category.unitId || null;
+        const parentDoc = category.parentCategoryId ? await Category.findById(category.parentCategoryId).lean() : null;
+        if (isOwnerPersonalCategory(category) || (parentDoc && isOwnerPersonalCategory(parentDoc))) {
+          tx.reportCategory = 'Owner Personal';
+          tx.sourceModule = 'OWNER_PERSONAL';
+        } else if (tx.reportCategory === 'Owner Personal') {
+          tx.reportCategory = 'Payments';
+          tx.sourceModule = 'EXPENSE';
+        }
       }
     }
     if (req.body.incomeHeadId) {

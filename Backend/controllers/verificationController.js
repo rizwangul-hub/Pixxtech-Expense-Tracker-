@@ -910,7 +910,7 @@ export const verifyEntry = async (req, res) => {
       // Detect owner personal category to tag transaction correctly
       let ownerPersonalTag = {};
       if (entry.categoryId) {
-        const catDoc = await Category.findById(entry.categoryId).populate('parentCategoryId', 'name').lean();
+        const catDoc = await Category.findById(entry.categoryId).populate('parentCategoryId', 'name excludeFromReports').lean();
         const parentDoc = catDoc?.parentCategoryId && typeof catDoc.parentCategoryId === 'object' ? catDoc.parentCategoryId : null;
         if (isOwnerPersonalCategory(catDoc) || (parentDoc && isOwnerPersonalCategory(parentDoc))) {
           ownerPersonalTag = { reportCategory: 'Owner Personal', sourceModule: 'OWNER_PERSONAL' };

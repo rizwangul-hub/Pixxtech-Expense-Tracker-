@@ -57,6 +57,7 @@ const initialExpenseCategory = {
   parentCategoryId: '',
   isMainHead: false,
   isRentalHead: false,
+  excludeFromReports: false,
 };
 
 const initialIncomeHead = {
@@ -226,6 +227,7 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
         parentCategoryId: expenseCategory.parentCategoryId || null,
         isMainHead: expenseCategory.isMainHead,
         isRentalHead: expenseCategory.isRentalHead,
+        excludeFromReports: Boolean(expenseCategory.excludeFromReports),
       });
       const createdCat = res.data?.category || res.category;
       setExpenseCategory(
@@ -255,6 +257,7 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
         unitId: editingCategory.unitId || null,
         parentCategoryId: editingCategory.parentCategoryId || null,
         isMainHead: editingCategory.isMainHead,
+        excludeFromReports: Boolean(editingCategory.excludeFromReports),
       });
       setEditingCategory(null);
       notify('success', 'Expense head updated successfully.');
@@ -652,6 +655,42 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                   Create this as a main expense head (for example, IT Office or Rider Expenses)
                 </label>
 
+                {/* Report Inclusion Option (Yes / No like Boss Personal) */}
+                <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-lg space-y-2">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Include in Monthly Business Expense Reports? *
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <label className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition ${!expenseCategory.excludeFromReports ? 'bg-white border-blue-500 shadow-2xs' : 'bg-slate-50 border-slate-200 opacity-75'}`}>
+                      <input
+                        type="radio"
+                        name="reportInclusion"
+                        checked={!expenseCategory.excludeFromReports}
+                        onChange={() => setExpenseCategory({ ...expenseCategory, excludeFromReports: false })}
+                        className="mt-0.5 accent-blue-600"
+                      />
+                      <div>
+                        <div className="font-bold text-slate-900">Yes &bull; Normal Expense</div>
+                        <div className="text-[10px] text-slate-500 font-medium leading-tight">Included in monthly expense reports &amp; net business calculations.</div>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition ${expenseCategory.excludeFromReports ? 'bg-white border-rose-500 shadow-2xs' : 'bg-slate-50 border-slate-200 opacity-75'}`}>
+                      <input
+                        type="radio"
+                        name="reportInclusion"
+                        checked={expenseCategory.excludeFromReports}
+                        onChange={() => setExpenseCategory({ ...expenseCategory, excludeFromReports: true })}
+                        className="mt-0.5 accent-rose-600"
+                      />
+                      <div>
+                        <div className="font-bold text-rose-700">No &bull; Exclude from Reports</div>
+                        <div className="text-[10px] text-rose-600 font-medium leading-tight">Handled like Boss/Owner Personal (shows in bank ledger, excluded from business report).</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
                 {/* Head / Property & Unit Pickers */}
                 <div className="space-y-3 p-3 bg-white border border-slate-200 rounded-lg">
                   <div>
@@ -881,6 +920,11 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                               <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                                 <span>{c.name}</span>
                                 {c.isMainHead && <span className="text-[9px] uppercase text-rose-700 border border-rose-200 rounded px-1">Main Head</span>}
+                                {(c.excludeFromReports || /boss|owner personal|kamran ijaz|drawings|rishwat/i.test(c.name)) && (
+                                  <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1" title="Excluded from business expense reports (like Boss/Owner Personal)">
+                                    Excluded from Reports
+                                  </span>
+                                )}
                                 <Eye size={12} className="text-blue-600 opacity-60" />
                               </div>
                               {c.propertyId && (
@@ -1604,6 +1648,42 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                 </p>
               </div>
             )}
+
+            {/* Report Inclusion Option (Yes / No like Boss Personal) */}
+            <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-lg space-y-2">
+              <label className="block text-xs font-bold text-slate-800">
+                Include in Monthly Business Expense Reports? *
+              </label>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <label className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition ${!editingCategory.excludeFromReports ? 'bg-white border-blue-500 shadow-2xs' : 'bg-slate-50 border-slate-200 opacity-75'}`}>
+                  <input
+                    type="radio"
+                    name="editReportInclusion"
+                    checked={!editingCategory.excludeFromReports}
+                    onChange={() => setEditingCategory({ ...editingCategory, excludeFromReports: false })}
+                    className="mt-0.5 accent-blue-600"
+                  />
+                  <div>
+                    <div className="font-bold text-slate-900">Yes &bull; Normal Expense</div>
+                    <div className="text-[10px] text-slate-500 font-medium leading-tight">Included in monthly expense reports.</div>
+                  </div>
+                </label>
+
+                <label className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition ${editingCategory.excludeFromReports ? 'bg-white border-rose-500 shadow-2xs' : 'bg-slate-50 border-slate-200 opacity-75'}`}>
+                  <input
+                    type="radio"
+                    name="editReportInclusion"
+                    checked={editingCategory.excludeFromReports}
+                    onChange={() => setEditingCategory({ ...editingCategory, excludeFromReports: true })}
+                    className="mt-0.5 accent-rose-600"
+                  />
+                  <div>
+                    <div className="font-bold text-rose-700">No &bull; Exclude from Reports</div>
+                    <div className="text-[10px] text-rose-600 font-medium leading-tight">Handled like Boss Personal (bank ledger only).</div>
+                  </div>
+                </label>
+              </div>
+            </div>
 
             {/* Derived Scope Badge Preview */}
             <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs font-bold">

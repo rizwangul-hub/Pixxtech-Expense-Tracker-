@@ -911,6 +911,8 @@ export const createCategory = async (req, res) => {
       unitId,
     };
 
+    const excludeFromReports = Boolean(req.body.excludeFromReports);
+
     let category = await Category.findOne(queryFilter);
     if (!category) {
       category = await Category.create({
@@ -922,10 +924,16 @@ export const createCategory = async (req, res) => {
         parentCategoryId: isMainHead ? null : resolvedParentCategoryId,
         isMainHead,
         isRentalHead: !!req.body.isRentalHead,
+        excludeFromReports,
       });
-    } else if (!isMainHead && resolvedParentCategoryId && !category.parentCategoryId) {
-      category.parentCategoryId = resolvedParentCategoryId;
-      category.isMainHead = false;
+    } else {
+      if (!isMainHead && resolvedParentCategoryId && !category.parentCategoryId) {
+        category.parentCategoryId = resolvedParentCategoryId;
+        category.isMainHead = false;
+      }
+      if (req.body.excludeFromReports !== undefined) {
+        category.excludeFromReports = excludeFromReports;
+      }
       await category.save();
     }
 
@@ -973,6 +981,7 @@ export const createCategory = async (req, res) => {
             propertyId,
             unitId,
             isRentalHead: !!req.body.isRentalHead,
+            excludeFromReports: Boolean(req.body.excludeFromReports),
           });
         }
 
@@ -1054,6 +1063,7 @@ export const updateCategory = async (req, res) => {
     }
     category.name = name;
     if (req.body.isMainHead !== undefined) category.isMainHead = Boolean(req.body.isMainHead);
+    if (req.body.excludeFromReports !== undefined) category.excludeFromReports = Boolean(req.body.excludeFromReports);
     await category.save();
 
     const populated = await Category.findById(category._id)

@@ -437,8 +437,9 @@ const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$
 
 export const isOwnerPersonalCategory = (category = {}) => {
   if (!category || typeof category !== 'object') return false;
+  if (category.excludeFromReports === true) return true;
   const name = String(category.name || '').trim();
-  return /boss|owner personal|kamran ijaz|drawings|daughter.*fee|vehicle.*purchase|personal.*drawing|aleeha kamran/i.test(name);
+  return /boss|owner personal|kamran ijaz|drawings|daughter.*fee|vehicle.*purchase|personal.*drawing|aleeha kamran|rishwat/i.test(name);
 };
 
 export const isOwnerPersonalTransaction = (tx = {}) => {
@@ -460,7 +461,7 @@ export const isOwnerPersonalTransaction = (tx = {}) => {
   return (
     isOwnerPersonalCategory(category) ||
     isOwnerPersonalCategory(parent) ||
-    /boss|owner personal|kamran ijaz|drawings|daughter.*fee|vehicle.*purchase|personal.*drawing|aleeha kamran/i.test(categoryName) ||
+    /boss|owner personal|kamran ijaz|drawings|daughter.*fee|vehicle.*purchase|personal.*drawing|aleeha kamran|rishwat/i.test(categoryName) ||
     /boss|owner personal|kamran ijaz|drawings|daughter.*fee|vehicle.*purchase|personal.*drawing|aleeha kamran/i.test(parentName) ||
     /boss.*personal|kamran ijaz.*personal/i.test(detail)
   );
