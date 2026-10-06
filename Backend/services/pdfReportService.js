@@ -18,6 +18,7 @@ import {
 } from './ledgerService.js';
 import { getUtcMonthDateRange, getUtcMonthEndDate } from './salaryReportingService.js';
 import { isOwnerPersonalTransaction } from './expenseClassificationService.js';
+import { getLiquidityStatementAmounts } from './ledgerPresentation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -528,19 +529,20 @@ export const generateMonthlyFundsReport = async (monthYear) => {
       accountSubtitle = acc.name;
     }
 
-    const entries = statement.entries.map(e => ({
-      date: formatReportDate(e.date),
-      vn: e.voucherNo || '-',
-      detail: e.detail,
-      drAccount: isCash ? (e.drAmount ? e.counterpartyAccount : acc.name) : '',
-      crAccount: isCash ? (e.crAmount ? e.counterpartyAccount : acc.name) : '',
-      drAmount: e.drAmount,
-      crAmount: e.crAmount,
-      debit: e.crAmount,  // In bank statements, debit = withdrawal/expense
-      credit: e.drAmount, // In bank statements, credit = deposit/rent
-      balance: e.runningBalance,
-      isNeg: e.runningBalance < 0,
-    }));
+    const entries = statement.entries.map((e) => {
+      const amounts = getLiquidityStatementAmounts(e, acc.name);
+      return {
+        date: formatReportDate(e.date),
+        vn: e.voucherNo || '-',
+        detail: e.detail,
+        drAccount: isCash ? amounts.debitAccount : '',
+        crAccount: isCash ? amounts.creditAccount : '',
+        debit: amounts.debit,
+        credit: amounts.credit,
+        balance: e.runningBalance,
+        isNeg: e.runningBalance < 0,
+      };
+    });
 
     const priorDayDate = new Date(startDate.getTime() - 86400000);
     const priorDateStr = `${String(priorDayDate.getUTCDate()).padStart(2, '0')}-${String(priorDayDate.getUTCMonth() + 1).padStart(2, '0')}-${String(priorDayDate.getUTCFullYear()).slice(-2)}`;
@@ -553,8 +555,8 @@ export const generateMonthlyFundsReport = async (monthYear) => {
       priorDate: priorDateStr,
       openingBalance: statement.previousBalance,
       entries,
-      totalDr: isCash ? statement.totalDebits : statement.totalCredits, // deposits for bank
-      totalCr: isCash ? statement.totalCredits : statement.totalDebits, // withdrawals for bank
+      totalDr: statement.totalCredits,
+      totalCr: statement.totalDebits,
       closingBalance: statement.closingBalance,
       isClosingNeg: statement.closingBalance < 0,
     });
@@ -985,4 +987,3 @@ export default {
   generateLedgerPDF,
   generateAllTransactionsPDF,
 };
-

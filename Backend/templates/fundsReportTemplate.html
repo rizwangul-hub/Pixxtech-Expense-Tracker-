@@ -627,8 +627,8 @@
             <td>{{this.detail}}</td>
             <td style="font-size: 6.2pt;">{{this.drAccount}}</td>
             <td style="font-size: 6.2pt;">{{this.crAccount}}</td>
-            <td class="text-right font-mono" style="color: #047857;">{{#if this.drAmount}}{{formatInt this.drAmount}}{{else}}-{{/if}}</td>
-            <td class="text-right font-mono" style="color: #b91c1c;">{{#if this.crAmount}}{{formatInt this.crAmount}}{{else}}-{{/if}}</td>
+            <td class="text-right font-mono" style="color: #b91c1c;">{{#if this.debit}}{{formatInt this.debit}}{{else}}-{{/if}}</td>
+            <td class="text-right font-mono" style="color: #047857;">{{#if this.credit}}{{formatInt this.credit}}{{else}}-{{/if}}</td>
             <td class="text-right font-mono font-bold {{#if this.isNeg}}negative{{/if}}">{{formatPKR this.balance}}</td>
           </tr>
           {{/each}}

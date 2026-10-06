@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getLiquidityLedgerAmounts } from '../services/ledgerPresentation.js';
+import {
+  getLiquidityLedgerAmounts,
+  getLiquidityStatementAmounts,
+} from '../services/ledgerPresentation.js';
 
 const bankAccountId = 'bank-account';
 
@@ -50,4 +53,30 @@ test('liquidity ledger preserves normal account balance movement on transfers', 
   assert.equal(incoming.debit, 0);
   assert.equal(incoming.credit, 2500);
   assert.equal(incoming.balanceChange, 2500);
+});
+
+test('monthly bank and cash statements show expenses as debit/out', () => {
+  assert.deepEqual(getLiquidityStatementAmounts({
+    drAmount: 0,
+    crAmount: 12500,
+    counterpartyAccount: 'Salary Expense',
+  }, 'Cash in Hand'), {
+    debit: 12500,
+    credit: 0,
+    debitAccount: 'Salary Expense',
+    creditAccount: 'Cash in Hand',
+  });
+});
+
+test('monthly bank and cash statements show rent and other income as credit/in', () => {
+  assert.deepEqual(getLiquidityStatementAmounts({
+    drAmount: 8400,
+    crAmount: 0,
+    counterpartyAccount: 'Rental Income',
+  }, 'Cash in Hand'), {
+    debit: 0,
+    credit: 8400,
+    debitAccount: 'Cash in Hand',
+    creditAccount: 'Rental Income',
+  });
 });

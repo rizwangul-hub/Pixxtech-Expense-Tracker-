@@ -12,3 +12,10 @@ export const getLiquidityLedgerAmounts = (transaction, accountId) => {
     balanceChange: (isDebitAccount ? amount : 0) - (isCreditAccount ? amount : 0),
   };
 };
+
+export const getLiquidityStatementAmounts = (entry, accountName) => ({
+  debit: Number(entry.crAmount || 0),
+  credit: Number(entry.drAmount || 0),
+  debitAccount: entry.crAmount ? entry.counterpartyAccount : accountName,
+  creditAccount: entry.drAmount ? entry.counterpartyAccount : accountName,
+});
