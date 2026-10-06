@@ -309,6 +309,30 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
                 <option value="">★ All Properties &amp; Units (Consolidated)</option>
               ) : entities.length === 0 ? (
                 <option value="">{loadingEntities ? 'Loading entities...' : 'No entities available'}</option>
+              ) : isAccountHead && entities.some((e) => e.group) ? (
+                <>
+                  {entities.filter((e) => e.group === 'CONSOLIDATED').map((item) => (
+                    <option key={String(item.id)} value={String(item.id)}>
+                      {item.name}
+                    </option>
+                  ))}
+                  <optgroup label="Main Expense Heads">
+                    {entities.filter((e) => e.group === 'MAIN_HEADS').map((item) => (
+                      <option key={String(item.id)} value={String(item.id)}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {entities.some((e) => e.group === 'STANDALONE_HEADS') && (
+                    <optgroup label="Direct / Standalone Expense Heads">
+                      {entities.filter((e) => e.group === 'STANDALONE_HEADS').map((item) => (
+                        <option key={String(item.id)} value={String(item.id)}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </>
               ) : (
                 entities.map((item) => (
                   <option key={String(item.id)} value={String(item.id)}>
@@ -334,7 +358,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
                 disabled={filteredSubCategories.length === 0}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-semibold text-slate-900 focus:outline-none focus:border-blue-600 disabled:opacity-50 disabled:bg-slate-50"
               >
-                <option value="">— All sub-heads of this main head —</option>
+                <option value="">— All sub-heads of this head (Consolidated) —</option>
                 {filteredSubCategories.map((sc) => (
                   <option key={String(sc.id)} value={String(sc.id)}>
                     {sc.name}
@@ -351,6 +375,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
                 onChange={(e) => setDatePreset(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-blue-600"
               >
+                <option value="ALL">All Time (Full Ledger)</option>
                 <option value="THIS_MONTH">This Month</option>
                 <option value="PREVIOUS_MONTH">Previous Month</option>
                 <option value="TODAY">Today</option>
@@ -392,6 +417,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
                 onChange={(e) => setDatePreset(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-blue-600"
               >
+                <option value="ALL">All Time (Full Ledger)</option>
                 <option value="THIS_MONTH">This Month</option>
                 <option value="PREVIOUS_MONTH">Previous Month</option>
                 <option value="TODAY">Today</option>
@@ -530,13 +556,28 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
 
           {/* Transaction Table */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <h3 className="text-sm font-bold text-slate-900">
-                Posted Transactions History ({summary.entryCount || entries.length} Entries)
-              </h3>
-              <span className="text-xs font-semibold text-slate-500">
-                Official Real Database Records Only
-              </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-3 gap-2">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Posted Transactions History ({summary.entryCount || entries.length} Entries)
+                </h3>
+                <span className="text-xs font-semibold text-slate-500">
+                  Official Real Database Records &bull; {ledgerData?.ledgerTitle}
+                </span>
+              </div>
+              <button
+                onClick={handleDownloadPDF}
+                disabled={downloadingPdf || !ledgerData || loading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white font-bold text-xs shadow-sm transition self-start sm:self-auto"
+                title="Download Official A4 PDF Statement of this Head Ledger"
+              >
+                {downloadingPdf ? (
+                  <RefreshCw size={13} className="animate-spin text-white" />
+                ) : (
+                  <Download size={13} className="text-white" />
+                )}
+                <span>{downloadingPdf ? 'Exporting PDF...' : 'Download Head Ledger PDF'}</span>
+              </button>
             </div>
 
             {loading ? (

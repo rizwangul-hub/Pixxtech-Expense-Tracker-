@@ -15,8 +15,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
+  Download,
+  RefreshCw,
 } from 'lucide-react';
-import { accountsAPI } from '../services/api.js';
+import { accountsAPI, ledgersAPI } from '../services/api.js';
 import { formatPKR, formatDate } from '../utils/formatters.js';
 
 export function AccountLedgerPage({
@@ -77,8 +79,46 @@ export function AccountLedgerPage({
 
   const isBank = account?.type === 'BANK';
 
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!accountId) return;
+    try {
+      setDownloadingPdf(true);
+      setErrorMsg('');
+      const safeTitle = (account?.accountName || account?.name || 'Account')
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .replace(/__+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 50);
+      const filename = `Pixx_Technologies_Ledger_${safeTitle || 'Account'}_${selectedMonth === 'ALL' ? 'Full' : selectedMonth}.pdf`;
+
+      const type = isBank ? 'BANK' : account?.type === 'SUSPENSE' ? 'SUSPENSE' : 'CASH';
+
+      const params = {
+        type,
+        entityId: accountId,
+        datePreset: selectedMonth === 'ALL' ? 'ALL' : 'CUSTOM',
+      };
+
+      if (selectedMonth && selectedMonth !== 'ALL') {
+        const [year, month] = selectedMonth.split('-');
+        const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+        params.startDate = `${selectedMonth}-01`;
+        params.endDate = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
+      }
+
+      await ledgersAPI.downloadLedgerPDF(params, filename);
+    } catch (err) {
+      console.error('Failed to download account ledger PDF:', err);
+      setErrorMsg(err.response?.data?.message || err.message || 'Failed to generate PDF. Please try again.');
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   return (
@@ -103,6 +143,19 @@ export function AccountLedgerPage({
               Transfer In / Out
             </button>
           )}
+          <button
+            onClick={handleDownloadPDF}
+            disabled={downloadingPdf || !ledgerData}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 border border-blue-600 px-3 py-2 rounded-lg transition shadow-sm"
+            title="Download Official A4 PDF Statement of this Account"
+          >
+            {downloadingPdf ? (
+              <RefreshCw size={14} className="animate-spin text-white" />
+            ) : (
+              <Download size={14} className="text-white" />
+            )}
+            <span>{downloadingPdf ? 'Exporting PDF...' : 'Download PDF Statement'}</span>
+          </button>
           <button
             onClick={handlePrint}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-900 border border-slate-800 px-3 py-2 rounded-lg transition"

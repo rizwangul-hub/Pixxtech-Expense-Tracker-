@@ -64,6 +64,12 @@ const parseDateRange = (datePreset, startDate, endDate, asOnDate) => {
       }
       break;
     }
+    case 'ALL':
+    case 'ALL_TIME': {
+      periodStart = null;
+      periodEnd = null;
+      break;
+    }
     default:
       break;
   }
@@ -123,8 +129,21 @@ export const getLedgerEntities = async (req, res) => {
     }
 
     if (!type || type === 'ACCOUNT_HEAD') {
-      // Return only main expense heads (top-level categories)
-      const mainHeads = await Category.find({ isMainHead: true }).sort({ name: 1 }).lean();
+      // Return main expense heads and standalone top-level heads
+      const topHeads = await Category.find({
+        type: { $ne: 'INCOME' },
+        $or: [
+          { isMainHead: true },
+          { parentCategoryId: null },
+          { parentCategoryId: { $exists: false } },
+        ],
+      })
+        .sort({ name: 1 })
+        .lean();
+
+      const mainHeads = topHeads.filter((c) => c.isMainHead);
+      const standaloneHeads = topHeads.filter((c) => !c.isMainHead);
+
       results.categories = [
         {
           id: 'ALL_EXPENSES',
@@ -132,6 +151,7 @@ export const getLedgerEntities = async (req, res) => {
           type: 'ACCOUNT_HEAD',
           subtext: 'Complete expense ledger across all heads',
           isMainHead: true,
+          group: 'CONSOLIDATED',
         },
         ...mainHeads.map((c) => ({
           id: c._id,
@@ -139,13 +159,25 @@ export const getLedgerEntities = async (req, res) => {
           type: c.type || 'EXPENSE',
           subtext: `Main Head • ${c.type || 'EXPENSE'}`,
           isMainHead: true,
+          group: 'MAIN_HEADS',
+        })),
+        ...standaloneHeads.map((c) => ({
+          id: c._id,
+          name: c.name,
+          type: c.type || 'EXPENSE',
+          subtext: `Direct Head • ${c.type || 'EXPENSE'}`,
+          isMainHead: false,
+          group: 'STANDALONE_HEADS',
         })),
       ];
     }
 
     if (!type || type === 'CATEGORY' || type === 'EXPENSE' || type === 'ACCOUNT_HEAD') {
-      // Return all sub-categories (non main-heads) for the sub-category drilldown
-      const cats = await Category.find({ isMainHead: { $ne: true } })
+      // Return all sub-categories (non main-heads or with parent) for sub-category drilldown
+      const cats = await Category.find({
+        type: { $ne: 'INCOME' },
+        parentCategoryId: { $exists: true, $ne: null },
+      })
         .sort({ name: 1 })
         .populate('parentCategoryId', 'name')
         .lean();
@@ -815,12 +847,25 @@ export const getLedgerReportData = async (queryParams = {}) => {
       closingBalance = round2(runningBal);
     }
 
+    let datePresetDisplay = datePreset;
+    if (datePreset === 'THIS_MONTH') datePresetDisplay = 'This Month';
+    else if (datePreset === 'PREVIOUS_MONTH') datePresetDisplay = 'Previous Month';
+    else if (datePreset === 'TODAY') datePresetDisplay = 'Today';
+    else if (datePreset === 'THIS_WEEK') datePresetDisplay = 'This Week';
+    else if (datePreset === 'ALL' || datePreset === 'ALL_TIME') datePresetDisplay = 'All Time (Full History)';
+    else if (datePreset === 'CUSTOM' && (startDate || endDate)) {
+      datePresetDisplay = `${startDate || 'Start'} to ${endDate || 'Latest'}`;
+    } else if (datePreset === 'AS_ON_DATE' && asOnDate) {
+      datePresetDisplay = `As on ${asOnDate}`;
+    }
+
     // Return unified central ledger payload
     return {
       type,
       ledgerTitle,
       entitySubtext,
-      datePreset,
+      datePreset: datePresetDisplay,
+      rawDatePreset: datePreset,
       summary: {
         openingBalance,
         totalDebit,

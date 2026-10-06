@@ -115,6 +115,7 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
   const [selectedIncomeHeadForLedger, setSelectedIncomeHeadForLedger] = useState(null);
   const [incomeHeadLedgerData, setIncomeHeadLedgerData] = useState(null);
   const [loadingIncomeHeadLedger, setLoadingIncomeHeadLedger] = useState(false);
+  const [downloadingPdfHead, setDownloadingPdfHead] = useState(false);
 
   const handleViewHeadDetails = async (category) => {
     setSelectedHeadForDetails(category);
@@ -1543,7 +1544,46 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
               )}
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!selectedHeadForDetails?._id) return;
+                  try {
+                    setDownloadingPdfHead(true);
+                    const safeName = (selectedHeadForDetails.name || 'Expense_Head')
+                      .replace(/[^a-zA-Z0-9_-]/g, '_')
+                      .replace(/__+/g, '_')
+                      .replace(/^_+|_+$/g, '')
+                      .slice(0, 50);
+                    const filename = `Pixx_Technologies_Head_Ledger_${safeName}.pdf`;
+                    await ledgersAPI.downloadLedgerPDF(
+                      {
+                        type: 'ACCOUNT_HEAD',
+                        entityId: selectedHeadForDetails._id,
+                        datePreset: 'ALL',
+                      },
+                      filename
+                    );
+                  } catch (err) {
+                    console.error('Failed to download head ledger PDF:', err);
+                    alert(err.response?.data?.message || err.message || 'Failed to download Head Ledger PDF.');
+                  } finally {
+                    setDownloadingPdfHead(false);
+                  }
+                }}
+                disabled={downloadingPdfHead}
+                className="px-4 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-sm"
+                title="Download Official A4 PDF Statement for this Expense Head"
+              >
+                {downloadingPdfHead ? (
+                  <RefreshCw size={14} className="animate-spin text-white" />
+                ) : (
+                  <Download size={14} className="text-white" />
+                )}
+                <span>{downloadingPdfHead ? 'Exporting PDF...' : 'Download Head Ledger PDF'}</span>
+              </button>
+
               <button
                 onClick={() => setSelectedHeadForDetails(null)}
                 className="px-4 py-2 rounded-xl bg-slate-800 text-white font-bold text-xs hover:bg-slate-900 transition"
@@ -1889,19 +1929,57 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
               )}
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-              {onNavigateToLedgers ? (
+            <div className="flex items-center justify-between pt-2 border-t border-slate-200 gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                {onNavigateToLedgers && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedIncomeHeadForLedger(null);
+                      onNavigateToLedgers('OTHER_INCOME', selectedIncomeHeadForLedger._id);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 font-bold text-xs hover:bg-teal-100 transition flex items-center gap-1.5"
+                  >
+                    <BookOpen size={14} /> Open in Central Ledger Screen
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedIncomeHeadForLedger(null);
-                    onNavigateToLedgers('OTHER_INCOME', selectedIncomeHeadForLedger._id);
+                  onClick={async () => {
+                    if (!selectedIncomeHeadForLedger?._id) return;
+                    try {
+                      setDownloadingPdfHead(true);
+                      const safeName = (selectedIncomeHeadForLedger.name || 'Income_Head')
+                        .replace(/[^a-zA-Z0-9_-]/g, '_')
+                        .slice(0, 50);
+                      const filename = `Pixx_Technologies_Income_Head_${safeName}.pdf`;
+                      await ledgersAPI.downloadLedgerPDF(
+                        {
+                          type: 'OTHER_INCOME',
+                          entityId: selectedIncomeHeadForLedger._id,
+                          datePreset: 'ALL',
+                        },
+                        filename
+                      );
+                    } catch (err) {
+                      console.error('Failed to download income head ledger PDF:', err);
+                      alert(err.response?.data?.message || err.message || 'Failed to download Income Head PDF.');
+                    } finally {
+                      setDownloadingPdfHead(false);
+                    }
                   }}
-                  className="px-4 py-2 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 font-bold text-xs hover:bg-teal-100 transition flex items-center gap-1.5"
+                  disabled={downloadingPdfHead}
+                  className="px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-sm"
+                  title="Download Official A4 PDF Statement for this Income Head"
                 >
-                  <BookOpen size={14} /> Open in Central Ledger Screen
+                  {downloadingPdfHead ? (
+                    <RefreshCw size={14} className="animate-spin text-white" />
+                  ) : (
+                    <Download size={14} className="text-white" />
+                  )}
+                  <span>{downloadingPdfHead ? 'Exporting PDF...' : 'Download Income Ledger PDF'}</span>
                 </button>
-              ) : <div />}
+              </div>
 
               <button
                 type="button"
