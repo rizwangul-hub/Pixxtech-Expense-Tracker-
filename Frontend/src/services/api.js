@@ -859,7 +859,24 @@ export const ledgersAPI = {
     window.URL.revokeObjectURL(downloadUrl);
     return true;
   },
+  downloadAllTransactionsPDF: async (params = {}, fallbackFilename) => {
+    const res = await api.get('/ledgers/download-all-transactions-pdf', {
+      params,
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = fallbackFilename || 'Pixx_Technologies_Central_Ledger.pdf';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+    return true;
+  },
 };
+
 
 // Staff Management API
 export const staffAPI = {

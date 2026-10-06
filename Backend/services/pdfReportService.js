@@ -85,6 +85,12 @@ handlebars.registerHelper('isNegative', (val) => Number(val) < 0);
 handlebars.registerHelper('isEven', (index) => index % 2 === 0);
 handlebars.registerHelper('addOne', (val) => Number(val) + 1);
 handlebars.registerHelper('gtZero', (val) => Number(val) > 0);
+handlebars.registerHelper('eq', (a, b) => a === b);
+handlebars.registerHelper('statusColor', (status) => {
+  const map = { POSTED: '#047857', VERIFIED: '#1e40af', REVERSED: '#b91c1c', VOID: '#6b7280' };
+  return map[status] || '#475569';
+});
+
 
 /**
  * Locate a valid browser executable (Edge, Chrome, or default Puppeteer Chromium)
@@ -894,9 +900,89 @@ export const generateLedgerPDF = async (ledgerData, requestedUser) => {
   }
 };
 
+/**
+ * @desc  Generate a landscape A4 PDF for the All Transactions — Central Financial Ledger
+ * @param {object} data  { transactions, summary, totalCount, periodLabel, filterSummary }
+ * @param {object} requestedUser
+ */
+export const generateAllTransactionsPDF = async (data, requestedUser) => {
+  const { resolveTransactionAccountDisplay } = await import('./ledgerService.js');
+
+  const templatePath = path.join(__dirname, '..', 'templates', 'allTransactionsTemplate.html');
+  const templateSource = fs.readFileSync(templatePath, 'utf8');
+  const compiledTemplate = handlebars.compile(templateSource);
+
+  // Shape each transaction for the template
+  const rows = (data.transactions || []).map((tx) => {
+    const acc = resolveTransactionAccountDisplay(tx);
+    return {
+      date: tx.date,
+      voucherNo: tx.voucherNo || '-',
+      transactionType: tx.transactionType || 'OTHER',
+      detail: tx.detail || tx.description || '-',
+      propertyName: tx.propertyId?.plazaName || tx.propertyId?.location || '',
+      headName: tx.categoryId?.name || tx.categoryName || '-',
+      parentHeadName: tx.categoryId?.parentCategoryId?.name || '',
+      drAccount: acc.dr || tx.drAccountId?.name || '-',
+      crAccount: acc.cr || tx.crAccountId?.name || '-',
+      status: tx.status || '-',
+      amount: tx.amount || 0,
+    };
+  });
+
+  const htmlContent = compiledTemplate({
+    transactions: rows,
+    summary: data.summary || {},
+    totalCount: data.totalCount || rows.length,
+    periodLabel: data.periodLabel || 'Selected Period',
+    filterSummary: data.filterSummary || '',
+    generatedDate: new Date().toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    generatedBy: requestedUser?.name || 'Sarfraz Khan (Accountant - Data Entry)',
+    logoBase64,
+    sarfrazSignBase64,
+    khurshidSignBase64,
+  });
+
+  const chromium = (await import('@sparticuz/chromium')).default;
+  const puppeteer = (await import('puppeteer-core')).default;
+
+  const localExecutablePath = getBrowserExecutablePath();
+  const executablePath = localExecutablePath || (await chromium.executablePath());
+  const launchOptions = {
+    headless: true,
+    args: localExecutablePath
+      ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+      : chromium.args,
+    executablePath,
+  };
+
+  const browser = await puppeteer.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: 60000 });
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      landscape: true,
+      printBackground: true,
+      margin: { top: '8mm', right: '10mm', bottom: '10mm', left: '10mm' },
+    });
+    return pdfBuffer;
+  } finally {
+    await browser.close();
+  }
+};
+
 export default {
   generateMonthlyFundsReport,
   generateSingleVoucherPDF,
   generateReceiptEvidencePDF,
   generateLedgerPDF,
+  generateAllTransactionsPDF,
 };
+

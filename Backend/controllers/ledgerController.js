@@ -9,9 +9,10 @@ import Category from '../models/Category.js';
 import OtherIncomeHead from '../models/OtherIncomeHead.js';
 import OtherIncome from '../models/OtherIncome.js';
 import Voucher from '../models/Voucher.js';
-import { round2, resolveTransactionAccountDisplay } from '../services/ledgerService.js';
+import { round2, resolveTransactionAccountDisplay, getTransactionsFiltered } from '../services/ledgerService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
-import { generateLedgerPDF } from '../services/pdfReportService.js';
+import { generateLedgerPDF, generateAllTransactionsPDF } from '../services/pdfReportService.js';
+
 
 /**
  * Utility to parse date presets (TODAY, THIS_WEEK, THIS_MONTH, PREVIOUS_MONTH, CUSTOM, AS_ON_DATE)
@@ -927,9 +928,100 @@ export const downloadLedgerPDF = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Download Official PDF for All Transactions — Central Financial Ledger
+ * @route   GET /api/ledgers/download-all-transactions-pdf
+ * @access  Private (Authenticated)
+ */
+export const downloadAllTransactionsPDF = async (req, res) => {
+  try {
+    const {
+      month,
+      startDate,
+      endDate,
+      search,
+      voucherNo,
+      categoryId,
+      reportCategory,
+      drAccountId,
+      crAccountId,
+      propertyId,
+      expenseClassification,
+      transactionType,
+      status,
+    } = req.query;
+
+    // Fetch ALL matching transactions (no pagination limit — cap at 5000 for safety)
+    const result = await getTransactionsFiltered({
+      month,
+      startDate,
+      endDate,
+      search,
+      voucherNo,
+      categoryId,
+      reportCategory,
+      drAccountId,
+      crAccountId,
+      propertyId,
+      expenseClassification,
+      transactionType,
+      status,
+      page: 1,
+      limit: 5000,
+    });
+
+    // Build human-readable period label
+    let periodLabel = 'All Records';
+    if (month) {
+      const [y, m] = month.split('-');
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      periodLabel = `${monthNames[parseInt(m, 10) - 1]} ${y}`;
+    } else if (startDate && endDate) {
+      periodLabel = `${startDate} to ${endDate}`;
+    } else if (startDate) {
+      periodLabel = `From ${startDate}`;
+    } else if (endDate) {
+      periodLabel = `Up to ${endDate}`;
+    }
+
+    // Build filter summary string
+    const filterParts = [];
+    if (transactionType && transactionType !== 'ALL') filterParts.push(`Type: ${transactionType}`);
+    if (reportCategory && reportCategory !== 'ALL') filterParts.push(`Category: ${reportCategory}`);
+    if (expenseClassification && expenseClassification !== 'ALL') filterParts.push(`Classification: ${expenseClassification}`);
+    if (status && status !== 'ALL') filterParts.push(`Status: ${status}`);
+    if (search) filterParts.push(`Search: "${search}"`);
+    if (voucherNo) filterParts.push(`Voucher: ${voucherNo}`);
+
+    const pdfBuffer = await generateAllTransactionsPDF(
+      {
+        transactions: result.transactions,
+        summary: result.summary,
+        totalCount: result.pagination.total,
+        periodLabel,
+        filterSummary: filterParts.length ? filterParts.join(' | ') : '',
+      },
+      req.user
+    );
+
+    const datePart = month || new Date().toISOString().slice(0, 7);
+    const filename = `Pixx_Technologies_Central_Ledger_${datePart.replace(/-/g, '_')}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.status(200).send(pdfBuffer);
+  } catch (error) {
+    console.error('[Download All Transactions PDF Error]:', error);
+    return apiError(res, error.message || 'Failed to generate transactions PDF.', 500);
+  }
+};
+
 export default {
   getLedgerEntities,
   getLedgerReportData,
   queryLedger,
   downloadLedgerPDF,
+  downloadAllTransactionsPDF,
 };
+

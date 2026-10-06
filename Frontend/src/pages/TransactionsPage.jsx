@@ -30,7 +30,7 @@ import {
   Paperclip,
   Image as ImageIcon,
 } from 'lucide-react';
-import { vouchersAPI, accountsAPI } from '../services/api.js';
+import { vouchersAPI, accountsAPI, ledgersAPI } from '../services/api.js';
 import { formatPKR, formatDate, resolveTransactionAccounts } from '../utils/formatters.js';
 import { isAdmin } from '../utils/permissions.js';
 import { SingleVoucherPrintModal } from '../components/SingleVoucherPrintModal.jsx';
@@ -81,6 +81,7 @@ export function TransactionsPage({ user }) {
   const [reverseReason, setReverseReason] = useState('');
   const [reversing, setReversing] = useState(false);
   const [selectedReceiptTx, setSelectedReceiptTx] = useState(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // New Voucher Form State
   const [voucherForm, setVoucherForm] = useState({
@@ -390,6 +391,41 @@ export function TransactionsPage({ user }) {
     }
   };
 
+  // Download All Transactions PDF
+  const handleDownloadPDF = async () => {
+    try {
+      setDownloadingPdf(true);
+      const params = {};
+      if (useDateRange) {
+        if (startDate) params.startDate = startDate;
+        if (endDate) params.endDate = endDate;
+      } else if (month) {
+        params.month = month;
+      }
+      if (search.trim()) params.search = search.trim();
+      if (voucherNo.trim()) params.voucherNo = voucherNo.trim();
+      if (categoryId) params.categoryId = categoryId;
+      if (reportCategory && reportCategory !== 'ALL') params.reportCategory = reportCategory;
+      if (drAccountId) params.drAccountId = drAccountId;
+      if (crAccountId) params.crAccountId = crAccountId;
+      if (propertyId) params.propertyId = propertyId;
+      if (expenseClassification !== 'ALL') params.expenseClassification = expenseClassification;
+      if (transactionType && transactionType !== 'ALL') params.transactionType = transactionType;
+      if (status && status !== 'ALL') params.status = status;
+
+      const datePart = (month || new Date().toISOString().slice(0, 7)).replace(/-/g, '_');
+      await ledgersAPI.downloadAllTransactionsPDF(
+        params,
+        `Pixx_Technologies_Central_Ledger_${datePart}.pdf`
+      );
+    } catch (err) {
+      console.error('Failed to download transactions PDF:', err);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* 1. Header & Quick Controls */}
@@ -464,6 +500,17 @@ export function TransactionsPage({ user }) {
             title="Refresh Ledger"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadPDF}
+            disabled={downloadingPdf || loading}
+            className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-lg shadow-emerald-700/20 transition"
+            title="Download all visible transactions as PDF"
+          >
+            <Download className={`w-4 h-4 ${downloadingPdf ? 'animate-pulse' : ''}`} />
+            <span>{downloadingPdf ? 'Generating…' : 'Download PDF'}</span>
           </button>
 
           <button

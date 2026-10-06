@@ -1,5 +1,5 @@
 import express from 'express';
-import { getLedgerEntities, queryLedger, downloadLedgerPDF } from '../controllers/ledgerController.js';
+import { getLedgerEntities, queryLedger, downloadLedgerPDF, downloadAllTransactionsPDF } from '../controllers/ledgerController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -17,6 +17,12 @@ router.use(authorize('ADMIN', 'ADMIN_PUBLISHER', 'VERIFIER', 'VERIFICATION_MANAG
 router.get('/download-pdf', downloadLedgerPDF);
 
 /**
+ * GET /api/ledgers/download-all-transactions-pdf
+ * @desc Download official landscape A4 PDF for All Transactions — Central Financial Ledger
+ */
+router.get('/download-all-transactions-pdf', downloadAllTransactionsPDF);
+
+/**
  * GET /api/ledgers/entities
  * @desc Get searchable list of entities per ledger type
  */
@@ -29,3 +35,4 @@ router.get('/entities', getLedgerEntities);
 router.get('/query', queryLedger);
 
 export default router;
+
