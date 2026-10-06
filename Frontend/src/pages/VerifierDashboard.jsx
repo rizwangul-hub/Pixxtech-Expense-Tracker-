@@ -1323,6 +1323,17 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                             <span className="text-slate-200 font-semibold">{entry.crAccountId?.name || '—'}</span>
                           </div>
                         </>
+                      ) : entry.entryType === 'OTHER_INCOME' ? (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-emerald-400 font-bold">Dr (Received In):</span>
+                            <span className="text-slate-200 font-semibold">{entry.drAccountId?.name || entry.receivingAccountId?.name || 'Receiving Account'}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-rose-400 font-bold">Cr (Income Head):</span>
+                            <span className="text-slate-200 font-semibold">{entry.categoryId?.name || 'Other Income'}</span>
+                          </div>
+                        </>
                       ) : (
                         <>
                           <div className="flex items-center justify-between">
@@ -1608,6 +1619,17 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                               <div>
                                 <span className="text-rose-400 font-bold">Cr (Paying): </span>
                                 <span className="text-slate-200 font-medium">{entry.crAccountId?.name || 'Credit Account'}</span>
+                              </div>
+                            </div>
+                          ) : entry.entryType === 'OTHER_INCOME' ? (
+                            <div className="space-y-0.5">
+                              <div>
+                                <span className="text-emerald-400 font-bold">Dr: </span>
+                                <span className="text-slate-200 font-medium">{entry.drAccountId?.name || entry.receivingAccountId?.name || 'Receiving Account'}</span>
+                              </div>
+                              <div>
+                                <span className="text-rose-400 font-bold">Cr: </span>
+                                <span className="text-slate-200 font-medium">{entry.categoryId?.name || 'Other Income'}</span>
                               </div>
                             </div>
                           ) : (
