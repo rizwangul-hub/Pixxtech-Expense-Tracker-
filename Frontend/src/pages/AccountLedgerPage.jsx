@@ -308,7 +308,7 @@ export function AccountLedgerPage({
             </div>
           </div>
 
-          {/* Inflows (Debits) */}
+          {/* Inflows (Credits in bank-statement view) */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
             <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
               <ArrowDownLeft size={12} />
@@ -317,10 +317,10 @@ export function AccountLedgerPage({
             <div className="text-base sm:text-lg font-black font-mono text-emerald-400 mt-1">
               +{formatPKR(summary.totalMoneyIn ?? 0)}
             </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">Total debits / collections</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Total inflows / receipts / deposits</div>
           </div>
 
-          {/* Outflows (Credits) */}
+          {/* Outflows (Debits in bank-statement view) */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
             <div className="text-[10px] font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1">
               <ArrowUpRight size={12} />
@@ -329,7 +329,7 @@ export function AccountLedgerPage({
             <div className="text-base sm:text-lg font-black font-mono text-rose-400 mt-1">
               -{formatPKR(summary.totalMoneyOut ?? 0)}
             </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">Total credits / disbursements</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Total outflows / payments / withdrawals</div>
           </div>
 
           {/* Net Period Movement */}
@@ -407,8 +407,8 @@ export function AccountLedgerPage({
                 <th className="py-3 px-3.5">Detail / Narration</th>
                 <th className="py-3 px-3.5">Account Head</th>
                 <th className="py-3 px-3.5">Contra Account</th>
-                <th className="py-3 px-3.5 text-right">Debit (Inflow)</th>
-                <th className="py-3 px-3.5 text-right">Credit (Outflow)</th>
+                <th className="py-3 px-3.5 text-right">Debit (Outflow)</th>
+                <th className="py-3 px-3.5 text-right">Credit (Inflow)</th>
                 <th className="py-3 px-3.5 text-right">Running Balance</th>
                 <th className="py-3 px-3.5 text-center">Status</th>
               </tr>
@@ -486,26 +486,27 @@ export function AccountLedgerPage({
                         <span className="truncate">{row.categoryName || 'General'}</span>
                       </td>
 
-                      {/* Contra Account */}
+                      {/* Contra Account — for outflow (debit), drAccount is the expense head;
+                          for inflow (credit), crAccount is the income source */}
                       <td className="py-2.5 px-3.5 font-sans whitespace-nowrap max-w-xs text-slate-400">
                         <span className="truncate">
-                          {hasDebit ? row.crAccount : row.drAccount}
+                          {hasDebit ? row.drAccount : row.crAccount}
                         </span>
                       </td>
 
-                      {/* Debit */}
+                      {/* Debit = Outflow / Payment — shown in rose/red */}
                       <td className="py-2.5 px-3.5 text-right font-mono font-semibold">
                         {hasDebit ? (
-                          <span className="text-emerald-400">+{formatPKR(row.debit)}</span>
+                          <span className="text-rose-400">-{formatPKR(row.debit)}</span>
                         ) : (
                           <span className="text-slate-600">—</span>
                         )}
                       </td>
 
-                      {/* Credit */}
+                      {/* Credit = Inflow / Receipt — shown in emerald/green */}
                       <td className="py-2.5 px-3.5 text-right font-mono font-semibold">
                         {hasCredit ? (
-                          <span className="text-rose-400">-{formatPKR(row.credit)}</span>
+                          <span className="text-emerald-400">+{formatPKR(row.credit)}</span>
                         ) : (
                           <span className="text-slate-600">—</span>
                         )}
@@ -534,11 +535,11 @@ export function AccountLedgerPage({
                   <td colSpan="5" className="py-3 px-3.5 uppercase tracking-wider text-slate-400 font-sans text-[11px]">
                     Period Totals & Closing Position:
                   </td>
-                  <td className="py-3 px-3.5 text-right font-mono text-emerald-400">
-                    +{formatPKR(summary.totalMoneyIn ?? 0)}
-                  </td>
                   <td className="py-3 px-3.5 text-right font-mono text-rose-400">
                     -{formatPKR(summary.totalMoneyOut ?? 0)}
+                  </td>
+                  <td className="py-3 px-3.5 text-right font-mono text-emerald-400">
+                    +{formatPKR(summary.totalMoneyIn ?? 0)}
                   </td>
                   <td className="py-3 px-3.5 text-right font-mono font-black text-emerald-400 text-sm">
                     {formatPKR(summary.closingBalance ?? 0)}

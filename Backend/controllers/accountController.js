@@ -6,6 +6,7 @@ import Property from '../models/Property.js';
 import PendingEntry from '../models/PendingEntry.js';
 import MonthlyReport from '../models/MonthlyReport.js';
 import { round2, resolveTransactionAccountDisplay } from '../services/ledgerService.js';
+import { getLiquidityLedgerAmounts } from '../services/ledgerPresentation.js';
 import { getOrCreateCanonicalHead, provisionStandardCategories } from '../services/expenseClassificationService.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
@@ -551,19 +552,36 @@ export const getAccountLedger = async (req, res) => {
 
     // 3. Compute running balance sequentially. Reversed transactions are
     // excluded above from normal account statements.
+    //
+    // For BANK and CASH accounts we present in bank-statement convention:
+    //   Debit column = outflow / payment / withdrawal
+    //   Credit column = inflow / deposit / rent / other income
+    // Balance still moves correctly via balanceChange from getLiquidityLedgerAmounts.
+    const isLiquidityAccount = account.type === 'BANK' || account.type === 'CASH';
     let runningBalance = openingBalance;
-    let totalMoneyIn = 0;
-    let totalMoneyOut = 0;
+    let totalMoneyIn = 0;   // credit (inflows) for liquidity; debit (money-in) for others
+    let totalMoneyOut = 0;  // debit (outflows) for liquidity; credit (money-out) for others
 
     const ledgerEntries = transactions.map((tx) => {
-      const isDr = tx.drAccountId?._id?.toString() === id.toString();
-      const isCr = tx.crAccountId?._id?.toString() === id.toString();
-      const debit = isDr ? tx.amount : 0;
-      const credit = isCr ? tx.amount : 0;
+      let debit, credit, balanceChange;
 
-      runningBalance = round2(runningBalance + debit - credit);
-      totalMoneyIn += debit;
-      totalMoneyOut += credit;
+      if (isLiquidityAccount) {
+        // Bank-statement view: debit = outflow, credit = inflow
+        const amounts = getLiquidityLedgerAmounts(tx, id);
+        debit = amounts.debit;
+        credit = amounts.credit;
+        balanceChange = amounts.balanceChange;
+      } else {
+        const isDr = tx.drAccountId?._id?.toString() === id.toString();
+        const isCr = tx.crAccountId?._id?.toString() === id.toString();
+        debit = isDr ? tx.amount : 0;
+        credit = isCr ? tx.amount : 0;
+        balanceChange = debit - credit;
+      }
+
+      runningBalance = round2(runningBalance + balanceChange);
+      totalMoneyIn += credit;   // inflow for liquidity; credit (money-out) for others
+      totalMoneyOut += debit;   // outflow for liquidity; debit (money-in) for others
 
       const display = resolveTransactionAccountDisplay(tx);
 
@@ -576,9 +594,8 @@ export const getAccountLedger = async (req, res) => {
         drAccount: display.dr || tx.drAccountId?.name || 'Account',
         crAccount: display.cr || tx.crAccountId?.name || 'Account',
         categoryName: tx.categoryId?.name || 'General',
-        // Show original amounts in the row for audit trail visibility
-        debit: round2(isDr ? tx.amount : 0),
-        credit: round2(isCr ? tx.amount : 0),
+        debit: round2(debit),
+        credit: round2(credit),
         balance: round2(runningBalance),
         status: tx.status,
         originalAmount: null,
