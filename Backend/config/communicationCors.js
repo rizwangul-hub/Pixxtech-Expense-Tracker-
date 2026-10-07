@@ -27,5 +27,23 @@ export const getCorsAllowedOrigins = (env = process.env) => {
 export const isCorsOriginAllowed = (origin, env = process.env) => {
   if (!origin) return true;
   const normalizedOrigin = normalizeOrigin(origin);
-  return normalizedOrigin !== null && getCorsAllowedOrigins(env).has(normalizedOrigin);
+  if (!normalizedOrigin) return false;
+
+  // Check explicit allowed origins list
+  if (getCorsAllowedOrigins(env).has(normalizedOrigin)) {
+    return true;
+  }
+
+  // Allow any official Pixxtech Vercel production or preview deployment:
+  // e.g. https://pixxtech-expense-tracker-*.vercel.app
+  try {
+    const parsed = new URL(normalizedOrigin);
+    if (parsed.protocol === 'https:' && /^pixxtech-expense-tracker.*\.vercel\.app$/.test(parsed.hostname)) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
 };
