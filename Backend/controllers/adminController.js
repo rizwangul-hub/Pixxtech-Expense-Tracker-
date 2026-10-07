@@ -6,6 +6,7 @@ import Category from '../models/Category.js';
 import OtherIncome from '../models/OtherIncome.js';
 import OtherIncomeHead from '../models/OtherIncomeHead.js';
 import MonthlyReport from '../models/MonthlyReport.js';
+import RentalAgreement from '../models/RentalAgreement.js';
 import {
   getMonthlyOpeningClosingMatrix,
   getAccountRunningLedger,
@@ -13,6 +14,7 @@ import {
   syncAccountBalances,
   round2,
 } from '../services/ledgerService.js';
+import { getAgreedMonthlyRent } from '../services/rentPricing.js';
 import { isOwnerPersonalCategory, isOwnerPersonalTransaction } from '../services/expenseClassificationService.js';
 
 /**
@@ -487,6 +489,16 @@ export const getRentalIncomeSummary = async (req, res) => {
       .populate('drAccountId', 'name type')
       .lean();
 
+    const allUnitIds = properties.flatMap((p) => (p.units || []).map((u) => u._id));
+    const activeAgreements = await RentalAgreement.find({
+      unitId: { $in: allUnitIds },
+      status: 'ACTIVE',
+    }).select('unitId monthlyRent').lean();
+
+    const agreementsByUnitId = new Map(
+      activeAgreements.map((agreement) => [agreement.unitId.toString(), agreement])
+    );
+
     let grandTotalAgreed = 0;
     let grandTotalPrior = 0;
     let grandTotalCurrentDue = 0;
@@ -503,7 +515,8 @@ export const getRentalIncomeSummary = async (req, res) => {
       let plazaAdvance = 0;
 
       const unitsData = (plaza.units || []).map((unit) => {
-        const agreed = round2(unit.agreedRent || 0);
+        const activeAgreement = agreementsByUnitId.get(unit._id.toString());
+        const agreed = round2(getAgreedMonthlyRent(unit, activeAgreement));
         const prior = round2(unit.julyReceivable || 0); // Prior month receivable/advance
         const currentDue = agreed;
 

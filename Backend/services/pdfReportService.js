@@ -8,6 +8,7 @@ import Property from '../models/Property.js';
 import Account from '../models/Account.js';
 import Category from '../models/Category.js';
 import MonthlyReport from '../models/MonthlyReport.js';
+import RentalAgreement from '../models/RentalAgreement.js';
 import {
   getMonthlyOpeningClosingMatrix,
   getHeadWiseExpenseReport,
@@ -16,6 +17,7 @@ import {
   buildHeadWiseReportItems,
   round2,
 } from './ledgerService.js';
+import { getAgreedMonthlyRent } from './rentPricing.js';
 import { getUtcMonthDateRange, getUtcMonthEndDate } from './salaryReportingService.js';
 import { isOwnerPersonalTransaction } from './expenseClassificationService.js';
 import {
@@ -376,6 +378,16 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     .sort({ plazaName: 1 })
     .lean();
 
+  const allUnitIds = properties.flatMap((p) => (p.units || []).map((u) => u._id));
+  const activeAgreements = await RentalAgreement.find({
+    unitId: { $in: allUnitIds },
+    status: 'ACTIVE',
+  }).select('unitId monthlyRent').lean();
+
+  const agreementsByUnitId = new Map(
+    activeAgreements.map((agreement) => [agreement.unitId.toString(), agreement])
+  );
+
   const [repYear, repMonth] = periodName.split('-').map(Number);
   const currentMonthLabel = `${monthNames[repMonth - 1]}-${repYear}`;
   const prevDate = new Date(Date.UTC(repYear, repMonth - 2, 1));
@@ -391,7 +403,8 @@ export const generateMonthlyFundsReport = async (monthYear) => {
 
   const plazaList = properties.map(plaza => {
     const units = (plaza.units || []).map(unit => {
-      const agreed = round2(unit.agreedRent || 0);
+      const activeAgreement = agreementsByUnitId.get(unit._id.toString());
+      const agreed = round2(getAgreedMonthlyRent(unit, activeAgreement));
       const currentDue = agreed;
 
       let prior = 0;
