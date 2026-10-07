@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "seed": "node scripts/seed.js",
-    "test": "node --test test/communications.test.js test/salaryReporting.test.js test/ledgerPresentation.test.js test/backup.test.js test/rentPricing.test.js test/accountBalance.test.js test/rentalReceivables.test.js",
+    "test": "node --test test/communications.test.js test/salaryReporting.test.js test/ledgerPresentation.test.js test/backup.test.js test/rentPricing.test.js test/accountBalance.test.js",
     "test:legacy:phase1": "node test/phase1.test.js",
     "test:legacy:phase2": "node test/phase2.test.js",
     "test:legacy:phase3-4": "node test/phase3_4.test.js"

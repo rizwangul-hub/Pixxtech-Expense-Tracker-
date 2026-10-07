@@ -4,9 +4,11 @@ import { fileURLToPath } from 'url';
 import handlebars from 'handlebars';
 
 import Transaction from '../models/Transaction.js';
+import Property from '../models/Property.js';
 import Account from '../models/Account.js';
 import Category from '../models/Category.js';
 import MonthlyReport from '../models/MonthlyReport.js';
+import RentalAgreement from '../models/RentalAgreement.js';
 import {
   getMonthlyOpeningClosingMatrix,
   getHeadWiseExpenseReport,
@@ -15,16 +17,13 @@ import {
   buildHeadWiseReportItems,
   round2,
 } from './ledgerService.js';
+import { getAgreedMonthlyRent } from './rentPricing.js';
 import { getUtcMonthDateRange, getUtcMonthEndDate } from './salaryReportingService.js';
 import { isOwnerPersonalTransaction } from './expenseClassificationService.js';
 import {
   getBankStatementHeading,
   getLiquidityStatementAmounts,
 } from './ledgerPresentation.js';
-import {
-  buildRentalReceivableSummary,
-  loadRentalReceivableContext,
-} from './rentalReceivables.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -373,47 +372,129 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     grandTotal: headWise.totalExpensesOverall,
   };
 
-  // 5. Fetch the same history-based rental receivables used by the report APIs.
-  const rentalSummary = buildRentalReceivableSummary(
-    await loadRentalReceivableContext(periodName),
-    periodName
+  // 5. Fetch 7 Plazas Tenancy Summary (Page 3)
+  const properties = await Property.find({})
+    .populate('units.defaultReceivingAccountId', 'name type')
+    .sort({ plazaName: 1 })
+    .lean();
+
+  const allUnitIds = properties.flatMap((property) =>
+    (property.units || []).map((unit) => unit._id)
+  );
+  const activeAgreements = await RentalAgreement.find({
+    unitId: { $in: allUnitIds },
+    status: 'ACTIVE',
+  }).select('unitId monthlyRent').lean();
+  const agreementsByUnitId = new Map(
+    activeAgreements.map((agreement) => [agreement.unitId.toString(), agreement])
   );
 
   const [repYear, repMonth] = periodName.split('-').map(Number);
   const currentMonthLabel = `${monthNames[repMonth - 1]}-${repYear}`;
   const prevDate = new Date(Date.UTC(repYear, repMonth - 2, 1));
   const priorMonthLabel = `${monthNames[prevDate.getUTCMonth()]}-${prevDate.getUTCFullYear()}`;
-  const plazaList = rentalSummary.plazas.map((plaza) => ({
-    plazaName: plaza.plazaName,
-    units: plaza.units.map((unit) => {
-      const prior = unit.priorMonthReceivable;
+  const isBaselineJuly = periodName === '2026-08';
+
+  let totAgreed = 0;
+  let totPrior = 0;
+  let totCurrentDue = 0;
+  let totReceived = 0;
+  let totReceivable = 0;
+  let totAdvance = 0;
+
+  const plazaList = properties.map((plaza) => {
+    const units = (plaza.units || []).map((unit) => {
+      const activeAgreement = agreementsByUnitId.get(unit._id.toString());
+      const agreed = round2(getAgreedMonthlyRent(unit, activeAgreement));
+      const currentDue = agreed;
+
+      let prior = 0;
+      if (isBaselineJuly) {
+        prior = round2(unit.julyReceivable || 0);
+      } else {
+        prior = round2(Math.max(0, unit.julyReceivable || 0));
+      }
+
+      const matchingTransactions = transactions.filter((transaction) => {
+        const propertyId =
+          transaction.propertyId?._id?.toString() ||
+          transaction.propertyId?.toString();
+        const unitId = transaction.unitId?.toString();
+        const isRent =
+          transaction.reportCategory === 'Rent' ||
+          transaction.sourceModule === 'RENT_RECEIVED';
+        return (
+          isRent &&
+          propertyId === plaza._id.toString() &&
+          unitId === unit._id.toString()
+        );
+      });
+
+      const received = round2(
+        matchingTransactions.reduce((sum, transaction) => sum + (transaction.amount || 0), 0)
+      );
+      const latestTransaction = matchingTransactions[matchingTransactions.length - 1];
+      const receivingBank =
+        latestTransaction && received > 0
+          ? latestTransaction.drAccountId?.name || '-'
+          : '-';
+      const receivedDate =
+        latestTransaction && received > 0 && latestTransaction.date
+          ? formatReportDate(latestTransaction.date)
+          : '-';
+      const renewalDate = unit.renewalDate
+        ? formatReportDate(unit.renewalDate)
+        : '-';
+      let receivable = 0;
+      let advanceRent = 0;
+      const isCorporateBank = unit.unitName && /Allied Bank/i.test(unit.unitName);
+
+      if (isCorporateBank && received === 0) {
+        receivable = 0;
+        advanceRent = 0;
+      } else if (isBaselineJuly && prior < 0) {
+        const priorAdvance = Math.abs(prior);
+        const totalCovered = round2(received + priorAdvance);
+        receivable = round2(Math.max(0, currentDue - totalCovered));
+        advanceRent = round2(Math.max(0, totalCovered - currentDue));
+      } else {
+        const totalPayable = round2(currentDue + Math.max(0, prior));
+        if (received >= totalPayable) {
+          receivable = 0;
+          advanceRent = round2(received - totalPayable);
+        } else {
+          receivable = round2(totalPayable - received);
+          advanceRent = 0;
+        }
+      }
+
+      totAgreed += agreed;
+      totPrior += prior;
+      totCurrentDue += currentDue;
+      totReceived += received;
+      totReceivable += receivable;
+      totAdvance += advanceRent;
+
       return {
         unitName: `${unit.unitName}${unit.tenantName ? ` - ${unit.tenantName}` : ''}`,
-        dueDay: unit.dueDay,
-        agreedRent: unit.agreedRent,
+        dueDay: unit.dueDay ? `${unit.dueDay}th` : '1st',
+        agreedRent: agreed,
         priorReceivable: prior,
         julyReceivable: prior,
         isPriorNeg: prior < 0,
-        currentActualRent: unit.currentMonthActualRent,
-        augustActualRent: unit.currentMonthActualRent,
-        receivedAmount: unit.receivedAmount,
-        receivedDate: unit.receivedDate === '-'
-          ? '-'
-          : formatReportDate(new Date(`${unit.receivedDate}T00:00:00.000Z`)),
-        receivingBank: unit.receivingAccountName,
-        renewalDate: unit.renewalDate,
-        receivable: unit.outstandingReceivable,
-        advanceRent: unit.advanceRentReceived,
+        currentActualRent: currentDue,
+        augustActualRent: currentDue,
+        receivedAmount: received,
+        receivedDate,
+        receivingBank,
+        renewalDate,
+        receivable,
+        advanceRent,
       };
-    }),
-  }));
+    });
 
-  const totAgreed = rentalSummary.grandTotals.totalAgreedRent;
-  const totPrior = rentalSummary.grandTotals.totalPriorReceivable;
-  const totCurrentDue = rentalSummary.grandTotals.totalCurrentDue;
-  const totReceived = rentalSummary.grandTotals.totalReceivedAmount;
-  const totReceivable = rentalSummary.grandTotals.totalOutstandingReceivable;
-  const totAdvance = rentalSummary.grandTotals.totalAdvanceRentReceived;
+    return { plazaName: plaza.plazaName, units };
+  });
 
   const page3Tenancy = {
     priorMonthLabel,
