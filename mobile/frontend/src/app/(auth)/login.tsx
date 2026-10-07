@@ -81,7 +81,7 @@ export default function LoginScreen() {
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.brandTitle}>Pixx Technologies</Text>
+            <Text style={styles.brandTitle}>Pak Expense Tracker</Text>
             <Text style={styles.brandSubtitle}>
               Property Funds & Expense Tracking System
             </Text>

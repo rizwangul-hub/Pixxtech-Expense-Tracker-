@@ -272,8 +272,8 @@ export default function MobileDrawerModal({
                 <Feather name="layers" size={20} color="#2563EB" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.brandTitle}>PIXX TECHNOLOGIES</Text>
-                <Text style={styles.brandSubtitle}>Property Finance & Ledger ERP</Text>
+                <Text style={styles.brandTitle}>PAK EXPENSE TRACKER</Text>
+                <Text style={styles.brandSubtitle}>Pixx Technologies Finance & Ledger</Text>
               </View>
             </View>
 

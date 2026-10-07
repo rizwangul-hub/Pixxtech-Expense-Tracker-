@@ -126,12 +126,13 @@ export default function MobileWebViewApp() {
 
       {/* Keep the loading artwork visible until the web app is ready. */}
       {isLoading && !hasError && (
-        <View style={StyleSheet.absoluteFill}>
+        <View style={styles.loadingContainer}>
           <Image
-            source={require('@/assets/images/loadingmb.jpg')}
-            style={styles.loadingImage}
-            resizeMode="cover"
+            source={require('@/assets/images/logo.png')}
+            style={styles.loadingLogo}
+            resizeMode="contain"
           />
+          <Text style={styles.loadingTitle}>Pak Expense Tracker</Text>
         </View>
       )}
 
@@ -167,15 +168,22 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
     zIndex: 10,
   },
-  loadingImage: {
-    width: '100%',
-    height: '100%',
+  loadingLogo: {
+    width: '85%',
+    maxWidth: 360,
+    height: 240,
+  },
+  loadingTitle: {
+    marginTop: 16,
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   errorContainer: {
     ...StyleSheet.absoluteFill,

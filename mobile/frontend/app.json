@@ -1,23 +1,23 @@
 {
   "expo": {
-    "name": "Pixx Expense Tracker",
+    "name": "Pak Expense Tracker",
     "slug": "pixx-expense-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "splash": {
-      "image": "./assets/images/loadingmb.jpg",
-      "resizeMode": "cover",
-      "backgroundColor": "#0F172A"
+      "image": "./assets/images/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
     },
     "scheme": "pixxexpensetracker",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
       "splash": {
-        "image": "./assets/images/loadingmb.jpg",
-        "resizeMode": "cover",
-        "backgroundColor": "#0F172A"
+        "image": "./assets/images/logo.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#FFFFFF"
       }
     },
     "android": {
@@ -30,9 +30,9 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "splash": {
-        "image": "./assets/images/loadingmb.jpg",
-        "resizeMode": "cover",
-        "backgroundColor": "#0F172A"
+        "image": "./assets/images/logo.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#FFFFFF"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -45,9 +45,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0F172A",
-          "image": "./assets/images/loadingmb.jpg",
-          "imageWidth": 360
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/images/logo.png",
+          "imageWidth": 280
         }
       ],
       "expo-secure-store"
