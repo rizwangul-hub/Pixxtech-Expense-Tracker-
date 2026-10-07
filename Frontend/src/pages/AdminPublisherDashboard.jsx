@@ -27,9 +27,11 @@ import {
   Home,
   Receipt,
   Layers,
+  Database,
 } from 'lucide-react';
 import { adminAPI, reportsAPI, accountsAPI, propertiesAPI, otherIncomeAPI } from '../services/api.js';
 import { MonthlyReportsHistoryPage } from './MonthlyReportsHistoryPage.jsx';
+import { DatabaseBackupSection } from '../components/DatabaseBackupSection.jsx';
 import { resolveTransactionAccounts } from '../utils/formatters.js';
 import { isAdmin } from '../utils/permissions.js';
 
@@ -465,6 +467,18 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
           >
             <FileText className="w-3.5 h-3.5" />
             Tab 6: Monthly Reports Archive & Publishing
+          </button>
+
+          <button
+            onClick={() => setActiveTab('backup')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+              activeTab === 'backup'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/30'
+                : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            Tab 7: Database Backup & Restore
           </button>
         </div>
 
@@ -1350,6 +1364,15 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
         {activeTab === 'history' && (
           <div className="space-y-6">
             <MonthlyReportsHistoryPage currentUser={user} />
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* TAB 7: DATABASE BACKUP & RESTORE / IMPORT                    */}
+        {/* ============================================================ */}
+        {activeTab === 'backup' && (
+          <div className="space-y-6">
+            <DatabaseBackupSection currentUser={user} />
           </div>
         )}
       </main>

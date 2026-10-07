@@ -23,6 +23,7 @@ import { AdminPublisherDashboard } from './pages/AdminPublisherDashboard.jsx';
 import { VerifierDashboard } from './pages/VerifierDashboard.jsx';
 import { StaffPage } from './pages/StaffPage.jsx';
 import { MessagesCallsPage } from './pages/MessagesCallsPage.jsx';
+import { DatabaseBackupSection } from './components/DatabaseBackupSection.jsx';
 import { LoginForm } from './components/LoginForm.jsx';
 import { CommunicationsProvider, canUseCommunications } from './communications/CommunicationsProvider.jsx';
 import loadingImg from './assets/image/loading.png';
@@ -55,6 +56,7 @@ const SECTION_PERMISSIONS = {
   reports: PERMISSIONS.VIEW_FINANCIALS,
   'monthly-reports': PERMISSIONS.EXPORT_REPORTS,
   users: PERMISSIONS.MANAGE_USERS,
+  backup: PERMISSIONS.MANAGE_SETTINGS,
   staff: PERMISSIONS.ENTER_DATA,
   settings: PERMISSIONS.MANAGE_SETTINGS,
 };
@@ -63,7 +65,7 @@ const getAccessibleSection = (section, user) => {
   if (section === 'communications' && !canUseCommunications(user)) {
     return 'dashboard';
   }
-  if (section === 'chart-of-accounts' && !isAdmin(user)) {
+  if ((section === 'chart-of-accounts' || section === 'backup') && !isAdmin(user)) {
     return 'dashboard';
   }
   if (section === 'tenants' && isDataEntry(user)) {
@@ -293,6 +295,10 @@ export function App() {
         />
       ) : currentSection === 'users' && isAdmin(user) ? (
         <UserManager currentUser={user} />
+      ) : currentSection === 'backup' && isAdmin(user) ? (
+        <div className="p-3 sm:p-6 max-w-7xl mx-auto">
+          <DatabaseBackupSection currentUser={user} />
+        </div>
       ) : currentSection === 'properties' ? (
         <PropertiesPage
           currentUser={user}

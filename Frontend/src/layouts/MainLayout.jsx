@@ -22,6 +22,7 @@ import {
   Sparkles,
   MessagesSquare,
   Bell,
+  Database,
 } from 'lucide-react';
 import { hasPermission, isAdmin, isVerifier, isDataEntry, PERMISSIONS } from '../utils/permissions.js';
 import { verificationAPI } from '../services/api.js';
@@ -283,6 +284,19 @@ export function MainLayout({
         : 'bg-slate-100 text-slate-400 border-slate-200',
       permission: PERMISSIONS.MANAGE_USERS,
     },
+    ...(userIsAdmin
+      ? [
+          {
+            id: 'backup',
+            label: 'Database Backup',
+            icon: Database,
+            status: 'active',
+            badge: 'Admin',
+            badgeColor: 'bg-purple-100 text-purple-800 border-purple-200',
+            permission: PERMISSIONS.MANAGE_SETTINGS,
+          },
+        ]
+      : []),
   ];
 
   const visibleNavigationItems = navigationItems.filter(

@@ -543,6 +543,49 @@ export const adminAPI = {
     const res = await api.get('/admin/head-wise-summary', { params });
     return res.data;
   },
+  // Database Backup & Restore System
+  createBackup: async (data) => {
+    const res = await api.post('/admin/backups/create', data);
+    return res.data;
+  },
+  getBackupHistory: async () => {
+    const res = await api.get('/admin/backups/history');
+    return res.data;
+  },
+  downloadBackup: async (id, filename) => {
+    const res = await api.get(`/admin/backups/download/${id}`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'application/zip' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename || `PixxTechnologies_Backup_${id}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+    return true;
+  },
+  validateBackup: async (file) => {
+    const formData = new FormData();
+    formData.append('backupFile', file);
+    const res = await api.post('/admin/backups/validate', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+  restoreBackup: async (file, { mode = 'merge', updateExisting = false, confirmation = '' }) => {
+    const formData = new FormData();
+    formData.append('backupFile', file);
+    formData.append('mode', mode);
+    formData.append('updateExisting', String(updateExisting));
+    formData.append('confirmation', confirmation);
+    const res = await api.post('/admin/backups/restore', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
 };
 
 export const reportsAPI = {

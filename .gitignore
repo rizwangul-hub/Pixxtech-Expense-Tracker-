@@ -18,6 +18,8 @@ Frontend/.env.*
 scratch/
 Backend/scratch/
 *.pdf
+Backend/backups/*.zip
+Backend/backups/
 
 # Production builds
 Frontend/dist/
