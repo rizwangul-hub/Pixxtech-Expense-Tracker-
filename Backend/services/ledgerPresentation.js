@@ -19,3 +19,26 @@ export const getLiquidityStatementAmounts = (entry, accountName) => ({
   debitAccount: entry.crAmount ? entry.counterpartyAccount : accountName,
   creditAccount: entry.drAmount ? entry.counterpartyAccount : accountName,
 });
+
+export const getBankStatementHeading = (accountName, accountType) => {
+  if (accountType === 'CASH') {
+    return { title: 'Pixx Technologies', subtitle: accountName };
+  }
+  if (accountType === 'SUSPENSE') {
+    return { title: accountName, subtitle: 'Suspense / Holding Account' };
+  }
+
+  const holder = accountName.match(/\(([^)]+)\)/)?.[1]?.trim() || accountName;
+
+  if (/Bank Al[- ]Falah/i.test(accountName)) {
+    return { title: 'Bank Al-Falah', subtitle: holder };
+  }
+  if (/\bUBL\b/i.test(accountName)) {
+    return { title: 'UBL', subtitle: holder };
+  }
+  if (/\bABL\b|Allied Bank/i.test(accountName)) {
+    return { title: 'Allied Bank', subtitle: holder };
+  }
+
+  return { title: accountName, subtitle: holder };
+};

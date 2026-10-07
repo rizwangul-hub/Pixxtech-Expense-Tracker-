@@ -18,7 +18,10 @@ import {
 } from './ledgerService.js';
 import { getUtcMonthDateRange, getUtcMonthEndDate } from './salaryReportingService.js';
 import { isOwnerPersonalTransaction } from './expenseClassificationService.js';
-import { getLiquidityStatementAmounts } from './ledgerPresentation.js';
+import {
+  getBankStatementHeading,
+  getLiquidityStatementAmounts,
+} from './ledgerPresentation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -503,31 +506,8 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     const statement = await getAccountRunningLedger(acc._id, startDate, endDate);
     const isCash = acc.type === 'CASH';
 
-    let bankOrCashTitle = acc.name;
-    let accountSubtitle = 'Kamran Ijaz Sb';
-
-    if (acc.name.includes('Bank Al Falah') || acc.name.includes('Bank Al-Falah')) {
-      bankOrCashTitle = 'Bank Al-Falah';
-      accountSubtitle = 'Kamran Ijaz Sb';
-    } else if (acc.name.includes('UBL (Kamran')) {
-      bankOrCashTitle = 'UBL';
-      accountSubtitle = 'Kamran Ijaz Sb';
-    } else if (acc.name.includes('UBL (Uraan')) {
-      bankOrCashTitle = 'UBL';
-      accountSubtitle = 'Uraan Ventures';
-    } else if (acc.name.includes('ABL (Kamran')) {
-      bankOrCashTitle = 'Allied Bank';
-      accountSubtitle = 'Kamran Ijaz Sb';
-    } else if (acc.name.includes('ABL (Uraan')) {
-      bankOrCashTitle = 'Allied Bank';
-      accountSubtitle = 'Uraan Ventures';
-    } else if (acc.type === 'SUSPENSE') {
-      bankOrCashTitle = acc.name;
-      accountSubtitle = 'Suspense / Holding Account';
-    } else if (isCash) {
-      bankOrCashTitle = 'Pixx Technologies';
-      accountSubtitle = acc.name;
-    }
+    const { title: bankOrCashTitle, subtitle: accountSubtitle } =
+      getBankStatementHeading(acc.name, acc.type);
 
     const entries = statement.entries.map((e) => {
       const amounts = getLiquidityStatementAmounts(e, acc.name);

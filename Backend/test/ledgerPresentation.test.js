@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  getBankStatementHeading,
   getLiquidityLedgerAmounts,
   getLiquidityStatementAmounts,
 } from '../services/ledgerPresentation.js';
@@ -78,5 +79,27 @@ test('monthly bank and cash statements show rent and other income as credit/in',
     credit: 8400,
     debitAccount: 'Cash in Hand',
     creditAccount: 'Rental Income',
+  });
+});
+
+test('monthly bank statement headings use the holder named in each account', () => {
+  assert.deepEqual(getBankStatementHeading('UBL (Saba Kamran)', 'BANK'), {
+    title: 'UBL',
+    subtitle: 'Saba Kamran',
+  });
+  assert.deepEqual(getBankStatementHeading('ABL (Abida Ijaz)', 'BANK'), {
+    title: 'Allied Bank',
+    subtitle: 'Abida Ijaz',
+  });
+});
+
+test('monthly bank statement headings preserve existing Uraan and Kamran labels', () => {
+  assert.deepEqual(getBankStatementHeading('UBL (Uraan Ventures)', 'BANK'), {
+    title: 'UBL',
+    subtitle: 'Uraan Ventures',
+  });
+  assert.deepEqual(getBankStatementHeading('ABL (Kamran Ijaz Sb)', 'BANK'), {
+    title: 'Allied Bank',
+    subtitle: 'Kamran Ijaz Sb',
   });
 });
