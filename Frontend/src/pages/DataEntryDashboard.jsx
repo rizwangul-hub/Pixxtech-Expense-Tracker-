@@ -227,7 +227,7 @@ export const DataEntryDashboard = ({ user }) => {
         setLoadingData(true);
       }
       const [accRes, catRes, propRes, entriesRes, headsRes, pendingRes] = await Promise.all([
-        accountsAPI.getActiveSummary(),
+        accountsAPI.getActiveSummary(true),
         accountsAPI.getCategories(),
         accountsAPI.getProperties().catch(() => ({ properties: [] })),
         transactionsAPI.getMyEntries(),
@@ -286,7 +286,7 @@ export const DataEntryDashboard = ({ user }) => {
       setRefreshingEntries(true);
       const [entriesRes, accRes, pendingRes] = await Promise.all([
         transactionsAPI.getMyEntries(),
-        accountsAPI.getActiveSummary(),
+        accountsAPI.getActiveSummary(true),
         verificationAPI.getMySubmissions().catch(() => ({ data: [] })),
       ]);
       const rawRecents = entriesRes.transactions || [];
@@ -650,7 +650,9 @@ export const DataEntryDashboard = ({ user }) => {
                     >
                       <option value="">Select Receiving Account...</option>
                       {accounts.map((a) => (
-                        <option key={a._id} value={a._id}>{a.name} ({a.type})</option>
+                        <option key={a._id} value={a._id}>
+                          {a.name} ({a.type}) - {formatPKR(a.currentBalance)}
+                        </option>
                       ))}
                     </select>
                   </div>

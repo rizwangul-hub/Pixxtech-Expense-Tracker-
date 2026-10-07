@@ -8,6 +8,7 @@ import MonthlyReport from '../models/MonthlyReport.js';
 import { round2, resolveTransactionAccountDisplay } from '../services/ledgerService.js';
 import { getLiquidityLedgerAmounts } from '../services/ledgerPresentation.js';
 import { getOrCreateCanonicalHead, provisionStandardCategories } from '../services/expenseClassificationService.js';
+import { calculateLiveAccountBalances } from '../services/accountBalance.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
 /**
@@ -71,17 +72,8 @@ export const getAccounts = async (req, res) => {
     })
       .select('drAccountId crAccountId amount')
       .lean();
-    const netMovementByAccount = new Map();
-    activeTransactions.forEach((tx) => {
-      const amount = Number(tx.amount) || 0;
-      const drId = tx.drAccountId?.toString();
-      const crId = tx.crAccountId?.toString();
-      if (drId) netMovementByAccount.set(drId, (netMovementByAccount.get(drId) || 0) + amount);
-      if (crId) netMovementByAccount.set(crId, (netMovementByAccount.get(crId) || 0) - amount);
-    });
-
-    const getLiveBalance = (account) =>
-      round2((account.openingBalance || 0) + (netMovementByAccount.get(account._id.toString()) || 0));
+    const liveBalances = calculateLiveAccountBalances(accounts, activeTransactions);
+    const getLiveBalance = (account) => liveBalances.get(account._id.toString()) || 0;
 
     // Calculate portfolio liquidity totals from all active bank, cash & suspense accounts
     const activeAccounts = await Account.find({ isActive: true, isClearing: { $ne: true } }).lean();
@@ -764,8 +756,15 @@ export const getActiveAccountsSummary = async (req, res) => {
     const accounts = await Account.find({ isActive: true, isClearing: { $ne: true } })
       .sort({ type: 1, name: 1 })
       .lean();
+    const activeTransactions = await Transaction.find({
+      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+    })
+      .select('drAccountId crAccountId amount status')
+      .lean();
+    const liveBalances = calculateLiveAccountBalances(accounts, activeTransactions);
 
     const categorized = accounts.map((acc) => {
+      const currentBalance = liveBalances.get(acc._id.toString()) || 0;
       const isCash = acc.type === 'CASH';
       const isCustodian =
         isCash &&
@@ -774,9 +773,9 @@ export const getActiveAccountsSummary = async (req, res) => {
         );
 
       let balanceStatus = 'HEALTHY';
-      if (acc.currentBalance < 0) {
+      if (currentBalance < 0) {
         balanceStatus = 'NEGATIVE';
-      } else if (acc.currentBalance < 2000) {
+      } else if (currentBalance < 2000) {
         balanceStatus = 'LOW';
       }
 
@@ -788,8 +787,8 @@ export const getActiveAccountsSummary = async (req, res) => {
         iban: acc.iban,
         branch: acc.branch,
         openingBalance: round2(acc.openingBalance),
-        currentBalance: round2(acc.currentBalance),
-        closingBalance: round2(acc.currentBalance),
+        currentBalance,
+        closingBalance: currentBalance,
         isCashCustodian: isCustodian,
         balanceStatus,
       };
