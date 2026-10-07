@@ -19,4 +19,6 @@ Optional TURN settings: configure all of `TURN_URLS` (comma-separated `turn:`/`t
 
 Vercel deployment: set the Vercel project Root Directory to `Backend`, with `Backend/vercel.json` and `Backend/package.json` as the deployment configuration and dependency manifest. The Backend lockfile includes `ably`, which is statically imported by the deployed API function and must be installed from this root. Configure all production credentials in Vercel Environment Variables; never commit `.env` or real credential values. The preview frontend origin above is allowed by the backend CORS policy.
 
+Vercel serverless functions use a read-only deployment filesystem. Backup ZIPs are written under the function's temporary directory, which is ephemeral and may not be available to another invocation. Configure durable object storage before relying on backup history or download links across function restarts.
+
 Focused tests: run `npm test` from the `Backend` directory. They use no live MongoDB, Cloudinary, or Ably credentials.

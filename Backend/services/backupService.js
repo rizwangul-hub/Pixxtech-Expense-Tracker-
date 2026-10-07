@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
@@ -38,11 +39,9 @@ import BackupRecord from '../models/BackupRecord.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const BACKUPS_DIR = path.join(__dirname, '..', 'backups');
-
-if (!fs.existsSync(BACKUPS_DIR)) {
-  fs.mkdirSync(BACKUPS_DIR, { recursive: true });
-}
+const BACKUPS_DIR = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'pixxtech-expense-tracker-backups')
+  : path.join(__dirname, '..', 'backups');
 
 /**
  * Definition of all database collections in the system.
@@ -292,6 +291,7 @@ export const createMonthlyBackupZip = async ({
   manifest.checksum = finalChecksum;
 
   const filename = `PixxTechnologies_Backup_${backupMonth}_${dateStamp}.zip`;
+  fs.mkdirSync(BACKUPS_DIR, { recursive: true });
   const storagePath = path.join(BACKUPS_DIR, filename);
 
   // Save to disk for download & backup history
