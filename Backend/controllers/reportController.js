@@ -13,6 +13,10 @@ import {
 } from '../services/ledgerService.js';
 import { generateMonthlyFundsReport, sortTransactionsByVoucher } from '../services/pdfReportService.js';
 import { getUtcMonthDateRange } from '../services/salaryReportingService.js';
+import {
+  buildRentalReceivableSummary,
+  loadRentalReceivableContext,
+} from '../services/rentalReceivables.js';
 
 // ─── Shared Helpers ────────────────────────────────────────────────────────────
 
@@ -133,53 +137,12 @@ export const getMonthlyFinancialSummary = async (req, res) => {
     }));
     const grandTotal = matrixData.grandTotal;
 
-    const properties = await Property.find({}).sort({ plazaName: 1 }).lean();
-    const rentTransactions = await Transaction.find({
-      date: { $gte: startDate, $lte: endDate },
-      transactionType: 'INCOME',
-      reportCategory: 'Rent',
-      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
-    }).populate('drAccountId', 'name type').lean();
-
-    let grandTotalRentalAgreed = 0, grandTotalRentalReceived = 0, grandTotalRentalOutstanding = 0;
-
-    const rentalByProperty = properties.map((plaza) => {
-      let plazaReceived = 0, plazaAgreed = 0;
-      const unitsData = (plaza.units || []).map((unit) => {
-        const agreed = round2(unit.agreedRent || 0);
-        const matchingTxs = rentTransactions.filter(
-          (t) => t.propertyId?.toString() === plaza._id.toString() && t.unitId?.toString() === unit._id.toString()
-        );
-        const totalReceived = round2(matchingTxs.reduce((sum, t) => sum + t.amount, 0));
-        const outstanding = round2(Math.max(0, agreed - totalReceived));
-        const latestTx = matchingTxs[matchingTxs.length - 1];
-        let statusBadge = 'OUTSTANDING';
-        if (totalReceived >= agreed && agreed > 0) statusBadge = 'FULLY_PAID';
-        else if (totalReceived > 0) statusBadge = 'PARTIALLY_PAID';
-        plazaAgreed += agreed; plazaReceived += totalReceived;
-        return {
-          unitId: unit._id,
-          unitName: unit.unitName,
-          tenantName: unit.tenantName || 'Unassigned',
-          agreedRent: agreed,
-          receivedAmount: totalReceived,
-          outstanding,
-          receivedDate: (latestTx && totalReceived > 0 && latestTx.date) ? new Date(latestTx.date).toISOString().split('T')[0] : '-',
-          receivingAccount: (latestTx && totalReceived > 0) ? (latestTx.drAccountId?.name || '-') : '-',
-          statusBadge,
-        };
-      });
-      plazaAgreed = round2(plazaAgreed); plazaReceived = round2(plazaReceived);
-      const plazaOutstanding = round2(Math.max(0, plazaAgreed - plazaReceived));
-      const collectionRate = plazaAgreed > 0 ? Math.round((plazaReceived / plazaAgreed) * 100) : 0;
-      grandTotalRentalAgreed += plazaAgreed; grandTotalRentalReceived += plazaReceived; grandTotalRentalOutstanding += plazaOutstanding;
-      return { plazaId: plaza._id, plazaName: plaza.plazaName, location: plaza.location || '', unitsCount: (plaza.units || []).length, agreedRent: plazaAgreed, receivedAmount: plazaReceived, outstanding: plazaOutstanding, collectionRate, units: unitsData };
-    });
-
-    grandTotalRentalAgreed = round2(grandTotalRentalAgreed);
-    grandTotalRentalReceived = round2(grandTotalRentalReceived);
-    grandTotalRentalOutstanding = round2(grandTotalRentalOutstanding);
-    const rentalCollectionRate = grandTotalRentalAgreed > 0 ? Math.round((grandTotalRentalReceived / grandTotalRentalAgreed) * 100) : 0;
+    const rentalContext = await loadRentalReceivableContext(periodString);
+    const rentalSummary = buildRentalReceivableSummary(rentalContext, periodString);
+    const grandTotalRentalAgreed = rentalSummary.grandTotals.totalAgreedRent;
+    const grandTotalRentalReceived = rentalSummary.grandTotals.totalReceivedAmount;
+    const grandTotalRentalOutstanding = rentalSummary.grandTotals.totalOutstandingReceivable;
+    const rentalCollectionRate = rentalSummary.grandTotals.collectionRate;
 
     const otherIncomeTxns = await Transaction.find({
       date: { $gte: startDate, $lte: endDate },
@@ -223,7 +186,13 @@ export const getMonthlyFinancialSummary = async (req, res) => {
     return res.status(200).json({
       success: true, period: periodString,
       accountMatrix: { accounts: accountSummary, bankRows, cashRows, suspenseRows, grandTotal, totalBankBalance, totalCashBalance, totalSuspenseBalance, grandClosingBalance },
-      rentalIncomeSummary: { grandTotalAgreed: grandTotalRentalAgreed, grandTotalReceived: grandTotalRentalReceived, grandTotalOutstanding: grandTotalRentalOutstanding, collectionRate: rentalCollectionRate, properties: rentalByProperty },
+      rentalIncomeSummary: {
+        grandTotalAgreed: grandTotalRentalAgreed,
+        grandTotalReceived: grandTotalRentalReceived,
+        grandTotalOutstanding: grandTotalRentalOutstanding,
+        collectionRate: rentalCollectionRate,
+        properties: rentalSummary.properties,
+      },
       otherIncomeSummary: { totalOtherIncome, breakdown: Array.from(otherIncomeByHead.entries()).map(([head, amount]) => ({ head, amount })), transactionCount: otherIncomeTxns.length },
       expenseSummary: {
         totalExpenses,

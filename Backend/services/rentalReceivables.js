@@ -5,6 +5,7 @@ import RentReceived from '../models/RentReceived.js';
 import Transaction from '../models/Transaction.js';
 import { round2 } from './ledgerService.js';
 
+// July receivable is the signed opening balance carried into the August 2026 ledger.
 const RECEIVABLE_BASELINE_MONTH = '2026-08';
 
 const formatMonth = (date) =>
@@ -47,6 +48,9 @@ const isReversedOrVoid = (status) =>
   /^(REVERSED|VOID)$/i.test(String(status || ''));
 
 const isPostedRentTransaction = (transaction) =>
+  transaction.transactionType === 'INCOME' &&
+  (transaction.reportCategory === 'Rent' ||
+    transaction.sourceModule === 'RENT_RECEIVED') &&
   ['VERIFIED', 'POSTED'].includes(String(transaction.status || '').toUpperCase());
 
 const dateInRange = (date, start, end) => {
@@ -75,7 +79,7 @@ export const loadRentalReceivableContext = async (periodString) => {
     RentalAgreement.find({
       startDate: { $lte: periodEndDate },
       endDate: { $gte: historyStartDate },
-      status: { $nin: ['DRAFT', 'TERMINATED', 'INACTIVE'] },
+      status: { $ne: 'DRAFT' },
     }).lean(),
     RentDue.find({
       rentMonth: { $gte: historyStartMonth, $lte: periodString },
@@ -89,7 +93,7 @@ export const loadRentalReceivableContext = async (periodString) => {
     Transaction.find({
       date: { $gte: historyStartDate, $lte: periodEndDate },
       transactionType: 'INCOME',
-      reportCategory: 'Rent',
+      $or: [{ reportCategory: 'Rent' }, { sourceModule: 'RENT_RECEIVED' }],
     })
       .populate('drAccountId', 'name type')
       .lean(),
@@ -209,41 +213,113 @@ export const buildRentalReceivableSummary = (context, periodString) => {
           )
       );
 
-      const payments = [
-        ...validReceipts.map((receipt) => ({
-          amount: Number(receipt.amount) || 0,
-          date: new Date(receipt.receiptDate),
+      const currentAllocationByMonth = new Map();
+      const priorAllocationByPaymentMonth = new Map();
+      const advanceAllocationByPaymentMonth = new Map();
+      const addAllocation = (map, month, amount) => {
+        if (!month || !amount) return;
+        map.set(month, round2((map.get(month) || 0) + amount));
+      };
+      const payments = [];
+
+      validReceipts.forEach((receipt) => {
+        const date = new Date(receipt.receiptDate);
+        const paymentMonth = formatMonth(date);
+        const amount = Number(receipt.amount) || 0;
+        const currentAllocation = Number(receipt.allocatedCurrentMonth) || 0;
+        const priorAllocation = Number(receipt.allocatedPreviousReceivable) || 0;
+        const advanceAllocation = Number(receipt.allocatedAdvance) || 0;
+        const hasAllocation =
+          currentAllocation > 0 ||
+          priorAllocation > 0 ||
+          advanceAllocation > 0;
+
+        if (hasAllocation) {
+          addAllocation(
+            currentAllocationByMonth,
+            receipt.rentMonth || paymentMonth,
+            currentAllocation
+          );
+          addAllocation(priorAllocationByPaymentMonth, paymentMonth, priorAllocation);
+          addAllocation(advanceAllocationByPaymentMonth, paymentMonth, advanceAllocation);
+
+          const unallocatedAmount = Math.max(
+            0,
+            round2(amount - currentAllocation - priorAllocation - advanceAllocation)
+          );
+          addAllocation(advanceAllocationByPaymentMonth, paymentMonth, unallocatedAmount);
+        } else {
+          addAllocation(
+            currentAllocationByMonth,
+            receipt.rentMonth || paymentMonth,
+            amount
+          );
+        }
+
+        payments.push({
+          amount,
+          date,
           accountName: receipt.receivingAccountId?.name || '-',
           status: receipt.status,
           checkedBy: receipt.checkedBy || null,
-        })),
-        ...validLegacyTransactions.map((transaction) => ({
+        });
+      });
+
+      validLegacyTransactions.forEach((transaction) => {
+        const date = new Date(transaction.date);
+        const paymentMonth = formatMonth(date);
+        addAllocation(
+          currentAllocationByMonth,
+          transaction.rentMonth || paymentMonth,
+          Number(transaction.amount) || 0
+        );
+        payments.push({
           amount: Number(transaction.amount) || 0,
-          date: new Date(transaction.date),
+          date,
           accountName: transaction.drAccountId?.name || '-',
           status: transaction.status,
           checkedBy: transaction.checkedBy || null,
-        })),
-      ].sort((a, b) => a.date - b.date);
+        });
+      });
+      payments.sort((a, b) => a.date - b.date);
 
       const monthStart = new Date(`${historyStartMonth}-01T00:00:00.000Z`);
       let monthCursor = monthStart;
-      let priorBalance = periodString >= RECEIVABLE_BASELINE_MONTH
+      const openingBalance = periodString >= RECEIVABLE_BASELINE_MONTH
         ? Number(unit.julyReceivable) || 0
         : 0;
-      let cumulativePayments = 0;
-      const openingReceivable = priorBalance;
+      let arrears = Math.max(0, openingBalance);
+      let advanceBalance = Math.max(0, -openingBalance);
+      let priorMonthReceivable = arrears;
+      let currentMonthAppliedAmount = 0;
       const currentMonthAgreed = expectedForMonth(periodString);
 
-      while (formatMonth(monthCursor) < periodString) {
+      while (formatMonth(monthCursor) <= periodString) {
         const month = formatMonth(monthCursor);
-        priorBalance = round2(priorBalance + expectedForMonth(month));
-        const { start, end } = monthDateRange(month);
-        const monthPayments = payments
-          .filter((payment) => payment.date >= start && payment.date <= end)
-          .reduce((sum, payment) => sum + payment.amount, 0);
-        priorBalance = round2(priorBalance - monthPayments);
-        cumulativePayments += monthPayments;
+        let monthDue = expectedForMonth(month);
+        const advanceApplied = Math.min(advanceBalance, monthDue);
+        advanceBalance = round2(advanceBalance - advanceApplied);
+        monthDue = round2(monthDue - advanceApplied);
+
+        const currentAllocated = currentAllocationByMonth.get(month) || 0;
+        const currentApplied = Math.min(monthDue, currentAllocated);
+        if (month === periodString) currentMonthAppliedAmount += currentApplied;
+        monthDue = round2(monthDue - currentApplied);
+        advanceBalance = round2(advanceBalance + Math.max(0, currentAllocated - currentApplied));
+        arrears = round2(arrears + monthDue);
+
+        const priorAllocated = priorAllocationByPaymentMonth.get(month) || 0;
+        const priorApplied = Math.min(arrears, priorAllocated);
+        if (month === periodString) currentMonthAppliedAmount += priorApplied;
+        arrears = round2(arrears - priorApplied);
+        advanceBalance = round2(advanceBalance + Math.max(0, priorAllocated - priorApplied));
+        advanceBalance = round2(
+          advanceBalance + (advanceAllocationByPaymentMonth.get(month) || 0)
+        );
+
+        if (month < periodString) {
+          priorMonthReceivable = round2(arrears - advanceBalance);
+        }
         monthCursor = new Date(Date.UTC(
           monthCursor.getUTCFullYear(),
           monthCursor.getUTCMonth() + 1,
@@ -257,11 +333,14 @@ export const buildRentalReceivableSummary = (context, periodString) => {
       const currentMonthPayments = payments.filter(
         (payment) => payment.date >= periodStart && payment.date <= periodEnd
       );
-      const monthEndBalance = round2(
-        priorBalance + currentMonthAgreed - periodPayments
+      const futurePrepayments = [...currentAllocationByMonth.entries()]
+        .filter(([month]) => month > periodString)
+        .reduce((sum, [, amount]) => sum + amount, 0);
+      const monthEndNetBalance = round2(arrears - advanceBalance);
+      const outstandingReceivable = round2(Math.max(0, monthEndNetBalance));
+      const advanceRentReceived = round2(
+        Math.max(0, -monthEndNetBalance) + futurePrepayments
       );
-      const outstandingReceivable = round2(Math.max(0, monthEndBalance));
-      const advanceRentReceived = round2(Math.max(0, -monthEndBalance));
       const latestPayment = currentMonthPayments.at(-1);
       const isVerified =
         currentMonthPayments.length > 0 &&
@@ -271,12 +350,12 @@ export const buildRentalReceivableSummary = (context, periodString) => {
       const statusBadge =
         outstandingReceivable === 0
           ? 'FULLY_PAID'
-          : periodPayments > 0
+          : currentMonthAppliedAmount > 0
             ? 'PARTIALLY_PAID'
             : 'OUTSTANDING';
 
       plazaAgreed += currentMonthAgreed;
-      plazaPrior += priorBalance;
+      plazaPrior += priorMonthReceivable;
       plazaReceived += periodPayments;
       plazaOutstanding += outstandingReceivable;
       plazaAdvance += advanceRentReceived;
@@ -287,7 +366,7 @@ export const buildRentalReceivableSummary = (context, periodString) => {
         tenantName: unit.tenantName || 'Unassigned',
         dueDay: unit.dueDay ? `${unit.dueDay}th` : '1st',
         agreedRent: currentMonthAgreed,
-        priorMonthReceivable: round2(priorBalance),
+        priorMonthReceivable: round2(priorMonthReceivable),
         currentMonthActualRent: currentMonthAgreed,
         receivedAmount: round2(periodPayments),
         receivedDate: latestPayment
