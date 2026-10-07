@@ -3,7 +3,9 @@ import Account from '../models/Account.js';
 import Category from '../models/Category.js';
 import Transaction from '../models/Transaction.js';
 import PendingEntry from '../models/PendingEntry.js';
+import RentalAgreement from '../models/RentalAgreement.js';
 import { createTransaction, round2, suggestNextVoucherNumber } from '../services/ledgerService.js';
+import { getAgreedMonthlyRent } from '../services/rentPricing.js';
 import { normalizeBusinessPaymentDate } from '../services/salaryReportingService.js';
 import { syncRentDueWithCollections } from './rentDueController.js';
 
@@ -148,7 +150,12 @@ export const collectRent = async (req, res) => {
     }).lean();
 
     const alreadyPaidThisMonth = existingMonthRent.reduce((sum, tx) => sum + tx.amount, 0);
-    const agreedMonthlyRent = round2(unit.agreedRent || 0);
+    const activeAgreement = await RentalAgreement.findOne({
+      propertyId,
+      unitId,
+      status: 'ACTIVE',
+    }).select('monthlyRent');
+    const agreedMonthlyRent = round2(getAgreedMonthlyRent(unit, activeAgreement));
     const remainingMonthDue = Math.max(0, round2(agreedMonthlyRent - alreadyPaidThisMonth));
 
     // Calculate prior outstanding receivables (for demonstration / simulated ledger dues)
@@ -240,6 +247,14 @@ export const getPlazaUnits = async (req, res) => {
       propertyId,
       rentMonth: targetMonth,
     }).lean();
+    const activeAgreements = await RentalAgreement.find({
+      propertyId,
+      unitId: { $in: property.units.map((unit) => unit._id) },
+      status: 'ACTIVE',
+    }).select('unitId monthlyRent').lean();
+    const agreementsByUnitId = new Map(
+      activeAgreements.map((agreement) => [agreement.unitId.toString(), agreement])
+    );
 
     // Map units with payment calculations
     const unitsWithStatus = property.units.map((unit) => {
@@ -249,7 +264,8 @@ export const getPlazaUnits = async (req, res) => {
       const paidThisMonth = round2(
         unitPayments.reduce((sum, tx) => sum + tx.amount, 0)
       );
-      const agreedRent = round2(unit.agreedRent || 0);
+      const activeAgreement = agreementsByUnitId.get(unit._id.toString());
+      const agreedRent = round2(getAgreedMonthlyRent(unit, activeAgreement));
       const balanceDue = round2(Math.max(0, agreedRent - paidThisMonth));
       const isFullyPaid = paidThisMonth >= agreedRent;
 

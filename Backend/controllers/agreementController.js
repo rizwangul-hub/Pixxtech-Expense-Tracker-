@@ -10,38 +10,38 @@ import { checkAgreementOverlap } from '../middleware/validateTenancy.js';
  * Helper to synchronize Unit status when agreement state changes
  */
 const syncUnitOccupancy = async (propertyId, unitId) => {
-  try {
-    const property = await Property.findById(propertyId);
-    if (!property) return;
-
-    const unit = property.units.id(unitId);
-    if (!unit) return;
-
-    // Check if any ACTIVE agreement exists for this unit
-    const activeAgreement = await RentalAgreement.findOne({
-      propertyId,
-      unitId,
-      status: 'ACTIVE',
-    }).populate('tenantId', 'fullName');
-
-    if (activeAgreement) {
-      unit.status = 'OCCUPIED';
-      unit.tenantName = activeAgreement.tenantId?.fullName || unit.tenantName;
-      unit.agreedRent = activeAgreement.monthlyRent;
-      unit.dueDay = activeAgreement.dueDay;
-      unit.renewalDate = activeAgreement.renewalDate || null;
-    } else {
-      // If no active lease remains, set to VACANT (unless currently under MAINTENANCE)
-      if (unit.status !== 'MAINTENANCE' && unit.status !== 'INACTIVE') {
-        unit.status = 'VACANT';
-        unit.tenantName = null;
-      }
-    }
-
-    await property.save();
-  } catch (err) {
-    console.error('[Sync Unit Occupancy Error]:', err);
+  const property = await Property.findById(propertyId);
+  if (!property) {
+    throw new Error('Property not found while synchronizing rental agreement.');
   }
+
+  const unit = property.units.id(unitId);
+  if (!unit) {
+    throw new Error('Unit not found while synchronizing rental agreement.');
+  }
+
+  // Check if any ACTIVE agreement exists for this unit
+  const activeAgreement = await RentalAgreement.findOne({
+    propertyId,
+    unitId,
+    status: 'ACTIVE',
+  }).populate('tenantId', 'fullName');
+
+  if (activeAgreement) {
+    unit.status = 'OCCUPIED';
+    unit.tenantName = activeAgreement.tenantId?.fullName || unit.tenantName;
+    unit.agreedRent = activeAgreement.monthlyRent;
+    unit.dueDay = activeAgreement.dueDay;
+    unit.renewalDate = activeAgreement.renewalDate || null;
+  } else {
+    // If no active lease remains, set to VACANT (unless currently under MAINTENANCE)
+    if (unit.status !== 'MAINTENANCE' && unit.status !== 'INACTIVE') {
+      unit.status = 'VACANT';
+      unit.tenantName = null;
+    }
+  }
+
+  await property.save();
 };
 
 /**
@@ -362,6 +362,8 @@ export const updateAgreement = async (req, res) => {
     } = req.body;
 
     const oldStatus = agreement.status;
+    const oldMonthlyRent = agreement.monthlyRent;
+    const oldDueDay = agreement.dueDay;
 
     if (startDate !== undefined) agreement.startDate = new Date(startDate);
     if (endDate !== undefined) agreement.endDate = new Date(endDate);
@@ -379,8 +381,14 @@ export const updateAgreement = async (req, res) => {
 
     await agreement.save();
 
-    // Re-evaluate unit occupancy if status changed or unit details shifted
-    if (status && status !== oldStatus) {
+    const statusChanged = status !== undefined && status !== oldStatus;
+    const activeLeaseDetailsChanged =
+      (oldStatus === 'ACTIVE' || agreement.status === 'ACTIVE') &&
+      ((monthlyRent !== undefined && Number(monthlyRent) !== oldMonthlyRent) ||
+        (dueDay !== undefined && Number(dueDay) !== oldDueDay));
+
+    // Keep the property unit snapshot aligned with changes to its active agreement.
+    if (statusChanged || activeLeaseDetailsChanged) {
       await syncUnitOccupancy(agreement.propertyId, agreement.unitId);
     }
 
