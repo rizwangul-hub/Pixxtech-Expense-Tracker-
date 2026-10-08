@@ -115,9 +115,11 @@ export const downloadFundsReportPDF = async (req, res) => {
  * @route GET /api/reports/monthly-financial-summary
  */
 export const getMonthlyFinancialSummary = async (req, res) => {
+  let reportStage = 'parse request';
   try {
     const { year, month, periodString, startDate, endDate } = parseDateFilters(req.query);
 
+    reportStage = 'calculate bank and cash balances';
     const matrixData = await getMonthlyOpeningClosingMatrix(year, month);
     const bankRows = matrixData.rows.filter((r) => r.accountType === 'BANK');
     const cashRows = matrixData.rows.filter((r) => r.accountType === 'CASH');
@@ -132,6 +134,7 @@ export const getMonthlyFinancialSummary = async (req, res) => {
       totalOutput: r.totalOutput,
       closingBalance: r.closingBalance,
     }));
+    reportStage = 'calculate rental summary';
     const rentalSummaryData = await getRentalSummaryWithCarryForward(periodString);
     const rentalByProperty = rentalSummaryData.plazas.map((plaza) => ({
       plazaId: plaza.plazaId,
@@ -162,6 +165,7 @@ export const getMonthlyFinancialSummary = async (req, res) => {
     const grandTotalRentalOutstanding = rentalSummaryData.grandTotals.totalOutstandingReceivable;
     const rentalCollectionRate = rentalSummaryData.grandTotals.collectionRate;
 
+    reportStage = 'load other income';
     const otherIncomeTxns = await Transaction.find({
       date: { $gte: startDate, $lte: endDate },
       transactionType: 'INCOME',
@@ -177,6 +181,7 @@ export const getMonthlyFinancialSummary = async (req, res) => {
       totalOtherIncome = round2(totalOtherIncome + amt);
     }
 
+    reportStage = 'calculate expenses';
     const expenseReport = await getHeadWiseExpenseReport(year, month);
     const totalExpenses = round2(expenseReport.totalExpensesOverall);
     const expenseHeadSummary = expenseReport.mainHeads
@@ -194,6 +199,7 @@ export const getMonthlyFinancialSummary = async (req, res) => {
     const totalSuspenseBalance = round2(suspenseRows.reduce((sum, r) => sum + r.closingBalance, 0));
     const grandClosingBalance = round2(totalBankBalance + totalCashBalance + totalSuspenseBalance);
 
+    reportStage = 'load transfers';
     const transferTxns = await Transaction.find({
       date: { $gte: startDate, $lte: endDate },
       transactionType: 'TRANSFER',
@@ -215,8 +221,12 @@ export const getMonthlyFinancialSummary = async (req, res) => {
       financialPosition: { totalRentalIncome: grandTotalRentalReceived, totalOtherIncome, totalIncome, totalExpenses, netSurplusDeficit, totalTransfers, grandClosingBalance },
     });
   } catch (error) {
-    console.error('[Monthly Financial Summary Error]:', error);
-    return res.status(500).json({ success: false, message: 'Failed to generate monthly financial summary.', error: error.message });
+    console.error(`[Monthly Financial Summary Error: ${reportStage}]:`, error);
+    return res.status(500).json({
+      success: false,
+      message: `Failed to generate monthly financial summary while attempting to ${reportStage}.`,
+      error: error.message,
+    });
   }
 };
 

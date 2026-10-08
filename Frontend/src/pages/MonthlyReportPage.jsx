@@ -236,7 +236,15 @@ export function MonthlyReportPage({ currentUser }) {
         setError(res.message || 'Failed to load summary.');
       }
     } catch (e) {
-      setError(e?.response?.data?.message || e.message || 'Network error');
+      const responseError = e?.response?.data?.error;
+      const responseMessage = e?.response?.data?.message;
+      setError(
+        [responseMessage, responseError && responseError !== responseMessage ? responseError : null]
+          .filter(Boolean)
+          .join(' ')
+        || e.message
+        || 'Network error'
+      );
     } finally {
       setLoading(false);
     }
