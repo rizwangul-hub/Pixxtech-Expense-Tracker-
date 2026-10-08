@@ -215,6 +215,7 @@ export const getMonthlyFinancialSummary = async (req, res) => {
       financialPosition: { totalRentalIncome: grandTotalRentalReceived, totalOtherIncome, totalIncome, totalExpenses, netSurplusDeficit, totalTransfers, grandClosingBalance },
     });
   } catch (error) {
+    console.error('[Monthly Financial Summary Error]:', error);
     return res.status(500).json({ success: false, message: 'Failed to generate monthly financial summary.', error: error.message });
   }
 };
