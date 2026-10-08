@@ -447,12 +447,8 @@ export const generateMonthlyFundsReport = async (monthYear) => {
         : '-';
       let receivable = 0;
       let advanceRent = 0;
-      const isCorporateBank = unit.unitName && /Allied Bank/i.test(unit.unitName);
 
-      if (isCorporateBank && received === 0) {
-        receivable = 0;
-        advanceRent = 0;
-      } else if (isBaselineJuly && prior < 0) {
+      if (isBaselineJuly && prior < 0) {
         const priorAdvance = Math.abs(prior);
         const totalCovered = round2(received + priorAdvance);
         receivable = round2(Math.max(0, currentDue - totalCovered));
