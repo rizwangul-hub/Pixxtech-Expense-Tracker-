@@ -1,9 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import handlebars from 'handlebars';
 import JSZip from 'jszip';
 import { generateBulkReceiptEvidenceZIP } from '../services/pdfReportService.js';
+
+test('bulk receipt evidence pages render the exact voucher number as searchable text', () => {
+  const templatePath = fileURLToPath(
+    new URL('../templates/bulkReceiptEvidenceTemplate.html', import.meta.url)
+  );
+  const templateSource = fs.readFileSync(path.resolve(templatePath), 'utf8');
+  const template = handlebars.compile(templateSource);
+  handlebars.registerHelper('formatPKR', (amount) => String(amount));
+
+  const html = template({
+    vouchers: [{ voucherNo: 'PT-182-09-26', attachments: [] }],
+  });
+
+  assert.match(html, /Voucher No: <span>PT-182-09-26<\/span>/);
+});
 
 test('bulk receipt evidence ZIP streams a merged PDF and receipt images', async () => {
   const image = Buffer.from(
