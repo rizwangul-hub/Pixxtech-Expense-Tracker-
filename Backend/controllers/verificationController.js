@@ -1728,19 +1728,9 @@ export const getFilteredVouchersForEvidence = async (query = {}) => {
       .lean();
 
     for (const entry of pendingEntries) {
-      const rawAttachments = (entry.attachments && entry.attachments.length > 0)
-        ? entry.attachments
-        : (entry.entryData?.attachments && entry.entryData.attachments.length > 0)
-        ? entry.entryData.attachments
-        : [];
-      const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.some((att) =>
-        typeof att === 'string' ? Boolean(att) : Boolean(att?.url)
-      );
-      if (hasAttachments) {
-        const vData = buildEvidenceDataForEntry(entry);
-        if (vData && vData.voucherNo) {
-          vouchersMap.set(vData.voucherNo, vData);
-        }
+      const vData = buildEvidenceDataForEntry(entry);
+      if (vData && vData.voucherNo) {
+        vouchersMap.set(vData.voucherNo, vData);
       }
     }
 

@@ -1181,72 +1181,70 @@ export const generateBulkReceiptEvidencePDF = async (vouchers, periodLabel = '')
 };
 
 /**
- * Generate a ZIP Archive containing both individual PDF voucher files and the combined master PDF
+ * Generate a ZIP Archive containing the master combined PDF + organized raw receipt images.
+ * Individual voucher PDFs are skipped (too slow on serverless); instead the ZIP contains:
+ *   - 00_Master_Combined_All_Vouchers_<period>.pdf  (the complete merged evidence PDF)
+ *   - Receipt_Images/VN<voucherNo>_<filename>.<ext> (raw Cloudinary images per voucher)
  */
 export const generateBulkReceiptEvidenceZIP = async (vouchers, periodLabel = '') => {
   const zip = new JSZip();
   const cleanPeriod = (periodLabel || 'All_Transactions').replace(/[^a-zA-Z0-9_-]/g, '_');
 
-  // Pre-fetch images into Base64 Data URIs once for both master and individual slips
+  // Pre-fetch all images into Base64 once (shared with master PDF)
   const inlinedVouchers = await prefetchVoucherImages(vouchers);
 
-  // 1. Generate the master combined multi-page PDF
+  // 1. Master combined multi-page PDF (all vouchers on sequential A4 pages)
   const masterPdfBuffer = await generateBulkReceiptEvidencePDF(inlinedVouchers, periodLabel);
   zip.file(`00_Master_Combined_All_Vouchers_${cleanPeriod}.pdf`, masterPdfBuffer);
 
-  // 2. Generate individual voucher PDFs reusing one browser instance
-  const chromium = (await import('@sparticuz/chromium')).default;
-  const puppeteer = (await import('puppeteer-core')).default;
-  const singleTemplatePath = path.join(__dirname, '..', 'templates', 'receiptEvidenceTemplate.html');
-  const singleTemplateSource = fs.readFileSync(singleTemplatePath, 'utf8');
-  const compiledSingleTemplate = handlebars.compile(singleTemplateSource);
-
-  const localExecutablePath = getBrowserExecutablePath();
-  const executablePath = localExecutablePath || (await chromium.executablePath());
-  const launchOptions = {
-    headless: true,
-    args: localExecutablePath
-      ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
-      : chromium.args,
-    executablePath,
-  };
-
-  const browser = await puppeteer.launch(launchOptions);
-  try {
-    const page = await browser.newPage();
-    const folder = zip.folder('Individual_Voucher_PDFs');
-
-    for (let i = 0; i < inlinedVouchers.length; i++) {
-      const voucher = inlinedVouchers[i];
-      const htmlContent = compiledSingleTemplate({
-        ...voucher,
-        formattedDate: formatReportDate(voucher.date),
-        logoBase64,
-        sarfrazSignBase64,
-        khurshidSignBase64,
-        generatedDate: new Date().toLocaleString('en-GB'),
-      });
-
-      await page.setContent(htmlContent, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      const singlePdf = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        preferCSSPageSize: true,
-        pageRanges: '1',
-        margin: { top: '4mm', right: '6mm', bottom: '4mm', left: '6mm' },
-      });
-
-      const vNo = voucher.voucherNo || (voucher._id ? voucher._id.toString().slice(-6) : `V${i + 1}`);
-      folder.file(`Voucher_${vNo}_Receipt_Evidence.pdf`, singlePdf);
+  // 2. Raw receipt images organized per voucher (fast — no extra Puppeteer needed)
+  const imagesFolder = zip.folder('Receipt_Images');
+  for (const voucher of inlinedVouchers) {
+    const vNo = (voucher.voucherNo || 'UNKNOWN').replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (Array.isArray(voucher.attachments) && voucher.attachments.length > 0) {
+      for (let i = 0; i < voucher.attachments.length; i++) {
+        const att = voucher.attachments[i];
+        const src = att?.url || '';
+        if (!src) continue;
+        try {
+          let imgBuffer;
+          let ext = 'jpg';
+          if (src.startsWith('data:')) {
+            // Already base64 from prefetch
+            const match = src.match(/^data:([^;]+);base64,(.+)$/);
+            if (match) {
+              const mime = match[1];
+              imgBuffer = Buffer.from(match[2], 'base64');
+              ext = mime.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+            }
+          } else {
+            // Fallback: fetch raw bytes
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 7000);
+            const res = await fetch(src, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (res.ok) {
+              const arrayBuffer = await res.arrayBuffer();
+              imgBuffer = Buffer.from(arrayBuffer);
+              const ct = res.headers.get('content-type') || 'image/jpeg';
+              ext = ct.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+            }
+          }
+          if (imgBuffer) {
+            const suffix = voucher.attachments.length > 1 ? `_${i + 1}` : '';
+            imagesFolder.file(`VN${vNo}${suffix}.${ext}`, imgBuffer);
+          }
+        } catch {
+          // Skip failed image
+        }
+      }
     }
-  } finally {
-    await browser.close();
   }
 
   const zipBuffer = await zip.generateAsync({
     type: 'nodebuffer',
     compression: 'DEFLATE',
-    compressionOptions: { level: 6 },
+    compressionOptions: { level: 4 },
   });
 
   return zipBuffer;
