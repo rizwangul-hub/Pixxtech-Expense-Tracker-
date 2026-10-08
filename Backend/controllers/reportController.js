@@ -121,6 +121,7 @@ export const getMonthlyFinancialSummary = async (req, res) => {
 
     reportStage = 'calculate bank and cash balances';
     const matrixData = await getMonthlyOpeningClosingMatrix(year, month);
+    const grandTotal = matrixData.grandTotal;
     const bankRows = matrixData.rows.filter((r) => r.accountType === 'BANK');
     const cashRows = matrixData.rows.filter((r) => r.accountType === 'CASH');
     const suspenseRows = matrixData.rows.filter((r) => r.accountType === 'SUSPENSE');

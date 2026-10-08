@@ -10,6 +10,7 @@ import {
   rejectEntry,
   deletePendingEntry,
   createPendingEntry,
+  downloadAllReceiptEvidencePDF,
   downloadAllReceiptEvidenceZIP,
   downloadReceiptEvidencePDF,
 } from '../controllers/verificationController.js';
@@ -22,11 +23,10 @@ router.use(protect);
 // Verification Manager & Admin Endpoints (Khurshid Anwar & Fahad)
 router.get('/pending', authorize('VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), getPendingEntries);
 router.get('/summary', authorize('VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'), getVerificationSummary);
-router.get(
-  '/receipt-evidence-zip',
-  authorize('VERIFICATION_MANAGER', 'VERIFIER', 'ADMIN', 'ADMIN_PUBLISHER'),
-  downloadAllReceiptEvidenceZIP
-);
+
+// Bulk Receipt Evidence Slip Downloads (Multi-page PDF & ZIP Archive)
+router.get('/receipt-evidence-pdf', downloadAllReceiptEvidencePDF);
+router.get('/receipt-evidence-zip', downloadAllReceiptEvidenceZIP);
 
 // Data Entry Submissions Query & Creation (Sarfraz)
 router.get('/my-submissions', getMySubmissions);

@@ -1632,54 +1632,179 @@ export const createPendingEntry = async (req, res) => {
 };
 
 /**
- * Download receipt-evidence PDFs for all matching verification queue entries as a ZIP.
- * Pagination is intentionally ignored so one export includes every matching entry.
+ * Helper to fetch and normalize vouchers for bulk evidence generation
  */
-export const downloadAllReceiptEvidenceZIP = async (req, res) => {
-  try {
-    const { status, entryType, search } = req.query;
-    const query = {};
-    const validStatuses = ['PENDING_VERIFICATION', 'EDITED', 'VERIFIED', 'REJECTED'];
-    const validEntryTypes = ['RENT', 'EXPENSE', 'TRANSFER', 'SALARY', 'OTHER_INCOME'];
+export const getFilteredVouchersForEvidence = async (query = {}) => {
+  const {
+    status,
+    entryType,
+    search,
+    startDate,
+    endDate,
+    month,
+    propertyId,
+    unitId,
+    categoryId,
+  } = query;
 
-    if (status && status !== 'ALL') {
-      if (!validStatuses.includes(status)) {
-        return apiError(res, 'Invalid verification status filter.', 400);
-      }
-      query.status = status === 'PENDING_VERIFICATION'
-        ? { $in: ['PENDING_VERIFICATION', 'EDITED'] }
-        : status;
-    } else if (!status) {
-      query.status = { $in: ['PENDING_VERIFICATION', 'EDITED'] };
+  const vouchersMap = new Map(); // voucherNo -> evidenceData
+
+  // 1. PendingEntry Query
+  const pQuery = {};
+  const validStatuses = ['PENDING_VERIFICATION', 'EDITED', 'VERIFIED', 'REJECTED'];
+  const validEntryTypes = ['RENT', 'EXPENSE', 'TRANSFER', 'SALARY', 'OTHER_INCOME'];
+
+  if (status && status !== 'ALL') {
+    if (validStatuses.includes(status)) {
+      pQuery.status = status === 'PENDING_VERIFICATION' ? { $in: ['PENDING_VERIFICATION', 'EDITED'] } : status;
     }
+  } else if (!status && !month && !startDate && !endDate) {
+    pQuery.status = { $in: ['PENDING_VERIFICATION', 'EDITED'] };
+  }
 
-    if (entryType && entryType !== 'ALL') {
-      if (!validEntryTypes.includes(entryType)) {
-        return apiError(res, 'Invalid entry type filter.', 400);
-      }
-      query.entryType = entryType;
+  if (entryType && entryType !== 'ALL' && validEntryTypes.includes(entryType)) {
+    pQuery.entryType = entryType;
+  }
+
+  if (propertyId && mongoose.Types.ObjectId.isValid(propertyId)) {
+    pQuery.propertyId = propertyId;
+  }
+  if (unitId && mongoose.Types.ObjectId.isValid(unitId)) {
+    pQuery.unitId = unitId;
+  }
+  if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
+    pQuery.categoryId = categoryId;
+  }
+
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    const [year, m] = month.split('-').map(Number);
+    const mStart = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
+    const mEnd = new Date(Date.UTC(year, m, 0, 23, 59, 59, 999));
+    pQuery.$or = [
+      { date: { $gte: mStart, $lte: mEnd } },
+      { rentMonth: month },
+      { 'entryData.month': month },
+    ];
+  } else if (startDate || endDate) {
+    pQuery.date = {};
+    if (startDate) pQuery.date.$gte = new Date(startDate);
+    if (endDate) pQuery.date.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+  }
+
+  if (typeof search === 'string' && search.trim()) {
+    const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escapedSearch, 'i');
+    const matchingProperties = await Property.find({
+      $or: [{ plazaName: regex }, { propertyName: regex }, { location: regex }],
+    }).distinct('_id');
+    const searchConditions = [
+      { voucherNo: regex },
+      { detail: regex },
+      { submittedByName: regex },
+      { referenceNumber: regex },
+    ];
+    if (matchingProperties.length > 0) {
+      searchConditions.push({ propertyId: { $in: matchingProperties } });
     }
+    if (pQuery.$or) {
+      pQuery.$and = [{ $or: pQuery.$or }, { $or: searchConditions }];
+      delete pQuery.$or;
+    } else {
+      pQuery.$or = searchConditions;
+    }
+  }
 
+  const pendingEntries = await PendingEntry.find(pQuery)
+    .populate('propertyId', 'plazaName propertyName propertyCode location address units')
+    .populate('tenantId', 'fullName tenantName name phone cnic')
+    .populate({
+      path: 'agreementId',
+      select: 'agreementNumber monthlyRent tenantId',
+      populate: { path: 'tenantId', select: 'fullName tenantName name phone cnic' },
+    })
+    .populate({
+      path: 'categoryId',
+      select: 'name type isRentalHead parentCategoryId isMainHead',
+      populate: { path: 'parentCategoryId', select: 'name' },
+    })
+    .populate('drAccountId', 'name type bankName accountNumber cashHolder')
+    .populate('crAccountId', 'name type bankName accountNumber cashHolder')
+    .populate('receivingAccountId', 'name type bankName accountNumber cashHolder')
+    .populate('submittedBy', 'name email role')
+    .populate('verifiedBy', 'name email role')
+    .sort({ date: 1, voucherNo: 1 })
+    .lean();
+
+  for (const entry of pendingEntries) {
+    const rawAttachments = (entry.attachments && entry.attachments.length > 0)
+      ? entry.attachments
+      : (entry.entryData?.attachments && entry.entryData.attachments.length > 0)
+      ? entry.entryData.attachments
+      : [];
+    const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.some((att) =>
+      typeof att === 'string' ? Boolean(att) : Boolean(att?.url)
+    );
+    if (hasAttachments) {
+      const vData = buildEvidenceDataForEntry(entry);
+      if (vData && vData.voucherNo) {
+        vouchersMap.set(vData.voucherNo, vData);
+      }
+    }
+  }
+
+  // 2. Also query Transaction central ledger (for verified/posted transactions, historical reports e.g. September 2026)
+  const tQuery = {};
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    const [year, m] = month.split('-').map(Number);
+    const mStart = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
+    const mEnd = new Date(Date.UTC(year, m, 0, 23, 59, 59, 999));
+    tQuery.$or = [
+      { date: { $gte: mStart, $lte: mEnd } },
+      { rentMonth: month },
+    ];
+  } else if (startDate || endDate) {
+    tQuery.date = {};
+    if (startDate) tQuery.date.$gte = new Date(startDate);
+    if (endDate) tQuery.date.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+  } else if (status === 'VERIFIED' || status === 'ALL') {
+    // query transactions if VERIFIED status was specifically requested or ALL
+  }
+
+  if (propertyId && mongoose.Types.ObjectId.isValid(propertyId)) {
+    tQuery.propertyId = propertyId;
+  }
+  if (unitId && mongoose.Types.ObjectId.isValid(unitId)) {
+    tQuery.unitId = unitId;
+  }
+  if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
+    tQuery.categoryId = categoryId;
+  }
+
+  if (month || startDate || endDate || status === 'VERIFIED' || status === 'ALL') {
     if (typeof search === 'string' && search.trim()) {
       const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escapedSearch, 'i');
       const matchingProperties = await Property.find({
-        $or: [
-          { plazaName: regex },
-          { propertyName: regex },
-          { location: regex },
-        ],
+        $or: [{ plazaName: regex }, { propertyName: regex }, { location: regex }],
       }).distinct('_id');
-      query.$or = [
+      const searchConditions = [
         { voucherNo: regex },
         { detail: regex },
-        { submittedByName: regex },
-        { referenceNumber: regex },
-        { propertyId: { $in: matchingProperties } },
+        { reference: regex },
+        { checkedBy: regex },
       ];
+      if (matchingProperties.length > 0) {
+        searchConditions.push({ propertyId: { $in: matchingProperties } });
+      }
+      if (tQuery.$or) {
+        tQuery.$and = [{ $or: tQuery.$or }, { $or: searchConditions }];
+        delete tQuery.$or;
+      } else {
+        tQuery.$or = searchConditions;
+      }
     }
 
-    const entries = await PendingEntry.find(query)
+    const transactions = await Transaction.find(tQuery)
       .populate('propertyId', 'plazaName propertyName propertyCode location address units')
       .populate('tenantId', 'fullName tenantName name phone cnic')
       .populate({
@@ -1694,32 +1819,82 @@ export const downloadAllReceiptEvidenceZIP = async (req, res) => {
       })
       .populate('drAccountId', 'name type bankName accountNumber cashHolder')
       .populate('crAccountId', 'name type bankName accountNumber cashHolder')
-      .populate('receivingAccountId', 'name type bankName accountNumber cashHolder')
-      .populate('submittedBy', 'name email role')
-      .populate('verifiedBy', 'name email role')
-      .sort({ submittedAt: -1 })
+      .populate('createdBy', 'name email role')
+      .sort({ date: 1, voucherNo: 1 })
       .lean();
 
-    const vouchers = entries
-      .filter((entry) => {
-        const attachments = entry.attachments?.length
-          ? entry.attachments
-          : entry.entryData?.attachments;
-        return Array.isArray(attachments) && attachments.some((attachment) =>
-          typeof attachment === 'string' ? Boolean(attachment) : Boolean(attachment?.url)
-        );
-      })
-      .map(buildEvidenceDataForEntry);
+    for (const tx of transactions) {
+      const rawAttachments = tx.attachments || [];
+      const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.some((att) =>
+        typeof att === 'string' ? Boolean(att) : Boolean(att?.url)
+      );
+      if (hasAttachments) {
+        const vData = buildEvidenceDataForEntry(tx);
+        if (vData && vData.voucherNo) {
+          vouchersMap.set(vData.voucherNo, vData);
+        }
+      }
+    }
+  }
+
+  const vouchers = Array.from(vouchersMap.values());
+  return sortTransactionsByVoucher(vouchers);
+};
+
+/**
+ * Download merged multi-page receipt-evidence PDF for all matching entries / transactions.
+ * Each voucher with its evidence photo appears on its own dedicated A4 page.
+ * @route GET /api/verification/receipt-evidence-pdf
+ */
+export const downloadAllReceiptEvidencePDF = async (req, res) => {
+  try {
+    const vouchers = await getFilteredVouchersForEvidence(req.query);
 
     if (vouchers.length === 0) {
-      return apiError(res, 'No matching verification queue entries have receipt evidence to download.', 404);
+      return apiError(res, 'No matching entries or transactions have receipt evidence photos to download.', 404);
     }
 
-    const zipBuffer = await generateBulkReceiptEvidenceZIP(
-      vouchers,
-      `Verification_Queue_${status || 'PENDING_VERIFICATION'}`
-    );
-    const filename = `Verification_Queue_Receipt_Evidence_${new Date().toISOString().slice(0, 10)}.zip`;
+    const periodLabel = req.query.month
+      ? req.query.month
+      : req.query.status
+      ? `Queue_${req.query.status}`
+      : `Transactions_${new Date().toISOString().slice(0, 10)}`;
+
+    const pdfBuffer = await generateBulkReceiptEvidencePDF(vouchers, periodLabel);
+    const filename = `All_Vouchers_Receipt_Evidence_${periodLabel}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.status(200).send(pdfBuffer);
+  } catch (error) {
+    console.error('[Download All Receipt Evidence PDF Error]:', error);
+    return apiError(res, error.message || 'Failed to generate merged receipt evidence PDF.', 500);
+  }
+};
+
+/**
+ * Download receipt-evidence PDFs for all matching entries / transactions as a ZIP.
+ * Contains both individual voucher PDFs and the complete master merged PDF.
+ * @route GET /api/verification/receipt-evidence-zip
+ */
+export const downloadAllReceiptEvidenceZIP = async (req, res) => {
+  try {
+    const vouchers = await getFilteredVouchersForEvidence(req.query);
+
+    if (vouchers.length === 0) {
+      return apiError(res, 'No matching entries or transactions have receipt evidence photos to download.', 404);
+    }
+
+    const periodLabel = req.query.month
+      ? req.query.month
+      : req.query.status
+      ? `Queue_${req.query.status}`
+      : `Transactions_${new Date().toISOString().slice(0, 10)}`;
+
+    const zipBuffer = await generateBulkReceiptEvidenceZIP(vouchers, periodLabel);
+    const filename = `All_Vouchers_Receipt_Evidence_${periodLabel}.zip`;
+
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', zipBuffer.length);
@@ -1791,209 +1966,13 @@ export const downloadReceiptEvidencePDF = async (req, res) => {
       return apiError(res, 'Transaction or Pending Entry record not found.', 404);
     }
 
-    // Extract attachments safely
-    const rawAttachments =
-      (entry.attachments && entry.attachments.length > 0)
-        ? entry.attachments
-        : (entry.entryData?.attachments && entry.entryData.attachments.length > 0)
-        ? entry.entryData.attachments
-        : [];
-
-    const attachments = rawAttachments
-      .map((att, idx) => {
-        const url = typeof att === 'string' ? att : att?.url;
-        if (!url) return null;
-        const caption = (typeof att === 'object' && att?.originalName)
-          ? att.originalName
-          : `Receipt Evidence Image #${idx + 1}`;
-        return {
-          url,
-          index: idx + 1,
-          caption,
-        };
-      })
-      .filter(Boolean);
-
-    if (attachments.length === 0) {
+    const evidenceData = buildEvidenceDataForEntry(entry);
+    if (!evidenceData.attachments || evidenceData.attachments.length === 0) {
       return apiError(res, 'No purchase or receipt image attachments found on this record.', 404);
     }
 
-    // Resolve property & unit
-    let propertyName =
-      entry.propertyId?.plazaName ||
-      entry.propertyId?.propertyName ||
-      entry.entryData?.property?.plazaName ||
-      entry.entryData?.property?.name ||
-      '';
-    let unitName = '';
-    if (entry.propertyId?.units && entry.unitId) {
-      const u = entry.propertyId.units.find(
-        (un) => un._id?.toString() === entry.unitId?.toString()
-      );
-      if (u) unitName = u.unitName || u.unitNumber || '';
-    }
-    if (!unitName && entry.entryData?.unit?.unitName) {
-      unitName = entry.entryData.unit.unitName;
-    }
-
-    // Older rent entries may have the agreement but not a tenant reference directly.
-    let agreement = entry.agreementId;
-    const rentDate = new Date(entry.date || entry.submittedAt || Date.now());
-    if (
-      (!agreement || !agreement.tenantId) &&
-      entry.unitId &&
-      entry.propertyId?._id
-    ) {
-      agreement = await RentalAgreement.findOne({
-        propertyId: entry.propertyId._id,
-        unitId: entry.unitId,
-        startDate: { $lte: rentDate },
-        endDate: { $gte: rentDate },
-      })
-        .select('agreementNumber monthlyRent tenantId')
-        .populate('tenantId', 'fullName tenantName name phone cnic')
-        .sort({ startDate: -1 })
-        .lean();
-    }
-
-    // Resolve tenant from the entry, its agreement, or legacy unit metadata.
-    const unitTenantName = entry.propertyId?.units?.find(
-      (unit) => unit._id?.toString() === entry.unitId?.toString()
-    )?.tenantName;
-    const tenantName =
-      entry.tenantId?.fullName ||
-      entry.tenantId?.tenantName ||
-      entry.agreementId?.tenantId?.fullName ||
-      entry.agreementId?.tenantId?.tenantName ||
-      entry.agreementId?.tenantId?.name ||
-      agreement?.tenantId?.fullName ||
-      agreement?.tenantId?.tenantName ||
-      agreement?.tenantId?.name ||
-      entry.entryData?.tenant?.fullName ||
-      unitTenantName ||
-      '';
-
-    // Resolve accounts & names
-    const submittedByName =
-      entry.submittedByName ||
-      entry.submittedBy?.name ||
-      entry.createdBy?.name ||
-      'Sarfraz Khan (Accountant - Data Entry)';
-
-    const verifiedByName =
-      entry.verifiedByName ||
-      entry.verifiedBy?.name ||
-      entry.checkedBy ||
-      'Khurshid Anwar';
-
-    const categoryName =
-      entry.categoryId?.name ||
-      entry.entryData?.category?.name ||
-      'General';
-    const mainExpenseHeadName = entry.categoryId?.isMainHead
-      ? entry.categoryId.name
-      : entry.categoryId?.parentCategoryId?.name ||
-        entry.entryData?.category?.parentCategoryId?.name ||
-        categoryName;
-    const expenseDebitHeadName = [mainExpenseHeadName, categoryName]
-      .filter((name, index, names) => name && names.indexOf(name) === index)
-      .join(' ');
-
-    let drAccountName =
-      entry.drAccountId?.name ||
-      entry.receivingAccountId?.name ||
-      entry.entryData?.drAccount?.name ||
-      '';
-    let crAccountName =
-      entry.crAccountId?.name ||
-      entry.entryData?.crAccount?.name ||
-      '';
-
-    const rentLocationName = [propertyName, unitName].filter(Boolean).join(' - ');
-
-    if (entry.entryType === 'RENT') {
-      drAccountName = (!drAccountName || /Clearing|External Parties/i.test(drAccountName))
-        ? (entry.receivingAccountId?.name || 'Cash Custodian / Bank')
-        : drAccountName;
-      crAccountName = rentLocationName || 'Rental Income';
-    } else if (
-      entry.entryType === 'OTHER_INCOME' ||
-      entry.reportCategory === 'Other Income' ||
-      entry.sourceModule === 'OTHER_INCOME'
-    ) {
-      drAccountName = drAccountName || entry.receivingAccountId?.name || 'Receiving Account (Bank/Cash)';
-      crAccountName = categoryName;
-    } else if (entry.entryType === 'TRANSFER') {
-      drAccountName = drAccountName || 'Destination Account';
-      crAccountName = crAccountName || 'Source Account';
-    } else {
-      const isPropertyExpense =
-        entry.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
-        entry.expenseClassification === 'UNIT_EXPENSE' ||
-        Boolean(entry.propertyId) ||
-        Boolean(entry.unitId);
-      if (isPropertyExpense && rentLocationName) {
-        drAccountName = `${rentLocationName} ${expenseDebitHeadName}`.trim();
-      } else if (!drAccountName || /Clearing|External Parties/i.test(drAccountName)) {
-        drAccountName = expenseDebitHeadName;
-      }
-      if (!crAccountName || /Clearing|External Parties/i.test(crAccountName)) {
-        crAccountName = 'Payment Account (Bank/Cash)';
-      }
-    }
-
-    const isVerified =
-      entry.status === 'VERIFIED' ||
-      entry.status === 'POSTED' ||
-      Boolean(entry.verifiedAt);
-
-    const isRent =
-      entry.entryType === 'RENT' ||
-      entry.reportCategory === 'Rent' ||
-      entry.sourceModule === 'RENT_RECEIVED';
-    const isOtherIncome =
-      entry.entryType === 'OTHER_INCOME' ||
-      entry.reportCategory === 'Other Income' ||
-      entry.sourceModule === 'OTHER_INCOME';
-
-    const documentTitle = isRent
-      ? 'OFFICIAL RENT RECEIPT EVIDENCE'
-      : isOtherIncome
-      ? 'OFFICIAL OTHER INCOME RECEIPT EVIDENCE'
-      : entry.entryType === 'TRANSFER'
-      ? 'BANK / CASH TRANSFER EVIDENCE'
-      : 'OFFICIAL PURCHASE & EXPENSE RECEIPT EVIDENCE';
-
-    const voucherNo =
-      entry.voucherNo ||
-      entry.voucherNumber ||
-      id.toString().slice(-6).toUpperCase();
-
-    const evidenceData = {
-      _id: entry._id,
-      voucherNo,
-      date: entry.date || entry.submittedAt || new Date(),
-      documentTitle,
-      isVerified,
-      submittedByName,
-      submittedAtFormatted: entry.submittedAt ? new Date(entry.submittedAt).toLocaleString('en-PK') : '',
-      verifiedByName,
-      propertyName,
-      unitName,
-      tenantName,
-      rentMonth: entry.rentMonth || null,
-      categoryName,
-      drAccountName,
-      crAccountName,
-      referenceNumber: entry.referenceNumber || entry.reference || '',
-      paymentMethod: entry.paymentMethod || 'CASH',
-      detail: entry.detail || entry.entryData?.detail || 'Purchase / Expense Evidence',
-      amount: round2(entry.amount),
-      attachments,
-    };
-
     const pdfBuffer = await generateReceiptEvidencePDF(evidenceData);
-    const cleanFilename = `Receipt_Evidence_VN${voucherNo}.pdf`;
+    const cleanFilename = `Receipt_Evidence_VN${evidenceData.voucherNo}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${cleanFilename}"`);
@@ -2319,4 +2298,6 @@ export default {
   deletePendingEntry,
   createPendingEntry,
   downloadReceiptEvidencePDF,
+  downloadAllReceiptEvidencePDF,
+  downloadAllReceiptEvidenceZIP,
 };

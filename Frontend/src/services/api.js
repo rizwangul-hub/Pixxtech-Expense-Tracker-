@@ -845,6 +845,38 @@ export const verificationAPI = {
     window.URL.revokeObjectURL(downloadUrl);
     return true;
   },
+  downloadAllReceiptEvidencePDF: async (params = {}) => {
+    let res;
+    try {
+      res = await api.get('/verification/receipt-evidence-pdf', {
+        params,
+        responseType: 'blob',
+      });
+    } catch (error) {
+      const responseData = error.response?.data;
+      if (responseData instanceof Blob) {
+        try {
+          const payload = JSON.parse(await responseData.text());
+          error.message = payload.message || error.message;
+        } catch {
+          // Keep the original request error when the response is not JSON.
+        }
+      }
+      throw error;
+    }
+
+    const label = params.month || (params.status ? `Queue_${params.status}` : `Transactions_${new Date().toISOString().slice(0, 10)}`);
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `All_Vouchers_Receipt_Evidence_${label}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
+    return true;
+  },
   downloadAllReceiptEvidenceZIP: async (params = {}) => {
     let res;
     try {
@@ -865,11 +897,12 @@ export const verificationAPI = {
       throw error;
     }
 
+    const label = params.month || (params.status ? `Queue_${params.status}` : `Transactions_${new Date().toISOString().slice(0, 10)}`);
     const blob = new Blob([res.data], { type: 'application/zip' });
     const downloadUrl = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.download = `Verification_Queue_Receipt_Evidence_${new Date().toISOString().slice(0, 10)}.zip`;
+    link.download = `All_Vouchers_Receipt_Evidence_${label}.zip`;
     document.body.appendChild(link);
     link.click();
     link.remove();
