@@ -16,6 +16,7 @@ import {
 } from '../services/ledgerService.js';
 import { getAgreedMonthlyRent } from '../services/rentPricing.js';
 import { isOwnerPersonalCategory, isOwnerPersonalTransaction } from '../services/expenseClassificationService.js';
+import { getRentalSummaryWithCarryForward } from '../services/rentalCarryForwardService.js';
 
 /**
  * Helper to parse month query (defaults to current month)
@@ -470,160 +471,14 @@ export const deleteTransaction = async (req, res) => {
  */
 export const getRentalIncomeSummary = async (req, res) => {
   try {
-    const { periodString, startDate, endDate } = parseMonthQuery(req.query.month);
-
-    const properties = await Property.find({})
-      .populate('units.defaultReceivingAccountId', 'name type currentBalance')
-      .sort({ plazaName: 1 })
-      .lean();
-
-    const rentTransactions = await Transaction.find({
-      $or: [
-        { rentMonth: periodString },
-        { date: { $gte: startDate, $lte: endDate }, propertyId: { $ne: null } },
-      ],
-      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
-    })
-      .populate('drAccountId', 'name type')
-      .lean();
-
-    const allUnitIds = properties.flatMap((property) =>
-      (property.units || []).map((unit) => unit._id)
-    );
-    const activeAgreements = await RentalAgreement.find({
-      unitId: { $in: allUnitIds },
-      status: 'ACTIVE',
-    }).select('unitId monthlyRent').lean();
-    const agreementsByUnitId = new Map(
-      activeAgreements.map((agreement) => [agreement.unitId.toString(), agreement])
-    );
-
-    let grandTotalAgreed = 0;
-    let grandTotalPrior = 0;
-    let grandTotalCurrentDue = 0;
-    let grandTotalReceived = 0;
-    let grandTotalOutstanding = 0;
-    let grandTotalAdvance = 0;
-
-    const plazaSummaries = properties.map((plaza) => {
-      let plazaAgreed = 0;
-      let plazaPrior = 0;
-      let plazaCurrentDue = 0;
-      let plazaReceived = 0;
-      let plazaOutstanding = 0;
-      let plazaAdvance = 0;
-
-      const units = (plaza.units || []).map((unit) => {
-        const agreement = agreementsByUnitId.get(unit._id.toString());
-        const agreed = round2(getAgreedMonthlyRent(unit, agreement));
-        const prior = round2(unit.julyReceivable || 0);
-        const matchingTransactions = rentTransactions.filter(
-          (transaction) =>
-            transaction.propertyId?.toString() === plaza._id.toString() &&
-            transaction.unitId?.toString() === unit._id.toString()
-        );
-        const received = round2(
-          matchingTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
-        );
-        const latestTransaction = matchingTransactions[matchingTransactions.length - 1];
-        const isVerified =
-          matchingTransactions.length > 0 &&
-          matchingTransactions.every((transaction) => transaction.status === 'VERIFIED');
-        const priorArrears = Math.max(0, prior);
-        const priorAdvance = Math.max(0, -prior);
-        const totalPayable = round2(agreed + priorArrears);
-        const totalCovered = round2(received + priorAdvance);
-        const outstanding = round2(Math.max(0, totalPayable - totalCovered));
-        const advance = round2(Math.max(0, totalCovered - totalPayable));
-        const statusBadge =
-          outstanding === 0
-            ? advance > 0 ? 'ADVANCE_PAID' : 'FULLY_PAID'
-            : totalCovered > 0 ? 'PARTIALLY_PAID' : 'OUTSTANDING';
-
-        plazaAgreed += agreed;
-        plazaPrior += prior;
-        plazaCurrentDue += agreed;
-        plazaReceived += received;
-        plazaOutstanding += outstanding;
-        plazaAdvance += advance;
-
-        return {
-          unitId: unit._id,
-          unitName: unit.unitName,
-          tenantName: unit.tenantName || 'Unassigned',
-          dueDay: unit.dueDay ? `${unit.dueDay}th` : '1st',
-          agreedRent: agreed,
-          priorMonthReceivable: prior,
-          currentMonthActualRent: agreed,
-          receivedAmount: received,
-          receivedDate: latestTransaction && received > 0 && latestTransaction.date
-            ? new Date(latestTransaction.date).toISOString().split('T')[0]
-            : '-',
-          receivingAccountName:
-            latestTransaction && received > 0
-              ? latestTransaction.drAccountId?.name || '-'
-              : '-',
-          renewalDate: unit.renewalDate
-            ? new Date(unit.renewalDate).toISOString().split('T')[0]
-            : 'N/A',
-          outstandingReceivable: outstanding,
-          advanceRentReceived: advance,
-          statusBadge,
-          isCheckedByFahad: isVerified,
-          checkedBy:
-            latestTransaction?.checkedBy ||
-            (isVerified ? 'Fahad Sb' : 'Pending'),
-        };
-      });
-
-      plazaAgreed = round2(plazaAgreed);
-      plazaPrior = round2(plazaPrior);
-      plazaCurrentDue = round2(plazaCurrentDue);
-      plazaReceived = round2(plazaReceived);
-      plazaOutstanding = round2(plazaOutstanding);
-      plazaAdvance = round2(plazaAdvance);
-
-      grandTotalAgreed += plazaAgreed;
-      grandTotalPrior += plazaPrior;
-      grandTotalCurrentDue += plazaCurrentDue;
-      grandTotalReceived += plazaReceived;
-      grandTotalOutstanding += plazaOutstanding;
-      grandTotalAdvance += plazaAdvance;
-
-      return {
-        plazaId: plaza._id,
-        plazaName: plaza.plazaName,
-        unitsCount: units.length,
-        subtotals: {
-          agreedRent: plazaAgreed,
-          priorReceivable: plazaPrior,
-          currentDue: plazaCurrentDue,
-          receivedAmount: plazaReceived,
-          outstandingReceivable: plazaOutstanding,
-          advanceRentReceived: plazaAdvance,
-          collectionRate:
-            plazaCurrentDue > 0 ? Math.round((plazaReceived / plazaCurrentDue) * 100) : 0,
-        },
-        units,
-      };
-    });
+    const { periodString } = parseMonthQuery(req.query.month);
+    const summary = await getRentalSummaryWithCarryForward(periodString);
 
     return res.status(200).json({
       success: true,
       period: periodString,
-      grandTotals: {
-        totalAgreedRent: round2(grandTotalAgreed),
-        totalPriorReceivable: round2(grandTotalPrior),
-        totalCurrentDue: round2(grandTotalCurrentDue),
-        totalReceivedAmount: round2(grandTotalReceived),
-        totalOutstandingReceivable: round2(grandTotalOutstanding),
-        totalAdvanceRentReceived: round2(grandTotalAdvance),
-        collectionRate:
-          grandTotalCurrentDue > 0
-            ? Math.round((grandTotalReceived / grandTotalCurrentDue) * 100)
-            : 0,
-      },
-      plazas: plazaSummaries,
+      grandTotals: summary.grandTotals,
+      plazas: summary.plazas,
     });
   } catch (error) {
     console.error('Error in getRentalIncomeSummary:', error);

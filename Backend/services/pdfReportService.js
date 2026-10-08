@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import handlebars from 'handlebars';
+import JSZip from 'jszip';
 
 import Transaction from '../models/Transaction.js';
 import Property from '../models/Property.js';
@@ -24,6 +25,7 @@ import {
   getBankStatementHeading,
   getLiquidityStatementAmounts,
 } from './ledgerPresentation.js';
+import { getRentalSummaryWithCarryForward } from './rentalCarryForwardService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -373,119 +375,31 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   };
 
   // 5. Fetch 7 Plazas Tenancy Summary (Page 3)
-  const properties = await Property.find({})
-    .populate('units.defaultReceivingAccountId', 'name type')
-    .sort({ plazaName: 1 })
-    .lean();
-
-  const allUnitIds = properties.flatMap((property) =>
-    (property.units || []).map((unit) => unit._id)
-  );
-  const activeAgreements = await RentalAgreement.find({
-    unitId: { $in: allUnitIds },
-    status: 'ACTIVE',
-  }).select('unitId monthlyRent').lean();
-  const agreementsByUnitId = new Map(
-    activeAgreements.map((agreement) => [agreement.unitId.toString(), agreement])
-  );
-
   const [repYear, repMonth] = periodName.split('-').map(Number);
   const currentMonthLabel = `${monthNames[repMonth - 1]}-${repYear}`;
   const prevDate = new Date(Date.UTC(repYear, repMonth - 2, 1));
   const priorMonthLabel = `${monthNames[prevDate.getUTCMonth()]}-${prevDate.getUTCFullYear()}`;
-  const isBaselineJuly = periodName === '2026-08';
 
-  let totAgreed = 0;
-  let totPrior = 0;
-  let totCurrentDue = 0;
-  let totReceived = 0;
-  let totReceivable = 0;
-  let totAdvance = 0;
+  const rentalSummary = await getRentalSummaryWithCarryForward(periodName);
 
-  const plazaList = properties.map((plaza) => {
-    const units = (plaza.units || []).map((unit) => {
-      const activeAgreement = agreementsByUnitId.get(unit._id.toString());
-      const agreed = round2(getAgreedMonthlyRent(unit, activeAgreement));
-      const currentDue = agreed;
-
-      let prior = 0;
-      if (isBaselineJuly) {
-        prior = round2(unit.julyReceivable || 0);
-      } else {
-        prior = round2(Math.max(0, unit.julyReceivable || 0));
-      }
-
-      const matchingTransactions = transactions.filter((transaction) => {
-        const propertyId =
-          transaction.propertyId?._id?.toString() ||
-          transaction.propertyId?.toString();
-        const unitId = transaction.unitId?.toString();
-        const isRent =
-          transaction.reportCategory === 'Rent' ||
-          transaction.sourceModule === 'RENT_RECEIVED';
-        return (
-          isRent &&
-          propertyId === plaza._id.toString() &&
-          unitId === unit._id.toString()
-        );
-      });
-
-      const received = round2(
-        matchingTransactions.reduce((sum, transaction) => sum + (transaction.amount || 0), 0)
-      );
-      const latestTransaction = matchingTransactions[matchingTransactions.length - 1];
-      const receivingBank =
-        latestTransaction && received > 0
-          ? latestTransaction.drAccountId?.name || '-'
-          : '-';
-      const receivedDate =
-        latestTransaction && received > 0 && latestTransaction.date
-          ? formatReportDate(latestTransaction.date)
-          : '-';
-      const renewalDate = unit.renewalDate
-        ? formatReportDate(unit.renewalDate)
-        : '-';
-      let receivable = 0;
-      let advanceRent = 0;
-
-      if (isBaselineJuly && prior < 0) {
-        const priorAdvance = Math.abs(prior);
-        const totalCovered = round2(received + priorAdvance);
-        receivable = round2(Math.max(0, currentDue - totalCovered));
-        advanceRent = round2(Math.max(0, totalCovered - currentDue));
-      } else {
-        const totalPayable = round2(currentDue + Math.max(0, prior));
-        if (received >= totalPayable) {
-          receivable = 0;
-          advanceRent = round2(received - totalPayable);
-        } else {
-          receivable = round2(totalPayable - received);
-          advanceRent = 0;
-        }
-      }
-
-      totAgreed += agreed;
-      totPrior += prior;
-      totCurrentDue += currentDue;
-      totReceived += received;
-      totReceivable += receivable;
-      totAdvance += advanceRent;
-
+  const plazaList = rentalSummary.plazas.map((plaza) => {
+    const units = (plaza.units || []).map((u) => {
+      const prior = round2(u.priorMonthReceivable || 0);
       return {
-        unitName: `${unit.unitName}${unit.tenantName ? ` - ${unit.tenantName}` : ''}`,
-        dueDay: unit.dueDay ? `${unit.dueDay}th` : '1st',
-        agreedRent: agreed,
+        unitName: `${u.unitName}${u.tenantName && u.tenantName !== 'Unassigned' ? ` - ${u.tenantName}` : ''}`,
+        dueDay: u.dueDay,
+        agreedRent: u.agreedRent,
         priorReceivable: prior,
         julyReceivable: prior,
         isPriorNeg: prior < 0,
-        currentActualRent: currentDue,
-        augustActualRent: currentDue,
-        receivedAmount: received,
-        receivedDate,
-        receivingBank,
-        renewalDate,
-        receivable,
-        advanceRent,
+        currentActualRent: u.currentMonthActualRent,
+        augustActualRent: u.currentMonthActualRent,
+        receivedAmount: u.receivedAmount,
+        receivedDate: u.receivedDate,
+        receivingBank: u.receivingAccountName || '-',
+        renewalDate: u.renewalDate,
+        receivable: u.outstandingReceivable,
+        advanceRent: u.advanceRentReceived,
       };
     });
 
@@ -497,15 +411,15 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     currentMonthLabel,
     plazas: plazaList,
     totals: {
-      agreedRent: round2(totAgreed),
-      priorReceivable: round2(totPrior),
-      julyReceivable: round2(totPrior),
-      isPriorNeg: totPrior < 0,
-      currentActualRent: round2(totCurrentDue),
-      augustActualRent: round2(totCurrentDue),
-      receivedAmount: round2(totReceived),
-      receivable: round2(totReceivable),
-      advanceRent: round2(totAdvance),
+      agreedRent: rentalSummary.grandTotals.totalAgreedRent,
+      priorReceivable: rentalSummary.grandTotals.totalPriorReceivable,
+      julyReceivable: rentalSummary.grandTotals.totalPriorReceivable,
+      isPriorNeg: rentalSummary.grandTotals.totalPriorReceivable < 0,
+      currentActualRent: rentalSummary.grandTotals.totalCurrentDue,
+      augustActualRent: rentalSummary.grandTotals.totalCurrentDue,
+      receivedAmount: rentalSummary.grandTotals.totalReceivedAmount,
+      receivable: rentalSummary.grandTotals.totalOutstandingReceivable,
+      advanceRent: rentalSummary.grandTotals.totalAdvanceRentReceived,
     },
   };
 
@@ -973,10 +887,321 @@ export const generateAllTransactionsPDF = async (data, requestedUser) => {
   }
 };
 
+/**
+ * Standardizes any Transaction or PendingEntry into evidenceData structure
+ */
+export const buildEvidenceDataForEntry = (entry) => {
+  const id = entry._id?.toString() || '';
+  const rawAttachments =
+    (entry.attachments && entry.attachments.length > 0)
+      ? entry.attachments
+      : (entry.entryData?.attachments && entry.entryData.attachments.length > 0)
+      ? entry.entryData.attachments
+      : [];
+
+  const attachments = rawAttachments
+    .map((att, idx) => {
+      const url = typeof att === 'string' ? att : att?.url;
+      if (!url) return null;
+      const caption = (typeof att === 'object' && att?.originalName)
+        ? att.originalName
+        : `Receipt Evidence Image #${idx + 1}`;
+      return {
+        url,
+        index: idx + 1,
+        caption,
+      };
+    })
+    .filter(Boolean);
+
+  let propertyName =
+    entry.propertyId?.plazaName ||
+    entry.propertyId?.propertyName ||
+    entry.entryData?.property?.plazaName ||
+    entry.entryData?.property?.name ||
+    '';
+  let unitName = '';
+  if (entry.propertyId?.units && entry.unitId) {
+    const u = entry.propertyId.units.find(
+      (un) => un._id?.toString() === entry.unitId?.toString()
+    );
+    if (u) unitName = u.unitName || u.unitNumber || '';
+  }
+  if (!unitName && entry.entryData?.unit?.unitName) {
+    unitName = entry.entryData.unit.unitName;
+  }
+
+  const unitTenantName = entry.propertyId?.units?.find(
+    (unit) => unit._id?.toString() === entry.unitId?.toString()
+  )?.tenantName;
+  const tenantName =
+    entry.tenantId?.fullName ||
+    entry.tenantId?.tenantName ||
+    entry.agreementId?.tenantId?.fullName ||
+    entry.agreementId?.tenantId?.tenantName ||
+    entry.agreementId?.tenantId?.name ||
+    entry.entryData?.tenant?.fullName ||
+    unitTenantName ||
+    '';
+
+  const submittedByName =
+    entry.submittedByName ||
+    entry.submittedBy?.name ||
+    entry.createdBy?.name ||
+    'Sarfraz Khan (Accountant - Data Entry)';
+
+  const verifiedByName =
+    entry.verifiedByName ||
+    entry.verifiedBy?.name ||
+    entry.checkedBy ||
+    'Khurshid Anwar';
+
+  const categoryName =
+    entry.categoryId?.name ||
+    entry.entryData?.category?.name ||
+    'General';
+  const mainExpenseHeadName = entry.categoryId?.isMainHead
+    ? entry.categoryId.name
+    : entry.categoryId?.parentCategoryId?.name ||
+      entry.entryData?.category?.parentCategoryId?.name ||
+      categoryName;
+  const expenseDebitHeadName = [mainExpenseHeadName, categoryName]
+    .filter((name, index, names) => name && names.indexOf(name) === index)
+    .join(' ');
+
+  let drAccountName =
+    entry.drAccountId?.name ||
+    entry.receivingAccountId?.name ||
+    entry.entryData?.drAccount?.name ||
+    '';
+  let crAccountName =
+    entry.crAccountId?.name ||
+    entry.entryData?.crAccount?.name ||
+    '';
+
+  const rentLocationName = [propertyName, unitName].filter(Boolean).join(' - ');
+
+  const isRent =
+    entry.entryType === 'RENT' ||
+    entry.reportCategory === 'Rent' ||
+    entry.sourceModule === 'RENT_RECEIVED';
+  const isOtherIncome =
+    entry.entryType === 'OTHER_INCOME' ||
+    entry.reportCategory === 'Other Income' ||
+    entry.sourceModule === 'OTHER_INCOME';
+
+  if (entry.entryType === 'RENT' || isRent) {
+    drAccountName = (!drAccountName || /Clearing|External Parties/i.test(drAccountName))
+      ? (entry.receivingAccountId?.name || 'Cash Custodian / Bank')
+      : drAccountName;
+    crAccountName = rentLocationName || 'Rental Income';
+  } else if (entry.entryType === 'OTHER_INCOME' || isOtherIncome) {
+    drAccountName = drAccountName || entry.receivingAccountId?.name || 'Receiving Account (Bank/Cash)';
+    crAccountName = categoryName;
+  } else if (entry.entryType === 'TRANSFER') {
+    drAccountName = drAccountName || 'Destination Account';
+    crAccountName = crAccountName || 'Source Account';
+  } else {
+    const isPropertyExpense =
+      entry.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+      entry.expenseClassification === 'UNIT_EXPENSE' ||
+      Boolean(entry.propertyId) ||
+      Boolean(entry.unitId);
+    if (isPropertyExpense && rentLocationName) {
+      drAccountName = `${rentLocationName} ${expenseDebitHeadName}`.trim();
+    } else if (!drAccountName || /Clearing|External Parties/i.test(drAccountName)) {
+      drAccountName = expenseDebitHeadName;
+    }
+    if (!crAccountName || /Clearing|External Parties/i.test(crAccountName)) {
+      crAccountName = 'Payment Account (Bank/Cash)';
+    }
+  }
+
+  const isVerified =
+    entry.status === 'VERIFIED' ||
+    entry.status === 'POSTED' ||
+    Boolean(entry.verifiedAt);
+
+  const documentTitle = isRent
+    ? 'OFFICIAL RENT RECEIPT EVIDENCE'
+    : isOtherIncome
+    ? 'OFFICIAL OTHER INCOME RECEIPT EVIDENCE'
+    : entry.entryType === 'TRANSFER'
+    ? 'BANK / CASH TRANSFER EVIDENCE'
+    : 'OFFICIAL PURCHASE & EXPENSE RECEIPT EVIDENCE';
+
+  const voucherNo =
+    entry.voucherNo ||
+    entry.voucherNumber ||
+    (id ? id.slice(-6).toUpperCase() : 'N/A');
+
+  const rawDate = entry.date || entry.submittedAt || new Date();
+
+  return {
+    _id: entry._id,
+    voucherNo,
+    date: rawDate,
+    formattedDate: formatReportDate(rawDate),
+    documentTitle,
+    isVerified,
+    submittedByName,
+    submittedAtFormatted: entry.submittedAt ? new Date(entry.submittedAt).toLocaleString('en-PK') : '',
+    verifiedByName,
+    propertyName,
+    unitName,
+    tenantName,
+    rentMonth: entry.rentMonth || null,
+    categoryName,
+    drAccountName,
+    crAccountName,
+    referenceNumber: entry.referenceNumber || entry.reference || '',
+    paymentMethod: entry.paymentMethod || 'CASH',
+    detail: entry.detail || entry.description || entry.entryData?.detail || 'Purchase / Expense Evidence',
+    amount: round2(entry.amount || 0),
+    attachments,
+  };
+};
+
+/**
+ * Generate Multi-Page A4 PDF containing all vouchers with receipt evidence sequentially
+ */
+export const generateBulkReceiptEvidencePDF = async (vouchers, periodLabel = '') => {
+  const templatePath = path.join(__dirname, '..', 'templates', 'bulkReceiptEvidenceTemplate.html');
+  const templateSource = fs.readFileSync(templatePath, 'utf8');
+  const compiledTemplate = handlebars.compile(templateSource);
+
+  const formattedVouchers = vouchers.map((v) => ({
+    ...v,
+    formattedDate: formatReportDate(v.date),
+  }));
+
+  const htmlContent = compiledTemplate({
+    vouchers: formattedVouchers,
+    periodLabel: periodLabel || 'Selected Vouchers',
+    logoBase64,
+    sarfrazSignBase64,
+    khurshidSignBase64,
+    generatedDate: new Date().toLocaleString('en-GB'),
+  });
+
+  const chromium = (await import('@sparticuz/chromium')).default;
+  const puppeteer = (await import('puppeteer-core')).default;
+
+  const localExecutablePath = getBrowserExecutablePath();
+  const executablePath = localExecutablePath || (await chromium.executablePath());
+  const launchOptions = {
+    headless: true,
+    args: localExecutablePath
+      ? [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ]
+      : chromium.args,
+    executablePath,
+  };
+
+  const browser = await puppeteer.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: 180000 });
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      preferCSSPageSize: true,
+      margin: {
+        top: '4mm',
+        right: '6mm',
+        bottom: '4mm',
+        left: '6mm',
+      },
+    });
+
+    return pdfBuffer;
+  } finally {
+    await browser.close();
+  }
+};
+
+/**
+ * Generate a ZIP Archive containing both individual PDF voucher files and the combined master PDF
+ */
+export const generateBulkReceiptEvidenceZIP = async (vouchers, periodLabel = '') => {
+  const zip = new JSZip();
+  const cleanPeriod = (periodLabel || 'All_Transactions').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+  // 1. Generate the master combined multi-page PDF
+  const masterPdfBuffer = await generateBulkReceiptEvidencePDF(vouchers, periodLabel);
+  zip.file(`00_Master_Combined_All_Vouchers_${cleanPeriod}.pdf`, masterPdfBuffer);
+
+  // 2. Generate individual voucher PDFs reusing one browser instance
+  const chromium = (await import('@sparticuz/chromium')).default;
+  const puppeteer = (await import('puppeteer-core')).default;
+  const singleTemplatePath = path.join(__dirname, '..', 'templates', 'receiptEvidenceTemplate.html');
+  const singleTemplateSource = fs.readFileSync(singleTemplatePath, 'utf8');
+  const compiledSingleTemplate = handlebars.compile(singleTemplateSource);
+
+  const localExecutablePath = getBrowserExecutablePath();
+  const executablePath = localExecutablePath || (await chromium.executablePath());
+  const launchOptions = {
+    headless: true,
+    args: localExecutablePath
+      ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+      : chromium.args,
+    executablePath,
+  };
+
+  const browser = await puppeteer.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    const folder = zip.folder('Individual_Voucher_PDFs');
+
+    for (let i = 0; i < vouchers.length; i++) {
+      const voucher = vouchers[i];
+      const htmlContent = compiledSingleTemplate({
+        ...voucher,
+        formattedDate: formatReportDate(voucher.date),
+        logoBase64,
+        sarfrazSignBase64,
+        khurshidSignBase64,
+        generatedDate: new Date().toLocaleString('en-GB'),
+      });
+
+      await page.setContent(htmlContent, { waitUntil: 'load', timeout: 30000 });
+      const singlePdf = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        preferCSSPageSize: true,
+        pageRanges: '1',
+        margin: { top: '4mm', right: '6mm', bottom: '4mm', left: '6mm' },
+      });
+
+      const vNo = voucher.voucherNo || (voucher._id ? voucher._id.toString().slice(-6) : `V${i + 1}`);
+      folder.file(`Voucher_${vNo}_Receipt_Evidence.pdf`, singlePdf);
+    }
+  } finally {
+    await browser.close();
+  }
+
+  const zipBuffer = await zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
+
+  return zipBuffer;
+};
+
 export default {
   generateMonthlyFundsReport,
   generateSingleVoucherPDF,
   generateReceiptEvidencePDF,
+  generateBulkReceiptEvidencePDF,
+  generateBulkReceiptEvidenceZIP,
+  buildEvidenceDataForEntry,
   generateLedgerPDF,
   generateAllTransactionsPDF,
 };
+

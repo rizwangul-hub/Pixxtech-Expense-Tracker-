@@ -33,7 +33,13 @@ import {
 } from './payrollController.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { validateExpenseClassification, isOwnerPersonalCategory } from '../services/expenseClassificationService.js';
-import { generateReceiptEvidencePDF } from '../services/pdfReportService.js';
+import {
+  generateReceiptEvidencePDF,
+  generateBulkReceiptEvidencePDF,
+  generateBulkReceiptEvidenceZIP,
+  buildEvidenceDataForEntry,
+  sortTransactionsByVoucher,
+} from '../services/pdfReportService.js';
 import {
   getSalaryPaymentDetail,
   getSalaryPaymentPeriod,

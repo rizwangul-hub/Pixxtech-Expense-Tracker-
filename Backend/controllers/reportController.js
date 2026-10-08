@@ -13,6 +13,7 @@ import {
 } from '../services/ledgerService.js';
 import { generateMonthlyFundsReport, sortTransactionsByVoucher } from '../services/pdfReportService.js';
 import { getUtcMonthDateRange } from '../services/salaryReportingService.js';
+import { getRentalSummaryWithCarryForward } from '../services/rentalCarryForwardService.js';
 
 // ─── Shared Helpers ────────────────────────────────────────────────────────────
 
@@ -131,86 +132,35 @@ export const getMonthlyFinancialSummary = async (req, res) => {
       totalOutput: r.totalOutput,
       closingBalance: r.closingBalance,
     }));
-    const grandTotal = matrixData.grandTotal;
+    const rentalSummaryData = await getRentalSummaryWithCarryForward(periodString);
+    const rentalByProperty = rentalSummaryData.plazas.map((plaza) => ({
+      plazaId: plaza.plazaId,
+      plazaName: plaza.plazaName,
+      location: plaza.location || '',
+      unitsCount: plaza.unitsCount,
+      agreedRent: plaza.subtotals.agreedRent,
+      receivedAmount: plaza.subtotals.receivedAmount,
+      outstanding: plaza.subtotals.outstandingReceivable,
+      collectionRate: plaza.subtotals.collectionRate,
+      units: plaza.units.map((u) => ({
+        unitId: u.unitId,
+        unitName: u.unitName,
+        tenantName: u.tenantName,
+        agreedRent: u.agreedRent,
+        priorMonthReceivable: u.priorMonthReceivable,
+        receivedAmount: u.receivedAmount,
+        outstanding: u.outstandingReceivable,
+        advanceRentReceived: u.advanceRentReceived,
+        receivedDate: u.receivedDate,
+        receivingAccount: u.receivingAccountName,
+        statusBadge: u.statusBadge,
+      })),
+    }));
 
-    const properties = await Property.find({}).sort({ plazaName: 1 }).lean();
-    const rentTransactions = await Transaction.find({
-      date: { $gte: startDate, $lte: endDate },
-      transactionType: 'INCOME',
-      reportCategory: 'Rent',
-      $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
-    }).populate('drAccountId', 'name type').lean();
-
-    let grandTotalRentalAgreed = 0;
-    let grandTotalRentalReceived = 0;
-    let grandTotalRentalOutstanding = 0;
-
-    const rentalByProperty = properties.map((plaza) => {
-      let plazaReceived = 0;
-      let plazaAgreed = 0;
-      const units = (plaza.units || []).map((unit) => {
-        const agreed = round2(unit.agreedRent || 0);
-        const matchingTransactions = rentTransactions.filter(
-          (transaction) =>
-            transaction.propertyId?.toString() === plaza._id.toString() &&
-            transaction.unitId?.toString() === unit._id.toString()
-        );
-        const received = round2(
-          matchingTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
-        );
-        const outstanding = round2(Math.max(0, agreed - received));
-        const latestTransaction = matchingTransactions[matchingTransactions.length - 1];
-        const statusBadge =
-          received >= agreed && agreed > 0
-            ? 'FULLY_PAID'
-            : received > 0 ? 'PARTIALLY_PAID' : 'OUTSTANDING';
-
-        plazaAgreed += agreed;
-        plazaReceived += received;
-        return {
-          unitId: unit._id,
-          unitName: unit.unitName,
-          tenantName: unit.tenantName || 'Unassigned',
-          agreedRent: agreed,
-          receivedAmount: received,
-          outstanding,
-          receivedDate: latestTransaction?.date
-            ? new Date(latestTransaction.date).toISOString().split('T')[0]
-            : '-',
-          receivingAccount: latestTransaction?.drAccountId?.name || '-',
-          statusBadge,
-        };
-      });
-
-      plazaAgreed = round2(plazaAgreed);
-      plazaReceived = round2(plazaReceived);
-      const outstanding = round2(Math.max(0, plazaAgreed - plazaReceived));
-      const collectionRate =
-        plazaAgreed > 0 ? Math.round((plazaReceived / plazaAgreed) * 100) : 0;
-      grandTotalRentalAgreed += plazaAgreed;
-      grandTotalRentalReceived += plazaReceived;
-      grandTotalRentalOutstanding += outstanding;
-
-      return {
-        plazaId: plaza._id,
-        plazaName: plaza.plazaName,
-        location: plaza.location || '',
-        unitsCount: (plaza.units || []).length,
-        agreedRent: plazaAgreed,
-        receivedAmount: plazaReceived,
-        outstanding,
-        collectionRate,
-        units,
-      };
-    });
-
-    grandTotalRentalAgreed = round2(grandTotalRentalAgreed);
-    grandTotalRentalReceived = round2(grandTotalRentalReceived);
-    grandTotalRentalOutstanding = round2(grandTotalRentalOutstanding);
-    const rentalCollectionRate =
-      grandTotalRentalAgreed > 0
-        ? Math.round((grandTotalRentalReceived / grandTotalRentalAgreed) * 100)
-        : 0;
+    const grandTotalRentalAgreed = rentalSummaryData.grandTotals.totalAgreedRent;
+    const grandTotalRentalReceived = rentalSummaryData.grandTotals.totalReceivedAmount;
+    const grandTotalRentalOutstanding = rentalSummaryData.grandTotals.totalOutstandingReceivable;
+    const rentalCollectionRate = rentalSummaryData.grandTotals.collectionRate;
 
     const otherIncomeTxns = await Transaction.find({
       date: { $gte: startDate, $lte: endDate },
