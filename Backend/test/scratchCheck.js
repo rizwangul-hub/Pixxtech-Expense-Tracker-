@@ -5,35 +5,22 @@ import Transaction from '../models/Transaction.js';
 import PendingEntry from '../models/PendingEntry.js';
 import User from '../models/User.js';
 import Property from '../models/Property.js';
-import { buildEvidenceDataForEntry, sortTransactionsByVoucher } from '../services/pdfReportService.js';
+import Tenant from '../models/Tenant.js';
+import RentalAgreement from '../models/RentalAgreement.js';
+import Category from '../models/Category.js';
+import Account from '../models/Account.js';
+import { generateBulkReceiptEvidencePDF, buildEvidenceDataForEntry, sortTransactionsByVoucher } from '../services/pdfReportService.js';
 
-async function checkMonth(month) {
-  const [year, m] = month.split('-').map(Number);
+async function testPdfGeneration() {
+  await mongoose.connect(process.env.MONGO_URI);
+  console.log('Connected to MongoDB');
+
+  const [year, m] = '2026-09'.split('-').map(Number);
   const mStart = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
   const mEnd = new Date(Date.UTC(year, m, 0, 23, 59, 59, 999));
 
   const vouchersMap = new Map();
 
-  // 1. PendingEntry
-  const pEntries = await PendingEntry.find({
-    $or: [
-      { date: { $gte: mStart, $lte: mEnd } },
-      { rentMonth: month },
-      { 'entryData.month': month },
-      { submittedAt: { $gte: mStart, $lte: mEnd } }
-    ]
-  })
-  .populate('propertyId tenantId categoryId drAccountId crAccountId receivingAccountId submittedBy verifiedBy')
-  .lean();
-
-  for (const pe of pEntries) {
-    const vData = buildEvidenceDataForEntry(pe);
-    if (vData && vData.voucherNo) {
-      vouchersMap.set(vData.voucherNo, vData);
-    }
-  }
-
-  // 2. Transaction
   const txs = await Transaction.find({
     date: { $gte: mStart, $lte: mEnd },
     $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }]
@@ -48,19 +35,20 @@ async function checkMonth(month) {
     }
   }
 
-  const allVouchers = sortTransactionsByVoucher(Array.from(vouchersMap.values()));
-  console.log(`Month: ${month} -> Total unique vouchers found: ${allVouchers.length}`);
-  if (allVouchers.length > 0) {
-    console.log(`  First 3: ${allVouchers.slice(0, 3).map(v => v.voucherNo).join(', ')}`);
-    console.log(`  Last 3: ${allVouchers.slice(-3).map(v => v.voucherNo).join(', ')}`);
-  }
-}
+  const vouchers = sortTransactionsByVoucher(Array.from(vouchersMap.values()));
+  console.log(`Found ${vouchers.length} vouchers for September 2026.`);
+  console.log('Generating bulk PDF with pre-fetched base64 images...');
 
-async function run() {
-  await mongoose.connect(process.env.MONGO_URI);
-  await checkMonth('2026-09');
-  await checkMonth('2026-10');
+  const t0 = Date.now();
+  const pdfBuf = await generateBulkReceiptEvidencePDF(vouchers, '2026-09');
+  const elapsed = Date.now() - t0;
+
+  console.log(`SUCCESS! Generated PDF buffer size: ${pdfBuf.length} bytes in ${elapsed}ms (${(elapsed/1000).toFixed(1)}s)`);
+
   await mongoose.disconnect();
 }
 
-run().catch(console.error);
+testPdfGeneration().then(() => process.exit(0)).catch(err => {
+  console.error('Test failed:', err);
+  process.exit(1);
+});

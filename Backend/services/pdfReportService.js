@@ -1063,6 +1063,58 @@ export const buildEvidenceDataForEntry = (entry) => {
 };
 
 /**
+ * Fast parallel batch pre-fetcher that inlines remote images into Base64 data URIs.
+ * This guarantees Puppeteer loads the 100+ page HTML instantly with 0 external network hangs or timeouts.
+ */
+export const prefetchVoucherImages = async (vouchers) => {
+  const urlMap = new Map();
+
+  for (const v of vouchers) {
+    if (Array.isArray(v.attachments)) {
+      for (const att of v.attachments) {
+        if (att?.url && typeof att.url === 'string' && !att.url.startsWith('data:image/')) {
+          urlMap.set(att.url, null);
+        }
+      }
+    }
+  }
+
+  const uniqueUrls = Array.from(urlMap.keys());
+  const batchSize = 15;
+
+  for (let i = 0; i < uniqueUrls.length; i += batchSize) {
+    const batch = uniqueUrls.slice(i, i + batchSize);
+    await Promise.all(
+      batch.map(async (url) => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 7000);
+          const res = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            const arrayBuffer = await res.arrayBuffer();
+            const buf = Buffer.from(arrayBuffer);
+            const contentType = res.headers.get('content-type') || 'image/jpeg';
+            urlMap.set(url, `data:${contentType};base64,${buf.toString('base64')}`);
+          }
+        } catch {
+          // Keep original url as fallback
+          urlMap.set(url, url);
+        }
+      })
+    );
+  }
+
+  return vouchers.map((v) => ({
+    ...v,
+    attachments: (v.attachments || []).map((att) => ({
+      ...att,
+      url: urlMap.get(att.url) || att.url,
+    })),
+  }));
+};
+
+/**
  * Generate Multi-Page A4 PDF containing all vouchers with receipt evidence sequentially
  */
 export const generateBulkReceiptEvidencePDF = async (vouchers, periodLabel = '') => {
@@ -1070,7 +1122,10 @@ export const generateBulkReceiptEvidencePDF = async (vouchers, periodLabel = '')
   const templateSource = fs.readFileSync(templatePath, 'utf8');
   const compiledTemplate = handlebars.compile(templateSource);
 
-  const formattedVouchers = vouchers.map((v) => ({
+  // Pre-fetch images into Base64 Data URIs so Puppeteer never hangs on network requests
+  const inlinedVouchers = await prefetchVoucherImages(vouchers);
+
+  const formattedVouchers = inlinedVouchers.map((v) => ({
     ...v,
     formattedDate: formatReportDate(v.date),
   }));
@@ -1105,7 +1160,7 @@ export const generateBulkReceiptEvidencePDF = async (vouchers, periodLabel = '')
   const browser = await puppeteer.launch(launchOptions);
   try {
     const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: 180000 });
+    await page.setContent(htmlContent, { waitUntil: 'domcontentloaded', timeout: 90000 });
 
     const pdfBuffer = await page.pdf({
       format: 'A4',
@@ -1132,8 +1187,11 @@ export const generateBulkReceiptEvidenceZIP = async (vouchers, periodLabel = '')
   const zip = new JSZip();
   const cleanPeriod = (periodLabel || 'All_Transactions').replace(/[^a-zA-Z0-9_-]/g, '_');
 
+  // Pre-fetch images into Base64 Data URIs once for both master and individual slips
+  const inlinedVouchers = await prefetchVoucherImages(vouchers);
+
   // 1. Generate the master combined multi-page PDF
-  const masterPdfBuffer = await generateBulkReceiptEvidencePDF(vouchers, periodLabel);
+  const masterPdfBuffer = await generateBulkReceiptEvidencePDF(inlinedVouchers, periodLabel);
   zip.file(`00_Master_Combined_All_Vouchers_${cleanPeriod}.pdf`, masterPdfBuffer);
 
   // 2. Generate individual voucher PDFs reusing one browser instance
@@ -1158,8 +1216,8 @@ export const generateBulkReceiptEvidenceZIP = async (vouchers, periodLabel = '')
     const page = await browser.newPage();
     const folder = zip.folder('Individual_Voucher_PDFs');
 
-    for (let i = 0; i < vouchers.length; i++) {
-      const voucher = vouchers[i];
+    for (let i = 0; i < inlinedVouchers.length; i++) {
+      const voucher = inlinedVouchers[i];
       const htmlContent = compiledSingleTemplate({
         ...voucher,
         formattedDate: formatReportDate(voucher.date),
@@ -1169,7 +1227,7 @@ export const generateBulkReceiptEvidenceZIP = async (vouchers, periodLabel = '')
         generatedDate: new Date().toLocaleString('en-GB'),
       });
 
-      await page.setContent(htmlContent, { waitUntil: 'load', timeout: 30000 });
+      await page.setContent(htmlContent, { waitUntil: 'domcontentloaded', timeout: 30000 });
       const singlePdf = await page.pdf({
         format: 'A4',
         printBackground: true,
