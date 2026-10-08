@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   BarChart3,
   Landmark,
@@ -44,19 +44,36 @@ const getMonthOptions = () => {
 
 
 const resolveTransactionCategory = (tx) => {
-  const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED' || tx.transactionType === 'INCOME';
-  if (isRent) return 'Rent';
-  if (tx.transactionType === 'TRANSFER') return 'Transfer';
-  return tx.reportCategory || tx.transactionType || 'Payments';
+  if (tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED') return 'Rent';
+  if (tx.transactionType === 'EXPENSE' || tx.reportCategory === 'Owner Personal' || tx.sourceModule === 'OWNER_PERSONAL') {
+    return 'Payments';
+  }
+  if (tx.reportCategory === 'Other Income' || tx.sourceModule === 'OTHER_INCOME') return 'Other Income';
+  if (tx.transactionType === 'TRANSFER' || tx.reportCategory === 'Transfer') return 'Transfer';
+  if (tx.transactionType === 'OPENING_BALANCE' || tx.reportCategory === 'Opening Balance') return 'Opening Balance';
+  if (tx.transactionType === 'INCOME') return 'Other Income';
+  if (tx.transactionType === 'ADJUSTMENT') return 'Adjustments';
+  return tx.reportCategory || 'Other Transactions';
 };
 
 const resolveTransactionHead = (tx) => {
-  const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED' || tx.transactionType === 'INCOME';
-  if (isRent && (tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED')) return tx.categoryId?.name || 'Rental Income';
+  const category = resolveTransactionCategory(tx);
+  if (category === 'Rent') return tx.categoryId?.name || 'Rental Income';
+  if (category === 'Other Income') return tx.categoryId?.name || 'Other Income';
   if (tx.transactionType === 'TRANSFER') return tx.categoryId?.name || 'Internal Transfer';
   const accounts = resolveTransactionAccounts(tx);
   return accounts.head || tx.categoryId?.name || 'General';
 };
+
+const transactionSectionOrder = [
+  'Payments',
+  'Rent',
+  'Other Income',
+  'Transfer',
+  'Opening Balance',
+  'Adjustments',
+  'Other Transactions',
+];
 
 export function FinancialReportsPage({ currentUser }) {
   const userIsAdmin = isAdmin(currentUser);
@@ -219,6 +236,20 @@ export function FinancialReportsPage({ currentUser }) {
       setTxReportLoading(false);
     }
   }, [getFilterParams, txTypeFilter, txAccFilter, txPropFilter, txSearch]);
+
+  const transactionSections = useMemo(() => {
+    const transactions = txReportData?.transactions || [];
+    return transactionSectionOrder
+      .map((category) => {
+        const rows = transactions.filter((tx) => resolveTransactionCategory(tx) === category);
+        return {
+          category,
+          rows,
+          totalAmount: rows.reduce((total, tx) => total + Number(tx.amount || 0), 0),
+        };
+      })
+      .filter((section) => section.rows.length > 0);
+  }, [txReportData?.transactions]);
 
   // 5. Fetch Reconciliation
   const fetchReconciliation = useCallback(async () => {
@@ -1104,53 +1135,68 @@ export function FinancialReportsPage({ currentUser }) {
                       </td>
                     </tr>
                   ) : (
-                    txReportData.transactions.map((tx) => {
-                      const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED' || tx.transactionType === 'INCOME';
-                      const categoryLabel = resolveTransactionCategory(tx);
-                      const headLabel = resolveTransactionHead(tx);
-                      const { dr: drDisplay, cr: crDisplay } = resolveTransactionAccounts(tx);
-                      return (
-                        <tr key={tx._id} className="hover:bg-slate-800/40 transition">
-                          <td className="py-2 px-3 text-slate-400 whitespace-nowrap">{formatDate(tx.date)}</td>
-                          <td className="py-2 px-3 font-bold text-white whitespace-nowrap">{tx.voucherNo}</td>
-                          <td className="py-2 px-3 font-sans text-slate-200 max-w-xs truncate">{tx.detail}</td>
-                          <td className="py-2 px-3 font-sans text-slate-300 whitespace-nowrap">
-                            {headLabel}
-                          </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
-                            <span
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                                isRent
-                                  ? 'bg-emerald-950 text-emerald-300 border-emerald-700/60'
-                                  : tx.transactionType === 'EXPENSE'
-                                  ? 'bg-rose-950 text-rose-300 border-rose-700/60'
-                                  : 'bg-sky-950 text-sky-300 border-sky-700/60'
-                              }`}
-                            >
-                              {categoryLabel}
+                    transactionSections.flatMap((section) => [
+                      <tr key={`section-${section.category}`} className="border-y border-slate-700 bg-slate-800/80 font-sans">
+                        <td colSpan="9" className="px-3 py-2">
+                          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                            <span className="font-bold text-slate-100">
+                              {section.category}
+                              <span className="ml-2 text-[10px] font-medium text-slate-400">
+                                {section.rows.length} {section.rows.length === 1 ? 'transaction' : 'transactions'}
+                              </span>
                             </span>
-                          </td>
-                          <td className="py-2 px-3 font-sans text-emerald-400 truncate max-w-[140px]" title={drDisplay}>
-                            {drDisplay}
-                          </td>
-                          <td className="py-2 px-3 font-sans text-rose-400 truncate max-w-[140px]" title={crDisplay}>
-                            {crDisplay}
-                          </td>
-                          <td className="py-2 px-3 text-right font-bold text-white whitespace-nowrap">
-                            {formatPKR(tx.amount)}
-                          </td>
-                          <td className="py-2 px-3 text-center">
-                            <button
-                              onClick={() => handleViewVoucher(tx.voucherId?._id || tx.voucherId, tx.voucherNo)}
-                              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-                              title="View Full Voucher"
-                            >
-                              <Eye size={12} />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
+                            <span className="text-[10px] font-bold text-slate-300">
+                              Section total: {formatPKR(section.totalAmount)}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>,
+                      ...section.rows.map((tx) => {
+                        const categoryLabel = resolveTransactionCategory(tx);
+                        const headLabel = resolveTransactionHead(tx);
+                        const { dr: drDisplay, cr: crDisplay } = resolveTransactionAccounts(tx);
+                        const categoryStyle = categoryLabel === 'Payments'
+                          ? 'bg-rose-950 text-rose-300 border-rose-700/60'
+                          : categoryLabel === 'Rent'
+                          ? 'bg-emerald-950 text-emerald-300 border-emerald-700/60'
+                          : categoryLabel === 'Other Income'
+                          ? 'bg-amber-950 text-amber-300 border-amber-700/60'
+                          : 'bg-sky-950 text-sky-300 border-sky-700/60';
+                        return (
+                          <tr key={tx._id} className="hover:bg-slate-800/40 transition">
+                            <td className="py-2 px-3 text-slate-400 whitespace-nowrap">{formatDate(tx.date)}</td>
+                            <td className="py-2 px-3 font-bold text-white whitespace-nowrap">{tx.voucherNo}</td>
+                            <td className="py-2 px-3 font-sans text-slate-200 max-w-xs truncate">{tx.detail}</td>
+                            <td className="py-2 px-3 font-sans text-slate-300 whitespace-nowrap">
+                              {headLabel}
+                            </td>
+                            <td className="py-2 px-3 whitespace-nowrap">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${categoryStyle}`}>
+                                {categoryLabel}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 font-sans text-emerald-400 truncate max-w-[140px]" title={drDisplay}>
+                              {drDisplay}
+                            </td>
+                            <td className="py-2 px-3 font-sans text-rose-400 truncate max-w-[140px]" title={crDisplay}>
+                              {crDisplay}
+                            </td>
+                            <td className="py-2 px-3 text-right font-bold text-white whitespace-nowrap">
+                              {formatPKR(tx.amount)}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <button
+                                onClick={() => handleViewVoucher(tx.voucherId?._id || tx.voucherId, tx.voucherNo)}
+                                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                                title="View Full Voucher"
+                              >
+                                <Eye size={12} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      }),
+                    ])
                   )}
                 </tbody>
               </table>

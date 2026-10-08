@@ -21,4 +21,6 @@ Vercel deployment: set the Vercel project Root Directory to `Backend`, with `Bac
 
 Vercel serverless functions use a read-only deployment filesystem. Backup ZIPs are written under the function's temporary directory, which is ephemeral and may not be available to another invocation. Configure durable object storage before relying on backup history or download links across function restarts.
 
+Monthly receipt-evidence PDF and ZIP exports can exceed Vercel's buffered response-size limit and take longer than a normal API request. These downloads are streamed to the client, and `vercel.json` sets their shared function's maximum duration to five minutes; retain streaming if changing these download handlers.
+
 Focused tests: run `npm test` from the `Backend` directory. They use no live MongoDB, Cloudinary, or Ably credentials.

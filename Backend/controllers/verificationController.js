@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import PendingEntry from '../models/PendingEntry.js';
 import OtherIncome from '../models/OtherIncome.js';
 import OtherIncomeHead from '../models/OtherIncomeHead.js';
@@ -1836,6 +1838,13 @@ export const getFilteredVouchersForEvidence = async (query = {}) => {
   return sortTransactionsByVoucher(vouchers);
 };
 
+const createBufferStream = (buffer) => Readable.from((function* () {
+  const chunkSize = 64 * 1024;
+  for (let offset = 0; offset < buffer.length; offset += chunkSize) {
+    yield buffer.subarray(offset, offset + chunkSize);
+  }
+})());
+
 /**
  * Download merged multi-page receipt-evidence PDF for all matching entries / transactions.
  * Each voucher with its evidence photo appears on its own dedicated A4 page.
@@ -1866,9 +1875,12 @@ export const downloadAllReceiptEvidencePDF = async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', pdfBuffer.length);
-    return res.status(200).send(pdfBuffer);
+    res.status(200);
+    await pipeline(createBufferStream(pdfBuffer), res);
+    return;
   } catch (error) {
     console.error('[Download All Receipt Evidence PDF Error]:', error);
+    if (res.headersSent) return;
     return apiError(res, error.message || 'Failed to generate merged receipt evidence PDF.', 500);
   }
 };
@@ -1897,15 +1909,17 @@ export const downloadAllReceiptEvidenceZIP = async (req, res) => {
       ? `Queue_${req.query.status}`
       : `Transactions_${new Date().toISOString().slice(0, 10)}`;
 
-    const zipBuffer = await generateBulkReceiptEvidenceZIP(vouchers, periodLabel);
+    const zipStream = await generateBulkReceiptEvidenceZIP(vouchers, periodLabel);
     const filename = `All_Vouchers_Receipt_Evidence_${periodLabel}.zip`;
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', zipBuffer.length);
-    return res.status(200).send(zipBuffer);
+    res.status(200);
+    await pipeline(zipStream, res);
+    return;
   } catch (error) {
     console.error('[Download All Receipt Evidence ZIP Error]:', error);
+    if (res.headersSent) return;
     return apiError(res, error.message || 'Failed to generate receipt evidence ZIP.', 500);
   }
 };

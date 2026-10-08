@@ -1181,7 +1181,7 @@ export const generateBulkReceiptEvidencePDF = async (vouchers, periodLabel = '')
 };
 
 /**
- * Generate a ZIP Archive containing the master combined PDF + organized raw receipt images.
+ * Generate a streamable ZIP Archive containing the master combined PDF + organized raw receipt images.
  * Individual voucher PDFs are skipped (too slow on serverless); instead the ZIP contains:
  *   - 00_Master_Combined_All_Vouchers_<period>.pdf  (the complete merged evidence PDF)
  *   - Receipt_Images/VN<voucherNo>_<filename>.<ext> (raw Cloudinary images per voucher)
@@ -1241,13 +1241,12 @@ export const generateBulkReceiptEvidenceZIP = async (vouchers, periodLabel = '')
     }
   }
 
-  const zipBuffer = await zip.generateAsync({
+  return zip.generateNodeStream({
     type: 'nodebuffer',
+    streamFiles: true,
     compression: 'DEFLATE',
     compressionOptions: { level: 4 },
   });
-
-  return zipBuffer;
 };
 
 export default {
@@ -1260,4 +1259,3 @@ export default {
   generateLedgerPDF,
   generateAllTransactionsPDF,
 };
-
