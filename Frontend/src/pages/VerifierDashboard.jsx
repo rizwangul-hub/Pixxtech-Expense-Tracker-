@@ -1163,7 +1163,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
               type="button"
               onClick={handleDownloadAllReceiptEvidencePDF}
               disabled={downloadingAllEvidencePdf || paginationInfo.total === 0}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-600/20 px-3 py-2 text-xs font-bold text-emerald-200 transition hover:bg-emerald-600/35 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-400 bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-800 disabled:text-emerald-100 disabled:opacity-100"
               title="Download single merged multi-page PDF where each voucher evidence slip is on a dedicated A4 page"
             >
               {downloadingAllEvidencePdf ? (
@@ -1177,7 +1177,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
               type="button"
               onClick={handleDownloadAllReceiptEvidence}
               disabled={downloadingAllEvidence || paginationInfo.total === 0}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-indigo-500/40 bg-indigo-600/15 px-3 py-2 text-xs font-bold text-indigo-200 transition hover:bg-indigo-600/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-indigo-400 bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:cursor-not-allowed disabled:bg-indigo-800 disabled:text-indigo-100 disabled:opacity-100"
               title="Download ZIP containing individual voucher PDFs + combined master PDF"
             >
               {downloadingAllEvidence ? (

@@ -1645,142 +1645,48 @@ export const getFilteredVouchersForEvidence = async (query = {}) => {
     propertyId,
     unitId,
     categoryId,
+    reportCategory,
+    expenseClassification,
+    transactionType,
+    voucherNo,
+    drAccountId,
+    crAccountId,
   } = query;
 
   const vouchersMap = new Map(); // voucherNo -> evidenceData
 
-  // 1. PendingEntry Query
-  const pQuery = {};
-  const validStatuses = ['PENDING_VERIFICATION', 'EDITED', 'VERIFIED', 'REJECTED'];
-  const validEntryTypes = ['RENT', 'EXPENSE', 'TRANSFER', 'SALARY', 'OTHER_INCOME'];
+  // Determine if this is a pending verification queue query or a ledger/monthly verified query
+  const isPendingQueueQuery = status && ['PENDING_VERIFICATION', 'EDITED', 'REJECTED'].includes(status);
 
-  if (status && status !== 'ALL') {
-    if (validStatuses.includes(status)) {
-      pQuery.status = status === 'PENDING_VERIFICATION' ? { $in: ['PENDING_VERIFICATION', 'EDITED'] } : status;
+  // 1. If specifically querying the pending verification queue, fetch from PendingEntry
+  if (isPendingQueueQuery) {
+    const pQuery = {};
+    pQuery.status = status === 'PENDING_VERIFICATION' ? { $in: ['PENDING_VERIFICATION', 'EDITED'] } : status;
+
+    if (entryType && entryType !== 'ALL') {
+      pQuery.entryType = entryType;
     }
-  } else if (!status && !month && !startDate && !endDate) {
-    pQuery.status = { $in: ['PENDING_VERIFICATION', 'EDITED'] };
-  }
-
-  if (entryType && entryType !== 'ALL' && validEntryTypes.includes(entryType)) {
-    pQuery.entryType = entryType;
-  }
-
-  if (propertyId && mongoose.Types.ObjectId.isValid(propertyId)) {
-    pQuery.propertyId = propertyId;
-  }
-  if (unitId && mongoose.Types.ObjectId.isValid(unitId)) {
-    pQuery.unitId = unitId;
-  }
-  if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
-    pQuery.categoryId = categoryId;
-  }
-
-  if (month && /^\d{4}-\d{2}$/.test(month)) {
-    const [year, m] = month.split('-').map(Number);
-    const mStart = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
-    const mEnd = new Date(Date.UTC(year, m, 0, 23, 59, 59, 999));
-    pQuery.$or = [
-      { date: { $gte: mStart, $lte: mEnd } },
-      { rentMonth: month },
-      { 'entryData.month': month },
-    ];
-  } else if (startDate || endDate) {
-    pQuery.date = {};
-    if (startDate) pQuery.date.$gte = new Date(startDate);
-    if (endDate) pQuery.date.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
-  }
-
-  if (typeof search === 'string' && search.trim()) {
-    const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(escapedSearch, 'i');
-    const matchingProperties = await Property.find({
-      $or: [{ plazaName: regex }, { propertyName: regex }, { location: regex }],
-    }).distinct('_id');
-    const searchConditions = [
-      { voucherNo: regex },
-      { detail: regex },
-      { submittedByName: regex },
-      { referenceNumber: regex },
-    ];
-    if (matchingProperties.length > 0) {
-      searchConditions.push({ propertyId: { $in: matchingProperties } });
+    if (propertyId && mongoose.Types.ObjectId.isValid(propertyId)) {
+      pQuery.propertyId = propertyId;
     }
-    if (pQuery.$or) {
-      pQuery.$and = [{ $or: pQuery.$or }, { $or: searchConditions }];
-      delete pQuery.$or;
-    } else {
-      pQuery.$or = searchConditions;
+    if (unitId && mongoose.Types.ObjectId.isValid(unitId)) {
+      pQuery.unitId = unitId;
     }
-  }
-
-  const pendingEntries = await PendingEntry.find(pQuery)
-    .populate('propertyId', 'plazaName propertyName propertyCode location address units')
-    .populate('tenantId', 'fullName tenantName name phone cnic')
-    .populate({
-      path: 'agreementId',
-      select: 'agreementNumber monthlyRent tenantId',
-      populate: { path: 'tenantId', select: 'fullName tenantName name phone cnic' },
-    })
-    .populate({
-      path: 'categoryId',
-      select: 'name type isRentalHead parentCategoryId isMainHead',
-      populate: { path: 'parentCategoryId', select: 'name' },
-    })
-    .populate('drAccountId', 'name type bankName accountNumber cashHolder')
-    .populate('crAccountId', 'name type bankName accountNumber cashHolder')
-    .populate('receivingAccountId', 'name type bankName accountNumber cashHolder')
-    .populate('submittedBy', 'name email role')
-    .populate('verifiedBy', 'name email role')
-    .sort({ date: 1, voucherNo: 1 })
-    .lean();
-
-  for (const entry of pendingEntries) {
-    const rawAttachments = (entry.attachments && entry.attachments.length > 0)
-      ? entry.attachments
-      : (entry.entryData?.attachments && entry.entryData.attachments.length > 0)
-      ? entry.entryData.attachments
-      : [];
-    const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.some((att) =>
-      typeof att === 'string' ? Boolean(att) : Boolean(att?.url)
-    );
-    if (hasAttachments) {
-      const vData = buildEvidenceDataForEntry(entry);
-      if (vData && vData.voucherNo) {
-        vouchersMap.set(vData.voucherNo, vData);
-      }
+    if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
+      pQuery.categoryId = categoryId;
     }
-  }
 
-  // 2. Also query Transaction central ledger (for verified/posted transactions, historical reports e.g. September 2026)
-  const tQuery = {};
-  if (month && /^\d{4}-\d{2}$/.test(month)) {
-    const [year, m] = month.split('-').map(Number);
-    const mStart = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
-    const mEnd = new Date(Date.UTC(year, m, 0, 23, 59, 59, 999));
-    tQuery.$or = [
-      { date: { $gte: mStart, $lte: mEnd } },
-      { rentMonth: month },
-    ];
-  } else if (startDate || endDate) {
-    tQuery.date = {};
-    if (startDate) tQuery.date.$gte = new Date(startDate);
-    if (endDate) tQuery.date.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
-  } else if (status === 'VERIFIED' || status === 'ALL') {
-    // query transactions if VERIFIED status was specifically requested or ALL
-  }
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      const [year, m] = month.split('-').map(Number);
+      const mStart = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
+      const mEnd = new Date(Date.UTC(year, m, 0, 23, 59, 59, 999));
+      pQuery.date = { $gte: mStart, $lte: mEnd };
+    } else if (startDate || endDate) {
+      pQuery.date = {};
+      if (startDate) pQuery.date.$gte = new Date(startDate);
+      if (endDate) pQuery.date.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+    }
 
-  if (propertyId && mongoose.Types.ObjectId.isValid(propertyId)) {
-    tQuery.propertyId = propertyId;
-  }
-  if (unitId && mongoose.Types.ObjectId.isValid(unitId)) {
-    tQuery.unitId = unitId;
-  }
-  if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
-    tQuery.categoryId = categoryId;
-  }
-
-  if (month || startDate || endDate || status === 'VERIFIED' || status === 'ALL') {
     if (typeof search === 'string' && search.trim()) {
       const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escapedSearch, 'i');
@@ -1790,21 +1696,16 @@ export const getFilteredVouchersForEvidence = async (query = {}) => {
       const searchConditions = [
         { voucherNo: regex },
         { detail: regex },
-        { reference: regex },
-        { checkedBy: regex },
+        { submittedByName: regex },
+        { referenceNumber: regex },
       ];
       if (matchingProperties.length > 0) {
         searchConditions.push({ propertyId: { $in: matchingProperties } });
       }
-      if (tQuery.$or) {
-        tQuery.$and = [{ $or: tQuery.$or }, { $or: searchConditions }];
-        delete tQuery.$or;
-      } else {
-        tQuery.$or = searchConditions;
-      }
+      pQuery.$or = searchConditions;
     }
 
-    const transactions = await Transaction.find(tQuery)
+    const pendingEntries = await PendingEntry.find(pQuery)
       .populate('propertyId', 'plazaName propertyName propertyCode location address units')
       .populate('tenantId', 'fullName tenantName name phone cnic')
       .populate({
@@ -1819,20 +1720,129 @@ export const getFilteredVouchersForEvidence = async (query = {}) => {
       })
       .populate('drAccountId', 'name type bankName accountNumber cashHolder')
       .populate('crAccountId', 'name type bankName accountNumber cashHolder')
-      .populate('createdBy', 'name email role')
+      .populate('receivingAccountId', 'name type bankName accountNumber cashHolder')
+      .populate('submittedBy', 'name email role')
+      .populate('verifiedBy', 'name email role')
       .sort({ date: 1, voucherNo: 1 })
       .lean();
 
-    for (const tx of transactions) {
-      const rawAttachments = tx.attachments || [];
+    for (const entry of pendingEntries) {
+      const rawAttachments = (entry.attachments && entry.attachments.length > 0)
+        ? entry.attachments
+        : (entry.entryData?.attachments && entry.entryData.attachments.length > 0)
+        ? entry.entryData.attachments
+        : [];
       const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.some((att) =>
         typeof att === 'string' ? Boolean(att) : Boolean(att?.url)
       );
       if (hasAttachments) {
-        const vData = buildEvidenceDataForEntry(tx);
+        const vData = buildEvidenceDataForEntry(entry);
         if (vData && vData.voucherNo) {
           vouchersMap.set(vData.voucherNo, vData);
         }
+      }
+    }
+
+    const vouchers = Array.from(vouchersMap.values());
+    return sortTransactionsByVoucher(vouchers);
+  }
+
+  // 2. Verified Transactions Query (for monthly reports, ledger, and verified voucher downloads)
+  const tQuery = {};
+
+  // Exclude reversed and voided transactions strictly
+  tQuery.$nor = [{ status: /^REVERSED$/i }, { status: /^VOID$/i }];
+
+  // Month date range filter
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    const [year, m] = month.split('-').map(Number);
+    const mStart = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
+    const mEnd = new Date(Date.UTC(year, m, 0, 23, 59, 59, 999));
+    tQuery.date = { $gte: mStart, $lte: mEnd };
+  } else if (startDate || endDate) {
+    tQuery.date = {};
+    if (startDate) tQuery.date.$gte = new Date(startDate);
+    if (endDate) tQuery.date.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+  }
+
+  if (voucherNo && voucherNo.trim()) {
+    tQuery.voucherNo = new RegExp(voucherNo.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  }
+  if (propertyId && mongoose.Types.ObjectId.isValid(propertyId)) {
+    tQuery.propertyId = propertyId;
+  }
+  if (unitId && mongoose.Types.ObjectId.isValid(unitId)) {
+    tQuery.unitId = unitId;
+  }
+  if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
+    tQuery.categoryId = categoryId;
+  }
+  if (reportCategory && reportCategory !== 'ALL') {
+    tQuery.reportCategory = reportCategory;
+  }
+  if (expenseClassification && expenseClassification !== 'ALL') {
+    tQuery.expenseClassification = expenseClassification;
+  }
+  if (transactionType && transactionType !== 'ALL') {
+    tQuery.transactionType = transactionType;
+  }
+  if (drAccountId && mongoose.Types.ObjectId.isValid(drAccountId)) {
+    tQuery.drAccountId = drAccountId;
+  }
+  if (crAccountId && mongoose.Types.ObjectId.isValid(crAccountId)) {
+    tQuery.crAccountId = crAccountId;
+  }
+
+  if (typeof search === 'string' && search.trim()) {
+    const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escapedSearch, 'i');
+    const matchingProperties = await Property.find({
+      $or: [{ plazaName: regex }, { propertyName: regex }, { location: regex }],
+    }).distinct('_id');
+    const searchConditions = [
+      { voucherNo: regex },
+      { detail: regex },
+      { reference: regex },
+      { checkedBy: regex },
+    ];
+    if (matchingProperties.length > 0) {
+      searchConditions.push({ propertyId: { $in: matchingProperties } });
+    }
+    tQuery.$and = [
+      { $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }] },
+      { $or: searchConditions },
+    ];
+    delete tQuery.$nor;
+  }
+
+  const transactions = await Transaction.find(tQuery)
+    .populate('propertyId', 'plazaName propertyName propertyCode location address units')
+    .populate('tenantId', 'fullName tenantName name phone cnic')
+    .populate({
+      path: 'agreementId',
+      select: 'agreementNumber monthlyRent tenantId',
+      populate: { path: 'tenantId', select: 'fullName tenantName name phone cnic' },
+    })
+    .populate({
+      path: 'categoryId',
+      select: 'name type isRentalHead parentCategoryId isMainHead',
+      populate: { path: 'parentCategoryId', select: 'name' },
+    })
+    .populate('drAccountId', 'name type bankName accountNumber cashHolder')
+    .populate('crAccountId', 'name type bankName accountNumber cashHolder')
+    .populate('createdBy', 'name email role')
+    .sort({ date: 1, voucherNo: 1 })
+    .lean();
+
+  for (const tx of transactions) {
+    const rawAttachments = tx.attachments || [];
+    const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.some((att) =>
+      typeof att === 'string' ? Boolean(att) : Boolean(att?.url)
+    );
+    if (hasAttachments) {
+      const vData = buildEvidenceDataForEntry(tx);
+      if (vData && vData.voucherNo) {
+        vouchersMap.set(vData.voucherNo, vData);
       }
     }
   }
