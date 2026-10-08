@@ -83,6 +83,44 @@ const formatShortDate = (date) => {
   return `${day}-${month}-${year}`;
 };
 
+export const MASTER_JOURNAL_SECTION_ORDER = [
+  'Payments',
+  'Rent',
+  'Other Income',
+  'Transfer',
+  'Opening Balance',
+  'Adjustments',
+  'Other Transactions',
+];
+
+export const resolveMasterJournalCategory = (tx) => {
+  if (tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED') return 'Rent';
+  if (
+    tx.transactionType === 'EXPENSE' ||
+    tx.reportCategory === 'Owner Personal' ||
+    tx.sourceModule === 'OWNER_PERSONAL'
+  ) {
+    return 'Payments';
+  }
+  if (tx.reportCategory === 'Other Income' || tx.sourceModule === 'OTHER_INCOME') return 'Other Income';
+  if (tx.transactionType === 'TRANSFER' || tx.reportCategory === 'Transfer') return 'Transfer';
+  if (tx.transactionType === 'OPENING_BALANCE' || tx.reportCategory === 'Opening Balance') return 'Opening Balance';
+  if (tx.transactionType === 'ADJUSTMENT') return 'Adjustments';
+  if (tx.reportCategory === 'Payments') return 'Payments';
+  if (tx.transactionType === 'INCOME') return 'Other Income';
+  return 'Other Transactions';
+};
+
+export const buildMasterJournalSections = (vouchers) =>
+  MASTER_JOURNAL_SECTION_ORDER.map((category) => {
+    const sectionVouchers = vouchers.filter((voucher) => voucher.category === category);
+    return {
+      category,
+      vouchers: sectionVouchers,
+      totalAmount: round2(sectionVouchers.reduce((total, voucher) => total + voucher.amount, 0)),
+    };
+  }).filter((section) => section.vouchers.length > 0);
+
 // Register helpers
 handlebars.registerHelper('formatPKR', formatPKR);
 handlebars.registerHelper('formatPKRZero', formatPKRZero);
@@ -326,14 +364,6 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   const transactions = sortTransactionsByVoucher(rawTransactions, activeMonthCode);
 
   const masterJournalList = transactions.map(tx => {
-    const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
-    const isTransfer = tx.transactionType === 'TRANSFER';
-
-    let category = 'Payments';
-    if (isRent) category = 'Rent';
-    else if (isTransfer) category = 'Transfer';
-    else if (tx.reportCategory) category = tx.reportCategory;
-
     const { dr, cr, head } = resolveTransactionAccountDisplay(tx);
 
     return {
@@ -341,7 +371,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
       vn: tx.voucherNo,
       detail: tx.detail,
       head,
-      category,
+      category: resolveMasterJournalCategory(tx),
       dr,
       cr,
       amount: round2(tx.amount),
@@ -355,7 +385,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   );
 
   const masterJournal = {
-    vouchers: masterJournalList,
+    sections: buildMasterJournalSections(masterJournalList),
     totalAmount: totalJournalAmount,
   };
 
