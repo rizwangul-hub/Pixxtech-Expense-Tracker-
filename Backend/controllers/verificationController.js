@@ -1632,6 +1632,105 @@ export const createPendingEntry = async (req, res) => {
 };
 
 /**
+ * Download receipt-evidence PDFs for all matching verification queue entries as a ZIP.
+ * Pagination is intentionally ignored so one export includes every matching entry.
+ */
+export const downloadAllReceiptEvidenceZIP = async (req, res) => {
+  try {
+    const { status, entryType, search } = req.query;
+    const query = {};
+    const validStatuses = ['PENDING_VERIFICATION', 'EDITED', 'VERIFIED', 'REJECTED'];
+    const validEntryTypes = ['RENT', 'EXPENSE', 'TRANSFER', 'SALARY', 'OTHER_INCOME'];
+
+    if (status && status !== 'ALL') {
+      if (!validStatuses.includes(status)) {
+        return apiError(res, 'Invalid verification status filter.', 400);
+      }
+      query.status = status === 'PENDING_VERIFICATION'
+        ? { $in: ['PENDING_VERIFICATION', 'EDITED'] }
+        : status;
+    } else if (!status) {
+      query.status = { $in: ['PENDING_VERIFICATION', 'EDITED'] };
+    }
+
+    if (entryType && entryType !== 'ALL') {
+      if (!validEntryTypes.includes(entryType)) {
+        return apiError(res, 'Invalid entry type filter.', 400);
+      }
+      query.entryType = entryType;
+    }
+
+    if (typeof search === 'string' && search.trim()) {
+      const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escapedSearch, 'i');
+      const matchingProperties = await Property.find({
+        $or: [
+          { plazaName: regex },
+          { propertyName: regex },
+          { location: regex },
+        ],
+      }).distinct('_id');
+      query.$or = [
+        { voucherNo: regex },
+        { detail: regex },
+        { submittedByName: regex },
+        { referenceNumber: regex },
+        { propertyId: { $in: matchingProperties } },
+      ];
+    }
+
+    const entries = await PendingEntry.find(query)
+      .populate('propertyId', 'plazaName propertyName propertyCode location address units')
+      .populate('tenantId', 'fullName tenantName name phone cnic')
+      .populate({
+        path: 'agreementId',
+        select: 'agreementNumber monthlyRent tenantId',
+        populate: { path: 'tenantId', select: 'fullName tenantName name phone cnic' },
+      })
+      .populate({
+        path: 'categoryId',
+        select: 'name type isRentalHead parentCategoryId isMainHead',
+        populate: { path: 'parentCategoryId', select: 'name' },
+      })
+      .populate('drAccountId', 'name type bankName accountNumber cashHolder')
+      .populate('crAccountId', 'name type bankName accountNumber cashHolder')
+      .populate('receivingAccountId', 'name type bankName accountNumber cashHolder')
+      .populate('submittedBy', 'name email role')
+      .populate('verifiedBy', 'name email role')
+      .sort({ submittedAt: -1 })
+      .lean();
+
+    const vouchers = entries
+      .filter((entry) => {
+        const attachments = entry.attachments?.length
+          ? entry.attachments
+          : entry.entryData?.attachments;
+        return Array.isArray(attachments) && attachments.some((attachment) =>
+          typeof attachment === 'string' ? Boolean(attachment) : Boolean(attachment?.url)
+        );
+      })
+      .map(buildEvidenceDataForEntry);
+
+    if (vouchers.length === 0) {
+      return apiError(res, 'No matching verification queue entries have receipt evidence to download.', 404);
+    }
+
+    const zipBuffer = await generateBulkReceiptEvidenceZIP(
+      vouchers,
+      `Verification_Queue_${status || 'PENDING_VERIFICATION'}`
+    );
+    const filename = `Verification_Queue_Receipt_Evidence_${new Date().toISOString().slice(0, 10)}.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', zipBuffer.length);
+    return res.status(200).send(zipBuffer);
+  } catch (error) {
+    console.error('[Download All Receipt Evidence ZIP Error]:', error);
+    return apiError(res, error.message || 'Failed to generate receipt evidence ZIP.', 500);
+  }
+};
+
+/**
  * @desc    Download Official Receipt Evidence Slip PDF
  *          Generates formatted A4 PDF containing top voucher/entry details
  *          (date, voucher no, submitter, property, accounts, amount, narration)

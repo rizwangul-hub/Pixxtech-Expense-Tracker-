@@ -184,6 +184,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   // Receipt Evidence Viewer & Downloader state
   const [viewingReceiptEntry, setViewingReceiptEntry] = useState(null);
   const [downloadingEntryId, setDownloadingEntryId] = useState(null);
+  const [downloadingAllEvidence, setDownloadingAllEvidence] = useState(false);
 
   // Helper to extract attachments safely from entry or nested entryData
   const getEntryAttachments = (entry) => {
@@ -268,6 +269,30 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       setViewingReceiptEntry(entry);
     } finally {
       setDownloadingEntryId(null);
+    }
+  };
+
+  const handleDownloadAllReceiptEvidence = async () => {
+    try {
+      setDownloadingAllEvidence(true);
+      await verificationAPI.downloadAllReceiptEvidenceZIP({
+        status: filterStatus,
+        entryType: filterType,
+        search: searchQuery.trim() || undefined,
+      });
+      setFeedback({
+        message: 'Downloaded receipt evidence ZIP for all matching verification queue entries.',
+        type: 'success',
+      });
+    } catch (err) {
+      console.error('Bulk receipt evidence download error:', err);
+      setFeedback({
+        message: err.response?.data?.message || err.message || 'Failed to download receipt evidence ZIP.',
+        type: 'error',
+      });
+    } finally {
+      setDownloadingAllEvidence(false);
+      setTimeout(() => setFeedback({ message: '', type: '' }), 5000);
     }
   };
 
@@ -1105,8 +1130,24 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 : `${filteredEntries.length} items`}
             </span>
           </div>
-          <div className="text-xs text-slate-400">
-            Click <strong className="text-emerald-400">Verify / OK</strong> to commit to Central Ledger
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div className="text-xs text-slate-400">
+              Click <strong className="text-emerald-400">Verify / OK</strong> to commit to Central Ledger
+            </div>
+            <button
+              type="button"
+              onClick={handleDownloadAllReceiptEvidence}
+              disabled={downloadingAllEvidence || paginationInfo.total === 0}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-indigo-500/40 bg-indigo-600/15 px-3 py-2 text-xs font-bold text-indigo-200 transition hover:bg-indigo-600/30 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Download receipt evidence PDFs for all entries matching the selected filters"
+            >
+              {downloadingAllEvidence ? (
+                <RefreshCw size={14} className="animate-spin" />
+              ) : (
+                <Download size={14} />
+              )}
+              {downloadingAllEvidence ? 'Preparing ZIP...' : 'Download All Evidence ZIP'}
+            </button>
           </div>
         </div>
 
