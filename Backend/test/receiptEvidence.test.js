@@ -9,7 +9,7 @@ import handlebars from 'handlebars';
 import JSZip from 'jszip';
 import { generateBulkReceiptEvidenceZIP } from '../services/pdfReportService.js';
 
-test('bulk receipt evidence pages render the exact voucher number as searchable text', () => {
+test('verified queue evidence pages render an unbroken, searchable voucher number', () => {
   const templatePath = fileURLToPath(
     new URL('../templates/bulkReceiptEvidenceTemplate.html', import.meta.url)
   );
@@ -18,10 +18,11 @@ test('bulk receipt evidence pages render the exact voucher number as searchable 
   handlebars.registerHelper('formatPKR', (amount) => String(amount));
 
   const html = template({
-    vouchers: [{ voucherNo: 'PT-182-09-26', attachments: [] }],
+    vouchers: [{ voucherNo: 'PT-163-10-26', attachments: [] }],
   });
 
-  assert.match(html, /Voucher No: <span>PT-182-09-26<\/span>/);
+  assert.match(html, /white-space:\s*nowrap/);
+  assert.match(html, /Voucher No: PT-163-10-26/);
 });
 
 test('bulk receipt evidence ZIP streams a merged PDF and receipt images', async () => {
