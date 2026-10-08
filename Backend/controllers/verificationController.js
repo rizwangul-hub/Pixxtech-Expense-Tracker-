@@ -15,6 +15,7 @@ import Payroll from '../models/Payroll.js';
 import Employee from '../models/Employee.js';
 import StaffLoan from '../models/StaffLoan.js';
 import MonthlyReport from '../models/MonthlyReport.js';
+import User from '../models/User.js';
 import {
   createTransaction,
   round2,
@@ -1835,15 +1836,9 @@ export const getFilteredVouchersForEvidence = async (query = {}) => {
     .lean();
 
   for (const tx of transactions) {
-    const rawAttachments = tx.attachments || [];
-    const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.some((att) =>
-      typeof att === 'string' ? Boolean(att) : Boolean(att?.url)
-    );
-    if (hasAttachments) {
-      const vData = buildEvidenceDataForEntry(tx);
-      if (vData && vData.voucherNo) {
-        vouchersMap.set(vData.voucherNo, vData);
-      }
+    const vData = buildEvidenceDataForEntry(tx);
+    if (vData && vData.voucherNo) {
+      vouchersMap.set(vData.voucherNo, vData);
     }
   }
 
@@ -1861,7 +1856,12 @@ export const downloadAllReceiptEvidencePDF = async (req, res) => {
     const vouchers = await getFilteredVouchersForEvidence(req.query);
 
     if (vouchers.length === 0) {
-      return apiError(res, 'No matching entries or transactions have receipt evidence photos to download.', 404);
+      const monthLabel = req.query.month ? `for month ${req.query.month}` : '';
+      return apiError(
+        res,
+        `No verified transactions found ${monthLabel}. If you have newly submitted entries for this month, please verify them in the Verification Queue first, or select a month with verified transactions (such as September 2026).`,
+        404
+      );
     }
 
     const periodLabel = req.query.month
@@ -1893,7 +1893,12 @@ export const downloadAllReceiptEvidenceZIP = async (req, res) => {
     const vouchers = await getFilteredVouchersForEvidence(req.query);
 
     if (vouchers.length === 0) {
-      return apiError(res, 'No matching entries or transactions have receipt evidence photos to download.', 404);
+      const monthLabel = req.query.month ? `for month ${req.query.month}` : '';
+      return apiError(
+        res,
+        `No verified transactions found ${monthLabel}. If you have newly submitted entries for this month, please verify them in the Verification Queue first, or select a month with verified transactions (such as September 2026).`,
+        404
+      );
     }
 
     const periodLabel = req.query.month
