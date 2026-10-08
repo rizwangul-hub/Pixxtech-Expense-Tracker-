@@ -117,7 +117,6 @@ export const buildMasterJournalSections = (vouchers) =>
     return {
       category,
       vouchers: sectionVouchers,
-      totalAmount: round2(sectionVouchers.reduce((total, voucher) => total + voucher.amount, 0)),
     };
   }).filter((section) => section.vouchers.length > 0);
 
@@ -380,13 +379,8 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     };
   });
 
-  const totalJournalAmount = round2(
-    masterJournalList.reduce((sum, v) => sum + v.amount, 0)
-  );
-
   const masterJournal = {
     sections: buildMasterJournalSections(masterJournalList),
-    totalAmount: totalJournalAmount,
   };
 
   // 4. Fetch Head-Wise Expenses (Pages 6, 7 & 8)

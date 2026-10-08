@@ -21,7 +21,8 @@ test('master journal classifies transactions and groups them in report order', (
     'Other Income',
     'Transfer',
   ]);
-  assert.deepEqual(sections.map((section) => section.totalAmount), [100, 400, 300, 50]);
+  assert.deepEqual(sections.map((section) => section.vouchers.length), [1, 1, 1, 1]);
+  assert.ok(sections.every((section) => !Object.hasOwn(section, 'totalAmount')));
   assert.equal(resolveMasterJournalCategory({ sourceModule: 'OWNER_PERSONAL' }), 'Payments');
   assert.equal(resolveMasterJournalCategory({ sourceModule: 'RENT_RECEIVED' }), 'Rent');
 });

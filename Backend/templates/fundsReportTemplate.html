@@ -516,8 +516,7 @@
       <tbody>
         {{#each masterJournal.sections}}
         <tr style="background: #e2e8f0; font-weight: bold; border-top: 1.5px solid #000000;">
-          <td colspan="7" style="font-size: 7.5pt;">{{this.category}} ({{this.vouchers.length}} transactions)</td>
-          <td class="text-right font-mono">{{formatPKRZero this.totalAmount}}</td>
+          <td colspan="8" style="font-size: 7.5pt;">{{this.category}}</td>
         </tr>
         {{#each this.vouchers}}
         <tr>
@@ -531,18 +530,8 @@
           <td class="text-right font-mono font-bold">{{formatInt this.amount}}</td>
         </tr>
         {{/each}}
-        <tr style="font-weight: bold; background: #f8fafc;">
-          <td colspan="7" class="text-right" style="font-size: 7pt;">{{this.category}} Subtotal</td>
-          <td class="text-right font-mono">{{formatPKRZero this.totalAmount}}</td>
-        </tr>
         {{/each}}
       </tbody>
-      <tfoot>
-        <tr style="border-top: 2px solid #000000; font-weight: bold; background: #f3f4f6;">
-          <td colspan="7" class="text-right" style="font-size: 8pt;">TOTAL</td>
-          <td class="text-right font-mono font-bold" style="font-size: 8.5pt;">{{formatPKRZero masterJournal.totalAmount}}</td>
-        </tr>
-      </tfoot>
     </table>
   </div>
 
