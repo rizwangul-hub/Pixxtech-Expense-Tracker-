@@ -185,6 +185,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   const [viewingReceiptEntry, setViewingReceiptEntry] = useState(null);
   const [downloadingEntryId, setDownloadingEntryId] = useState(null);
   const [downloadingAllEvidence, setDownloadingAllEvidence] = useState(false);
+  const [downloadingAllEvidencePdf, setDownloadingAllEvidencePdf] = useState(false);
 
   // Helper to extract attachments safely from entry or nested entryData
   const getEntryAttachments = (entry) => {
@@ -269,6 +270,30 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       setViewingReceiptEntry(entry);
     } finally {
       setDownloadingEntryId(null);
+    }
+  };
+
+  const handleDownloadAllReceiptEvidencePDF = async () => {
+    try {
+      setDownloadingAllEvidencePdf(true);
+      await verificationAPI.downloadAllReceiptEvidencePDF({
+        status: filterStatus,
+        entryType: filterType,
+        search: searchQuery.trim() || undefined,
+      });
+      setFeedback({
+        message: 'Downloaded merged multi-page receipt evidence PDF for all matching entries.',
+        type: 'success',
+      });
+    } catch (err) {
+      console.error('Bulk receipt evidence PDF download error:', err);
+      setFeedback({
+        message: err.response?.data?.message || err.message || 'Failed to download merged receipt evidence PDF.',
+        type: 'error',
+      });
+    } finally {
+      setDownloadingAllEvidencePdf(false);
+      setTimeout(() => setFeedback({ message: '', type: '' }), 5000);
     }
   };
 
@@ -1136,10 +1161,24 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
             </div>
             <button
               type="button"
+              onClick={handleDownloadAllReceiptEvidencePDF}
+              disabled={downloadingAllEvidencePdf || paginationInfo.total === 0}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-600/20 px-3 py-2 text-xs font-bold text-emerald-200 transition hover:bg-emerald-600/35 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Download single merged multi-page PDF where each voucher evidence slip is on a dedicated A4 page"
+            >
+              {downloadingAllEvidencePdf ? (
+                <RefreshCw size={14} className="animate-spin" />
+              ) : (
+                <FileText size={14} />
+              )}
+              {downloadingAllEvidencePdf ? 'Generating Merged PDF...' : 'Download Merged Evidence PDF'}
+            </button>
+            <button
+              type="button"
               onClick={handleDownloadAllReceiptEvidence}
               disabled={downloadingAllEvidence || paginationInfo.total === 0}
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-indigo-500/40 bg-indigo-600/15 px-3 py-2 text-xs font-bold text-indigo-200 transition hover:bg-indigo-600/30 disabled:cursor-not-allowed disabled:opacity-50"
-              title="Download receipt evidence PDFs for all entries matching the selected filters"
+              title="Download ZIP containing individual voucher PDFs + combined master PDF"
             >
               {downloadingAllEvidence ? (
                 <RefreshCw size={14} className="animate-spin" />

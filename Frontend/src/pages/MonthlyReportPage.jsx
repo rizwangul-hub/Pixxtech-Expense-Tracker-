@@ -16,7 +16,7 @@ import {
   FileDown,
   RotateCcw,
 } from 'lucide-react';
-import { financialReportsAPI, monthlyReportsAPI } from '../services/api.js';
+import { financialReportsAPI, monthlyReportsAPI, verificationAPI } from '../services/api.js';
 import { isAdmin } from '../utils/permissions.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -224,6 +224,8 @@ export function MonthlyReportPage({ currentUser }) {
   const [error, setError] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [evidencePdfLoading, setEvidencePdfLoading] = useState(false);
+  const [evidenceZipLoading, setEvidenceZipLoading] = useState(false);
 
   const fetchSummary = useCallback(async () => {
     setLoading(true);
@@ -277,6 +279,28 @@ export function MonthlyReportPage({ currentUser }) {
       alert('PDF generation failed: ' + (e?.response?.data?.message || e.message));
     } finally {
       setPdfLoading(false);
+    }
+  };
+
+  const handleDownloadEvidencePDF = async () => {
+    setEvidencePdfLoading(true);
+    try {
+      await verificationAPI.downloadAllReceiptEvidencePDF({ month: selectedMonth });
+    } catch (e) {
+      alert('Failed to generate vouchers evidence PDF: ' + (e?.response?.data?.message || e.message));
+    } finally {
+      setEvidencePdfLoading(false);
+    }
+  };
+
+  const handleDownloadEvidenceZIP = async () => {
+    setEvidenceZipLoading(true);
+    try {
+      await verificationAPI.downloadAllReceiptEvidenceZIP({ month: selectedMonth });
+    } catch (e) {
+      alert('Failed to generate vouchers evidence ZIP: ' + (e?.response?.data?.message || e.message));
+    } finally {
+      setEvidenceZipLoading(false);
     }
   };
 
@@ -339,14 +363,37 @@ export function MonthlyReportPage({ currentUser }) {
 
           {/* PDF Download — Admin only */}
           {isAdmin(currentUser) && (
-            <button
-              onClick={handleDownloadPDF}
-              disabled={pdfLoading}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white border border-indigo-600 transition disabled:opacity-50"
-            >
-              <FileDown size={13} />
-              {pdfLoading ? 'Generating…' : 'Download PDF'}
-            </button>
+            <>
+              <button
+                onClick={handleDownloadPDF}
+                disabled={pdfLoading}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white border border-indigo-600 transition disabled:opacity-50"
+                title="Download standard monthly financial position report PDF"
+              >
+                <FileDown size={13} />
+                {pdfLoading ? 'Generating…' : 'Download PDF'}
+              </button>
+
+              <button
+                onClick={handleDownloadEvidencePDF}
+                disabled={evidencePdfLoading}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white border border-emerald-600 transition disabled:opacity-50"
+                title="Download all transaction vouchers with receipt slips as a single multi-page PDF"
+              >
+                <FileDown size={13} />
+                {evidencePdfLoading ? 'Generating Slips…' : 'Evidence Slips (PDF)'}
+              </button>
+
+              <button
+                onClick={handleDownloadEvidenceZIP}
+                disabled={evidenceZipLoading}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-cyan-800 hover:bg-cyan-700 text-cyan-100 border border-cyan-600/70 transition disabled:opacity-50"
+                title="Download all voucher evidence PDFs organized inside a ZIP archive"
+              >
+                <FileDown size={13} />
+                {evidenceZipLoading ? 'Packaging ZIP…' : 'Evidence ZIP'}
+              </button>
+            </>
           )}
         </div>
       </div>

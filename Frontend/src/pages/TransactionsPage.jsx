@@ -30,7 +30,7 @@ import {
   Paperclip,
   Image as ImageIcon,
 } from 'lucide-react';
-import { vouchersAPI, accountsAPI, ledgersAPI } from '../services/api.js';
+import { vouchersAPI, accountsAPI, ledgersAPI, verificationAPI } from '../services/api.js';
 import { formatPKR, formatDate, resolveTransactionAccounts } from '../utils/formatters.js';
 import { isAdmin } from '../utils/permissions.js';
 import { SingleVoucherPrintModal } from '../components/SingleVoucherPrintModal.jsx';
@@ -82,6 +82,8 @@ export function TransactionsPage({ user }) {
   const [reversing, setReversing] = useState(false);
   const [selectedReceiptTx, setSelectedReceiptTx] = useState(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingEvidencePdf, setDownloadingEvidencePdf] = useState(false);
+  const [downloadingEvidenceZip, setDownloadingEvidenceZip] = useState(false);
 
   // New Voucher Form State
   const [voucherForm, setVoucherForm] = useState({
@@ -426,6 +428,76 @@ export function TransactionsPage({ user }) {
     }
   };
 
+  // Download All Voucher Evidence PDF
+  const handleDownloadEvidencePDF = async () => {
+    try {
+      setDownloadingEvidencePdf(true);
+      const params = {};
+      if (useDateRange) {
+        if (startDate) params.startDate = startDate;
+        if (endDate) params.endDate = endDate;
+      } else if (month) {
+        params.month = month;
+      }
+      if (search.trim()) params.search = search.trim();
+      if (voucherNo.trim()) params.voucherNo = voucherNo.trim();
+      if (categoryId) params.categoryId = categoryId;
+      if (reportCategory && reportCategory !== 'ALL') params.reportCategory = reportCategory;
+      if (drAccountId) params.drAccountId = drAccountId;
+      if (crAccountId) params.crAccountId = crAccountId;
+      if (propertyId) params.propertyId = propertyId;
+      if (expenseClassification !== 'ALL') params.expenseClassification = expenseClassification;
+      if (transactionType && transactionType !== 'ALL') params.transactionType = transactionType;
+      if (status && status !== 'ALL') params.status = status;
+
+      const datePart = (month || new Date().toISOString().slice(0, 7)).replace(/-/g, '_');
+      await verificationAPI.downloadAllReceiptEvidencePDF(
+        params,
+        `Vouchers_Receipt_Evidence_${datePart}.pdf`
+      );
+    } catch (err) {
+      console.error('Failed to download vouchers evidence PDF:', err);
+      alert('Failed to generate vouchers evidence PDF. Please try again.');
+    } finally {
+      setDownloadingEvidencePdf(false);
+    }
+  };
+
+  // Download All Voucher Evidence ZIP
+  const handleDownloadEvidenceZIP = async () => {
+    try {
+      setDownloadingEvidenceZip(true);
+      const params = {};
+      if (useDateRange) {
+        if (startDate) params.startDate = startDate;
+        if (endDate) params.endDate = endDate;
+      } else if (month) {
+        params.month = month;
+      }
+      if (search.trim()) params.search = search.trim();
+      if (voucherNo.trim()) params.voucherNo = voucherNo.trim();
+      if (categoryId) params.categoryId = categoryId;
+      if (reportCategory && reportCategory !== 'ALL') params.reportCategory = reportCategory;
+      if (drAccountId) params.drAccountId = drAccountId;
+      if (crAccountId) params.crAccountId = crAccountId;
+      if (propertyId) params.propertyId = propertyId;
+      if (expenseClassification !== 'ALL') params.expenseClassification = expenseClassification;
+      if (transactionType && transactionType !== 'ALL') params.transactionType = transactionType;
+      if (status && status !== 'ALL') params.status = status;
+
+      const datePart = (month || new Date().toISOString().slice(0, 7)).replace(/-/g, '_');
+      await verificationAPI.downloadAllReceiptEvidenceZIP(
+        params,
+        `Vouchers_Evidence_ZIP_${datePart}.zip`
+      );
+    } catch (err) {
+      console.error('Failed to download vouchers evidence ZIP:', err);
+      alert('Failed to generate vouchers evidence ZIP. Please try again.');
+    } finally {
+      setDownloadingEvidenceZip(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* 1. Header & Quick Controls */}
@@ -506,17 +578,39 @@ export function TransactionsPage({ user }) {
             type="button"
             onClick={handleDownloadPDF}
             disabled={downloadingPdf || loading}
-            className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-lg shadow-emerald-700/20 transition"
-            title="Download all visible transactions as PDF"
+            className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold px-3.5 py-2 rounded-xl shadow-lg shadow-emerald-700/20 transition"
+            title="Download all visible transactions ledger as PDF"
           >
             <Download className={`w-4 h-4 ${downloadingPdf ? 'animate-pulse' : ''}`} />
-            <span>{downloadingPdf ? 'Generating…' : 'Download PDF'}</span>
+            <span>{downloadingPdf ? 'Generating…' : 'Ledger PDF'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadEvidencePDF}
+            disabled={downloadingEvidencePdf || loading}
+            className="flex items-center gap-2 bg-teal-700 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold px-3.5 py-2 rounded-xl shadow-lg shadow-teal-700/20 transition"
+            title="Download all voucher slips with receipt evidence as a single merged multi-page PDF"
+          >
+            <Download className={`w-4 h-4 ${downloadingEvidencePdf ? 'animate-pulse' : ''}`} />
+            <span>{downloadingEvidencePdf ? 'Generating…' : 'Evidence (PDF)'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadEvidenceZIP}
+            disabled={downloadingEvidenceZip || loading}
+            className="flex items-center gap-2 bg-cyan-800 hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed text-cyan-100 text-xs font-semibold px-3.5 py-2 rounded-xl shadow-lg shadow-cyan-800/20 transition"
+            title="Download all voucher evidence PDFs organized inside a ZIP archive"
+          >
+            <Download className={`w-4 h-4 ${downloadingEvidenceZip ? 'animate-pulse' : ''}`} />
+            <span>{downloadingEvidenceZip ? 'Packaging…' : 'Evidence (ZIP)'}</span>
           </button>
 
           <button
             type="button"
             onClick={handleOpenNewVoucher}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-lg shadow-blue-600/20 transition"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl shadow-lg shadow-blue-600/20 transition"
           >
             <Plus className="w-4 h-4" />
             <span>New Voucher</span>
