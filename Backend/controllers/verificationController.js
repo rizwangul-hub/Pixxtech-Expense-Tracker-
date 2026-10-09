@@ -2164,7 +2164,7 @@ export const unverifyEntry = async (req, res) => {
         const newTotalPaid = round2(Math.max(0, (pDoc.totalInstallmentsPaid || 0) - salaryAmount));
         pDoc.totalInstallmentsPaid = newTotalPaid;
         pDoc.status = newTotalPaid >= pDoc.netPayable ? 'PAID' : 'FINALIZED';
-        pDoc.paymentStatus = newTotalPaid >= pDoc.netPayable ? 'PAID' : newTotalPaid > 0 ? 'PARTIAL_PAYMENT' : 'UNPAID';
+        pDoc.paymentStatus = newTotalPaid >= pDoc.netPayable ? 'PAID' : newTotalPaid > 0 ? 'PARTIAL_PAYMENT' : 'PENDING_PAYMENT';
         if (newTotalPaid === 0) {
           pDoc.paidFromAccountId = null;
           pDoc.paidFromAccountName = null;
