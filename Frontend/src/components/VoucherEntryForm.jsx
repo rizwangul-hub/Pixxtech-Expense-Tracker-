@@ -114,20 +114,28 @@ export const VoucherEntryForm = ({
       return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
     });
 
-    if (activeScopeCategories.length > 0) {
-      const scopedCategories = (!propertyId && !unitId && parentCategoryId)
-        ? activeScopeCategories.filter((c) => String(c.parentCategoryId?._id || c.parentCategoryId) === String(parentCategoryId))
-        : activeScopeCategories;
+    const isGeneralScope = !propertyId && !unitId;
+    const scopedCategories = isGeneralScope && generalMainHeads.length > 0
+      ? (parentCategoryId
+          ? activeScopeCategories.filter((c) => String(c.parentCategoryId?._id || c.parentCategoryId) === String(parentCategoryId))
+          : [])
+      : activeScopeCategories;
+
+    if (scopedCategories.length > 0) {
       if (!categoryId || !scopedCategories.some((c) => c._id === categoryId)) {
         setCategoryId(scopedCategories[0]?._id || '');
       }
-    } else if (categoryId) {
+    } else {
       setCategoryId('');
     }
-  }, [propertyId, unitId, parentCategoryId, categories]);
+  }, [propertyId, unitId, parentCategoryId, categories, generalMainHeads.length]);
 
   const handleCreateCategory = async (e) => {
     e?.preventDefault();
+    if (!propertyId && !unitId && generalMainHeads.length > 0 && !parentCategoryId) {
+      setError('Please select a specific Main Head above before adding a new expense head.');
+      return;
+    }
     const name = customCategoryName.trim();
     if (!name) {
       setError('Enter the expense name first, for example Electricity Bill or Maintenance.');
@@ -197,6 +205,10 @@ export const VoucherEntryForm = ({
     if (!detail.trim()) {
       setError('Transaction Detail / Narration is required.');
       detailInputRef.current?.focus();
+      return;
+    }
+    if (!propertyId && !unitId && generalMainHeads.length > 0 && !parentCategoryId) {
+      setError('Please select a specific Main Head first.');
       return;
     }
     if (!categoryId) {
@@ -427,7 +439,9 @@ export const VoucherEntryForm = ({
             <span className="text-slate-600">Active Expense Head Scope:</span>
             {!propertyId ? (
               <span className="px-2.5 py-1 rounded-md bg-slate-200 text-slate-800 border border-slate-300">
-                🌐 General Expense (Showing General Heads)
+                {parentCategoryId
+                  ? `🏢 Main Head: ${generalMainHeads.find((h) => String(h._id) === String(parentCategoryId))?.name || 'Selected'}`
+                  : '🌐 General Expense (Select Main Head to view expenses)'}
               </span>
             ) : !unitId ? (
               <span className="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-300">
@@ -451,25 +465,40 @@ export const VoucherEntryForm = ({
               <Tag className="w-4 h-4 text-blue-600" /> Account Head / Category (Where Expense Goes)
             </label>
             {!propertyId && !unitId && generalMainHeads.length > 0 && (
-              <select
-                value={parentCategoryId}
-                onChange={(e) => {
-                  setParentCategoryId(e.target.value);
-                  setCategoryId('');
-                }}
-                className="w-full mb-2 bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
-              >
-                <option value="">-- General Main Head --</option>
-                {generalMainHeads.map((head) => <option key={head._id} value={head._id}>{head.name}</option>)}
-              </select>
+              <div className="mb-2">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Select Specific Main Head <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={parentCategoryId}
+                  onChange={(e) => {
+                    setParentCategoryId(e.target.value);
+                    setCategoryId('');
+                  }}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
+                  required
+                >
+                  <option value="">-- Select Specific Main Head --</option>
+                  {generalMainHeads.map((head) => (
+                    <option key={head._id} value={head._id}>
+                      🏢 {head.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
+              disabled={!propertyId && !unitId && generalMainHeads.length > 0 && !parentCategoryId}
+              className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
               required
             >
-              <option value="">-- Select Expense Head --</option>
+              {!propertyId && !unitId && generalMainHeads.length > 0 && !parentCategoryId ? (
+                <option value="">-- Select Main Head First --</option>
+              ) : (
+                <option value="">-- Select Expense Head --</option>
+              )}
               {(() => {
                 const activeScopeCategories = categories.filter((c) => {
                   if (c.type !== 'EXPENSE') return false;
@@ -483,14 +512,20 @@ export const VoucherEntryForm = ({
                   }
                   return (!c.propertyId || !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE') && !c.isMainHead;
                 });
-                const visibleCategories = (!propertyId && !unitId && parentCategoryId)
-                  ? activeScopeCategories.filter((c) => String(c.parentCategoryId?._id || c.parentCategoryId) === String(parentCategoryId))
+                const isGeneralScope = !propertyId && !unitId;
+                const visibleCategories = isGeneralScope && generalMainHeads.length > 0
+                  ? (parentCategoryId
+                      ? activeScopeCategories.filter((c) => String(c.parentCategoryId?._id || c.parentCategoryId) === String(parentCategoryId))
+                      : [])
                   : activeScopeCategories;
 
+                const selectedMainHead = generalMainHeads.find((h) => String(h._id) === String(parentCategoryId));
                 const groupLabel = unitId
                   ? `Unit Expense Categories (${selectedProperty?.plazaName || 'Property'})`
                   : propertyId
                   ? `Property Own Expense Categories (${selectedProperty?.plazaName || 'Property'})`
+                  : selectedMainHead
+                  ? `${selectedMainHead.name} Categories`
                   : 'General Company Expense Categories';
 
                 return (
@@ -503,11 +538,7 @@ export const VoucherEntryForm = ({
                           </option>
                         ))}
                       </optgroup>
-                    ) : (
-                      <option value="" disabled>
-                        -- Resolving Scope Expense Head... --
-                      </option>
-                    )}
+                    ) : null}
                   </>
                 );
               })()}
@@ -524,17 +555,23 @@ export const VoucherEntryForm = ({
                       handleCreateCategory();
                     }
                   }}
-                  placeholder="Add new head, e.g. Security Equipment"
+                  disabled={!propertyId && !unitId && generalMainHeads.length > 0 && !parentCategoryId}
+                  placeholder={
+                    !propertyId && !unitId && generalMainHeads.length > 0 && !parentCategoryId
+                      ? "Select main head above to add new expense head..."
+                      : "Add new head, e.g. Security Equipment"
+                  }
                   maxLength={100}
-                  className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-600"
+                  className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 />
                 <button
                   type="button"
                   onClick={handleCreateCategory}
-                  disabled={savingCategory}
-                  className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50"
+                  disabled={savingCategory || (!propertyId && !unitId && generalMainHeads.length > 0 && !parentCategoryId)}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shrink-0"
                 >
-                  {savingCategory ? 'Saving...' : '+ Add Head'}
+                  <Plus className="w-3.5 h-3.5" />
+                  {savingCategory ? 'Adding...' : 'Add Head'}
                 </button>
               </div>
             )}
