@@ -840,8 +840,34 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
                           title="Absent / Leave deduction. Can be corrected before any installment is paid."
                         />
                       </td>
-                      <td className="py-2 px-1 text-right font-mono font-black text-xs text-emerald-400 whitespace-nowrap">
-                        {formatPKR(row.netPayable)}
+                      <td className="py-2 px-1 text-right font-mono font-black text-xs whitespace-nowrap">
+                        {isPaid ? (
+                          <div>
+                            <span className="text-slate-500 font-bold">0</span>
+                            <div className="text-[8.5px] text-slate-500 font-normal line-through" title="Full Net Salary">
+                              {formatPKR(row.netPayable)}
+                            </div>
+                          </div>
+                        ) : isPartial ? (
+                          <div>
+                            <span className="text-amber-400 font-black">{formatPKR(remainingPay)}</span>
+                            <div className="text-[8.5px] text-slate-400 font-normal flex items-center justify-end gap-1">
+                              <span className="line-through text-slate-500" title="Full Net Salary">{formatPKR(row.netPayable)}</span>
+                              <span className="text-emerald-400 font-bold text-[8px]">Left</span>
+                            </div>
+                          </div>
+                        ) : isPendingApproval ? (
+                          <div>
+                            <span className="text-purple-400 font-black">{formatPKR(remainingPay)}</span>
+                            {remainingPay < (row.netPayable || 0) && (
+                              <div className="text-[8.5px] text-slate-500 font-normal line-through" title="Full Net Salary">
+                                {formatPKR(row.netPayable)}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-emerald-400">{formatPKR(row.netPayable)}</span>
+                        )}
                       </td>
                       <td className="py-2 px-1.5 min-w-0">
                         <div className="font-bold text-slate-300 text-[10px] truncate" title={row.accountTitle || row.name}>
