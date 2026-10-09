@@ -1262,6 +1262,69 @@ export const payrollAPI = {
     setTimeout(() => window.URL.revokeObjectURL(blobUrl), 30000);
     return true;
   },
+  getPendingSalaryBossReport: async (params = {}) => {
+    const res = await api.get('/staff/payroll/boss-pending-report', { params });
+    return res.data;
+  },
+  downloadPendingSalaryBossReportPDF: async (month, params = {}) => {
+    const res = await api.get('/staff/payroll/boss-pending-report-pdf', {
+      params: { month, ...params },
+      responseType: 'blob',
+    });
+
+    const contentType = res.headers['content-type'] || '';
+    if (contentType.includes('application/json') || !contentType.includes('application/pdf')) {
+      const text = await res.data.text();
+      let msg = 'PDF generation failed on the server.';
+      try { msg = JSON.parse(text).message || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `Pending_Salary_Report_Boss_${month}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+    return true;
+  },
+  printPendingSalaryBossReportPDF: async (month, params = {}) => {
+    const res = await api.get('/staff/payroll/boss-pending-report-pdf', {
+      params: { month, ...params },
+      responseType: 'blob',
+    });
+
+    const contentType = res.headers['content-type'] || '';
+    if (contentType.includes('application/json') || !contentType.includes('application/pdf')) {
+      const text = await res.data.text();
+      let msg = 'PDF generation failed on the server.';
+      try { msg = JSON.parse(text).message || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const newTab = window.open(blobUrl, '_blank');
+    if (!newTab) {
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `Pending_Salary_Report_Boss_${month}.pdf`;
+      link.click();
+    } else {
+      newTab.addEventListener('load', () => {
+        setTimeout(() => {
+          try { newTab.print(); } catch (e) { /* user can print manually */ }
+        }, 800);
+      });
+    }
+
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 30000);
+    return true;
+  },
 };
 
 export default api;

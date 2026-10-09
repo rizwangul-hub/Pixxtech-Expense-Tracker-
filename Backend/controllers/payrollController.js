@@ -2856,6 +2856,591 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
 };
 
 /**
+ * @desc    Get Pending Salary Report for Boss grouped by workplace/department
+ *          Only includes employees whose salary is pending (excludes PAID / fully settled)
+ * @route   GET /api/staff/payroll/boss-pending-report
+ * @access  Private
+ */
+export const getPendingSalaryBossReport = async (req, res) => {
+  try {
+    const currentMonthStr = new Date().toISOString().slice(0, 7);
+    const { month = currentMonthStr, department } = req.query;
+
+    const employees = await Employee.find({ isActive: true }).sort({ department: 1, name: 1 }).lean();
+    const savedPayrolls = await Payroll.find({ payrollMonth: month }).lean();
+    const savedMap = new Map();
+    savedPayrolls.forEach((p) => savedMap.set(String(p.employeeId), p));
+
+    // Fetch pending salary entries awaiting verification
+    const pendingSalaryEntries = await PendingEntry.find({
+      entryType: 'SALARY',
+      rentMonth: month,
+      status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
+    }).lean();
+
+    const pendingMap = new Map();
+    pendingSalaryEntries.forEach((entry) => {
+      const empIdStr = String(entry.tenantId || entry.entryData?.employeeId || entry.entryData?.payrollSnapshot?.employeeId || '');
+      const pIdStr = String(entry.entryData?.payrollId || '');
+      if (empIdStr) {
+        if (!pendingMap.has(empIdStr)) pendingMap.set(empIdStr, []);
+        pendingMap.get(empIdStr).push(entry);
+      }
+      if (pIdStr) {
+        if (!pendingMap.has(pIdStr)) pendingMap.set(pIdStr, []);
+        pendingMap.get(pIdStr).push(entry);
+      }
+    });
+
+    const pendingRows = [];
+
+    employees.forEach((emp) => {
+      const empIdStr = String(emp._id);
+      const saved = savedMap.get(empIdStr);
+
+      const basic = emp.basicSalary || 0;
+      const legacyAllowances =
+        (emp.fuelAllowance || 0) +
+        (emp.foodAllowance || 0) +
+        (emp.mobileAllowance || 0) +
+        (emp.performanceAllowance || 0) +
+        (emp.otherAllowances || 0);
+
+      const allowance = saved && saved.allowance !== undefined
+        ? saved.allowance
+        : (emp.allowance || legacyAllowances);
+
+      const gross = basic + allowance;
+      const loanDeduction = saved ? (Number(saved.loanDeduction) || 0) : 0;
+      const lopDeduction = saved ? (Number(saved.lopDeduction) || 0) : 0;
+      const otherDeduction = saved ? (Number(saved.otherDeduction) || 0) : 0;
+      const totalDeduction = loanDeduction + lopDeduction + otherDeduction;
+      const netPayable = Math.max(0, gross - totalDeduction);
+
+      const pIdStr = saved ? String(saved._id) : '';
+      const rawPending = [
+        ...(pendingMap.get(empIdStr) || []),
+        ...(pIdStr ? (pendingMap.get(pIdStr) || []) : []),
+      ];
+      const uniquePending = Array.from(new Map(rawPending.map((e) => [String(e._id), e])).values());
+      const pendingPaidAmount = round2(uniquePending.reduce((sum, item) => sum + (item.amount || 0), 0));
+      const verifiedPaidAmount = round2(saved?.totalInstallmentsPaid || 0);
+      const totalPaidOrPending = round2(verifiedPaidAmount + pendingPaidAmount);
+      const remainingPayable = round2(Math.max(0, netPayable - totalPaidOrPending));
+
+      // Skip employees who are fully PAID or verified paid
+      if (saved?.paymentStatus === 'PAID' || remainingPayable <= 0.01) {
+        return;
+      }
+
+      // Filter by department if requested
+      const deptName = emp.department || 'General Office';
+      if (department && department !== 'ALL' && deptName !== department) {
+        return;
+      }
+
+      pendingRows.push({
+        employeeId: emp._id,
+        employeeCode: emp.employeeCode || '',
+        name: emp.name,
+        designation: emp.designation || 'Staff',
+        department: deptName,
+        basicSalary: basic,
+        allowance,
+        totalDeduction,
+        finalSalary: netPayable,
+        paidAmount: verifiedPaidAmount,
+        pendingVerificationAmount: pendingPaidAmount,
+        remainingSalary: remainingPayable,
+        paymentStatus: saved?.paymentStatus || (saved ? 'PENDING_PAYMENT' : 'DRAFT'),
+        accountTitle: emp.accountTitle || emp.name,
+        ibanNumber: emp.ibanNumber || '',
+        accountNumber: emp.accountNumber || '',
+        bankName: emp.bankName || 'Cash / Bank',
+      });
+    });
+
+    // Group rows by Location / Workplace
+    const departmentGroups = {};
+    pendingRows.forEach((row) => {
+      const dept = row.department;
+      if (!departmentGroups[dept]) {
+        departmentGroups[dept] = {
+          department: dept,
+          employees: [],
+          totalFinalSalary: 0,
+          totalRemaining: 0,
+        };
+      }
+      departmentGroups[dept].employees.push(row);
+      departmentGroups[dept].totalFinalSalary += row.finalSalary;
+      departmentGroups[dept].totalRemaining += row.remainingSalary;
+    });
+
+    const groupsList = Object.values(departmentGroups);
+    const grandFinalSalary = pendingRows.reduce((sum, r) => sum + r.finalSalary, 0);
+    const grandRemainingSalary = pendingRows.reduce((sum, r) => sum + r.remainingSalary, 0);
+
+    return apiSuccess(
+      res,
+      {
+        month,
+        totalPendingEmployees: pendingRows.length,
+        grandFinalSalary: round2(grandFinalSalary),
+        grandRemainingSalary: round2(grandRemainingSalary),
+        departments: groupsList,
+        rows: pendingRows,
+      },
+      `Boss pending salary report for ${month}.`
+    );
+  } catch (error) {
+    console.error('[Get Boss Pending Salary Report Error]:', error);
+    return apiError(res, 'Failed to fetch boss pending salary report.', 500);
+  }
+};
+
+/**
+ * @desc    Generate Printable PDF for Boss containing Pending Salaries grouped by workplace
+ * @route   GET /api/staff/payroll/boss-pending-report-pdf
+ * @access  Private
+ */
+export const generatePendingSalaryBossReportPDF = async (req, res) => {
+  try {
+    const currentMonthStr = new Date().toISOString().slice(0, 7);
+    const { month = currentMonthStr, department } = req.query;
+
+    const [y, m] = month.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, 1);
+    const monthName = dateObj.toLocaleString('en-US', { month: 'long' });
+    const formattedTitleDate = `${monthName} ${y}`;
+
+    const employees = await Employee.find({ isActive: true }).sort({ department: 1, name: 1 }).lean();
+    const savedPayrolls = await Payroll.find({ payrollMonth: month }).lean();
+    const savedMap = new Map();
+    savedPayrolls.forEach((p) => savedMap.set(String(p.employeeId), p));
+
+    const pendingSalaryEntries = await PendingEntry.find({
+      entryType: 'SALARY',
+      rentMonth: month,
+      status: { $in: ['PENDING_VERIFICATION', 'EDITED'] },
+    }).lean();
+
+    const pendingMap = new Map();
+    pendingSalaryEntries.forEach((entry) => {
+      const empIdStr = String(entry.tenantId || entry.entryData?.employeeId || entry.entryData?.payrollSnapshot?.employeeId || '');
+      const pIdStr = String(entry.entryData?.payrollId || '');
+      if (empIdStr) {
+        if (!pendingMap.has(empIdStr)) pendingMap.set(empIdStr, []);
+        pendingMap.get(empIdStr).push(entry);
+      }
+      if (pIdStr) {
+        if (!pendingMap.has(pIdStr)) pendingMap.set(pIdStr, []);
+        pendingMap.get(pIdStr).push(entry);
+      }
+    });
+
+    const pendingRows = [];
+
+    employees.forEach((emp) => {
+      const empIdStr = String(emp._id);
+      const saved = savedMap.get(empIdStr);
+
+      const basic = emp.basicSalary || 0;
+      const legacyAllowances =
+        (emp.fuelAllowance || 0) +
+        (emp.foodAllowance || 0) +
+        (emp.mobileAllowance || 0) +
+        (emp.performanceAllowance || 0) +
+        (emp.otherAllowances || 0);
+
+      const allowance = saved && saved.allowance !== undefined
+        ? saved.allowance
+        : (emp.allowance || legacyAllowances);
+
+      const gross = basic + allowance;
+      const loanDeduction = saved ? (Number(saved.loanDeduction) || 0) : 0;
+      const lopDeduction = saved ? (Number(saved.lopDeduction) || 0) : 0;
+      const otherDeduction = saved ? (Number(saved.otherDeduction) || 0) : 0;
+      const totalDeduction = loanDeduction + lopDeduction + otherDeduction;
+      const netPayable = Math.max(0, gross - totalDeduction);
+
+      const pIdStr = saved ? String(saved._id) : '';
+      const rawPending = [
+        ...(pendingMap.get(empIdStr) || []),
+        ...(pIdStr ? (pendingMap.get(pIdStr) || []) : []),
+      ];
+      const uniquePending = Array.from(new Map(rawPending.map((e) => [String(e._id), e])).values());
+      const pendingPaidAmount = round2(uniquePending.reduce((sum, item) => sum + (item.amount || 0), 0));
+      const verifiedPaidAmount = round2(saved?.totalInstallmentsPaid || 0);
+      const totalPaidOrPending = round2(verifiedPaidAmount + pendingPaidAmount);
+      const remainingPayable = round2(Math.max(0, netPayable - totalPaidOrPending));
+
+      // Strictly exclude already PAID or settled employees
+      if (saved?.paymentStatus === 'PAID' || remainingPayable <= 0.01) {
+        return;
+      }
+
+      const deptName = emp.department || 'General Office';
+      if (department && department !== 'ALL' && deptName !== department) {
+        return;
+      }
+
+      pendingRows.push({
+        name: emp.name,
+        designation: emp.designation || 'Staff',
+        department: deptName,
+        finalSalary: netPayable,
+        remainingSalary: remainingPayable,
+        accountTitle: emp.accountTitle || emp.name,
+        ibanNumber: emp.ibanNumber || emp.accountNumber || '—',
+        bankName: emp.bankName || 'Cash / Bank',
+      });
+    });
+
+    // Group by department
+    const departmentGroups = {};
+    pendingRows.forEach((row) => {
+      const dept = row.department;
+      if (!departmentGroups[dept]) {
+        departmentGroups[dept] = [];
+      }
+      departmentGroups[dept].push(row);
+    });
+
+    const grandRemainingSalary = pendingRows.reduce((sum, r) => sum + r.remainingSalary, 0);
+    const logoBase64 = getAssetBase64('logo.png');
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Pending Salary Payout Details - ${formattedTitleDate}</title>
+      <style>
+        @page { size: A4 portrait; margin: 10mm 10mm 10mm 10mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: 'Segoe UI', Arial, sans-serif;
+          color: #0f172a;
+          background: #fff;
+          font-size: 10px;
+          line-height: 1.4;
+        }
+        .header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 2px solid #0f172a;
+          padding-bottom: 8px;
+          margin-bottom: 12px;
+        }
+        .header-logo img {
+          height: 38px;
+          width: auto;
+          object-fit: contain;
+        }
+        .header-company {
+          text-align: right;
+        }
+        .header-company h1 {
+          font-size: 15px;
+          font-weight: 900;
+          color: #0f172a;
+          letter-spacing: 0.5px;
+        }
+        .header-company p {
+          font-size: 8.5px;
+          color: #64748b;
+          margin-top: 2px;
+        }
+        .title-banner {
+          background: #0f172a;
+          color: #fff;
+          padding: 8px 12px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 14px;
+        }
+        .title-banner h2 {
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+        }
+        .title-banner .meta {
+          font-size: 9px;
+          color: #cbd5e1;
+          font-weight: 600;
+        }
+        .summary-cards {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 16px;
+        }
+        .summary-card {
+          flex: 1;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          padding: 8px 10px;
+          background: #f8fafc;
+          text-align: center;
+        }
+        .summary-card.highlight {
+          background: #fff7ed;
+          border-color: #fdba74;
+        }
+        .summary-card .lbl {
+          font-size: 8px;
+          font-weight: 700;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .summary-card .val {
+          font-size: 14px;
+          font-weight: 900;
+          color: #0f172a;
+          margin-top: 2px;
+          font-family: 'Courier New', monospace;
+        }
+        .summary-card.highlight .val {
+          color: #c2410c;
+        }
+        .section-block {
+          margin-bottom: 18px;
+          page-break-inside: avoid;
+        }
+        .section-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: #f1f5f9;
+          border-left: 4px solid #4f46e5;
+          padding: 6px 10px;
+          border-radius: 4px;
+          margin-bottom: 6px;
+        }
+        .section-header h3 {
+          font-size: 11px;
+          font-weight: 800;
+          color: #1e1b4b;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .section-header .badge {
+          font-size: 8.5px;
+          font-weight: 700;
+          background: #e0e7ff;
+          color: #3730a3;
+          padding: 2px 7px;
+          border-radius: 10px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 6px;
+          font-size: 9px;
+        }
+        th {
+          background: #1e293b;
+          color: #fff;
+          font-weight: 700;
+          padding: 6px 6px;
+          text-align: left;
+          font-size: 8px;
+          text-transform: uppercase;
+          letter-spacing: 0.4px;
+          border: 1px solid #334155;
+        }
+        th.center, td.center { text-align: center; }
+        th.right, td.right { text-align: right; }
+        td {
+          padding: 5px 6px;
+          border: 1px solid #e2e8f0;
+          color: #1e293b;
+          vertical-align: middle;
+        }
+        tbody tr:nth-child(even) td { background: #f8fafc; }
+        .dept-total-row td {
+          background: #f1f5f9 !important;
+          font-weight: 800 !important;
+          border-top: 1.5px solid #94a3b8;
+          color: #0f172a;
+        }
+        .grand-total-box {
+          margin-top: 16px;
+          padding: 10px 14px;
+          background: #0f172a;
+          color: #fff;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .grand-total-box .title {
+          font-size: 11px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .grand-total-box .amount {
+          font-size: 15px;
+          font-weight: 900;
+          font-family: 'Courier New', monospace;
+          color: #38bdf8;
+        }
+        .footer-note {
+          margin-top: 14px;
+          font-size: 8px;
+          color: #64748b;
+          text-align: center;
+          border-top: 1px dashed #cbd5e1;
+          padding-top: 6px;
+        }
+        .mono { font-family: 'Courier New', monospace; font-weight: 700; }
+      </style>
+    </head>
+    <body>
+      <!-- HEADER -->
+      <div class="header">
+        <div class="header-logo">
+          ${logoBase64
+            ? `<img src="${logoBase64}" alt="Pixx Technologies" />`
+            : `<div style="font-size:16px;font-weight:900;color:#0f172a;">PIXX TECHNOLOGIES</div>`
+          }
+        </div>
+        <div class="header-company">
+          <h1>PIXX TECHNOLOGIES PAKISTAN</h1>
+          <p>Office 4C Chanbeli Block, Bahria Town Lahore &bull; Standalone Staff HR &amp; Payroll</p>
+        </div>
+      </div>
+
+      <!-- TITLE BANNER -->
+      <div class="title-banner">
+        <div>
+          <h2>Executive Pending Salary Payout Statement</h2>
+          <div class="meta">Month: ${formattedTitleDate} &bull; Filter: Strictly Pending Salaries (Paid / Verified Excluded)</div>
+        </div>
+        <div class="meta" style="text-align:right;">
+          Date Generated: ${new Date().toLocaleDateString('en-PK')}<br/>
+          Boss Transfer Order
+        </div>
+      </div>
+
+      <!-- SUMMARY CARDS -->
+      <div class="summary-cards">
+        <div class="summary-card">
+          <div class="lbl">Total Pending Staff</div>
+          <div class="val">${pendingRows.length}</div>
+        </div>
+        <div class="summary-card">
+          <div class="lbl">Workplace Offices</div>
+          <div class="val">${Object.keys(departmentGroups).length}</div>
+        </div>
+        <div class="summary-card highlight">
+          <div class="lbl">Total Pending Net Payout</div>
+          <div class="val">Rs. ${formatPKR(grandRemainingSalary)}</div>
+        </div>
+      </div>
+
+      <!-- SECTIONS PER WORKPLACE / DEPARTMENT -->
+      ${Object.entries(departmentGroups).map(([deptName, emps]) => {
+        const subtotal = emps.reduce((sum, e) => sum + e.remainingSalary, 0);
+        return `
+          <div class="section-block">
+            <div class="section-header">
+              <h3>Office / Location: ${deptName}</h3>
+              <span class="badge">${emps.length} Staff Member${emps.length === 1 ? '' : 's'} &bull; Subtotal: Rs. ${formatPKR(subtotal)}</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th class="center" style="width: 5%;">#</th>
+                  <th style="width: 20%;">Employee Name</th>
+                  <th style="width: 17%;">Designation</th>
+                  <th class="right" style="width: 13%;">Final Salary</th>
+                  <th style="width: 17%;">Account Title</th>
+                  <th style="width: 18%;">IBAN / Account No</th>
+                  <th style="width: 10%;">Bank Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${emps.map((emp, idx) => `
+                  <tr>
+                    <td class="center font-bold">${idx + 1}</td>
+                    <td><strong>${emp.name}</strong></td>
+                    <td style="color:#475569;">${emp.designation}</td>
+                    <td class="right mono" style="color:#0f172a;font-weight:800;">Rs. ${formatPKR(emp.remainingSalary)}</td>
+                    <td>${emp.accountTitle || emp.name}</td>
+                    <td class="mono" style="font-size:8.5px;">${emp.ibanNumber || '—'}</td>
+                    <td>${emp.bankName || 'Cash'}</td>
+                  </tr>
+                `).join('')}
+                <tr class="dept-total-row">
+                  <td colspan="3" class="right" style="text-transform:uppercase;letter-spacing:0.5px;">Subtotal for ${deptName}:</td>
+                  <td class="right mono" style="color:#1e1b4b;font-size:10px;">Rs. ${formatPKR(subtotal)}</td>
+                  <td colspan="3"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        `;
+      }).join('')}
+
+      <!-- GRAND TOTAL BANNER -->
+      <div class="grand-total-box">
+        <div class="title">Grand Total Pending Payout (All Workplace Branches)</div>
+        <div class="amount">Rs. ${formatPKR(grandRemainingSalary)}</div>
+      </div>
+
+      <!-- FOOTER NOTE -->
+      <div class="footer-note">
+        This document contains strictly unverified and pending staff salaries awaiting disbursement approval. Paid and settled salaries are excluded.<br/>
+        Confidential Management Document &bull; Pixx Technologies Pakistan
+      </div>
+
+    </body>
+    </html>
+    `;
+
+    let browser;
+    try {
+      browser = await launchPuppeteer();
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
+
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        landscape: false,
+        margin: { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' },
+        printBackground: true,
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=Pending_Salary_Report_Boss_${month}.pdf`);
+      return res.status(200).send(pdfBuffer);
+    } catch (pdfErr) {
+      console.error('[Puppeteer Error] Boss Pending Salary PDF failed:', pdfErr.message);
+      return res.status(500).json({
+        success: false,
+        message: `PDF generation failed: ${pdfErr.message}`,
+      });
+    } finally {
+      if (browser) {
+        await browser.close().catch((closeErr) => {
+          console.error('[Puppeteer Cleanup Error] Boss Pending Salary PDF:', closeErr.message);
+        });
+      }
+    }
+  } catch (error) {
+    console.error('[Generate Boss Pending Salary Report PDF Error]:', error);
+    return apiError(res, error.message || 'Failed to generate Boss Pending Salary Report PDF.', 500);
+  }
+};
+
+/**
  * @desc    Get detailed individual Employee Account Ledger (Accruals, Payouts, & Pending Balance)
  * @route   GET /api/staff/payroll/employee-ledger/:employeeId
  * @access  Private

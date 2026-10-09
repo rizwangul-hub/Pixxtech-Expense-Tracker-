@@ -539,6 +539,26 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
             </button>
 
             <button
+              onClick={async () => {
+                try {
+                  setDownloadingMonthlyPDF(true);
+                  await payrollAPI.downloadPendingSalaryBossReportPDF(selectedMonth);
+                  setMsg({ type: 'success', text: `Downloaded Boss Pending Salary Statement PDF for ${selectedMonth}.` });
+                  setTimeout(() => setMsg({ type: '', text: '' }), 4000);
+                } catch (err) {
+                  setMsg({ type: 'error', text: err.message || 'Failed to download Boss Pending Salary PDF.' });
+                } finally {
+                  setDownloadingMonthlyPDF(false);
+                }
+              }}
+              disabled={downloadingMonthlyPDF}
+              className="bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-800/60 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+              title="Download Executive Pending Salary Statement for Boss (Grouped by location, excludes paid)"
+            >
+              <CreditCard size={14} /> Boss Pending PDF
+            </button>
+
+            <button
               onClick={handlePrintMonthlyPDF}
               disabled={downloadingMonthlyPDF}
               className="bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/60 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"

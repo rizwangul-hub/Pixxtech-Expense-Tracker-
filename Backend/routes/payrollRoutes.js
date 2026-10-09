@@ -6,6 +6,8 @@ import {
   downloadSalarySheetExcel,
   generateSalarySlipPDF,
   generateMonthlySalarySheetPDF,
+  getPendingSalaryBossReport,
+  generatePendingSalaryBossReportPDF,
   getEmployeeLedger,
   paySingleSalary,
   payBulkSalary,
@@ -21,6 +23,8 @@ router.get('/', getMonthlyPayroll);
 router.post('/save', authorize('ADMIN', 'DATA_ENTRY'), savePayroll);
 router.get('/excel', downloadSalarySheetExcel);
 router.get('/monthly-sheet-pdf', generateMonthlySalarySheetPDF);
+router.get('/boss-pending-report', getPendingSalaryBossReport);
+router.get('/boss-pending-report-pdf', generatePendingSalaryBossReportPDF);
 router.get('/employee-ledger/:employeeId', getEmployeeLedger);
 router.get('/slip/:employeeId/pdf', generateSalarySlipPDF);
 
