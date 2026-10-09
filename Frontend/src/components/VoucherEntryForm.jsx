@@ -13,6 +13,7 @@ import {
   Calendar,
   DollarSign,
   FileText,
+  Plus,
 } from 'lucide-react';
 
 const QUICK_TAGS = [
