@@ -193,6 +193,11 @@ const employeeSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+    isExcludedFromSalary: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     notes: {
       type: String,
       trim: true,

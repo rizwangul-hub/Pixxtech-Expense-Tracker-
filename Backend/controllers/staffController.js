@@ -172,6 +172,7 @@ export const createEmployee = async (req, res) => {
       paymentMethod = 'BANK_TRANSFER',
       initialLoanBalance = 0,
       notes = '',
+      isExcludedFromSalary = false,
     } = req.body;
 
     if (!name || !name.trim()) {
@@ -210,6 +211,7 @@ export const createEmployee = async (req, res) => {
       accountNumber: accountNumber.trim(),
       paymentMethod: paymentMethod || 'BANK_TRANSFER',
       loanBalance: Number(initialLoanBalance) || 0,
+      isExcludedFromSalary: Boolean(isExcludedFromSalary),
       notes: notes.trim(),
       createdBy: req.user?._id || null,
     });
@@ -278,6 +280,7 @@ export const updateEmployee = async (req, res) => {
       accountNumber,
       paymentMethod,
       isActive,
+      isExcludedFromSalary,
       notes,
     } = req.body;
 
@@ -307,6 +310,7 @@ export const updateEmployee = async (req, res) => {
     if (accountNumber !== undefined) employee.accountNumber = accountNumber.trim();
     if (paymentMethod !== undefined) employee.paymentMethod = paymentMethod;
     if (isActive !== undefined) employee.isActive = Boolean(isActive);
+    if (isExcludedFromSalary !== undefined) employee.isExcludedFromSalary = Boolean(isExcludedFromSalary);
     if (notes !== undefined) employee.notes = notes.trim();
 
     await employee.save();

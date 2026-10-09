@@ -1262,15 +1262,27 @@ export const payrollAPI = {
     setTimeout(() => window.URL.revokeObjectURL(blobUrl), 30000);
     return true;
   },
-  getPendingSalaryBossReport: async (params = {}) => {
+  getPendingSalaryBossReport: async (params = {}, data = null) => {
+    if (data || params.payrollRecords) {
+      const res = await api.post('/staff/payroll/boss-pending-report', data || params, { params });
+      return res.data;
+    }
     const res = await api.get('/staff/payroll/boss-pending-report', { params });
     return res.data;
   },
-  downloadPendingSalaryBossReportPDF: async (month, params = {}) => {
-    const res = await api.get('/staff/payroll/boss-pending-report-pdf', {
-      params: { month, ...params },
-      responseType: 'blob',
-    });
+  downloadPendingSalaryBossReportPDF: async (month, params = {}, data = null) => {
+    let res;
+    if (data || params.payrollRecords) {
+      res = await api.post('/staff/payroll/boss-pending-report-pdf', data || { month, ...params }, {
+        params: { month, ...params },
+        responseType: 'blob',
+      });
+    } else {
+      res = await api.get('/staff/payroll/boss-pending-report-pdf', {
+        params: { month, ...params },
+        responseType: 'blob',
+      });
+    }
 
     const contentType = res.headers['content-type'] || '';
     if (contentType.includes('application/json') || !contentType.includes('application/pdf')) {
@@ -1291,11 +1303,19 @@ export const payrollAPI = {
     window.URL.revokeObjectURL(downloadUrl);
     return true;
   },
-  printPendingSalaryBossReportPDF: async (month, params = {}) => {
-    const res = await api.get('/staff/payroll/boss-pending-report-pdf', {
-      params: { month, ...params },
-      responseType: 'blob',
-    });
+  printPendingSalaryBossReportPDF: async (month, params = {}, data = null) => {
+    let res;
+    if (data || params.payrollRecords) {
+      res = await api.post('/staff/payroll/boss-pending-report-pdf', data || { month, ...params }, {
+        params: { month, ...params },
+        responseType: 'blob',
+      });
+    } else {
+      res = await api.get('/staff/payroll/boss-pending-report-pdf', {
+        params: { month, ...params },
+        responseType: 'blob',
+      });
+    }
 
     const contentType = res.headers['content-type'] || '';
     if (contentType.includes('application/json') || !contentType.includes('application/pdf')) {

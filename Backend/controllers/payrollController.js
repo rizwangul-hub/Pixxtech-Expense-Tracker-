@@ -193,8 +193,11 @@ export const getMonthlyPayroll = async (req, res) => {
       }
     });
 
-    // Fetch active employees
-    const empQuery = { isActive: true };
+    // Fetch active employees eligible for salary
+    const empQuery = {
+      isActive: true,
+      isExcludedFromSalary: { $ne: true },
+    };
     if (department && department !== 'ALL') empQuery.department = department;
     const employees = await Employee.find(empQuery).sort({ department: 1, name: 1 }).lean();
 
@@ -619,7 +622,10 @@ export const downloadSalarySheetExcel = async (req, res) => {
   try {
     const { month = '2026-08' } = req.query;
 
-    const employees = await Employee.find({ isActive: true }).sort({ department: 1, name: 1 }).lean();
+    const employees = await Employee.find({
+      isActive: true,
+      isExcludedFromSalary: { $ne: true },
+    }).sort({ department: 1, name: 1 }).lean();
     const existingPayroll = await Payroll.find({ payrollMonth: month }).lean();
     const payrollMap = new Map();
     existingPayroll.forEach((p) => payrollMap.set(p.employeeId.toString(), p));
@@ -2328,8 +2334,11 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
     const startDate = new Date(Date.UTC(y, m - 1, 1));
     const endDate = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
 
-    // 1. Fetch Employees & Payroll Records
-    const employees = await Employee.find({ status: { $ne: 'INACTIVE' } }).sort({ name: 1 }).lean();
+    // 1. Fetch Employees & Payroll Records eligible for salary
+    const employees = await Employee.find({
+      isActive: true,
+      isExcludedFromSalary: { $ne: true },
+    }).sort({ name: 1 }).lean();
     const savedPayrolls = await Payroll.find({ payrollMonth: month }).lean();
 
     const savedMap = new Map();
@@ -2864,12 +2873,25 @@ export const generateMonthlySalarySheetPDF = async (req, res) => {
 export const getPendingSalaryBossReport = async (req, res) => {
   try {
     const currentMonthStr = new Date().toISOString().slice(0, 7);
-    const { month = currentMonthStr, department } = req.query;
+    const month = req.body?.month || req.query?.month || currentMonthStr;
+    const department = req.body?.department || req.query?.department;
+    const clientPayrollRecords = Array.isArray(req.body?.payrollRecords) ? req.body.payrollRecords : null;
 
-    const employees = await Employee.find({ isActive: true }).sort({ department: 1, name: 1 }).lean();
+    const employees = await Employee.find({
+      isActive: true,
+      isExcludedFromSalary: { $ne: true },
+    }).sort({ department: 1, name: 1 }).lean();
     const savedPayrolls = await Payroll.find({ payrollMonth: month }).lean();
     const savedMap = new Map();
     savedPayrolls.forEach((p) => savedMap.set(String(p.employeeId), p));
+
+    // If client provided live/active edited payrollRecords from the UI table, merge them!
+    const clientRecordMap = new Map();
+    if (clientPayrollRecords) {
+      clientPayrollRecords.forEach((rec) => {
+        if (rec.employeeId) clientRecordMap.set(String(rec.employeeId), rec);
+      });
+    }
 
     // Fetch pending salary entries awaiting verification
     const pendingSalaryEntries = await PendingEntry.find({
@@ -2906,14 +2928,24 @@ export const getPendingSalaryBossReport = async (req, res) => {
         (emp.performanceAllowance || 0) +
         (emp.otherAllowances || 0);
 
-      const allowance = saved && saved.allowance !== undefined
-        ? saved.allowance
-        : (emp.allowance || legacyAllowances);
+      const clientRec = clientRecordMap.get(empIdStr);
+
+      const allowance = clientRec && clientRec.allowance !== undefined
+        ? Number(clientRec.allowance) || 0
+        : (saved && saved.allowance !== undefined
+            ? saved.allowance
+            : (emp.allowance || legacyAllowances));
 
       const gross = basic + allowance;
-      const loanDeduction = saved ? (Number(saved.loanDeduction) || 0) : 0;
-      const lopDeduction = saved ? (Number(saved.lopDeduction) || 0) : 0;
-      const otherDeduction = saved ? (Number(saved.otherDeduction) || 0) : 0;
+      const loanDeduction = clientRec && clientRec.loanDeduction !== undefined
+        ? Number(clientRec.loanDeduction) || 0
+        : (saved ? (Number(saved.loanDeduction) || 0) : 0);
+      const lopDeduction = clientRec && clientRec.lopDeduction !== undefined
+        ? Number(clientRec.lopDeduction) || 0
+        : (saved ? (Number(saved.lopDeduction) || 0) : 0);
+      const otherDeduction = clientRec && clientRec.otherDeduction !== undefined
+        ? Number(clientRec.otherDeduction) || 0
+        : (saved ? (Number(saved.otherDeduction) || 0) : 0);
       const totalDeduction = loanDeduction + lopDeduction + otherDeduction;
       const netPayable = Math.max(0, gross - totalDeduction);
 
@@ -3007,17 +3039,30 @@ export const getPendingSalaryBossReport = async (req, res) => {
 export const generatePendingSalaryBossReportPDF = async (req, res) => {
   try {
     const currentMonthStr = new Date().toISOString().slice(0, 7);
-    const { month = currentMonthStr, department } = req.query;
+    const month = req.body?.month || req.query?.month || currentMonthStr;
+    const department = req.body?.department || req.query?.department;
+    const clientPayrollRecords = Array.isArray(req.body?.payrollRecords) ? req.body.payrollRecords : null;
 
     const [y, m] = month.split('-').map(Number);
     const dateObj = new Date(y, m - 1, 1);
     const monthName = dateObj.toLocaleString('en-US', { month: 'long' });
     const formattedTitleDate = `${monthName} ${y}`;
 
-    const employees = await Employee.find({ isActive: true }).sort({ department: 1, name: 1 }).lean();
+    const employees = await Employee.find({
+      isActive: true,
+      isExcludedFromSalary: { $ne: true },
+    }).sort({ department: 1, name: 1 }).lean();
     const savedPayrolls = await Payroll.find({ payrollMonth: month }).lean();
     const savedMap = new Map();
     savedPayrolls.forEach((p) => savedMap.set(String(p.employeeId), p));
+
+    // If client provided live/active edited payrollRecords from the UI table, merge them!
+    const clientRecordMap = new Map();
+    if (clientPayrollRecords) {
+      clientPayrollRecords.forEach((rec) => {
+        if (rec.employeeId) clientRecordMap.set(String(rec.employeeId), rec);
+      });
+    }
 
     const pendingSalaryEntries = await PendingEntry.find({
       entryType: 'SALARY',
@@ -3044,6 +3089,7 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
     employees.forEach((emp) => {
       const empIdStr = String(emp._id);
       const saved = savedMap.get(empIdStr);
+      const clientRec = clientRecordMap.get(empIdStr);
 
       const basic = emp.basicSalary || 0;
       const legacyAllowances =
@@ -3053,14 +3099,22 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
         (emp.performanceAllowance || 0) +
         (emp.otherAllowances || 0);
 
-      const allowance = saved && saved.allowance !== undefined
-        ? saved.allowance
-        : (emp.allowance || legacyAllowances);
+      const allowance = clientRec && clientRec.allowance !== undefined
+        ? Number(clientRec.allowance) || 0
+        : (saved && saved.allowance !== undefined
+            ? saved.allowance
+            : (emp.allowance || legacyAllowances));
 
       const gross = basic + allowance;
-      const loanDeduction = saved ? (Number(saved.loanDeduction) || 0) : 0;
-      const lopDeduction = saved ? (Number(saved.lopDeduction) || 0) : 0;
-      const otherDeduction = saved ? (Number(saved.otherDeduction) || 0) : 0;
+      const loanDeduction = clientRec && clientRec.loanDeduction !== undefined
+        ? Number(clientRec.loanDeduction) || 0
+        : (saved ? (Number(saved.loanDeduction) || 0) : 0);
+      const lopDeduction = clientRec && clientRec.lopDeduction !== undefined
+        ? Number(clientRec.lopDeduction) || 0
+        : (saved ? (Number(saved.lopDeduction) || 0) : 0);
+      const otherDeduction = clientRec && clientRec.otherDeduction !== undefined
+        ? Number(clientRec.otherDeduction) || 0
+        : (saved ? (Number(saved.otherDeduction) || 0) : 0);
       const totalDeduction = loanDeduction + lopDeduction + otherDeduction;
       const netPayable = Math.max(0, gross - totalDeduction);
 

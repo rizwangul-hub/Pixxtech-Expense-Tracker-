@@ -542,8 +542,19 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
               onClick={async () => {
                 try {
                   setDownloadingMonthlyPDF(true);
-                  await payrollAPI.downloadPendingSalaryBossReportPDF(selectedMonth);
-                  setMsg({ type: 'success', text: `Downloaded Boss Pending Salary Statement PDF for ${selectedMonth}.` });
+                  // First ensure current deduction changes are saved to DB
+                  if (payrollRows && payrollRows.length > 0) {
+                    await payrollAPI.savePayroll({
+                      month: selectedMonth,
+                      payrollRecords: payrollRows,
+                    });
+                  }
+                  await payrollAPI.downloadPendingSalaryBossReportPDF(selectedMonth, {}, {
+                    month: selectedMonth,
+                    payrollRecords: payrollRows,
+                  });
+                  setMsg({ type: 'success', text: `Downloaded Boss Pending Salary Statement PDF for ${selectedMonth} with exact Net Payable amounts.` });
+                  fetchPayroll();
                   setTimeout(() => setMsg({ type: '', text: '' }), 4000);
                 } catch (err) {
                   setMsg({ type: 'error', text: err.message || 'Failed to download Boss Pending Salary PDF.' });
