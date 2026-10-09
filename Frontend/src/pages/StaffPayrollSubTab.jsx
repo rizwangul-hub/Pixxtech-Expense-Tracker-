@@ -542,12 +542,16 @@ export const StaffPayrollSubTab = ({ onRefreshEmployees }) => {
               onClick={async () => {
                 try {
                   setDownloadingMonthlyPDF(true);
-                  // First ensure current deduction changes are saved to DB
+                  // Auto-save eligible deduction changes before downloading PDF
                   if (payrollRows && payrollRows.length > 0) {
-                    await payrollAPI.savePayroll({
-                      month: selectedMonth,
-                      payrollRecords: payrollRows,
-                    });
+                    try {
+                      await payrollAPI.savePayroll({
+                        month: selectedMonth,
+                        payrollRecords: payrollRows,
+                      });
+                    } catch (saveErr) {
+                      console.warn('Auto-save payroll before PDF download:', saveErr);
+                    }
                   }
                   await payrollAPI.downloadPendingSalaryBossReportPDF(selectedMonth, {}, {
                     month: selectedMonth,

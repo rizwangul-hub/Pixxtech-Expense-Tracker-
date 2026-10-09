@@ -415,14 +415,8 @@ export const savePayroll = async (req, res) => {
         }
       }
 
-      if (hasVerifiedPayments && financialValuesChanged) {
-        return apiError(
-          res,
-          `Salary for ${existingDoc.employeeName} has already been paid in part or full. Reverse the posted payment before changing payroll amounts.`,
-          400
-        );
-      }
       if (hasVerifiedPayments) {
+        // Employees with verified payments (partial or full) are locked; preserve their existing record intact
         savedResults.push(existingDoc);
         continue;
       }
