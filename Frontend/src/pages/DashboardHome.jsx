@@ -175,44 +175,44 @@ export function DashboardHome({
   return (
     <div className="space-y-6">
       {/* Monthly Activity & Total Entries Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-indigo-800/40 rounded-xl p-5 shadow-md">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-indigo-900/40">
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
           <div>
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-lg">
+              <div className="p-2 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-lg">
                 <Calendar className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-white tracking-tight">
+                  <h2 className="text-base font-bold text-slate-900 tracking-tight">
                     Monthly Activity & Total Entries
                   </h2>
                   {selectedMonth === getCurrentMonth() ? (
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800/60 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                       Current Month
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950 px-2 py-0.5 rounded-full border border-amber-800/60">
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                       Historical Month
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 mt-0.5">
                   Showing all transactions and ledger activity for{' '}
-                  <span className="text-indigo-300 font-semibold">{formatMonthLabel(selectedMonth)}</span>
+                  <span className="text-indigo-600 font-semibold">{formatMonthLabel(selectedMonth)}</span>
                 </p>
               </div>
             </div>
           </div>
 
           {/* Month Selector Controls */}
-          <div className="flex items-center gap-2 bg-slate-950/70 p-1.5 rounded-xl border border-indigo-900/40">
+          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
             <button
               type="button"
               onClick={handlePrevMonth}
               title="Previous Month"
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+              className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition"
             >
               <ChevronLeft size={16} />
             </button>
@@ -222,7 +222,7 @@ export function DashboardHome({
                 type="month"
                 value={selectedMonth}
                 onChange={(e) => e.target.value && setSelectedMonth(e.target.value)}
-                className="bg-slate-900 text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 hover:border-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                className="bg-white text-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-xs"
               />
             </div>
 
@@ -230,7 +230,7 @@ export function DashboardHome({
               type="button"
               onClick={handleNextMonth}
               title="Next Month"
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+              className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition"
             >
               <ChevronRight size={16} />
             </button>
@@ -240,7 +240,7 @@ export function DashboardHome({
                 type="button"
                 onClick={handleResetToCurrentMonth}
                 title="Reset to current month"
-                className="flex items-center gap-1 text-[11px] font-semibold text-indigo-300 hover:text-white bg-indigo-950/80 hover:bg-indigo-900/80 border border-indigo-700/50 px-2.5 py-1.5 rounded-lg transition ml-1"
+                className="flex items-center gap-1 text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1.5 rounded-lg transition ml-1"
               >
                 <RefreshCw size={11} />
                 <span>Current</span>
@@ -250,32 +250,31 @@ export function DashboardHome({
         </div>
 
         {/* 4 Cards Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {/* Card 1: Total Entries (Featured) */}
-          <div className="bg-slate-950/90 border border-indigo-500/40 rounded-xl p-3.5 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-500/10 rounded-full blur-xl pointer-events-none"></div>
+          <div className="bg-gradient-to-br from-indigo-50/70 to-indigo-100/40 border border-indigo-200 rounded-xl p-3.5 relative overflow-hidden group shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
+              <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider">
                 Total Entries
               </span>
-              <div className="p-1 bg-indigo-500/20 text-indigo-300 rounded">
+              <div className="p-1 bg-indigo-100 text-indigo-700 rounded">
                 <Hash size={14} />
               </div>
             </div>
-            <div className="text-3xl font-black text-white mt-1.5 tracking-tight font-mono">
+            <div className="text-3xl font-black text-slate-900 mt-1.5 tracking-tight font-mono">
               {monthlyLoading ? (
-                <span className="text-slate-500 text-2xl">...</span>
+                <span className="text-slate-400 text-2xl">...</span>
               ) : (
                 totalEntriesCount
               )}
             </div>
-            <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
+            <div className="flex items-center justify-between mt-1 text-[11px] text-slate-600">
               <span>Transactions in {formatMonthLabel(selectedMonth).split(' ')[0]}</span>
               {onNavigateToTransactions && (
                 <button
                   type="button"
                   onClick={onNavigateToTransactions}
-                  className="text-indigo-400 hover:text-indigo-300 font-semibold underline flex items-center gap-0.5"
+                  className="text-indigo-600 hover:text-indigo-800 font-bold underline flex items-center gap-0.5"
                 >
                   View <ChevronRight size={10} />
                 </button>
@@ -284,16 +283,16 @@ export function DashboardHome({
           </div>
 
           {/* Card 2: Unique Vouchers */}
-          <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400">Unique Vouchers</span>
-              <div className="p-1 bg-slate-800 text-slate-400 rounded">
+              <span className="text-xs font-bold text-slate-700">Unique Vouchers</span>
+              <div className="p-1 bg-slate-200/80 text-slate-600 rounded">
                 <FileSpreadsheet size={14} />
               </div>
             </div>
-            <div className="text-2xl font-black text-white mt-1.5 tracking-tight font-mono">
+            <div className="text-2xl font-black text-slate-900 mt-1.5 tracking-tight font-mono">
               {monthlyLoading ? (
-                <span className="text-slate-500 text-xl">...</span>
+                <span className="text-slate-400 text-xl">...</span>
               ) : (
                 transactionStats?.uniqueVouchersCount ?? 0
               )}
@@ -304,37 +303,37 @@ export function DashboardHome({
           </div>
 
           {/* Card 3: Monthly Financial Volume */}
-          <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5">
+          <div className="bg-sky-50/70 border border-sky-200 rounded-xl p-3.5 shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400">Turnover Volume</span>
-              <div className="p-1 bg-slate-800 text-slate-400 rounded">
+              <span className="text-xs font-bold text-sky-800">Turnover Volume</span>
+              <div className="p-1 bg-sky-100 text-sky-700 rounded">
                 <TrendingUp size={14} />
               </div>
             </div>
-            <div className="text-lg font-black text-sky-400 mt-2 font-mono truncate">
+            <div className="text-lg font-black text-sky-900 mt-2 font-mono truncate">
               {monthlyLoading ? (
-                <span className="text-slate-500 text-sm">...</span>
+                <span className="text-slate-400 text-sm">...</span>
               ) : (
                 formatPKR(transactionStats?.filteredLineTotal ?? 0)
               )}
             </div>
-            <div className="text-[11px] text-slate-500 mt-1">
+            <div className="text-[11px] text-sky-700/80 mt-1">
               Total monthly line volume
             </div>
           </div>
 
           {/* Card 4: Monthly Rent & Income vs Expenses */}
-          <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between shadow-xs">
             <div>
-              <div className="text-xs font-semibold text-slate-400">Ledger Activity</div>
+              <div className="text-xs font-bold text-slate-700">Ledger Activity</div>
               <div className="mt-1.5 space-y-0.5 text-[11px] font-mono">
-                <div className="flex justify-between text-emerald-400">
-                  <span className="text-slate-400 font-sans">Rent Inflow:</span>
-                  <span>{formatPKR(transactionStats?.totalRentalIncome ?? 0)}</span>
+                <div className="flex justify-between text-emerald-700">
+                  <span className="text-slate-500 font-sans">Rent Inflow:</span>
+                  <span className="font-bold">{formatPKR(transactionStats?.totalRentalIncome ?? 0)}</span>
                 </div>
-                <div className="flex justify-between text-rose-400">
-                  <span className="text-slate-400 font-sans">Expenses:</span>
-                  <span>{formatPKR(transactionStats?.totalRentalExpenses ?? 0)}</span>
+                <div className="flex justify-between text-rose-700">
+                  <span className="text-slate-500 font-sans">Expenses:</span>
+                  <span className="font-bold">{formatPKR(transactionStats?.totalRentalExpenses ?? 0)}</span>
                 </div>
               </div>
             </div>
@@ -342,7 +341,7 @@ export function DashboardHome({
               <button
                 type="button"
                 onClick={onNavigateToTransactions}
-                className="mt-2 text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-500 py-1 px-2 rounded-lg transition text-center flex items-center justify-center gap-1"
+                className="mt-2 text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 py-1.5 px-2 rounded-lg transition text-center flex items-center justify-center gap-1 shadow-xs"
               >
                 <span>All {totalEntriesCount} Entries</span>
                 <ChevronRight size={12} />
