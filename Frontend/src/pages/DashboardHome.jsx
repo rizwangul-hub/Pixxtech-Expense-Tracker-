@@ -1,101 +1,357 @@
 import React, { useState, useEffect } from 'react';
 import {
- Database,
- Coins,
- CheckCircle2,
- Clock,
- Layers,
- Building2,
- ChevronRight,
- Users,
- Receipt,
- Landmark,
- Wallet,
- ArrowLeftRight,
- TrendingUp,
- FileSpreadsheet,
+  Database,
+  Coins,
+  CheckCircle2,
+  Clock,
+  Layers,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  Users,
+  Receipt,
+  Landmark,
+  Wallet,
+  ArrowLeftRight,
+  TrendingUp,
+  FileSpreadsheet,
+  Calendar,
+  Hash,
+  RefreshCw,
 } from 'lucide-react';
 import { formatPKR } from '../utils/formatters.js';
-import { propertiesAPI, tenantsAPI, agreementsAPI, rentDueAPI, accountsAPI, rentReceivedAPI, vouchersAPI, otherIncomeAPI } from '../services/api.js';
+import {
+  propertiesAPI,
+  tenantsAPI,
+  agreementsAPI,
+  rentDueAPI,
+  accountsAPI,
+  rentReceivedAPI,
+  vouchersAPI,
+  otherIncomeAPI,
+} from '../services/api.js';
+
+const getCurrentMonth = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
+
+const formatMonthLabel = (monthStr) => {
+  if (!monthStr || !/^\d{4}-\d{2}$/.test(monthStr)) return monthStr || '';
+  const [y, m] = monthStr.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1, 1));
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+};
 
 export function DashboardHome({
- user,
- onNavigateToProperties,
- onNavigateToTenants,
- onNavigateToAgreements,
- onNavigateToRentDue,
- onNavigateToRentReceived,
- onNavigateToOtherIncome,
- onNavigateToAccounts,
- onNavigateToTransfers,
- onNavigateToTransactions,
+  user,
+  onNavigateToProperties,
+  onNavigateToTenants,
+  onNavigateToAgreements,
+  onNavigateToRentDue,
+  onNavigateToRentReceived,
+  onNavigateToOtherIncome,
+  onNavigateToAccounts,
+  onNavigateToTransfers,
+  onNavigateToTransactions,
 }) {
- const normalizedRole = user?.role === 'ADMIN_PUBLISHER' ? 'ADMIN' : user?.role || 'DATA_ENTRY';
+  const normalizedRole = user?.role === 'ADMIN_PUBLISHER' ? 'ADMIN' : user?.role || 'DATA_ENTRY';
 
- // Live Portfolio Stats from Database
- const [portfolioStats, setPortfolioStats] = useState(null);
- const [tenancyStats, setTenancyStats] = useState(null);
- const [agreementStats, setAgreementStats] = useState(null);
- const [rentDueStats, setRentDueStats] = useState(null);
- const [liquidityStats, setLiquidityStats] = useState(null);
- const [rentReceivedStats, setRentReceivedStats] = useState(null);
- const [otherIncomeStats, setOtherIncomeStats] = useState(null);
- const [transactionStats, setTransactionStats] = useState(null);
- const [loadingPortfolio, setLoadingPortfolio] = useState(true);
+  // Month Selection State (defaults to current month YYYY-MM)
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth);
+  const [totalEntriesCount, setTotalEntriesCount] = useState(0);
+  const [monthlyLoading, setMonthlyLoading] = useState(true);
 
- useEffect(() => {
- const fetchDashboardStats = async () => {
- try {
- const [propsRes, tenantsRes, agreementsRes, rentDueRes, accountsRes, rentReceivedRes, otherIncomeRes, txRes] = await Promise.all([
- propertiesAPI.getProperties({ limit: 1 }),
- tenantsAPI.getTenants({ limit: 1 }),
- agreementsAPI.getAgreements({ limit: 1 }),
- rentDueAPI.getRentDueSummary({ month: '2026-09' }),
- accountsAPI.getAccounts({ limit: 1 }),
- rentReceivedAPI.getSummary({ month: '2026-09' }),
- otherIncomeAPI.getMonthlySummary({ month: '2026-09' }),
- vouchersAPI.getAllTransactions({ month: '2026-09', limit: 1 }),
- ]);
+  // Live Portfolio Stats from Database (loaded once on mount)
+  const [portfolioStats, setPortfolioStats] = useState(null);
+  const [tenancyStats, setTenancyStats] = useState(null);
+  const [agreementStats, setAgreementStats] = useState(null);
+  const [liquidityStats, setLiquidityStats] = useState(null);
+  const [loadingPortfolio, setLoadingPortfolio] = useState(true);
 
- if (propsRes?.success && propsRes.data?.summary) {
- setPortfolioStats(propsRes.data.summary);
- }
- if (tenantsRes?.success && tenantsRes.data?.summary) {
- setTenancyStats(tenantsRes.data.summary);
- }
- if (agreementsRes?.success && agreementsRes.data?.summary) {
- setAgreementStats(agreementsRes.data.summary);
- }
- if (rentDueRes?.success && rentDueRes.data) {
- setRentDueStats(rentDueRes.data);
- }
- if (accountsRes?.success && accountsRes.data?.summary) {
- setLiquidityStats(accountsRes.data.summary);
- }
- if (rentReceivedRes?.success && rentReceivedRes.data) {
- setRentReceivedStats(rentReceivedRes.data);
- }
- if (otherIncomeRes?.success && otherIncomeRes.data) {
- setOtherIncomeStats(otherIncomeRes.data);
- }
- if (txRes?.success && txRes.data?.summary) {
- setTransactionStats(txRes.data.summary);
- }
- } catch (err) {
- console.error('Failed to load dashboard portfolio stats:', err);
- } finally {
- setLoadingPortfolio(false);
- }
- };
- fetchDashboardStats();
- }, []);
+  // Dynamic Monthly Stats from Database (updated whenever selectedMonth changes)
+  const [rentDueStats, setRentDueStats] = useState(null);
+  const [rentReceivedStats, setRentReceivedStats] = useState(null);
+  const [otherIncomeStats, setOtherIncomeStats] = useState(null);
+  const [transactionStats, setTransactionStats] = useState(null);
 
- // Interactive Currency & Date Test States (for demonstrating standard compliance)
- const [testAmount, setTestAmount] = useState('1500000');
- const [testDate, setTestDate] = useState(new Date().toISOString().split('T')[0]);
+  // Fetch static portfolio metrics once on mount
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPortfolioStats = async () => {
+      try {
+        const [propsRes, tenantsRes, agreementsRes, accountsRes] = await Promise.all([
+          propertiesAPI.getProperties({ limit: 1 }),
+          tenantsAPI.getTenants({ limit: 1 }),
+          agreementsAPI.getAgreements({ limit: 1 }),
+          accountsAPI.getAccounts({ limit: 1 }),
+        ]);
+
+        if (!isMounted) return;
+
+        if (propsRes?.success && propsRes.data?.summary) {
+          setPortfolioStats(propsRes.data.summary);
+        }
+        if (tenantsRes?.success && tenantsRes.data?.summary) {
+          setTenancyStats(tenantsRes.data.summary);
+        }
+        if (agreementsRes?.success && agreementsRes.data?.summary) {
+          setAgreementStats(agreementsRes.data.summary);
+        }
+        if (accountsRes?.success && accountsRes.data?.summary) {
+          setLiquidityStats(accountsRes.data.summary);
+        }
+      } catch (err) {
+        console.error('Failed to load dashboard portfolio stats:', err);
+      } finally {
+        if (isMounted) setLoadingPortfolio(false);
+      }
+    };
+
+    fetchPortfolioStats();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Fetch monthly activity, transaction entries count, and breakdown for selectedMonth
+  useEffect(() => {
+    let isMounted = true;
+    const fetchMonthlyData = async () => {
+      setMonthlyLoading(true);
+      try {
+        const [rentDueRes, rentReceivedRes, otherIncomeRes, txRes] = await Promise.all([
+          rentDueAPI.getRentDueSummary({ month: selectedMonth }),
+          rentReceivedAPI.getSummary({ month: selectedMonth }),
+          otherIncomeAPI.getMonthlySummary({ month: selectedMonth }),
+          vouchersAPI.getAllTransactions({ month: selectedMonth, limit: 1 }),
+        ]);
+
+        if (!isMounted) return;
+
+        if (rentDueRes?.success && rentDueRes.data) {
+          setRentDueStats(rentDueRes.data);
+        }
+        if (rentReceivedRes?.success && rentReceivedRes.data) {
+          setRentReceivedStats(rentReceivedRes.data);
+        }
+        if (otherIncomeRes?.success && otherIncomeRes.data) {
+          setOtherIncomeStats(otherIncomeRes.data);
+        }
+        if (txRes?.success && txRes.data) {
+          setTotalEntriesCount(txRes.data.pagination?.total ?? 0);
+          setTransactionStats(txRes.data.summary ?? null);
+        }
+      } catch (err) {
+        console.error('Failed to load monthly dashboard stats:', err);
+      } finally {
+        if (isMounted) setMonthlyLoading(false);
+      }
+    };
+
+    fetchMonthlyData();
+    return () => { isMounted = false; };
+  }, [selectedMonth]);
+
+  // Month navigation handlers
+  const handlePrevMonth = () => {
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const prevDate = new Date(Date.UTC(y, m - 2, 1));
+    const newMonth = `${prevDate.getUTCFullYear()}-${String(prevDate.getUTCMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonth(newMonth);
+  };
+
+  const handleNextMonth = () => {
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const nextDate = new Date(Date.UTC(y, m, 1));
+    const newMonth = `${nextDate.getUTCFullYear()}-${String(nextDate.getUTCMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonth(newMonth);
+  };
+
+  const handleResetToCurrentMonth = () => {
+    setSelectedMonth(getCurrentMonth());
+  };
 
   return (
     <div className="space-y-6">
+      {/* Monthly Activity & Total Entries Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-indigo-800/40 rounded-xl p-5 shadow-md">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-indigo-900/40">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-lg">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-white tracking-tight">
+                    Monthly Activity & Total Entries
+                  </h2>
+                  {selectedMonth === getCurrentMonth() ? (
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800/60 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      Current Month
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950 px-2 py-0.5 rounded-full border border-amber-800/60">
+                      Historical Month
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Showing all transactions and ledger activity for{' '}
+                  <span className="text-indigo-300 font-semibold">{formatMonthLabel(selectedMonth)}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Month Selector Controls */}
+          <div className="flex items-center gap-2 bg-slate-950/70 p-1.5 rounded-xl border border-indigo-900/40">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              title="Previous Month"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+            >
+              <ChevronLeft size={16} />
+            </button>
+
+            <div className="relative flex items-center">
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => e.target.value && setSelectedMonth(e.target.value)}
+                className="bg-slate-900 text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 hover:border-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              title="Next Month"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+            >
+              <ChevronRight size={16} />
+            </button>
+
+            {selectedMonth !== getCurrentMonth() && (
+              <button
+                type="button"
+                onClick={handleResetToCurrentMonth}
+                title="Reset to current month"
+                className="flex items-center gap-1 text-[11px] font-semibold text-indigo-300 hover:text-white bg-indigo-950/80 hover:bg-indigo-900/80 border border-indigo-700/50 px-2.5 py-1.5 rounded-lg transition ml-1"
+              >
+                <RefreshCw size={11} />
+                <span>Current</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 4 Cards Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4">
+          {/* Card 1: Total Entries (Featured) */}
+          <div className="bg-slate-950/90 border border-indigo-500/40 rounded-xl p-3.5 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-500/10 rounded-full blur-xl pointer-events-none"></div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                Total Entries
+              </span>
+              <div className="p-1 bg-indigo-500/20 text-indigo-300 rounded">
+                <Hash size={14} />
+              </div>
+            </div>
+            <div className="text-3xl font-black text-white mt-1.5 tracking-tight font-mono">
+              {monthlyLoading ? (
+                <span className="text-slate-500 text-2xl">...</span>
+              ) : (
+                totalEntriesCount
+              )}
+            </div>
+            <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
+              <span>Transactions in {formatMonthLabel(selectedMonth).split(' ')[0]}</span>
+              {onNavigateToTransactions && (
+                <button
+                  type="button"
+                  onClick={onNavigateToTransactions}
+                  className="text-indigo-400 hover:text-indigo-300 font-semibold underline flex items-center gap-0.5"
+                >
+                  View <ChevronRight size={10} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: Unique Vouchers */}
+          <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400">Unique Vouchers</span>
+              <div className="p-1 bg-slate-800 text-slate-400 rounded">
+                <FileSpreadsheet size={14} />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-white mt-1.5 tracking-tight font-mono">
+              {monthlyLoading ? (
+                <span className="text-slate-500 text-xl">...</span>
+              ) : (
+                transactionStats?.uniqueVouchersCount ?? 0
+              )}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-1">
+              Multi-line journal vouchers
+            </div>
+          </div>
+
+          {/* Card 3: Monthly Financial Volume */}
+          <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400">Turnover Volume</span>
+              <div className="p-1 bg-slate-800 text-slate-400 rounded">
+                <TrendingUp size={14} />
+              </div>
+            </div>
+            <div className="text-lg font-black text-sky-400 mt-2 font-mono truncate">
+              {monthlyLoading ? (
+                <span className="text-slate-500 text-sm">...</span>
+              ) : (
+                formatPKR(transactionStats?.filteredLineTotal ?? 0)
+              )}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-1">
+              Total monthly line volume
+            </div>
+          </div>
+
+          {/* Card 4: Monthly Rent & Income vs Expenses */}
+          <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between">
+            <div>
+              <div className="text-xs font-semibold text-slate-400">Ledger Activity</div>
+              <div className="mt-1.5 space-y-0.5 text-[11px] font-mono">
+                <div className="flex justify-between text-emerald-400">
+                  <span className="text-slate-400 font-sans">Rent Inflow:</span>
+                  <span>{formatPKR(transactionStats?.totalRentalIncome ?? 0)}</span>
+                </div>
+                <div className="flex justify-between text-rose-400">
+                  <span className="text-slate-400 font-sans">Expenses:</span>
+                  <span>{formatPKR(transactionStats?.totalRentalExpenses ?? 0)}</span>
+                </div>
+              </div>
+            </div>
+            {onNavigateToTransactions && (
+              <button
+                type="button"
+                onClick={onNavigateToTransactions}
+                className="mt-2 text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-500 py-1 px-2 rounded-lg transition text-center flex items-center justify-center gap-1"
+              >
+                <span>All {totalEntriesCount} Entries</span>
+                <ChevronRight size={12} />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Live Properties Portfolio Metrics */}
       {portfolioStats && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">
@@ -227,7 +483,7 @@ export function DashboardHome({
  </div>
 
  <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3">
- <div className="text-[11px] text-amber-400 font-medium">September 2026 Expected</div>
+ <div className="text-[11px] text-amber-400 font-medium">{formatMonthLabel(selectedMonth)} Expected</div>
  <div className="text-lg font-black text-amber-400 font-mono mt-0.5">
  {formatPKR(rentDueStats?.totalExpectedRent ?? 0)}
  </div>
@@ -254,7 +510,7 @@ export function DashboardHome({
  </span>
  </div>
  <p className="text-xs text-slate-400 mt-0.5">
- Real database tenant rental collections, 3-tier allocations, advance surplus, and net outstanding receivables for September 2026.
+ Real database tenant rental collections, 3-tier allocations, advance surplus, and net outstanding receivables for {formatMonthLabel(selectedMonth)}.
  </p>
  </div>
 
@@ -513,13 +769,13 @@ export function DashboardHome({
  <div className="flex flex-wrap items-center gap-4">
  <div className="text-right">
  <div className="text-[10px] text-slate-400 uppercase tracking-wider font-mono">
- August 2026 Activity
+ {formatMonthLabel(selectedMonth)} Activity
  </div>
  <div className="text-base font-black text-white font-mono">
- {formatPKR(transactionStats?.filteredLineTotal || 3223223)}
+ {formatPKR(transactionStats?.filteredLineTotal ?? 0)}
  </div>
  <div className="text-[10px] text-blue-400/80 font-mono">
- {transactionStats?.uniqueVouchersCount || 37} unique vouchers
+ {transactionStats?.uniqueVouchersCount ?? 0} unique vouchers
  </div>
  </div>
 
