@@ -30,6 +30,7 @@ import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
 import { ReceiptViewerModal } from './ReceiptViewerModal.jsx';
 import { downloadReceiptEvidenceDocument, downloadReceiptImage } from '../utils/downloadReceipt.js';
 import { resolveTransactionAccounts } from '../utils/formatters.js';
+import { isAdmin } from '../utils/permissions.js';
 
 
 const formatPKR = (val) => {
@@ -63,6 +64,14 @@ export const RecentEntriesTable = ({
   onRefresh,
   onEntryUpdated,
 }) => {
+  const cachedUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user'));
+    } catch {
+      return null;
+    }
+  }, []);
+  const isUserAdmin = isAdmin(cachedUser);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'verified'
 
@@ -527,7 +536,7 @@ export const RecentEntriesTable = ({
                       ? { label: 'Edited / Re-pending', cls: 'bg-blue-100 text-blue-800 border-blue-300', Icon: Edit3 }
                       : { label: 'Awaiting Verification', cls: 'bg-amber-100 text-amber-800 border-amber-300', Icon: Clock };
 
-                  const canEdit = entry.status !== 'REJECTED' && entry.status !== 'VERIFIED';
+                  const canEdit = entry.status !== 'REJECTED' && (entry.status !== 'VERIFIED' || isUserAdmin);
 
                   return (
                     <tr key={entry._id} className="hover:bg-amber-50/40 transition-colors">

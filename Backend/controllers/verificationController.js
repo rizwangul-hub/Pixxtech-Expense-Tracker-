@@ -537,9 +537,36 @@ export const updatePendingEntry = async (req, res) => {
       return apiError(res, 'Pending entry not found.', 404);
     }
 
+    const isAdmin = ['ADMIN', 'ADMIN_PUBLISHER'].includes(req.user?.role);
     if (entry.status === 'VERIFIED') {
-      return apiError(res, 'Cannot edit an entry that has already been verified and posted.', 400);
+      if (!isAdmin) {
+        return apiError(
+          res,
+          'Cannot edit an entry that has already been verified and posted. Only administrators can edit verified entries directly.',
+          403
+        );
+      }
+      // Period lock check: Prevent editing if the period is locked by a published monthly report
+      const checkDate = entry.date || new Date();
+      const d = new Date(checkDate);
+      const periodMonth = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      const isLocked = await MonthlyReport.findOne({ month: periodMonth, status: 'PUBLISHED' }).lean();
+      if (isLocked) {
+        return apiError(
+          res,
+          `Financial period ${periodMonth} is officially PUBLISHED and locked. Verified entries in this period cannot be modified.`,
+          403
+        );
+      }
     }
+
+    const wasVerified = entry.status === 'VERIFIED';
+    const oldVoucherNo = entry.voucherNo;
+    const oldDate = entry.date;
+    const oldRentMonth = entry.rentMonth;
+    const oldDrId = entry.drAccountId?.toString();
+    const oldCrId = entry.crAccountId?.toString();
+    const oldRecAccId = entry.receivingAccountId?.toString();
 
     const previousSnapshot = {
       amount: entry.amount,
@@ -775,38 +802,259 @@ export const updatePendingEntry = async (req, res) => {
       }
     }
 
-    entry.status = 'EDITED';
-    entry.isEdited = true;
-    entry.editedBy = req.user._id;
-    entry.editedByName = req.user.name;
-    entry.editedAt = new Date();
-    entry.auditLog.push({
-      action: 'EDITED',
-      performedBy: req.user.name,
-      performedById: req.user._id,
-      timestamp: new Date(),
-      notes: updates.editNotes || 'Information modified prior to approval',
-      changes: { previous: previousSnapshot, updated: updates },
-    });
+    if (wasVerified) {
+      entry.status = 'VERIFIED';
+      entry.isEdited = true;
+      entry.editedBy = req.user._id;
+      entry.editedByName = req.user.name;
+      entry.editedAt = new Date();
+      entry.auditLog.push({
+        action: 'EDITED_AFTER_VERIFICATION',
+        performedBy: req.user.name,
+        performedById: req.user._id,
+        timestamp: new Date(),
+        notes: updates.editNotes || 'Verified entry modified directly by Admin',
+        changes: { previous: previousSnapshot, updated: updates },
+      });
+    } else {
+      entry.status = 'EDITED';
+      entry.isEdited = true;
+      entry.editedBy = req.user._id;
+      entry.editedByName = req.user.name;
+      entry.editedAt = new Date();
+      entry.auditLog.push({
+        action: 'EDITED',
+        performedBy: req.user.name,
+        performedById: req.user._id,
+        timestamp: new Date(),
+        notes: updates.editNotes || 'Information modified prior to approval',
+        changes: { previous: previousSnapshot, updated: updates },
+      });
+    }
 
     await entry.save();
-    if (entry.entryType === 'OTHER_INCOME' && entry.entryData?.otherIncomeRecordId) {
-      const category = await Category.findById(entry.categoryId).select('name').lean();
-      await OtherIncome.findByIdAndUpdate(entry.entryData.otherIncomeRecordId, {
-        receiptDate: entry.date,
-        headName: category?.name || 'Other Income',
-        incomeHeadId: entry.entryData.incomeHeadId,
-        amount: entry.amount,
-        receivingAccountId: entry.receivingAccountId || entry.drAccountId,
-        propertyId: entry.propertyId || null,
-        unitId: entry.unitId || null,
-        receivedFrom: entry.entryData?.receivedFrom || '',
-        referenceNumber: entry.referenceNumber || '',
-        transactionDetail: entry.detail,
-        description: entry.entryData?.description || '',
-        attachments: entry.attachments || [],
-        updatedBy: req.user?._id,
-      });
+
+    if (wasVerified) {
+      // Find associated Transaction in Central Ledger
+      let tx = null;
+      if (entry.postedTransactionId) {
+        tx = await Transaction.findById(entry.postedTransactionId);
+      }
+      if (!tx && entry.voucherNo) {
+        tx = await Transaction.findOne({ voucherNo: entry.voucherNo });
+      }
+      if (!tx && oldVoucherNo) {
+        tx = await Transaction.findOne({ voucherNo: oldVoucherNo });
+      }
+      if (!tx) {
+        tx = await Transaction.findOne({ sourceId: entry._id });
+      }
+
+      const affectedAccountIds = new Set([
+        oldDrId,
+        oldCrId,
+        oldRecAccId,
+        entry.drAccountId?.toString(),
+        entry.crAccountId?.toString(),
+        entry.receivingAccountId?.toString(),
+      ]);
+
+      if (tx) {
+        if (tx.drAccountId) affectedAccountIds.add(tx.drAccountId.toString());
+        if (tx.crAccountId) affectedAccountIds.add(tx.crAccountId.toString());
+
+        tx.date = normalizeBusinessPaymentDate(entry.date);
+        tx.voucherNo = entry.voucherNo;
+        tx.detail = entry.detail;
+        tx.amount = entry.amount;
+        if (entry.drAccountId) tx.drAccountId = entry.drAccountId;
+        if (entry.crAccountId) tx.crAccountId = entry.crAccountId;
+        if (entry.categoryId) tx.categoryId = entry.categoryId;
+        tx.propertyId = entry.propertyId || null;
+        tx.unitId = entry.unitId || null;
+        if (entry.rentMonth) tx.rentMonth = entry.rentMonth;
+        if (entry.expenseClassification) tx.expenseClassification = entry.expenseClassification;
+        if (entry.attachments) tx.attachments = entry.attachments;
+
+        if (tx.categoryId) {
+          const catDoc = await Category.findById(tx.categoryId).populate('parentCategoryId', 'name excludeFromReports').lean();
+          const parentDoc = catDoc?.parentCategoryId && typeof catDoc.parentCategoryId === 'object' ? catDoc.parentCategoryId : null;
+          if (isOwnerPersonalCategory(catDoc) || (parentDoc && isOwnerPersonalCategory(parentDoc))) {
+            tx.reportCategory = 'Owner Personal';
+            tx.sourceModule = 'OWNER_PERSONAL';
+          } else if (tx.reportCategory === 'Owner Personal') {
+            tx.reportCategory = 'Payments';
+            tx.sourceModule = 'EXPENSE';
+          }
+        }
+
+        if (tx.drAccountId) affectedAccountIds.add(tx.drAccountId.toString());
+        if (tx.crAccountId) affectedAccountIds.add(tx.crAccountId.toString());
+
+        await tx.save();
+      }
+
+      // 1. Rent Received & Due Synchronization
+      const isRent = entry.entryType === 'RENT' || tx?.reportCategory === 'Rent' || tx?.sourceModule === 'RENT_RECEIVED';
+      if (isRent) {
+        const rentRec = await RentReceived.findOne({
+          $or: [
+            ...(entry.postedRentReceivedId ? [{ _id: entry.postedRentReceivedId }] : []),
+            ...(tx ? [{ transactionId: tx._id }] : []),
+            { voucherNo: entry.voucherNo },
+            { receiptNumber: entry.voucherNo },
+            ...(oldVoucherNo ? [{ voucherNo: oldVoucherNo }, { receiptNumber: oldVoucherNo }] : []),
+          ],
+        });
+
+        if (rentRec) {
+          if (rentRec.receivingAccountId) affectedAccountIds.add(rentRec.receivingAccountId.toString());
+          rentRec.receiptDate = normalizeBusinessPaymentDate(entry.date);
+          rentRec.amount = entry.amount;
+          rentRec.receiptNumber = entry.voucherNo;
+          rentRec.voucherNo = entry.voucherNo;
+          rentRec.rentMonth = entry.rentMonth;
+          rentRec.propertyId = entry.propertyId || null;
+          rentRec.unitId = entry.unitId || null;
+          if (entry.tenantId) rentRec.tenantId = entry.tenantId;
+          if (entry.agreementId) rentRec.agreementId = entry.agreementId;
+          const recAcc = entry.receivingAccountId || entry.drAccountId;
+          if (recAcc) rentRec.receivingAccountId = recAcc;
+          rentRec.description = entry.detail;
+          if (entry.attachments) rentRec.attachments = entry.attachments;
+          if (rentRec.receivingAccountId) affectedAccountIds.add(rentRec.receivingAccountId.toString());
+          await rentRec.save();
+        }
+
+        const currentMonth = entry.rentMonth || oldRentMonth;
+        if (currentMonth) {
+          await syncRentDueWithCollections({
+            rentMonth: currentMonth,
+            agreementId: entry.agreementId || rentRec?.agreementId || undefined,
+            unitId: entry.unitId || rentRec?.unitId || undefined,
+          });
+          if (oldRentMonth && oldRentMonth !== currentMonth) {
+            await syncRentDueWithCollections({
+              rentMonth: oldRentMonth,
+              agreementId: entry.agreementId || rentRec?.agreementId || undefined,
+              unitId: entry.unitId || rentRec?.unitId || undefined,
+            });
+          }
+        }
+      }
+
+      // 2. Salary Payout Synchronization
+      const isSalary = entry.entryType === 'SALARY' || tx?.sourceModule === 'SALARY';
+      if (isSalary) {
+        const payrollId = entry.entryData?.payrollId || tx?.sourceId;
+        const employeeId = entry.tenantId || entry.entryData?.employeeId;
+        const month = entry.rentMonth || entry.entryData?.month;
+
+        let pDoc = null;
+        if (payrollId && mongoose.Types.ObjectId.isValid(payrollId)) {
+          pDoc = await Payroll.findById(payrollId);
+        }
+        if (!pDoc && employeeId && month) {
+          pDoc = await Payroll.findOne({ employeeId, payrollMonth: month });
+        }
+
+        if (pDoc) {
+          if (Array.isArray(pDoc.salaryInstallments)) {
+            const inst = pDoc.salaryInstallments.find((i) =>
+              (tx?._id && i.transactionId?.toString() === tx._id.toString()) ||
+              (entry.voucherNo && i.voucherNo === entry.voucherNo) ||
+              (oldVoucherNo && i.voucherNo === oldVoucherNo)
+            );
+            if (inst) {
+              inst.amount = entry.amount;
+              inst.paymentDate = normalizeBusinessPaymentDate(entry.date);
+              inst.voucherNo = entry.voucherNo;
+              if (entry.crAccountId) {
+                inst.paidFromAccountId = entry.crAccountId;
+                const acc = await Account.findById(entry.crAccountId).select('name').lean();
+                if (acc) inst.paidFromAccountName = acc.name;
+              }
+              inst.notes = entry.detail;
+            }
+            const newTotalPaid = round2(
+              pDoc.salaryInstallments.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+            );
+            pDoc.totalInstallmentsPaid = newTotalPaid;
+            pDoc.status = newTotalPaid >= pDoc.netPayable ? 'PAID' : 'FINALIZED';
+            pDoc.paymentStatus = newTotalPaid >= pDoc.netPayable ? 'PAID' : newTotalPaid > 0 ? 'PARTIAL_PAYMENT' : 'PENDING_PAYMENT';
+            if (entry.crAccountId) {
+              pDoc.paidFromAccountId = entry.crAccountId;
+              const acc = await Account.findById(entry.crAccountId).select('name').lean();
+              if (acc) pDoc.paidFromAccountName = acc.name;
+            }
+            pDoc.voucherNo = entry.voucherNo;
+            pDoc.paymentDate = normalizeBusinessPaymentDate(entry.date);
+            pDoc.paidDate = normalizeBusinessPaymentDate(entry.date);
+            await pDoc.save();
+          }
+        }
+      }
+
+      // 3. Other Income Synchronization
+      const isOtherIncome = entry.entryType === 'OTHER_INCOME' || tx?.sourceModule === 'OTHER_INCOME' || tx?.reportCategory === 'Other Income';
+      if (isOtherIncome) {
+        const otherIncomeRecordId = entry.entryData?.otherIncomeRecordId;
+        const category = await Category.findById(entry.categoryId).select('name').lean();
+        const oiRec = await OtherIncome.findOne({
+          $or: [
+            ...(otherIncomeRecordId ? [{ _id: otherIncomeRecordId }] : []),
+            ...(tx ? [{ transactionId: tx._id }] : []),
+            { voucherNo: entry.voucherNo },
+            ...(oldVoucherNo ? [{ voucherNo: oldVoucherNo }] : []),
+          ],
+        });
+
+        if (oiRec) {
+          if (oiRec.receivingAccountId) affectedAccountIds.add(oiRec.receivingAccountId.toString());
+          oiRec.receiptDate = normalizeBusinessPaymentDate(entry.date);
+          oiRec.amount = entry.amount;
+          oiRec.voucherNo = entry.voucherNo;
+          oiRec.headName = category?.name || oiRec.headName || 'Other Income';
+          if (entry.entryData?.incomeHeadId) oiRec.incomeHeadId = entry.entryData.incomeHeadId;
+          const recAcc = entry.receivingAccountId || entry.drAccountId;
+          if (recAcc) oiRec.receivingAccountId = recAcc;
+          oiRec.propertyId = entry.propertyId || null;
+          oiRec.unitId = entry.unitId || null;
+          oiRec.receivedFrom = entry.entryData?.receivedFrom || oiRec.receivedFrom || '';
+          oiRec.referenceNumber = entry.referenceNumber || oiRec.referenceNumber || '';
+          oiRec.transactionDetail = entry.detail;
+          oiRec.description = entry.entryData?.description || oiRec.description || '';
+          if (entry.attachments) oiRec.attachments = entry.attachments;
+          oiRec.updatedBy = req.user?._id;
+          if (oiRec.receivingAccountId) affectedAccountIds.add(oiRec.receivingAccountId.toString());
+          await oiRec.save();
+        }
+      }
+
+      // 4. Atomic balance recalculation for all affected accounts
+      const finalAffectedAccs = Array.from(affectedAccountIds).filter(Boolean);
+      if (finalAffectedAccs.length > 0) {
+        await syncAccountBalances(finalAffectedAccs);
+      }
+    } else {
+      if (entry.entryType === 'OTHER_INCOME' && entry.entryData?.otherIncomeRecordId) {
+        const category = await Category.findById(entry.categoryId).select('name').lean();
+        await OtherIncome.findByIdAndUpdate(entry.entryData.otherIncomeRecordId, {
+          receiptDate: entry.date,
+          headName: category?.name || 'Other Income',
+          incomeHeadId: entry.entryData.incomeHeadId,
+          amount: entry.amount,
+          receivingAccountId: entry.receivingAccountId || entry.drAccountId,
+          propertyId: entry.propertyId || null,
+          unitId: entry.unitId || null,
+          receivedFrom: entry.entryData?.receivedFrom || '',
+          referenceNumber: entry.referenceNumber || '',
+          transactionDetail: entry.detail,
+          description: entry.entryData?.description || '',
+          attachments: entry.attachments || [],
+          updatedBy: req.user?._id,
+        });
+      }
     }
 
     const populated = await PendingEntry.findById(entry._id)

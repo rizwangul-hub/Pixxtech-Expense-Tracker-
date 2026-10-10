@@ -279,10 +279,13 @@ export const updatePendingVoucher = async (req, res) => {
     }
 
     if (tx.status === 'VERIFIED') {
-      return res.status(403).json({
-        success: false,
-        message: 'Locked transaction. Cannot edit a voucher that has already been verified.',
-      });
+      const isAdmin = ['ADMIN', 'ADMIN_PUBLISHER'].includes(req.user?.role);
+      if (!isAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Locked transaction. Cannot edit a voucher that has already been verified.',
+        });
+      }
     }
 
     if (detail) tx.detail = detail.trim();

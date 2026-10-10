@@ -7,6 +7,10 @@ import OtherIncome from '../models/OtherIncome.js';
 import OtherIncomeHead from '../models/OtherIncomeHead.js';
 import MonthlyReport from '../models/MonthlyReport.js';
 import RentalAgreement from '../models/RentalAgreement.js';
+import PendingEntry from '../models/PendingEntry.js';
+import RentReceived from '../models/RentReceived.js';
+import Payroll from '../models/Payroll.js';
+import { syncRentDueWithCollections } from './rentDueController.js';
 import {
   getMonthlyOpeningClosingMatrix,
   getAccountRunningLedger,
@@ -390,6 +394,87 @@ export const updateTransactionMaster = async (req, res) => {
           updatedBy: req.user?._id,
         }
       );
+    }
+
+    // Synchronize linked PendingEntry if present
+    const pendingEntry = await PendingEntry.findOne({
+      $or: [
+        { postedTransactionId: tx._id },
+        { voucherNo: tx.voucherNo },
+        ...(voucherNo && voucherNo !== tx.voucherNo ? [{ voucherNo }] : []),
+        { _id: tx.sourceId },
+      ].filter(Boolean),
+    });
+    if (pendingEntry) {
+      pendingEntry.date = tx.date;
+      pendingEntry.voucherNo = tx.voucherNo;
+      pendingEntry.detail = tx.detail;
+      pendingEntry.amount = tx.amount;
+      if (tx.categoryId) pendingEntry.categoryId = tx.categoryId;
+      if (tx.drAccountId) pendingEntry.drAccountId = tx.drAccountId;
+      if (tx.crAccountId) pendingEntry.crAccountId = tx.crAccountId;
+      pendingEntry.propertyId = tx.propertyId || null;
+      pendingEntry.unitId = tx.unitId || null;
+      pendingEntry.rentMonth = tx.rentMonth || null;
+      pendingEntry.isEdited = true;
+      pendingEntry.editedBy = req.user?._id;
+      pendingEntry.editedByName = req.user?.name;
+      pendingEntry.editedAt = new Date();
+      await pendingEntry.save();
+    }
+
+    // Synchronize Rent Received & Due if applicable
+    if (tx.transactionType === 'INCOME' || tx.sourceModule === 'RENT_RECEIVED' || tx.reportCategory === 'Rent') {
+      const rentRec = await RentReceived.findOne({
+        $or: [
+          { transactionId: tx._id },
+          { voucherNo: tx.voucherNo },
+          ...(voucherNo && voucherNo !== tx.voucherNo ? [{ voucherNo }] : []),
+        ].filter(Boolean),
+      });
+      if (rentRec) {
+        rentRec.receiptDate = tx.date;
+        rentRec.amount = tx.amount;
+        rentRec.voucherNo = tx.voucherNo;
+        rentRec.receiptNumber = tx.voucherNo;
+        rentRec.rentMonth = tx.rentMonth;
+        rentRec.propertyId = tx.propertyId || null;
+        rentRec.unitId = tx.unitId || null;
+        rentRec.receivingAccountId = tx.drAccountId;
+        rentRec.description = tx.detail;
+        await rentRec.save();
+      }
+      if (tx.rentMonth) {
+        await syncRentDueWithCollections({ rentMonth: tx.rentMonth, unitId: tx.unitId || undefined });
+      }
+    }
+
+    // Synchronize Payroll if applicable
+    if (tx.sourceId) {
+      const pDoc = await Payroll.findById(tx.sourceId);
+      if (pDoc && Array.isArray(pDoc.salaryInstallments)) {
+        const inst = pDoc.salaryInstallments.find((i) =>
+          i.transactionId?.toString() === tx._id.toString() ||
+          i.voucherNo === tx.voucherNo ||
+          (voucherNo && i.voucherNo === voucherNo)
+        );
+        if (inst) {
+          inst.amount = tx.amount;
+          inst.paymentDate = tx.date;
+          inst.voucherNo = tx.voucherNo;
+          inst.paidFromAccountId = tx.crAccountId;
+        }
+        const newTotalPaid = round2(
+          pDoc.salaryInstallments.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+        );
+        pDoc.totalInstallmentsPaid = newTotalPaid;
+        pDoc.status = newTotalPaid >= pDoc.netPayable ? 'PAID' : 'FINALIZED';
+        pDoc.paymentStatus = newTotalPaid >= pDoc.netPayable ? 'PAID' : newTotalPaid > 0 ? 'PARTIAL_PAYMENT' : 'PENDING_PAYMENT';
+        pDoc.voucherNo = tx.voucherNo;
+        pDoc.paymentDate = tx.date;
+        pDoc.paidDate = tx.date;
+        await pDoc.save();
+      }
     }
 
     // Reliably synchronize account balances from active ledger

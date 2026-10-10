@@ -706,21 +706,22 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
           (unit) => String(unit._id) === String(editForm.unitId)
         );
         setFeedback({
-          message: 'Entry details and evidence updated successfully. You can now verify it.',
+          message: editingEntry.status === 'VERIFIED'
+            ? 'Verified entry updated across central ledger and live account balances successfully.'
+            : 'Entry details and evidence updated successfully. You can now verify it.',
           type: 'success',
         });
         // Close modal immediately
         setEditingEntry(null);
         setEditNewFiles([]);
-        // Optimistically mark entry as edited in local state so the Edit button
-        // disappears right away without waiting for the background refetch
+        // Optimistically update entry in local state
         setPendingEntries((prev) =>
           prev.map((e) =>
             e._id === entryId
               ? {
                   ...e,
                   isEdited: true,
-                  status: 'EDITED',
+                  status: e.status === 'VERIFIED' ? 'VERIFIED' : 'EDITED',
                   attachments: finalAttachments,
                   entryData: {
                     ...(e.entryData || {}),
@@ -1489,6 +1490,17 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           Verified by <strong className="text-emerald-400">{entry.verifiedByName || 'Verifier'}</strong>
                         </div>
                         <div className="flex items-center gap-1.5">
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleOpenEdit(entry)}
+                              disabled={savingEntryId === entry._id}
+                              className="py-1.5 px-2.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-xs font-bold flex items-center gap-1.5 transition disabled:opacity-50"
+                              title="Direct Edit Verified Entry (Admin)"
+                            >
+                              <Edit3 size={13} />
+                              <span>Edit</span>
+                            </button>
+                          )}
                           <button
                             onClick={() => handleUnverify(entry)}
                             disabled={savingEntryId === entry._id}
@@ -1808,15 +1820,28 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                               {isVerified ? (
                                 <div className="flex flex-col gap-1 items-center">
                                   <div className="text-slate-400">Verified by <span className="text-emerald-400 font-bold">{entry.verifiedByName || 'Verifier'}</span></div>
-                                  <button
-                                    onClick={() => handleUnverify(entry)}
-                                    disabled={savingEntryId === entry._id}
-                                    className="py-1 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold flex items-center gap-1 transition disabled:opacity-50"
-                                    title="Unverify: Reverse ledger transactions and return to pending"
-                                  >
-                                    <RotateCcw size={11} className={savingEntryId === entry._id ? 'animate-spin' : ''} />
-                                    <span>Unverify</span>
-                                  </button>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    {isAdmin && (
+                                      <button
+                                        onClick={() => handleOpenEdit(entry)}
+                                        disabled={savingEntryId === entry._id}
+                                        className="py-1 px-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-[10px] font-bold flex items-center gap-1 transition disabled:opacity-50"
+                                        title="Direct Edit Verified Entry (Admin)"
+                                      >
+                                        <Edit3 size={11} />
+                                        <span>Edit</span>
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleUnverify(entry)}
+                                      disabled={savingEntryId === entry._id}
+                                      className="py-1 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold flex items-center gap-1 transition disabled:opacity-50"
+                                      title="Unverify: Reverse ledger transactions and return to pending"
+                                    >
+                                      <RotateCcw size={11} className={savingEntryId === entry._id ? 'animate-spin' : ''} />
+                                      <span>Unverify</span>
+                                    </button>
+                                  </div>
                                   {entryAttachments.length > 0 && (
                                     <button
                                       type="button"
@@ -1903,7 +1928,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Edit3 size={16} className="text-indigo-400" />
-                Edit Temporary Entry Before Verification
+                {editingEntry?.status === 'VERIFIED' ? 'Edit Verified Entry (Admin Direct Edit)' : 'Edit Temporary Entry Before Verification'}
               </h3>
               <button
                 onClick={() => setEditingEntry(null)}
