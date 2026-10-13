@@ -5,6 +5,7 @@ import {
   Receipt,
   Layers,
   ArrowLeftRight,
+  ArrowRight,
   Banknote,
   CheckCircle2,
   Clock,
@@ -615,28 +616,32 @@ export const DataEntryDashboard = ({ user }) => {
               <form onSubmit={handleTransferSubmit} className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">From Account (Credit)</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <span className="text-rose-700 font-extrabold">From Account (Source &bull; Money Leaves)</span>
+                    </label>
                     <select
                       value={transferForm.fromAccountId}
                       onChange={(e) => setTransferForm({ ...transferForm, fromAccountId: e.target.value })}
                       required
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold focus:outline-none focus:border-rose-500"
                     >
-                      <option value="">Select Source Account...</option>
+                      <option value="">Select Sending Account...</option>
                       {accounts.map((a) => (
                         <option key={a._id} value={a._id}>{a.name} ({formatPKR(a.currentBalance)})</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">To Account (Debit)</label>
+                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <span className="text-emerald-700 font-extrabold">To Account (Destination &bull; Money Enters)</span>
+                    </label>
                     <select
                       value={transferForm.toAccountId}
                       onChange={(e) => setTransferForm({ ...transferForm, toAccountId: e.target.value })}
                       required
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold focus:outline-none focus:border-emerald-500"
                     >
-                      <option value="">Select Destination Account...</option>
+                      <option value="">Select Receiving Account...</option>
                       {accounts.map((a) => (
                         <option key={a._id} value={a._id}>{a.name} ({formatPKR(a.currentBalance)})</option>
                       ))}
@@ -656,6 +661,24 @@ export const DataEntryDashboard = ({ user }) => {
                     />
                   </div>
                 </div>
+
+                {/* Live Transfer Flow Clarification Banner */}
+                {transferForm.fromAccountId && transferForm.toAccountId && (
+                  <div className="p-2.5 rounded-lg bg-sky-50 border border-sky-200 text-xs flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-rose-700">Deduct From:</span>
+                      <span className="font-bold text-slate-800">{accounts.find((a) => a._id === transferForm.fromAccountId)?.name}</span>
+                      <ArrowRight size={14} className="text-sky-600 shrink-0" />
+                      <span className="font-extrabold text-emerald-700">Add To:</span>
+                      <span className="font-bold text-slate-800">{accounts.find((a) => a._id === transferForm.toAccountId)?.name}</span>
+                    </div>
+                    {transferForm.amount && !isNaN(Number(transferForm.amount)) && Number(transferForm.amount) > 0 && (
+                      <span className="font-mono font-bold text-sky-900 bg-white px-2 py-0.5 rounded border border-sky-200">
+                        Transfer Amount: {formatPKR(Number(transferForm.amount))}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
