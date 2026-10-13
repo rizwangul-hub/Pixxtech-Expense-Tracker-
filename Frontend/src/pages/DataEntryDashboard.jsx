@@ -100,7 +100,7 @@ export const DataEntryDashboard = ({ user }) => {
       }
       const [accRes, catRes, propRes, entriesRes, headsRes, pendingRes] = await Promise.all([
         accountsAPI.getActiveSummary(true),
-        accountsAPI.getCategories(),
+        accountsAPI.getCategories(true),
         accountsAPI.getProperties().catch(() => ({ properties: [] })),
         transactionsAPI.getMyEntries(),
         otherIncomeAPI.getHeads().catch(() => ({ data: [] })),

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { accountsAPI, transactionsAPI, uploadAPI } from '../services/api.js';
 import { EvidenceImageUpload } from './EvidenceImageUpload.jsx';
 import {
@@ -77,7 +77,20 @@ export const VoucherEntryForm = ({
   const suspenseAccounts = accounts.filter((a) => a.type === 'SUSPENSE');
   const selectedProperty = properties.find((property) => property._id === propertyId);
   const units = selectedProperty?.units || [];
-  const generalMainHeads = categories.filter(
+  const [localCreatedCategories, setLocalCreatedCategories] = useState([]);
+
+  const combinedCategories = useMemo(() => {
+    const map = new Map();
+    (categories || []).forEach((c) => {
+      if (c && c._id) map.set(String(c._id), c);
+    });
+    (localCreatedCategories || []).forEach((c) => {
+      if (c && c._id) map.set(String(c._id), c);
+    });
+    return Array.from(map.values());
+  }, [categories, localCreatedCategories]);
+
+  const generalMainHeads = combinedCategories.filter(
     (c) => c.type === 'EXPENSE' && c.isMainHead && !c.propertyId && !c.unitId
   );
 
@@ -100,8 +113,10 @@ export const VoucherEntryForm = ({
     fetchNextVn(date);
   }, [date]);
 
+  const pendingCategoryIdRef = useRef(null);
+
   useEffect(() => {
-    const activeScopeCategories = categories.filter((c) => {
+    const activeScopeCategories = combinedCategories.filter((c) => {
       if (c.type !== 'EXPENSE') return false;
       if (c.isMainHead) return false;
       if (unitId) {
@@ -123,13 +138,17 @@ export const VoucherEntryForm = ({
       : activeScopeCategories;
 
     if (scopedCategories.length > 0) {
-      if (!categoryId || !scopedCategories.some((c) => c._id === categoryId)) {
+      const targetId = pendingCategoryIdRef.current || categoryId;
+      if (targetId && scopedCategories.some((c) => String(c._id) === String(targetId))) {
+        setCategoryId(String(targetId));
+        pendingCategoryIdRef.current = null;
+      } else if (!categoryId || !scopedCategories.some((c) => String(c._id) === String(categoryId))) {
         setCategoryId(scopedCategories[0]?._id || '');
       }
-    } else {
+    } else if (!pendingCategoryIdRef.current) {
       setCategoryId('');
     }
-  }, [propertyId, unitId, parentCategoryId, categories, generalMainHeads.length]);
+  }, [propertyId, unitId, parentCategoryId, combinedCategories, generalMainHeads.length]);
 
   const handleCreateCategory = async (e) => {
     e?.preventDefault();
@@ -144,10 +163,16 @@ export const VoucherEntryForm = ({
     }
 
     if (name) {
-      const existing = categories.find((c) => {
+      const existing = combinedCategories.find((c) => {
         if (c.name.trim().toLowerCase() !== name.toLowerCase()) return false;
         if (derivedClassification === 'GENERAL_EXPENSE') {
-          return !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
+          const matchScope = !c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE';
+          if (!matchScope) return false;
+          if (parentCategoryId) {
+            const pId = c.parentCategoryId?._id || c.parentCategoryId;
+            return String(pId) === String(parentCategoryId);
+          }
+          return !c.parentCategoryId && !c.isMainHead;
         }
         if (derivedClassification === 'PROPERTY_OWN_EXPENSE') {
           const pId = c.propertyId?._id || c.propertyId;
@@ -178,13 +203,26 @@ export const VoucherEntryForm = ({
         parentCategoryId: parentCategoryId || null,
       });
       const category = response.data?.category || response.category || response.data;
+      const targetCatId = category?._id ? String(category._id) : '';
+
       if (category && category._id) {
-        setCategoryId(category._id);
+        setLocalCreatedCategories((prev) => [...prev.filter((c) => String(c._id) !== String(category._id)), category]);
+      }
+
+      if (targetCatId) {
+        pendingCategoryIdRef.current = targetCatId;
+        setCategoryId(targetCatId);
       }
       setCustomCategoryName('');
       setError(null);
-      setSuccess(`Expense head '${category?.name || name}' selected.`);
-      await onMasterDataChanged?.();
+      setSuccess(`Expense head '${category?.name || name}' created and selected.`);
+
+      if (onMasterDataChanged) {
+        await onMasterDataChanged();
+      }
+      if (targetCatId) {
+        setCategoryId(targetCatId);
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to select expense head.');
     } finally {
@@ -501,7 +539,7 @@ export const VoucherEntryForm = ({
                 <option value="">-- Select Expense Head --</option>
               )}
               {(() => {
-                const activeScopeCategories = categories.filter((c) => {
+                const activeScopeCategories = combinedCategories.filter((c) => {
                   if (c.type !== 'EXPENSE') return false;
                   if (unitId) {
                     const uId = c.unitId?._id || c.unitId;
@@ -529,17 +567,24 @@ export const VoucherEntryForm = ({
                   ? `${selectedMainHead.name} Categories`
                   : 'General Company Expense Categories';
 
+                const hasSelectedInVisible = visibleCategories.some((c) => String(c._id) === String(categoryId));
+
                 return (
                   <>
-                    {visibleCategories.length > 0 ? (
+                    {(visibleCategories.length > 0 || categoryId) && (
                       <optgroup label={groupLabel}>
                         {visibleCategories.map((c) => (
                           <option key={c._id} value={c._id}>
                             {c.name} {c.isRentalHead ? '(Rental)' : ''}
                           </option>
                         ))}
+                        {!hasSelectedInVisible && categoryId && (
+                          <option value={categoryId}>
+                            {combinedCategories.find((c) => String(c._id) === String(categoryId))?.name || 'Selected Head'}
+                          </option>
+                        )}
                       </optgroup>
-                    ) : null}
+                    )}
                   </>
                 );
               })()}

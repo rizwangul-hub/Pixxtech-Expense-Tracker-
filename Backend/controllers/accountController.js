@@ -900,13 +900,21 @@ export const createCategory = async (req, res) => {
       const parent = await Category.findOne({ _id: parentCategoryId, type: 'EXPENSE' });
       if (!parent) return apiError(res, 'Selected main expense head was not found.', 400);
       if (parent.parentCategoryId || !parent.isMainHead) return apiError(res, 'Selected category is not a main expense head.', 400);
-      if (
-        parent.expenseClassification !== expenseClassification ||
-        String(parent.propertyId || '') !== String(propertyId || '') ||
-        String(parent.unitId || '') !== String(unitId || '')
-      ) {
-        return apiError(res, 'The expense and main head must use the same property/unit scope.', 400);
+
+      // Inherit property/unit scope from the selected main head if not explicitly specified
+      if (!propertyId && parent.propertyId) {
+        propertyId = parent.propertyId;
       }
+      if (!unitId && parent.unitId) {
+        unitId = parent.unitId;
+      }
+      if (parent.propertyId && propertyId && String(parent.propertyId) !== String(propertyId)) {
+        return apiError(res, 'The expense and main head must belong to the same property.', 400);
+      }
+      if (parent.unitId && unitId && String(parent.unitId) !== String(unitId)) {
+        return apiError(res, 'The expense and main head must belong to the same unit.', 400);
+      }
+      expenseClassification = parent.expenseClassification || (unitId ? 'UNIT_EXPENSE' : propertyId ? 'PROPERTY_OWN_EXPENSE' : 'GENERAL_EXPENSE');
     }
 
     let resolvedParentCategoryId = parentCategoryId;
@@ -927,9 +935,40 @@ export const createCategory = async (req, res) => {
       unitId,
     };
 
+    if (isMainHead) {
+      queryFilter.isMainHead = true;
+    } else if (resolvedParentCategoryId) {
+      queryFilter.parentCategoryId = resolvedParentCategoryId;
+      queryFilter.isMainHead = false;
+    } else {
+      queryFilter.isMainHead = false;
+      queryFilter.parentCategoryId = null;
+    }
+
     const excludeFromReports = Boolean(req.body.excludeFromReports);
 
     let category = await Category.findOne(queryFilter);
+    if (!category && !isMainHead && resolvedParentCategoryId) {
+      // Check if an ungrouped legacy category exists with no parent and no mainHead flag
+      const ungrouped = await Category.findOne({
+        type: 'EXPENSE',
+        name: { $regex: `^${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+        expenseClassification,
+        propertyId,
+        unitId,
+        parentCategoryId: null,
+        isMainHead: false,
+      });
+      if (ungrouped) {
+        ungrouped.parentCategoryId = resolvedParentCategoryId;
+        if (req.body.excludeFromReports !== undefined) {
+          ungrouped.excludeFromReports = excludeFromReports;
+        }
+        await ungrouped.save();
+        category = ungrouped;
+      }
+    }
+
     if (!category) {
       category = await Category.create({
         name: rawName,
@@ -953,10 +992,10 @@ export const createCategory = async (req, res) => {
       await category.save();
     }
 
-    let populatedCat = category;
-    if (propertyId) {
-      populatedCat = await Category.findById(category._id).populate('propertyId', 'plazaName propertyName').lean();
-    }
+    const populatedCat = await Category.findById(category._id)
+      .populate('propertyId', 'plazaName propertyName')
+      .populate('parentCategoryId', 'name type expenseClassification propertyId unitId isMainHead isRentalHead')
+      .lean();
 
     return apiSuccess(res, { category: populatedCat || category }, `Expense head '${category.name}' ready.`, 200);
   } catch (error) {
@@ -981,13 +1020,20 @@ export const createCategory = async (req, res) => {
           expenseClassification = 'GENERAL_EXPENSE';
         }
 
-        let existing = await Category.findOne({
+        const retryFilter = {
           type: 'EXPENSE',
           name: { $regex: `^${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
           expenseClassification,
           propertyId,
           unitId,
-        });
+        };
+        if (req.body.isMainHead) {
+          retryFilter.isMainHead = true;
+        } else if (req.body.parentCategoryId) {
+          retryFilter.parentCategoryId = req.body.parentCategoryId;
+        }
+
+        let existing = await Category.findOne(retryFilter);
 
         if (!existing) {
           existing = await Category.create({
@@ -996,15 +1042,17 @@ export const createCategory = async (req, res) => {
             expenseClassification,
             propertyId,
             unitId,
+            parentCategoryId: req.body.isMainHead ? null : req.body.parentCategoryId || null,
+            isMainHead: Boolean(req.body.isMainHead),
             isRentalHead: !!req.body.isRentalHead,
             excludeFromReports: Boolean(req.body.excludeFromReports),
           });
         }
 
-        let populatedCat = existing;
-        if (propertyId) {
-          populatedCat = await Category.findById(existing._id).populate('propertyId', 'plazaName propertyName').lean();
-        }
+        const populatedCat = await Category.findById(existing._id)
+          .populate('propertyId', 'plazaName propertyName')
+          .populate('parentCategoryId', 'name type expenseClassification propertyId unitId isMainHead isRentalHead')
+          .lean();
 
         return apiSuccess(res, { category: populatedCat || existing }, `Expense head '${existing.name}' ready.`, 200);
       } catch (retryErr) {

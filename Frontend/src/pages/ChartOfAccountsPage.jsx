@@ -102,6 +102,7 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [expenseHeadSearch, setExpenseHeadSearch] = useState('');
   const [expenseHeadFilterType, setExpenseHeadFilterType] = useState('ALL');
+  const [expenseHeadMainFilter, setExpenseHeadMainFilter] = useState('ALL');
 
   // Head drill-down details modal state
   const [selectedHeadForDetails, setSelectedHeadForDetails] = useState(null);
@@ -154,7 +155,7 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
       const [propRes, accRes, catRes, headsRes] = await Promise.all([
         accountsAPI.getProperties().catch(() => ({ properties: [] })),
         accountsAPI.getAccounts().catch(() => ({ accounts: [] })),
-        accountsAPI.getCategories().catch(() => ({ categories: [] })),
+        accountsAPI.getCategories(true).catch(() => ({ categories: [] })),
         otherIncomeAPI.getHeads().catch(() => ({ heads: [] })),
       ]);
 
@@ -239,6 +240,12 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
             }
           : initialExpenseCategory
       );
+      const targetParentId = expenseCategory.parentCategoryId || createdCat?.parentCategoryId?._id || createdCat?.parentCategoryId;
+      if (targetParentId) {
+        setExpenseHeadMainFilter(String(targetParentId));
+      } else if (createdCat?.isMainHead) {
+        setExpenseHeadMainFilter(String(createdCat._id));
+      }
       notify('success', `Expense head "${createdCat?.name || expenseCategory.name.trim()}" created successfully.`);
       await loadChartData();
     } catch (error) {
@@ -432,7 +439,13 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
       const matchName = c.name?.toLowerCase().includes(headSearchTrimmed);
       const matchProp = (c.propertyId?.plazaName || c.propertyId?.propertyName || '').toLowerCase().includes(headSearchTrimmed);
       const matchClass = (c.expenseClassification || '').toLowerCase().includes(headSearchTrimmed);
-      if (!matchName && !matchProp && !matchClass) return false;
+      const matchParent = (c.parentCategoryId?.name || '').toLowerCase().includes(headSearchTrimmed);
+      if (!matchName && !matchProp && !matchClass && !matchParent) return false;
+    }
+    if (expenseHeadMainFilter !== 'ALL') {
+      const isSelectedMain = String(c._id) === String(expenseHeadMainFilter);
+      const isChildOfSelected = String(c.parentCategoryId?._id || c.parentCategoryId) === String(expenseHeadMainFilter);
+      if (!isSelectedMain && !isChildOfSelected) return false;
     }
     if (expenseHeadFilterType === 'GENERAL') {
       return !c.propertyId && (!c.expenseClassification || c.expenseClassification === 'GENERAL_EXPENSE');
@@ -737,17 +750,35 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                       <label className="block text-xs font-bold text-slate-700 mb-1">Main Expense Head (Optional)</label>
                       <select
                         value={expenseCategory.parentCategoryId}
-                        onChange={(e) => setExpenseCategory({ ...expenseCategory, parentCategoryId: e.target.value })}
+                        onChange={(e) => {
+                          const selectedParentId = e.target.value;
+                          const parentObj = mainExpenseHeads.find((h) => String(h._id) === String(selectedParentId));
+                          if (parentObj) {
+                            setExpenseCategory({
+                              ...expenseCategory,
+                              parentCategoryId: selectedParentId,
+                              propertyId: parentObj.propertyId?._id || parentObj.propertyId || '',
+                              unitId: parentObj.unitId?._id || parentObj.unitId || '',
+                            });
+                          } else {
+                            setExpenseCategory({
+                              ...expenseCategory,
+                              parentCategoryId: selectedParentId,
+                            });
+                          }
+                        }}
                         className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:border-rose-600"
                       >
                         <option value="">-- Legacy / ungrouped expense --</option>
-                        {mainExpenseHeads
-                          .filter((head) => {
-                            const sameProperty = String(head.propertyId?._id || head.propertyId || '') === String(expenseCategory.propertyId || '');
-                            const sameUnit = String(head.unitId?._id || head.unitId || '') === String(expenseCategory.unitId || '');
-                            return sameProperty && sameUnit;
-                          })
-                          .map((head) => <option key={head._id} value={head._id}>{head.name}</option>)}
+                        {mainExpenseHeads.map((head) => {
+                          const propName = head.propertyId?.plazaName || head.propertyId?.propertyName;
+                          const scopeSuffix = propName ? ` (${propName})` : ' (General)';
+                          return (
+                            <option key={head._id} value={head._id}>
+                              🏢 {head.name}{scopeSuffix}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   )}
@@ -873,6 +904,37 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                       <span className="text-[10px] opacity-75">({countUnitHeads})</span>
                     </button>
                   </div>
+
+                  {/* Main Head Specific Filter */}
+                  {mainExpenseHeads.length > 0 && (
+                    <div className="pt-1 flex items-center gap-2">
+                      <select
+                        value={expenseHeadMainFilter}
+                        onChange={(e) => setExpenseHeadMainFilter(e.target.value)}
+                        className="flex-1 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-rose-600 shadow-2xs"
+                      >
+                        <option value="ALL">-- View All Main Heads ({mainExpenseHeads.length}) --</option>
+                        {mainExpenseHeads.map((h) => {
+                          const childCount = expenseCategories.filter((c) => String(c.parentCategoryId?._id || c.parentCategoryId) === String(h._id)).length;
+                          return (
+                            <option key={h._id} value={h._id}>
+                              🏢 {h.name} ({childCount} sub-heads)
+                            </option>
+                          );
+                        })}
+                      </select>
+                      {expenseHeadMainFilter !== 'ALL' && (
+                        <button
+                          type="button"
+                          onClick={() => setExpenseHeadMainFilter('ALL')}
+                          className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold shrink-0"
+                          title="Show all main heads"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Directory List Box */}
@@ -882,14 +944,17 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                       <div className="text-xs text-slate-500 font-semibold">
                         {expenseHeadSearch
                           ? `No expense heads found matching "${expenseHeadSearch}".`
+                          : expenseHeadMainFilter !== 'ALL'
+                          ? 'No sub-heads found under this main head.'
                           : 'No expense heads matching selected filter.'}
                       </div>
-                      {(expenseHeadSearch || expenseHeadFilterType !== 'ALL') && (
+                      {(expenseHeadSearch || expenseHeadFilterType !== 'ALL' || expenseHeadMainFilter !== 'ALL') && (
                         <button
                           type="button"
                           onClick={() => {
                             setExpenseHeadSearch('');
                             setExpenseHeadFilterType('ALL');
+                            setExpenseHeadMainFilter('ALL');
                           }}
                           className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs"
                         >
@@ -909,32 +974,48 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                         (c) => c.expenseClassification === 'UNIT_EXPENSE'
                       );
 
-                      const renderHeadItem = (c) => (
-                        <div
-                          key={c._id}
-                          className={`p-2.5 rounded-lg border hover:border-blue-400 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition shadow-2xs ${c.isMainHead ? 'bg-slate-50 border-slate-300' : 'border-slate-200 ml-4'}`}
-                          onClick={() => handleViewHeadDetails(c)}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            {c.isMainHead ? <Layers size={14} className="text-rose-700 shrink-0" /> : <Tag size={14} className="text-rose-600 shrink-0" />}
-                            <div>
-                              <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                                <span>{c.name}</span>
-                                {c.isMainHead && <span className="text-[9px] uppercase text-rose-700 border border-rose-200 rounded px-1">Main Head</span>}
-                                {(c.excludeFromReports || /boss|owner personal|kamran ijaz|drawings|rishwat/i.test(c.name)) && (
-                                  <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1" title="Excluded from business expense reports (like Boss/Owner Personal)">
-                                    Excluded from Reports
-                                  </span>
-                                )}
-                                <Eye size={12} className="text-blue-600 opacity-60" />
-                              </div>
-                              {c.propertyId && (
-                                <div className="text-[10px] text-slate-500 font-medium">
-                                  Property: {c.propertyId.plazaName || c.propertyId.propertyName}
+                      const renderHeadItem = (c) => {
+                        const childCount = c.isMainHead
+                          ? safeCategories.filter((child) => String(child.parentCategoryId?._id || child.parentCategoryId) === String(c._id)).length
+                          : 0;
+
+                        return (
+                          <div
+                            key={c._id}
+                            className={`p-2.5 rounded-lg border hover:border-blue-400 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition shadow-2xs ${
+                              c.isMainHead ? 'bg-slate-50 border-slate-300 font-bold' : 'border-slate-200 ml-4 bg-white'
+                            }`}
+                            onClick={() => handleViewHeadDetails(c)}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              {c.isMainHead ? <Layers size={14} className="text-rose-700 shrink-0" /> : <Tag size={14} className="text-rose-600 shrink-0" />}
+                              <div>
+                                <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                                  <span>{c.name}</span>
+                                  {c.isMainHead && (
+                                    <span className="text-[9px] uppercase font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded px-1.5 py-0.5">
+                                      Main Head ({childCount} sub-heads)
+                                    </span>
+                                  )}
+                                  {!c.isMainHead && c.parentCategoryId && (
+                                    <span className="text-[9px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">
+                                      Under: {c.parentCategoryId.name || 'Main Head'}
+                                    </span>
+                                  )}
+                                  {(c.excludeFromReports || /boss|owner personal|kamran ijaz|drawings|rishwat/i.test(c.name)) && (
+                                    <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1" title="Excluded from business expense reports (like Boss/Owner Personal)">
+                                      Excluded from Reports
+                                    </span>
+                                  )}
+                                  <Eye size={12} className="text-blue-600 opacity-60" />
                                 </div>
-                              )}
+                                {c.propertyId && (
+                                  <div className="text-[10px] text-slate-500 font-medium">
+                                    Property: {c.propertyId.plazaName || c.propertyId.propertyName}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
@@ -969,6 +1050,7 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                           </div>
                         </div>
                       );
+                    };
 
                       const renderHierarchy = (group) => {
                         // When searching, show all matching heads immediately without filtering out children whose parents don't match
@@ -1499,6 +1581,36 @@ export function ChartOfAccountsPage({ currentUser, onNavigateToLedgers }) {
                 </div>
               </div>
             </div>
+
+            {/* Configured Sub-Heads under this Head */}
+            {(() => {
+              const subHeads = safeCategories.filter(
+                (child) => String(child.parentCategoryId?._id || child.parentCategoryId) === String(selectedHeadForDetails._id)
+              );
+              if (subHeads.length === 0) return null;
+              return (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                  <div className="text-xs font-black uppercase text-slate-700 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Tag size={13} className="text-rose-600" />
+                      Configured Sub-Heads under this Main Head ({subHeads.length})
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-semibold">Active expense sub-categories</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1">
+                    {subHeads.map((sub) => (
+                      <span
+                        key={sub._id}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-800 shadow-2xs"
+                      >
+                        <Tag size={12} className="text-rose-500" />
+                        {sub.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Itemized Transactions Table */}
             <div className="flex-1 overflow-y-auto border border-slate-200 rounded-xl bg-white">
