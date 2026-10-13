@@ -54,9 +54,9 @@ router.get('/rental-income-summary', authorize('ADMIN', 'ADMIN_PUBLISHER', 'DATA
 router.get('/reconcile/account-statement/:accountId', authorize('ADMIN', 'ADMIN_PUBLISHER', 'DATA_ENTRY', 'VERIFIER', 'VERIFICATION_MANAGER'), getAccountReconciliation);
 router.get('/head-wise-summary', authorize('ADMIN', 'ADMIN_PUBLISHER', 'DATA_ENTRY', 'VERIFIER', 'VERIFICATION_MANAGER'), getHeadWiseSummary);
 
-// Mutation endpoints restricted to ADMIN / ADMIN_PUBLISHER
+// Mutation endpoints restricted to ADMIN / ADMIN_PUBLISHER / VERIFIER
 router.patch('/transactions/:id/verify', authorize('ADMIN', 'ADMIN_PUBLISHER'), verifyTransaction);
-router.put('/transactions/:id', authorize('ADMIN', 'ADMIN_PUBLISHER'), updateTransactionMaster);
+router.put('/transactions/:id', authorize('ADMIN', 'ADMIN_PUBLISHER', 'VERIFIER', 'VERIFICATION_MANAGER'), updateTransactionMaster);
 router.delete('/transactions/:id', authorize('ADMIN', 'ADMIN_PUBLISHER'), deleteTransaction);
 
 export default router;

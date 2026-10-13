@@ -25,12 +25,12 @@ import {
   Building2,
   Landmark,
 } from 'lucide-react';
-import { transactionsAPI, vouchersAPI, verificationAPI, uploadAPI, otherIncomeAPI } from '../services/api.js';
+import { transactionsAPI, vouchersAPI, verificationAPI, uploadAPI, otherIncomeAPI, adminAPI } from '../services/api.js';
 import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
 import { ReceiptViewerModal } from './ReceiptViewerModal.jsx';
 import { downloadReceiptEvidenceDocument, downloadReceiptImage } from '../utils/downloadReceipt.js';
 import { resolveTransactionAccounts } from '../utils/formatters.js';
-import { isAdmin } from '../utils/permissions.js';
+import { isAdmin, isVerifier } from '../utils/permissions.js';
 
 
 const formatPKR = (val) => {
@@ -71,7 +71,10 @@ export const RecentEntriesTable = ({
       return null;
     }
   }, []);
-  const isUserAdmin = isAdmin(cachedUser);
+  const isUserAdmin =
+    isAdmin(cachedUser) ||
+    isVerifier(cachedUser) ||
+    ['ADMIN', 'ADMIN_PUBLISHER', 'VERIFIER', 'VERIFICATION_MANAGER'].includes(cachedUser?.role);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'verified'
 
@@ -308,7 +311,11 @@ export const RecentEntriesTable = ({
         attachments: finalAttachments,
       };
 
-      if (editingPending.entryType === 'EXPENSE') {
+      const effectiveEntryType =
+        editingPending.entryType ||
+        (editingPending.reportCategory === 'Other Income' ? 'OTHER_INCOME' : editingPending.transactionType || 'EXPENSE');
+
+      if (effectiveEntryType === 'EXPENSE' || !effectiveEntryType) {
         const classification = editUnitId
           ? 'UNIT_EXPENSE'
           : editPropertyId
@@ -323,7 +330,7 @@ export const RecentEntriesTable = ({
         if (editParentCategoryId) {
           payload.parentCategoryId = editParentCategoryId;
         }
-      } else if (editingPending.entryType === 'OTHER_INCOME') {
+      } else if (effectiveEntryType === 'OTHER_INCOME') {
         payload.incomeHeadId = editIncomeHeadId || null;
         payload.propertyId = editPropertyId || null;
         payload.unitId = editUnitId || null;
@@ -340,9 +347,18 @@ export const RecentEntriesTable = ({
         payload.receivingAccountId = editAccountId;
       }
 
-      await verificationAPI.updatePending(editingPending._id, payload);
+      try {
+        await verificationAPI.updatePending(editingPending._id, payload);
+      } catch (err) {
+        if (err.response?.status === 404 && adminAPI?.updateTransaction) {
+          await adminAPI.updateTransaction(editingPending._id, payload);
+        } else {
+          throw err;
+        }
+      }
       closeEditPending();
       if (onEntryUpdated) onEntryUpdated();
+      if (onRefresh) onRefresh();
     } catch (err) {
       setEditError(err.response?.data?.message || err.message || 'Failed to update entry.');
     } finally {
@@ -869,6 +885,15 @@ export const RecentEntriesTable = ({
                           >
                             <Printer className="w-4 h-4" />
                           </button>
+                          {isUserAdmin && (
+                            <button
+                              onClick={() => openEditPending(tx)}
+                              className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg transition border border-blue-200"
+                              title={`Direct Edit Verified Voucher #${tx.voucherNo}`}
+                            >
+                              <Edit3 className="w-4 h-4 text-blue-600" />
+                            </button>
+                          )}
                           {!isVerified && (
                             <button
                               onClick={() => handleDeleteVerified(tx)}
@@ -964,10 +989,20 @@ export const RecentEntriesTable = ({
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Edit3 className="w-4 h-4 text-amber-400" />
-                  Edit Pending Entry
+                  {editingPending.status === 'VERIFIED' ? 'Edit Verified Voucher' : 'Edit Pending Entry'}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Type: <span className="text-amber-300 font-bold">{ENTRY_TYPE_LABELS[editingPending.entryType] || editingPending.entryType}</span>
+                  Type:{' '}
+                  <span className="text-amber-300 font-bold">
+                    {ENTRY_TYPE_LABELS[editingPending.entryType] ||
+                      editingPending.entryType ||
+                      (editingPending.reportCategory === 'Other Income' ? 'Other Income' : 'Expense')}
+                  </span>
+                  {editingPending.status === 'VERIFIED' && (
+                    <span className="ml-2 inline-flex items-center text-emerald-400 font-semibold text-[11px]">
+                      (Verified & Posted)
+                    </span>
+                  )}
                 </p>
               </div>
               <button onClick={closeEditPending} className="text-slate-400 hover:text-white p-1 rounded">
@@ -1006,7 +1041,7 @@ export const RecentEntriesTable = ({
                 </div>
               </div>
 
-              {editingPending?.entryType === 'EXPENSE' && (
+              {(editingPending?.entryType === 'EXPENSE' || (!editingPending?.entryType && editingPending?.reportCategory !== 'Other Income')) && (
                 <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-lg space-y-3">
                   <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">

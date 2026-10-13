@@ -41,6 +41,7 @@ import {
   downloadReceiptEvidenceDocument,
   downloadReceiptEvidenceImage,
 } from '../utils/downloadReceipt.js';
+import { isAdmin as checkAdmin, isVerifier } from '../utils/permissions.js';
 
 // Persistent in-memory cache for instant tab switching without blocking loading screens
 let verifierDataCache = {
@@ -154,7 +155,19 @@ const SalaryBreakdown = ({ entry }) => {
 };
 
 export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties }) => {
-  const isAdmin = ['ADMIN', 'ADMIN_PUBLISHER'].includes(user?.role);
+  const cachedUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('user'));
+    } catch {
+      return null;
+    }
+  })();
+  const effectiveUser = user || cachedUser;
+  const isAdmin = ['ADMIN', 'ADMIN_PUBLISHER'].includes(effectiveUser?.role) || checkAdmin(effectiveUser);
+  const canEditVerified =
+    ['ADMIN', 'ADMIN_PUBLISHER', 'VERIFIER', 'VERIFICATION_MANAGER'].includes(effectiveUser?.role) ||
+    isAdmin ||
+    isVerifier(effectiveUser);
   const hasCache = verifierDataCache.pendingEntries !== null;
 
   const [pendingEntries, setPendingEntries] = useState(verifierDataCache.pendingEntries || []);
@@ -1490,12 +1503,12 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                           Verified by <strong className="text-emerald-400">{entry.verifiedByName || 'Verifier'}</strong>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          {isAdmin && (
+                          {canEditVerified && (
                             <button
                               onClick={() => handleOpenEdit(entry)}
                               disabled={savingEntryId === entry._id}
                               className="py-1.5 px-2.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-xs font-bold flex items-center gap-1.5 transition disabled:opacity-50"
-                              title="Direct Edit Verified Entry (Admin)"
+                              title="Direct Edit Verified Entry (Admin / Verifier)"
                             >
                               <Edit3 size={13} />
                               <span>Edit</span>
@@ -1821,12 +1834,12 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                                 <div className="flex flex-col gap-1 items-center">
                                   <div className="text-slate-400">Verified by <span className="text-emerald-400 font-bold">{entry.verifiedByName || 'Verifier'}</span></div>
                                   <div className="flex items-center gap-1.5 mt-0.5">
-                                    {isAdmin && (
+                                    {canEditVerified && (
                                       <button
                                         onClick={() => handleOpenEdit(entry)}
                                         disabled={savingEntryId === entry._id}
                                         className="py-1 px-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-[10px] font-bold flex items-center gap-1 transition disabled:opacity-50"
-                                        title="Direct Edit Verified Entry (Admin)"
+                                        title="Direct Edit Verified Entry (Admin / Verifier)"
                                       >
                                         <Edit3 size={11} />
                                         <span>Edit</span>

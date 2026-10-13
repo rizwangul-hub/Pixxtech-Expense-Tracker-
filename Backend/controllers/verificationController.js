@@ -532,17 +532,37 @@ export const updatePendingEntry = async (req, res) => {
       return apiError(res, 'Invalid entry ID.', 400);
     }
 
-    const entry = await PendingEntry.findById(id);
+    let entry = await PendingEntry.findById(id);
     if (!entry) {
+      entry = await PendingEntry.findOne({
+        $or: [
+          { postedTransactionId: id },
+          { _id: id },
+        ],
+      });
+    }
+    if (!entry) {
+      const tx = await Transaction.findById(id);
+      if (tx) {
+        if (tx.sourceId) entry = await PendingEntry.findById(tx.sourceId);
+        if (!entry && tx.voucherNo) entry = await PendingEntry.findOne({ voucherNo: tx.voucherNo });
+      }
+    }
+    if (!entry) {
+      const tx = await Transaction.findById(id);
+      if (tx) {
+        const { updateTransactionMaster } = await import('./adminController.js');
+        return updateTransactionMaster(req, res);
+      }
       return apiError(res, 'Pending entry not found.', 404);
     }
 
-    const isAdmin = ['ADMIN', 'ADMIN_PUBLISHER'].includes(req.user?.role);
+    const canEditVerified = ['ADMIN', 'ADMIN_PUBLISHER', 'VERIFIER', 'VERIFICATION_MANAGER'].includes(req.user?.role);
     if (entry.status === 'VERIFIED') {
-      if (!isAdmin) {
+      if (!canEditVerified) {
         return apiError(
           res,
-          'Cannot edit an entry that has already been verified and posted. Only administrators can edit verified entries directly.',
+          'Cannot edit an entry that has already been verified and posted. Only administrators and verifiers can edit verified entries directly.',
           403
         );
       }

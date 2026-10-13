@@ -29,16 +29,28 @@ import {
   Download,
   Paperclip,
   Image as ImageIcon,
+  Edit3,
 } from 'lucide-react';
-import { vouchersAPI, accountsAPI, ledgersAPI, verificationAPI } from '../services/api.js';
+import { vouchersAPI, accountsAPI, ledgersAPI, verificationAPI, adminAPI } from '../services/api.js';
 import { formatPKR, formatDate, resolveTransactionAccounts } from '../utils/formatters.js';
-import { isAdmin } from '../utils/permissions.js';
+import { isAdmin, isVerifier } from '../utils/permissions.js';
 import { SingleVoucherPrintModal } from '../components/SingleVoucherPrintModal.jsx';
 import { ReceiptViewerModal } from '../components/ReceiptViewerModal.jsx';
 import { downloadAllReceipts } from '../utils/downloadReceipt.js';
 
 export function TransactionsPage({ user }) {
-  const userIsAdmin = isAdmin(user);
+  const cachedUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('user'));
+    } catch {
+      return null;
+    }
+  })();
+  const effectiveUser = user || cachedUser;
+  const userIsAdmin =
+    isAdmin(effectiveUser) ||
+    isVerifier(effectiveUser) ||
+    ['ADMIN', 'ADMIN_PUBLISHER', 'VERIFIER', 'VERIFICATION_MANAGER'].includes(effectiveUser?.role);
 
   // Filter State
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -84,6 +96,55 @@ export function TransactionsPage({ user }) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadingEvidencePdf, setDownloadingEvidencePdf] = useState(false);
   const [downloadingEvidenceZip, setDownloadingEvidenceZip] = useState(false);
+
+  // Edit Transaction Modal State (Direct Edit without Unverify)
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState(null);
+
+  const handleOpenEditTransaction = (tx) => {
+    setEditingTransaction({
+      _id: tx._id,
+      date: tx.date ? new Date(tx.date).toISOString().split('T')[0] : '',
+      voucherNo: tx.voucherNo || '',
+      detail: tx.detail || '',
+      categoryId: tx.categoryId?._id || tx.categoryId || '',
+      drAccountId: tx.drAccountId?._id || tx.drAccountId || '',
+      crAccountId: tx.crAccountId?._id || tx.crAccountId || '',
+      amount: tx.amount || 0,
+      propertyId: tx.propertyId?._id || tx.propertyId || '',
+      unitId: tx.unitId?._id || tx.unitId || '',
+      status: tx.status || 'VERIFIED',
+    });
+    setEditError(null);
+  };
+
+  const handleSaveTransactionEdit = async (e) => {
+    e.preventDefault();
+    if (!editingTransaction) return;
+    try {
+      setSavingEdit(true);
+      setEditError(null);
+      await adminAPI.updateTransaction(editingTransaction._id, {
+        date: editingTransaction.date,
+        voucherNo: editingTransaction.voucherNo,
+        detail: editingTransaction.detail,
+        categoryId: editingTransaction.categoryId,
+        drAccountId: editingTransaction.drAccountId,
+        crAccountId: editingTransaction.crAccountId,
+        amount: Number(editingTransaction.amount),
+        propertyId: editingTransaction.propertyId || null,
+        unitId: editingTransaction.unitId || null,
+        status: editingTransaction.status,
+      });
+      setEditingTransaction(null);
+      fetchTransactions();
+    } catch (err) {
+      setEditError(err.response?.data?.message || err.message || 'Failed to update transaction.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   // New Voucher Form State
   const [voucherForm, setVoucherForm] = useState({
@@ -847,19 +908,20 @@ export function TransactionsPage({ user }) {
                 <th className="py-3 px-3.5">Account (Cr.)</th>
                 <th className="py-3 px-3.5 text-right">Amount (PKR)</th>
                 <th className="py-3 px-3 text-center">Status</th>
+                <th className="py-3 px-3 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {loading ? (
                 <tr>
-                  <td colSpan="10" className="py-12 text-center text-slate-500">
+                  <td colSpan="11" className="py-12 text-center text-slate-500">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-500" />
                     <span>Loading central ledger transactions...</span>
                   </td>
                 </tr>
               ) : transactions.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="py-12 text-center text-slate-500">
+                  <td colSpan="11" className="py-12 text-center text-slate-500">
                     No transactions found for the selected criteria.
                   </td>
                 </tr>
@@ -997,6 +1059,30 @@ export function TransactionsPage({ user }) {
                       >
                         {tx.status}
                       </span>
+                    </td>
+
+                    {/* 10. Actions */}
+                    <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {userIsAdmin && tx.status !== 'REVERSED' && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditTransaction(tx)}
+                            className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition text-xs font-semibold"
+                            title={`Direct Edit Transaction #${tx.voucherNo}`}
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => openVoucherDetail(tx.voucherNo)}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
+                          title="View Voucher"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1480,6 +1566,22 @@ export function TransactionsPage({ user }) {
                 {userIsAdmin && selectedVoucher.voucher?.status !== 'REVERSED' && (
                   <button
                     type="button"
+                    onClick={() => {
+                      const txToEdit = selectedVoucher.voucher || selectedVoucher.lines?.[0];
+                      if (txToEdit) {
+                        handleOpenEditTransaction(txToEdit);
+                        setSelectedVoucher(null);
+                      }
+                    }}
+                    className="px-3.5 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs font-semibold rounded-xl transition flex items-center gap-1.5"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit Transaction</span>
+                  </button>
+                )}
+                {userIsAdmin && selectedVoucher.voucher?.status !== 'REVERSED' && (
+                  <button
+                    type="button"
                     onClick={() => setShowReverseModal(true)}
                     className="px-3.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold rounded-xl transition flex items-center gap-1.5"
                   >
@@ -1496,6 +1598,184 @@ export function TransactionsPage({ user }) {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Edit Transaction Modal (Admin / Verifier without Unverify) */}
+      {editingTransaction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-blue-400" />
+                <span>Direct Edit Voucher #{editingTransaction.voucherNo}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingTransaction(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
+                {editError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveTransactionEdit} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={editingTransaction.date}
+                    onChange={(e) => setEditingTransaction((p) => ({ ...p, date: e.target.value }))}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">Amount (PKR) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    required
+                    value={editingTransaction.amount}
+                    onChange={(e) => setEditingTransaction((p) => ({ ...p, amount: e.target.value }))}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">Transaction Detail / Narration *</label>
+                <textarea
+                  rows="2"
+                  required
+                  value={editingTransaction.detail}
+                  onChange={(e) => setEditingTransaction((p) => ({ ...p, detail: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:border-blue-500 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">Account Head / Category *</label>
+                <select
+                  value={editingTransaction.categoryId}
+                  onChange={(e) => setEditingTransaction((p) => ({ ...p, categoryId: e.target.value }))}
+                  required
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium focus:border-blue-500"
+                >
+                  <option value="">-- Select Category / Head --</option>
+                  {categories.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name} {c.type ? `(${c.type})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">Debit Account (Dr.) *</label>
+                  <select
+                    value={editingTransaction.drAccountId}
+                    onChange={(e) => setEditingTransaction((p) => ({ ...p, drAccountId: e.target.value }))}
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-emerald-300 font-mono text-[11px] focus:border-blue-500"
+                  >
+                    <option value="">-- Select Debit Account --</option>
+                    {accounts.map((a) => (
+                      <option key={a._id} value={a._id}>
+                        {a.name} ({a.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">Credit Account (Cr.) *</label>
+                  <select
+                    value={editingTransaction.crAccountId}
+                    onChange={(e) => setEditingTransaction((p) => ({ ...p, crAccountId: e.target.value }))}
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-rose-300 font-mono text-[11px] focus:border-blue-500"
+                  >
+                    <option value="">-- Select Credit Account --</option>
+                    {accounts.map((a) => (
+                      <option key={a._id} value={a._id}>
+                        {a.name} ({a.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Property & Unit Allocation (Optional) */}
+              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-semibold mb-1">Property (Optional)</label>
+                  <select
+                    value={editingTransaction.propertyId || ''}
+                    onChange={(e) => setEditingTransaction((p) => ({ ...p, propertyId: e.target.value, unitId: '' }))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
+                  >
+                    <option value="">-- None (General) --</option>
+                    {properties.map((prop) => (
+                      <option key={prop._id} value={prop._id}>
+                        {prop.plazaName || prop.propertyName || prop.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-semibold mb-1">Shop / Unit (Optional)</label>
+                  <select
+                    value={editingTransaction.unitId || ''}
+                    onChange={(e) => setEditingTransaction((p) => ({ ...p, unitId: e.target.value }))}
+                    disabled={!editingTransaction.propertyId}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white disabled:opacity-40"
+                  >
+                    <option value="">-- All / General --</option>
+                    {properties
+                      .find((p) => String(p._id) === String(editingTransaction.propertyId))
+                      ?.units?.map((u) => (
+                        <option key={u._id} value={u._id}>
+                          {u.unitNumber} {u.floorNumber ? `(${u.floorNumber})` : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingTransaction(null)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold transition disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {savingEdit ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Re-calculating Balances...</span>
+                    </>
+                  ) : (
+                    <span>Save & Rebalance Accounts</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
