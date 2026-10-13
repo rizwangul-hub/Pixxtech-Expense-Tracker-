@@ -14,6 +14,7 @@ const specificRules = [
   { matchName: 'Miss Nausheen', dept: 'IT Office', time: '15:00' },
   { matchName: 'Nausheen', dept: 'IT Office', time: '15:00' },
   { matchName: 'Zulaikha Afzaal', dept: 'IT Office', time: '15:00' },
+  { matchName: 'Sawera', dept: 'IT Office', time: '12:30' },
   { matchName: 'Abdul Rafey', dept: 'IT Office', time: '16:00' },
 
   // Bahria Town Office & 4A Driver Shift Times

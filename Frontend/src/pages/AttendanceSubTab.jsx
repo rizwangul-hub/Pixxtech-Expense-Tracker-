@@ -29,6 +29,7 @@ const ATTENDANCE_ORDER = {
     'Miss Nausheen',
     'Samina Iqbal',
     'Zulaikha Afzaal',
+    'Sawera',
     'Saeed Sb',
     'Faiz Mujahid',
     'Malik Naveed',
@@ -73,6 +74,8 @@ const employeeOrderIndex = (name, location) => {
     abdulrafey: 'abdulrafey',
     zaffarhussain: 'zaferhussain',
     saeed: 'saeedsb',
+    sawera: 'sawera',
+    saweera: 'sawera',
   };
   const canonicalName = aliases[normalizedName] || normalizedName;
   const aliasIndex = order.findIndex((person) => normalizeEmployeeName(person) === canonicalName);
