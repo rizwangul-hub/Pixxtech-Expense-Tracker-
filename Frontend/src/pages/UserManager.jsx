@@ -20,6 +20,7 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
+  ArrowLeft,
   Copy,
   Check,
   Activity,
@@ -98,7 +99,7 @@ export function UserManager({ currentUser }) {
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityTotalCount, setActivityTotalCount] = useState(0);
   const [activityPage, setActivityPage] = useState(1);
-  const [activityLimit] = useState(15);
+  const [activityLimit, setActivityLimit] = useState(25);
   const [activityFilters, setActivityFilters] = useState({
     search: '',
     category: 'ALL',
@@ -376,6 +377,24 @@ export function UserManager({ currentUser }) {
       fetchUserActivity();
     }
   }, [historyModalUser, fetchUserActivity]);
+
+  useEffect(() => {
+    if (historyModalUser) {
+      document.body.style.overflow = 'hidden';
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          setHistoryModalUser(null);
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [historyModalUser]);
 
   const handleOpenHistoryModal = (userItem) => {
     setHistoryModalUser(userItem);
@@ -917,16 +936,27 @@ export function UserManager({ currentUser }) {
       </div>
 
       {/* ========================================================================= */}
-      {/* 4. MODAL: View Full History & Audit Logs                                   */}
+      {/* 4. FULLSCREEN VIEW: Full Activity History & Audit Logs                     */}
       {/* ========================================================================= */}
       {historyModalUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
-            {/* Header / User Profile Banner */}
-            <div className="bg-slate-950 border-b border-slate-800 p-4 sm:p-5 flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-800 flex items-center gap-1.5">
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col w-screen h-screen overflow-hidden animate-fade-in">
+          {/* Top Fullscreen Header Bar */}
+          <div className="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-3 flex items-center justify-between gap-4 shrink-0 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                onClick={() => setHistoryModalUser(null)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer shrink-0"
+                title="Back to User Management (Esc)"
+              >
+                <ArrowLeft size={16} />
+                <span>Back to Users</span>
+              </button>
+
+              <div className="h-6 w-px bg-slate-800 hidden sm:block"></div>
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950 px-2.5 py-0.5 rounded border border-indigo-800 flex items-center gap-1.5">
                     <History size={13} className="text-indigo-400" />
                     {historyModalUser.isGlobal ? 'System Activity History' : 'User Activity History'}
                   </span>
@@ -937,144 +967,194 @@ export function UserManager({ currentUser }) {
                     </span>
                   )}
                 </div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 truncate mt-0.5">
                   {historyModalUser.isGlobal ? (
-                    <History size={20} className="text-indigo-400" />
+                    <History size={18} className="text-indigo-400 shrink-0" />
                   ) : (
-                    <User size={18} className="text-indigo-400" />
+                    <User size={18} className="text-indigo-400 shrink-0" />
                   )}
-                  {historyModalUser.name}{' '}
-                  <span className="text-xs text-slate-400 font-mono font-normal">
+                  <span className="truncate">{historyModalUser.name}</span>
+                  <span className="text-xs text-slate-400 font-mono font-normal hidden md:inline">
                     ({historyModalUser.email})
                   </span>
                 </h2>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 pt-1 font-mono">
-                  <span>Scope: <strong className="text-slate-200">{historyModalUser.role}</strong></span>
-                  {historyModalUser.createdAt && (
-                    <span>Joined: <strong className="text-slate-200">{formatDate(historyModalUser.createdAt, 'DD-MMM-YYYY')}</strong></span>
-                  )}
-                  <span>Logins Recorded: <strong className="text-slate-200">{historyModalUser.loginCount || 0}</strong></span>
-                  <span>Total Activities: <strong className="text-indigo-400">{activityTotalCount}</strong></span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={handleExportUserActivityCsv}
-                  disabled={exportingCsv || activityTotalCount === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-white text-xs font-semibold transition disabled:opacity-40"
-                  title="Download activity history as CSV"
-                >
-                  <Download size={14} />
-                  {exportingCsv ? 'Exporting...' : 'Export CSV'}
-                </button>
-                <button
-                  onClick={() => setHistoryModalUser(null)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-                >
-                  <X size={18} />
-                </button>
               </div>
             </div>
 
-            {/* Filter Bar */}
-            <div className="bg-slate-950/60 border-b border-slate-800/80 p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex-1 min-w-[200px] relative">
-                <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+            {/* Quick Stats Pill Bar */}
+            <div className="hidden lg:flex items-center gap-4 text-xs font-mono text-slate-400 bg-slate-950/70 px-3.5 py-1.5 rounded-lg border border-slate-800">
+              <span>Scope: <strong className="text-slate-200">{historyModalUser.role}</strong></span>
+              {historyModalUser.createdAt && (
+                <span>Joined: <strong className="text-slate-200">{formatDate(historyModalUser.createdAt, 'DD-MMM-YYYY')}</strong></span>
+              )}
+              <span>Logins: <strong className="text-slate-200">{historyModalUser.loginCount || 0}</strong></span>
+              <span>Total Activities: <strong className="text-indigo-400 font-bold">{activityTotalCount}</strong></span>
+            </div>
+
+            {/* Actions Bar */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={fetchUserActivity}
+                disabled={activityLoading}
+                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition cursor-pointer"
+                title="Refresh activities"
+              >
+                <RefreshCw size={15} className={activityLoading ? 'animate-spin' : ''} />
+              </button>
+              <button
+                onClick={handleExportUserActivityCsv}
+                disabled={exportingCsv || activityTotalCount === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition disabled:opacity-40 shadow-sm cursor-pointer"
+                title="Download complete activity audit history as CSV"
+              >
+                <Download size={14} />
+                <span>{exportingCsv ? 'Exporting...' : 'Export CSV'}</span>
+              </button>
+              <button
+                onClick={() => setHistoryModalUser(null)}
+                className="p-2 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 border border-slate-700 transition cursor-pointer"
+                title="Close Fullscreen (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Fullscreen Filter Bar */}
+          <div className="bg-slate-900/90 border-b border-slate-800 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+            <div className="flex-1 min-w-[240px] max-w-md relative">
+              <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                value={activityFilters.search}
+                onChange={(e) => {
+                  setActivityFilters({ ...activityFilters, search: e.target.value });
+                  setActivityPage(1);
+                }}
+                placeholder="Search description, voucher #, record ID, or IP..."
+                className="w-full bg-slate-950 border border-slate-700/80 rounded-lg pl-8 pr-2 py-1.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={activityFilters.category}
+                onChange={(e) => {
+                  setActivityFilters({ ...activityFilters, category: e.target.value });
+                  setActivityPage(1);
+                }}
+                className="bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none"
+              >
+                <option value="ALL">All Categories</option>
+                <option value="FINANCIAL">Financial (Expenses/Transfers)</option>
+                <option value="RENT">Rent & Tenancy</option>
+                <option value="PAYROLL">Payroll & Salaries</option>
+                <option value="PROPERTY">Properties & Units</option>
+                <option value="USER_MANAGEMENT">User Management</option>
+                <option value="AUTH">Authentication / Logins</option>
+                <option value="BACKUP">Database Backups</option>
+              </select>
+
+              <select
+                value={activityFilters.action}
+                onChange={(e) => {
+                  setActivityFilters({ ...activityFilters, action: e.target.value });
+                  setActivityPage(1);
+                }}
+                className="bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none"
+              >
+                <option value="ALL">All Actions</option>
+                <option value="LOGIN_SUCCESS">Login Success</option>
+                <option value="LOGIN_FAILED">Login Failed</option>
+                <option value="LOGOUT">Logout</option>
+                <option value="CREATE">Create</option>
+                <option value="UPDATE">Update</option>
+                <option value="DELETE">Delete</option>
+                <option value="VERIFY">Verify</option>
+                <option value="UNVERIFY">Unverify</option>
+                <option value="REJECT">Reject</option>
+                <option value="RESET_PASSWORD">Reset Password</option>
+              </select>
+
+              <select
+                value={activityFilters.status}
+                onChange={(e) => {
+                  setActivityFilters({ ...activityFilters, status: e.target.value });
+                  setActivityPage(1);
+                }}
+                className="bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none"
+              >
+                <option value="ALL">All Results</option>
+                <option value="SUCCESS">Success Only</option>
+                <option value="FAILED">Failed Only</option>
+              </select>
+
+              <div className="flex items-center gap-1 bg-slate-950 border border-slate-700/80 rounded-lg px-2 py-1">
+                <Calendar size={13} className="text-slate-400" />
                 <input
-                  type="text"
-                  value={activityFilters.search}
+                  type="date"
+                  value={activityFilters.startDate}
                   onChange={(e) => {
-                    setActivityFilters({ ...activityFilters, search: e.target.value });
+                    setActivityFilters({ ...activityFilters, startDate: e.target.value });
                     setActivityPage(1);
                   }}
-                  placeholder="Filter by description, voucher # or record..."
-                  className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-2 py-1 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
+                  className="bg-transparent text-slate-300 text-xs focus:outline-none"
+                  title="From date"
+                />
+                <span className="text-slate-500 text-xs">to</span>
+                <input
+                  type="date"
+                  value={activityFilters.endDate}
+                  onChange={(e) => {
+                    setActivityFilters({ ...activityFilters, endDate: e.target.value });
+                    setActivityPage(1);
+                  }}
+                  className="bg-transparent text-slate-300 text-xs focus:outline-none"
+                  title="To date"
                 />
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 bg-slate-950 border border-slate-700/80 rounded-lg px-2 py-1">
+                <span className="text-slate-400 text-[11px]">Show:</span>
                 <select
-                  value={activityFilters.category}
+                  value={activityLimit}
                   onChange={(e) => {
-                    setActivityFilters({ ...activityFilters, category: e.target.value });
+                    setActivityLimit(Number(e.target.value));
                     setActivityPage(1);
                   }}
-                  className="bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1 text-slate-200 text-xs focus:outline-none"
+                  className="bg-transparent text-slate-200 text-xs focus:outline-none font-mono"
                 >
-                  <option value="ALL">All Categories</option>
-                  <option value="FINANCIAL">Financial (Expenses/Transfers)</option>
-                  <option value="RENT">Rent & Tenancy</option>
-                  <option value="PAYROLL">Payroll & Salaries</option>
-                  <option value="PROPERTY">Properties & Units</option>
-                  <option value="USER_MANAGEMENT">User Management</option>
-                  <option value="AUTH">Authentication / Logins</option>
-                  <option value="BACKUP">Database Backups</option>
+                  <option value="15">15</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
                 </select>
-
-                <select
-                  value={activityFilters.action}
-                  onChange={(e) => {
-                    setActivityFilters({ ...activityFilters, action: e.target.value });
-                    setActivityPage(1);
-                  }}
-                  className="bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1 text-slate-200 text-xs focus:outline-none"
-                >
-                  <option value="ALL">All Actions</option>
-                  <option value="LOGIN_SUCCESS">Login Success</option>
-                  <option value="LOGIN_FAILED">Login Failed</option>
-                  <option value="LOGOUT">Logout</option>
-                  <option value="CREATE">Create</option>
-                  <option value="UPDATE">Update</option>
-                  <option value="DELETE">Delete</option>
-                  <option value="VERIFY">Verify</option>
-                  <option value="UNVERIFY">Unverify</option>
-                  <option value="REJECT">Reject</option>
-                  <option value="RESET_PASSWORD">Reset Password</option>
-                </select>
-
-                <select
-                  value={activityFilters.status}
-                  onChange={(e) => {
-                    setActivityFilters({ ...activityFilters, status: e.target.value });
-                    setActivityPage(1);
-                  }}
-                  className="bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1 text-slate-200 text-xs focus:outline-none"
-                >
-                  <option value="ALL">All Results</option>
-                  <option value="SUCCESS">Success Only</option>
-                  <option value="FAILED">Failed Only</option>
-                </select>
-
-                <div className="flex items-center gap-1 bg-slate-900 border border-slate-700/80 rounded-lg px-2 py-0.5">
-                  <Calendar size={12} className="text-slate-400" />
-                  <input
-                    type="date"
-                    value={activityFilters.startDate}
-                    onChange={(e) => {
-                      setActivityFilters({ ...activityFilters, startDate: e.target.value });
-                      setActivityPage(1);
-                    }}
-                    className="bg-transparent text-slate-300 text-xs focus:outline-none"
-                    title="From date"
-                  />
-                  <span className="text-slate-500 text-xs">to</span>
-                  <input
-                    type="date"
-                    value={activityFilters.endDate}
-                    onChange={(e) => {
-                      setActivityFilters({ ...activityFilters, endDate: e.target.value });
-                      setActivityPage(1);
-                    }}
-                    className="bg-transparent text-slate-300 text-xs focus:outline-none"
-                    title="To date"
-                  />
-                </div>
               </div>
-            </div>
 
-            {/* Activity Stream Table / List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {(activityFilters.search || activityFilters.category !== 'ALL' || activityFilters.action !== 'ALL' || activityFilters.status !== 'ALL' || activityFilters.startDate || activityFilters.endDate) && (
+                <button
+                  onClick={() => {
+                    setActivityFilters({
+                      search: '',
+                      category: 'ALL',
+                      action: 'ALL',
+                      status: 'ALL',
+                      startDate: '',
+                      endDate: '',
+                    });
+                    setActivityPage(1);
+                  }}
+                  className="px-2.5 py-1 text-xs text-rose-400 hover:text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 rounded-lg border border-rose-800/50 transition cursor-pointer"
+                  title="Clear all filters"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Activity Stream Table / List */}
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-2.5 bg-slate-950">
               {activityLoading ? (
                 <div className="py-16 text-center text-slate-400">
                   <RefreshCw size={24} className="animate-spin inline-block text-indigo-400 mb-2" />
@@ -1232,8 +1312,7 @@ export function UserManager({ currentUser }) {
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
 
       {/* ========================================================================= */}
       {/* 5. MODAL: Reset Password                                                  */}
