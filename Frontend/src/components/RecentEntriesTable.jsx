@@ -24,14 +24,54 @@ import {
   RotateCcw,
   Building2,
   Landmark,
+  Calendar,
 } from 'lucide-react';
 import { transactionsAPI, vouchersAPI, verificationAPI, uploadAPI, otherIncomeAPI, adminAPI } from '../services/api.js';
 import { SingleVoucherPrintModal } from './SingleVoucherPrintModal.jsx';
 import { ReceiptViewerModal } from './ReceiptViewerModal.jsx';
 import { downloadReceiptEvidenceDocument, downloadReceiptImage } from '../utils/downloadReceipt.js';
-import { resolveTransactionAccounts } from '../utils/formatters.js';
+import { resolveTransactionAccounts, formatDate } from '../utils/formatters.js';
 import { isAdmin, isVerifier } from '../utils/permissions.js';
 
+const getItemMonth = (item) => {
+  if (!item) return '';
+  const rawDate =
+    item.date ||
+    item.receiptDate ||
+    item.transferDate ||
+    item.entryData?.date ||
+    item.submittedAt ||
+    item.createdAt;
+  if (!rawDate) return '';
+  if (typeof rawDate === 'string') {
+    const trimmed = rawDate.trim();
+    if (/^\d{4}-\d{2}/.test(trimmed)) {
+      return trimmed.slice(0, 7);
+    }
+  }
+  try {
+    const d = new Date(rawDate);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      return `${y}-${m}`;
+    }
+  } catch {
+    return '';
+  }
+  return '';
+};
+
+const formatMonthLabel = (mStr) => {
+  if (!mStr || mStr === 'ALL') return 'All Months';
+  try {
+    const [year, month] = mStr.split('-');
+    const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  } catch {
+    return mStr;
+  }
+};
 
 const formatPKR = (val) => {
   return new Intl.NumberFormat('en-PK').format(Number(val) || 0);
@@ -63,6 +103,8 @@ export const RecentEntriesTable = ({
   loading = false,
   onRefresh,
   onEntryUpdated,
+  selectedMonth: externalSelectedMonth,
+  onMonthChange,
 }) => {
   const cachedUser = useMemo(() => {
     try {
@@ -77,6 +119,15 @@ export const RecentEntriesTable = ({
     ['ADMIN', 'ADMIN_PUBLISHER', 'VERIFIER', 'VERIFICATION_MANAGER'].includes(cachedUser?.role);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'verified'
+
+  const [internalSelectedMonth, setInternalSelectedMonth] = useState(() => {
+    return new Date().toISOString().slice(0, 7);
+  });
+  const selectedMonth = externalSelectedMonth !== undefined ? externalSelectedMonth : internalSelectedMonth;
+  const setSelectedMonth = (m) => {
+    setInternalSelectedMonth(m);
+    if (onMonthChange) onMonthChange(m);
+  };
 
   const [internalOtherHeads, setInternalOtherHeads] = useState(otherHeads || []);
   useEffect(() => {
@@ -389,27 +440,64 @@ export const RecentEntriesTable = ({
   const verifiedOnlyEntries = entries.filter((tx) => tx.status !== 'PENDING');
 
   // Combine pendingEntries prop with any pending entries from entries prop (avoiding duplicate IDs)
-  const combinedPending = [
-    ...pendingEntries,
-    ...pendingFromEntries.filter((tx) => !pendingEntries.some((p) => p._id?.toString() === tx._id?.toString())),
-  ];
+  const combinedPending = useMemo(() => {
+    return [
+      ...pendingEntries,
+      ...pendingFromEntries.filter((tx) => !pendingEntries.some((p) => p._id?.toString() === tx._id?.toString())),
+    ];
+  }, [pendingEntries, pendingFromEntries]);
 
-  const filteredPending = combinedPending.filter((e) =>
-    !q ||
-    e.voucherNo?.toLowerCase().includes(q) ||
-    e.detail?.toLowerCase().includes(q) ||
-    e.entryType?.toLowerCase().includes(q) ||
-    (e.categoryId?.name || e.categoryId || '').toString().toLowerCase().includes(q)
-  );
+  // Extract all unique months present across submissions & transactions
+  const availableMonths = useMemo(() => {
+    const monthsSet = new Set();
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    monthsSet.add(currentMonth);
 
-  const filteredVerified = verifiedOnlyEntries.filter((tx) =>
-    !q ||
-    tx.voucherNo?.toLowerCase().includes(q) ||
-    tx.detail?.toLowerCase().includes(q) ||
-    tx.categoryId?.name?.toLowerCase().includes(q) ||
-    tx.drAccountId?.name?.toLowerCase().includes(q) ||
-    tx.crAccountId?.name?.toLowerCase().includes(q)
-  );
+    combinedPending.forEach((e) => {
+      const m = getItemMonth(e);
+      if (m) monthsSet.add(m);
+    });
+
+    verifiedOnlyEntries.forEach((tx) => {
+      const m = getItemMonth(tx);
+      if (m) monthsSet.add(m);
+    });
+
+    return Array.from(monthsSet).sort().reverse();
+  }, [combinedPending, verifiedOnlyEntries]);
+
+  const filteredPending = useMemo(() => {
+    return combinedPending.filter((e) => {
+      if (selectedMonth && selectedMonth !== 'ALL') {
+        const m = getItemMonth(e);
+        if (m && m !== selectedMonth) return false;
+      }
+      if (!q) return true;
+      return (
+        e.voucherNo?.toLowerCase().includes(q) ||
+        e.detail?.toLowerCase().includes(q) ||
+        e.entryType?.toLowerCase().includes(q) ||
+        (e.categoryId?.name || e.categoryId || '').toString().toLowerCase().includes(q)
+      );
+    });
+  }, [combinedPending, selectedMonth, q]);
+
+  const filteredVerified = useMemo(() => {
+    return verifiedOnlyEntries.filter((tx) => {
+      if (selectedMonth && selectedMonth !== 'ALL') {
+        const m = getItemMonth(tx);
+        if (m && m !== selectedMonth) return false;
+      }
+      if (!q) return true;
+      return (
+        tx.voucherNo?.toLowerCase().includes(q) ||
+        tx.detail?.toLowerCase().includes(q) ||
+        tx.categoryId?.name?.toLowerCase().includes(q) ||
+        tx.drAccountId?.name?.toLowerCase().includes(q) ||
+        tx.crAccountId?.name?.toLowerCase().includes(q)
+      );
+    });
+  }, [verifiedOnlyEntries, selectedMonth, q]);
 
   // Pagination for 10 entries per page as requested
   const [pagePending, setPagePending] = useState(1);
@@ -419,7 +507,7 @@ export const RecentEntriesTable = ({
   useEffect(() => {
     setPagePending(1);
     setPageVerified(1);
-  }, [searchTerm]);
+  }, [searchTerm, selectedMonth]);
 
   const totalPendingPages = Math.max(1, Math.ceil(filteredPending.length / PAGE_SIZE));
   const safePagePending = Math.min(pagePending, totalPendingPages);
@@ -440,7 +528,7 @@ export const RecentEntriesTable = ({
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
       {/* Header */}
-      <div className="section-bar mb-4 shadow-2xs">
+      <div className="section-bar mb-4 shadow-2xs flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div className="flex items-center gap-3">
           <FileText className="w-5 h-5 text-white" />
           <span className="section-title">My Submitted Entries</span>
@@ -449,7 +537,51 @@ export const RecentEntriesTable = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Month Selector Filter */}
+          <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-800 shadow-2xs">
+            <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider hidden sm:inline">Month:</span>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">All Months ({combinedPending.length + verifiedOnlyEntries.length})</option>
+              {availableMonths.map((m) => {
+                const count =
+                  combinedPending.filter((e) => getItemMonth(e) === m).length +
+                  verifiedOnlyEntries.filter((tx) => getItemMonth(tx) === m).length;
+                return (
+                  <option key={m} value={m}>
+                    {formatMonthLabel(m)} ({count})
+                  </option>
+                );
+              })}
+            </select>
+            <input
+              type="month"
+              value={selectedMonth === 'ALL' ? '' : selectedMonth}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setSelectedMonth(e.target.value);
+                }
+              }}
+              className="bg-transparent text-xs text-slate-700 focus:outline-none cursor-pointer border-l border-slate-200 pl-1.5 ml-0.5"
+              title="Pick specific month"
+            />
+            {selectedMonth !== 'ALL' && (
+              <button
+                type="button"
+                onClick={() => setSelectedMonth('ALL')}
+                className="text-[10px] font-extrabold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 transition cursor-pointer"
+                title="Clear month filter and show all months"
+              >
+                All
+              </button>
+            )}
+          </div>
+
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
@@ -457,9 +589,10 @@ export const RecentEntriesTable = ({
               placeholder="Search entries..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-white border border-slate-300 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-600 w-48 sm:w-64 font-semibold"
+              className="bg-white border border-slate-300 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-600 w-44 sm:w-56 font-semibold"
             />
           </div>
+
           <button
             onClick={onRefresh}
             disabled={loading}
@@ -468,6 +601,40 @@ export const RecentEntriesTable = ({
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
+        </div>
+      </div>
+
+      {/* Month Filter Info Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg mb-4 text-xs">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
+          <span className="text-slate-600 font-medium">Viewing Entries For:</span>
+          <span className="font-extrabold text-blue-700 bg-blue-100/90 px-2 py-0.5 rounded border border-blue-200">
+            {formatMonthLabel(selectedMonth)}
+          </span>
+          <span className="text-slate-500 text-[11px]">
+            ({filteredPending.length} pending, {filteredVerified.length} verified & posted)
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {selectedMonth !== 'ALL' ? (
+            <button
+              type="button"
+              onClick={() => setSelectedMonth('ALL')}
+              className="text-xs font-bold text-blue-600 hover:text-blue-800 underline flex items-center gap-1 cursor-pointer"
+            >
+              Show All Months
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSelectedMonth(new Date().toISOString().slice(0, 7))}
+              className="text-xs font-bold text-blue-600 hover:text-blue-800 underline flex items-center gap-1 cursor-pointer"
+            >
+              Filter to Current Month
+            </button>
+          )}
         </div>
       </div>
 
@@ -536,8 +703,27 @@ export const RecentEntriesTable = ({
                 <tr>
                   <td colSpan="8" className="py-10 text-center">
                     <ShieldCheck className="w-8 h-8 mx-auto mb-2 text-emerald-400" />
-                    <p className="text-sm font-bold text-slate-600">No pending entries!</p>
-                    <p className="text-xs text-slate-400 mt-1">All your submissions have been verified by Khurshid Anwar.</p>
+                    <p className="text-sm font-bold text-slate-600">
+                      {selectedMonth !== 'ALL'
+                        ? `No pending entries for ${formatMonthLabel(selectedMonth)}!`
+                        : 'No pending entries!'}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {selectedMonth !== 'ALL' ? (
+                        <span>
+                          No submissions awaiting verification in this month.{' '}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMonth('ALL')}
+                            className="text-blue-600 underline font-semibold hover:text-blue-800 cursor-pointer"
+                          >
+                            View all months
+                          </button>
+                        </span>
+                      ) : (
+                        'All your submissions have been verified by Khurshid Anwar.'
+                      )}
+                    </p>
                   </td>
                 </tr>
               ) : (
@@ -762,7 +948,22 @@ export const RecentEntriesTable = ({
               ) : filteredVerified.length === 0 ? (
                 <tr>
                   <td colSpan="9" className="py-8 text-center text-slate-500 font-medium">
-                    No verified journal transactions found.
+                    <p className="text-sm font-bold text-slate-600">
+                      {selectedMonth !== 'ALL'
+                        ? `No verified journal transactions found for ${formatMonthLabel(selectedMonth)}.`
+                        : 'No verified journal transactions found.'}
+                    </p>
+                    {selectedMonth !== 'ALL' && (
+                      <p className="text-xs text-slate-400 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedMonth('ALL')}
+                          className="text-blue-600 underline font-semibold hover:text-blue-800 cursor-pointer"
+                        >
+                          View all months
+                        </button>
+                      </p>
+                    )}
                   </td>
                 </tr>
               ) : (

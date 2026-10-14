@@ -61,6 +61,7 @@ export const DataEntryDashboard = ({ user }) => {
   const [recentEntries, setRecentEntries] = useState(dataEntryCache.recentEntries);
   const [pendingEntries, setPendingEntries] = useState(dataEntryCache.pendingEntries);
   const [otherHeads, setOtherHeads] = useState(dataEntryCache.otherHeads);
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
 
   const [loadingData, setLoadingData] = useState(!dataEntryCache.isLoaded);
   const [refreshingEntries, setRefreshingEntries] = useState(false);
@@ -188,10 +189,22 @@ export const DataEntryDashboard = ({ user }) => {
 
   // Compute KPI card statistics
   const todayStr = new Date().toISOString().split('T')[0];
-  const thisMonthStr = todayStr.slice(0, 7);
+  const activeMonthStr = selectedMonth === 'ALL' ? '' : selectedMonth;
 
   const todayEntries = recentEntries.filter((e) => e.date && e.date.startsWith(todayStr));
-  const monthEntries = recentEntries.filter((e) => e.date && e.date.startsWith(thisMonthStr));
+  const monthEntries = recentEntries.filter((e) => {
+    if (!activeMonthStr) return true;
+    return e.date && e.date.startsWith(activeMonthStr);
+  });
+  const monthPendingEntries = pendingEntries.filter((e) => {
+    if (!activeMonthStr) return true;
+    const rawDate = e.date || e.receiptDate || e.transferDate || e.entryData?.date || e.submittedAt || e.createdAt;
+    if (!rawDate) return true;
+    const m = typeof rawDate === 'string' && /^\d{4}-\d{2}/.test(rawDate.trim())
+      ? rawDate.trim().slice(0, 7)
+      : new Date(rawDate).toISOString().slice(0, 7);
+    return m === activeMonthStr;
+  });
   const pendingLocalTx = recentEntries.filter((e) => e.status === 'PENDING');
   const reversedEntries = recentEntries.filter((e) => e.status === 'REVERSED');
 
@@ -313,8 +326,10 @@ export const DataEntryDashboard = ({ user }) => {
 
           <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase font-bold text-slate-500">This Month</span>
-              <Calendar size={16} className="text-emerald-600" />
+              <span className="text-[11px] uppercase font-bold text-slate-500 truncate" title={selectedMonth === 'ALL' ? 'All Months Posted' : `Month: ${selectedMonth}`}>
+                {selectedMonth === 'ALL' ? 'All Months Posted' : `Month: ${selectedMonth}`}
+              </span>
+              <Calendar size={16} className="text-emerald-600 shrink-0" />
             </div>
             <div className="text-2xl font-black font-mono text-slate-900 mt-1">
               {monthEntries.length}
@@ -326,13 +341,19 @@ export const DataEntryDashboard = ({ user }) => {
 
           <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase font-bold text-amber-700">Pending Review</span>
-              <AlertTriangle size={16} className="text-amber-600" />
+              <span className="text-[11px] uppercase font-bold text-amber-700">
+                {selectedMonth === 'ALL' ? 'Pending (All)' : 'Pending Month'}
+              </span>
+              <AlertTriangle size={16} className="text-amber-600 shrink-0" />
             </div>
             <div className="text-2xl font-black font-mono text-amber-600 mt-1">
-              {pendingEntries.length}
+              {monthPendingEntries.length}
             </div>
-            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">Awaiting Khurshid's signoff</div>
+            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
+              {monthPendingEntries.length === pendingEntries.length
+                ? "Awaiting Khurshid's signoff"
+                : `${monthPendingEntries.length} of ${pendingEntries.length} total pending`}
+            </div>
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
@@ -764,6 +785,8 @@ export const DataEntryDashboard = ({ user }) => {
           loading={refreshingEntries || loadingData}
           onRefresh={refreshEntries}
           onEntryUpdated={refreshEntries}
+          selectedMonth={selectedMonth}
+          onMonthChange={setSelectedMonth}
         />
       </main>
 
