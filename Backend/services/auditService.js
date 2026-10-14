@@ -3,12 +3,12 @@ import AuditLog from '../models/AuditLog.js';
 /**
  * Sanitize object to remove passwords, tokens, and sensitive secrets before logging
  */
-const sanitizePayload = (data) => {
+export const sanitizePayload = (data) => {
   if (!data || typeof data !== 'object') return data;
   if (Array.isArray(data)) return data.map(sanitizePayload);
 
   const clean = { ...data };
-  const sensitiveKeys = ['password', 'passwordHash', 'token', 'refreshToken', 'secret', 'authorization'];
+  const sensitiveKeys = ['password', 'passwordHash', 'token', 'refreshToken', 'secret', 'authorization', 'apiKey', 'pin', 'creditCard'];
   for (const key of Object.keys(clean)) {
     if (sensitiveKeys.some((s) => key.toLowerCase().includes(s.toLowerCase()))) {
       clean[key] = '[REDACTED]';
@@ -18,6 +18,8 @@ const sanitizePayload = (data) => {
   }
   return clean;
 };
+
+export const sanitizeDataForAudit = sanitizePayload;
 
 /**
  * Format a Date object into Asia/Karachi local time string
