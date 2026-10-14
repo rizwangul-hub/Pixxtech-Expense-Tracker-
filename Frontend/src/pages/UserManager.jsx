@@ -631,7 +631,6 @@ export function UserManager({ currentUser }) {
               <option value="ALL">All Status</option>
               <option value="ACTIVE">Active Accounts</option>
               <option value="DISABLED">Disabled Accounts</option>
-              <option value="DELETED">Deleted Accounts</option>
             </select>
           </div>
 
@@ -686,14 +685,11 @@ export function UserManager({ currentUser }) {
                 (Array.isArray(users) ? users : []).map((u) => {
                   const isCurrent = u._id === currentUser?.id || u._id === currentUser?._id;
                   const isUserAdmin = u.role === 'ADMIN' || u.role === 'ADMIN_PUBLISHER';
-                  const isDeleted = Boolean(u.isDeleted);
 
                   return (
                     <tr
                       key={u._id}
-                      className={`hover:bg-slate-800/40 transition ${
-                        isDeleted ? 'opacity-60 bg-slate-950/40' : ''
-                      }`}
+                      className="hover:bg-slate-800/40 transition"
                     >
                       {/* Name & Email */}
                       <td className="px-4 py-3.5">
@@ -702,11 +698,6 @@ export function UserManager({ currentUser }) {
                           {isCurrent && (
                             <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/60">
                               You
-                            </span>
-                          )}
-                          {isDeleted && (
-                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 border border-rose-800/60">
-                              Soft Deleted
                             </span>
                           )}
                         </div>
@@ -733,11 +724,7 @@ export function UserManager({ currentUser }) {
 
                       {/* Account Status */}
                       <td className="px-3 py-3.5 whitespace-nowrap">
-                        {isDeleted ? (
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-700">
-                            Deleted
-                          </span>
-                        ) : u.isActive ? (
+                        {u.isActive ? (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-700/50">
                             Active
                           </span>
@@ -792,49 +779,43 @@ export function UserManager({ currentUser }) {
                           </button>
 
                           {/* Reset Password */}
-                          {!isDeleted && (
-                            <button
-                              onClick={() => handleOpenResetModal(u)}
-                              className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:text-amber-300 transition"
-                              title="Reset Password"
-                            >
-                              <Key size={14} className="text-amber-400" />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleOpenResetModal(u)}
+                            className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:text-amber-300 transition"
+                            title="Reset Password"
+                          >
+                            <Key size={14} className="text-amber-400" />
+                          </button>
 
                           {/* Activate / Deactivate Toggle */}
-                          {!isDeleted && (
-                            <button
-                              disabled={isCurrent}
-                              onClick={() => handleToggleStatus(u)}
-                              className={`px-2 py-1 rounded text-[11px] font-medium border transition ${
-                                isCurrent
-                                  ? 'opacity-30 cursor-not-allowed border-slate-800 text-slate-600'
-                                  : u.isActive
-                                  ? 'bg-rose-950/30 text-rose-300 border-rose-800/40 hover:bg-rose-900/40'
-                                  : 'bg-emerald-950/30 text-emerald-300 border-emerald-800/40 hover:bg-emerald-900/40'
-                              }`}
-                              title={isCurrent ? 'Cannot toggle own account' : u.isActive ? 'Deactivate account' : 'Activate account'}
-                            >
-                              {u.isActive ? 'Disable' : 'Enable'}
-                            </button>
-                          )}
+                          <button
+                            disabled={isCurrent}
+                            onClick={() => handleToggleStatus(u)}
+                            className={`px-2 py-1 rounded text-[11px] font-medium border transition ${
+                              isCurrent
+                                ? 'opacity-30 cursor-not-allowed border-slate-800 text-slate-600'
+                                : u.isActive
+                                ? 'bg-rose-950/30 text-rose-300 border-rose-800/40 hover:bg-rose-900/40'
+                                : 'bg-emerald-950/30 text-emerald-300 border-emerald-800/40 hover:bg-emerald-900/40'
+                            }`}
+                            title={isCurrent ? 'Cannot toggle own account' : u.isActive ? 'Deactivate account' : 'Activate account'}
+                          >
+                            {u.isActive ? 'Disable' : 'Enable'}
+                          </button>
 
                           {/* Delete User */}
-                          {!isDeleted && (
-                            <button
-                              disabled={isCurrent}
-                              onClick={() => handleOpenDeleteModal(u)}
-                              className={`p-1.5 rounded-md border transition ${
-                                isCurrent
-                                  ? 'opacity-30 cursor-not-allowed bg-slate-800 text-slate-600 border-slate-800'
-                                  : 'bg-rose-950/30 hover:bg-rose-900/40 text-rose-400 border-rose-800/50'
-                              }`}
-                              title={isCurrent ? 'Cannot delete own account' : 'Delete user account'}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
+                          <button
+                            disabled={isCurrent}
+                            onClick={() => handleOpenDeleteModal(u)}
+                            className={`p-1.5 rounded-md border transition ${
+                              isCurrent
+                                ? 'opacity-30 cursor-not-allowed bg-slate-800 text-slate-600 border-slate-800'
+                                : 'bg-rose-950/30 hover:bg-rose-900/40 text-rose-400 border-rose-800/50'
+                            }`}
+                            title={isCurrent ? 'Cannot delete own account' : 'Delete user account'}
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </td>
                     </tr>

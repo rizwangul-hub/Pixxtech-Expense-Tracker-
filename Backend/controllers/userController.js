@@ -43,15 +43,25 @@ export const getUsers = async (req, res) => {
     const {
       search = '',
       role = 'ALL',
-      status = 'ALL',
-      includeDeleted = 'true',
+      status: rawStatus = 'ALL',
+      accountStatus = '',
+      includeDeleted = 'false',
       page = 1,
       limit = 50,
       sortBy = 'createdAt',
       sortOrder = 'desc',
     } = req.query;
 
+    const status = (accountStatus || rawStatus || 'ALL').toUpperCase();
+
     const query = {};
+
+    // By default, never show deleted users unless explicitly requested
+    if (status === 'DELETED' || includeDeleted === 'true') {
+      if (status === 'DELETED') query.isDeleted = true;
+    } else {
+      query.isDeleted = { $ne: true };
+    }
 
     // Search by name or email
     if (search.trim()) {
@@ -79,10 +89,6 @@ export const getUsers = async (req, res) => {
       query.isDeleted = { $ne: true };
     } else if (status === 'DISABLED') {
       query.isActive = false;
-      query.isDeleted = { $ne: true };
-    } else if (status === 'DELETED') {
-      query.isDeleted = true;
-    } else if (includeDeleted !== 'true') {
       query.isDeleted = { $ne: true };
     }
 
