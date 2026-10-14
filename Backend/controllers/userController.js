@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 import crypto from 'crypto';
 import User from '../models/User.js';
 import AuditLog from '../models/AuditLog.js';
+import PendingEntry from '../models/PendingEntry.js';
+import CommunicationMessage from '../models/CommunicationMessage.js';
+import CommunicationCall from '../models/CommunicationCall.js';
+import CommunicationAttachment from '../models/CommunicationAttachment.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { recordAuditLog, generateAuditLogsCsv, formatKarachiDateTime } from '../services/auditService.js';
 
@@ -131,7 +135,7 @@ export const getUsers = async (req, res) => {
     const [totalActive, totalDeleted, totalAll, recentLoginsCount, totalActivitiesCount] = await Promise.all([
       User.countDocuments({ isActive: true, isDeleted: { $ne: true } }),
       User.countDocuments({ isDeleted: true }),
-      User.countDocuments({}),
+      User.countDocuments({ isDeleted: { $ne: true } }),
       User.countDocuments({
         lastLoginAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
         isDeleted: { $ne: true },
@@ -184,6 +188,9 @@ export const createUser = async (req, res) => {
     const { name, email, password, role } = req.body;
 
     const normalizedEmail = email.toLowerCase().trim();
+
+    // Clean up any stale soft-deleted accounts with this email so the email is free
+    await User.deleteMany({ email: normalizedEmail, isDeleted: true });
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: normalizedEmail });
@@ -421,18 +428,11 @@ export const deleteUser = async (req, res) => {
       }
     }
 
-    // Perform soft deletion
-    const now = new Date();
-    targetUser.isDeleted = true;
-    targetUser.isActive = false;
-    targetUser.deletedAt = now;
-    targetUser.deletedBy = req.user._id;
-    targetUser.deletedByName = req.user.name;
-    // Invalidate sessions immediately
-    targetUser.tokenVersion = (targetUser.tokenVersion || 0) + 1;
-    await targetUser.save({ validateBeforeSave: false });
+    const targetUserId = targetUser._id;
+    const targetEmail = targetUser.email.toLowerCase().trim();
+    const targetName = targetUser.name;
 
-    // Record audit log
+    // Record audit log for the administrative deletion action
     await recordAuditLog({
       req,
       userId: req.user._id,
@@ -442,22 +442,47 @@ export const deleteUser = async (req, res) => {
       action: 'DELETE',
       module: 'USER',
       recordType: 'User',
-      recordId: targetUser._id,
+      recordId: targetUserId,
       status: 'SUCCESS',
-      description: `Administrator ${req.user.name} deleted user account '${targetUser.name}' (${targetUser.email}). Historical accounting records and audit logs are preserved.`,
-      metadata: { deletedUserId: targetUser._id, deletedUserName: targetUser.name },
+      description: `Administrator ${req.user.name} permanently deleted user account '${targetName}' (${targetEmail}) and removed all their user data from the database.`,
+      metadata: { deletedUserId: targetUserId, deletedUserEmail: targetEmail },
+    });
+
+    // 1. Delete all audit logs and activity history belonging to this user
+    await AuditLog.deleteMany({
+      $or: [
+        { userId: targetUserId },
+        { userEmail: targetEmail },
+      ],
+      // Keep only the administrative action audit log that records who deleted them
+      action: { $ne: 'DELETE' },
+    });
+
+    // 2. Delete communication messages, attachments, calls, and pending unverified drafts
+    await Promise.allSettled([
+      CommunicationMessage.deleteMany({ $or: [{ sender: targetUserId }, { recipient: targetUserId }] }),
+      CommunicationCall.deleteMany({ $or: [{ caller: targetUserId }, { callee: targetUserId }] }),
+      CommunicationAttachment.deleteMany({ sender: targetUserId }),
+      PendingEntry.deleteMany({ submittedBy: targetUserId, status: { $ne: 'VERIFIED' } }),
+    ]);
+
+    // 3. Permanently remove the user record from MongoDB so the email is immediately free
+    await User.deleteMany({
+      $or: [
+        { _id: targetUserId },
+        { email: targetEmail },
+      ],
     });
 
     return apiSuccess(
       res,
       {
-        id: targetUser._id,
-        name: targetUser.name,
-        email: targetUser.email,
-        isDeleted: true,
-        deletedAt: now,
+        id: targetUserId,
+        name: targetName,
+        email: targetEmail,
+        deleted: true,
       },
-      `User account '${targetUser.name}' has been deleted. Historical accounting records remain preserved.`
+      `User account '${targetName}' (${targetEmail}) and all their data were permanently deleted from the database. You can now create a new user on this email address.`
     );
   } catch (error) {
     console.error('[Delete User Error]:', error);

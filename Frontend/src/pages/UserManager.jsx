@@ -1355,14 +1355,13 @@ export function UserManager({ currentUser }) {
             <div className="p-3.5 bg-rose-950/70 border border-rose-800/60 rounded-lg text-rose-200 text-xs space-y-2">
               <div className="font-bold flex items-center gap-1.5 text-rose-300">
                 <AlertTriangle size={15} />
-                Warning: Account Soft Deletion
+                Warning: Permanent User & Data Deletion
               </div>
               <p className="text-[11px] leading-relaxed text-rose-200/90">
                 You are about to delete user <strong>{deleteModalUser.name}</strong> (<span className="font-mono">{deleteModalUser.email}</span>).
               </p>
               <p className="text-[11px] leading-relaxed text-rose-200/80">
-                The user will be immediately blocked from logging in and all active sessions revoked.
-                All historical financial vouchers, transactions, audit logs, and payroll records created by this user will be <strong>100% safely preserved</strong> for audit integrity.
+                This will permanently delete this user account and wipe their user data from the database. The email address will be immediately freed up, allowing you to create another user with this exact same email address whenever needed.
               </p>
             </div>
 
