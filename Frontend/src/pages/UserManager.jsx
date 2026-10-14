@@ -125,18 +125,31 @@ export function UserManager({ currentUser }) {
 
       const res = await usersAPI.getUsers(params);
       if (res?.success) {
-        setUsers(res.data || []);
-        if (res.summary) {
-          setSummary(res.summary);
+        const userList = Array.isArray(res.data)
+          ? res.data
+          : Array.isArray(res.data?.users)
+          ? res.data.users
+          : [];
+        setUsers(userList);
+
+        const summaryData = res.data?.summary || res.summary;
+        if (summaryData) {
+          setSummary(summaryData);
         }
-        if (res.pagination) {
-          setTotalFilteredUsers(res.pagination.totalUsers || 0);
+
+        const paginationData = res.data?.pagination || res.pagination;
+        if (paginationData) {
+          setTotalFilteredUsers(paginationData.total || paginationData.totalUsers || userList.length);
+        } else {
+          setTotalFilteredUsers(userList.length);
         }
       } else {
+        setUsers([]);
         setError(res?.message || 'Failed to fetch users.');
       }
     } catch (err) {
       console.error('Fetch users error:', err);
+      setUsers([]);
       setError(err.response?.data?.message || 'Could not load users list.');
     } finally {
       setLoading(false);
@@ -328,13 +341,25 @@ export function UserManager({ currentUser }) {
 
       const res = await usersAPI.getUserActivity(historyModalUser._id, params);
       if (res?.success) {
-        setActivityLogs(res.data || []);
-        if (res.pagination) {
-          setActivityTotalCount(res.pagination.totalRecords || 0);
+        const logList = Array.isArray(res.data)
+          ? res.data
+          : Array.isArray(res.data?.activities)
+          ? res.data.activities
+          : [];
+        setActivityLogs(logList);
+
+        const paginationData = res.data?.pagination || res.pagination;
+        if (paginationData) {
+          setActivityTotalCount(paginationData.total || paginationData.totalRecords || logList.length);
+        } else {
+          setActivityTotalCount(logList.length);
         }
+      } else {
+        setActivityLogs([]);
       }
     } catch (err) {
       console.error('Fetch activity error:', err);
+      setActivityLogs([]);
     } finally {
       setActivityLoading(false);
     }
@@ -644,21 +669,21 @@ export function UserManager({ currentUser }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {loading && users.length === 0 ? (
+              {loading && (!Array.isArray(users) || users.length === 0) ? (
                 <tr>
                   <td colSpan="10" className="px-4 py-12 text-center text-slate-400">
                     <RefreshCw size={20} className="animate-spin inline-block mb-2 text-indigo-400" />
                     <div>Loading system user accounts & activity statistics...</div>
                   </td>
                 </tr>
-              ) : users.length === 0 ? (
+              ) : !Array.isArray(users) || users.length === 0 ? (
                 <tr>
                   <td colSpan="10" className="px-4 py-12 text-center text-slate-400">
                     No users matching the selected filters.
                   </td>
                 </tr>
               ) : (
-                users.map((u) => {
+                (Array.isArray(users) ? users : []).map((u) => {
                   const isCurrent = u._id === currentUser?.id || u._id === currentUser?._id;
                   const isUserAdmin = u.role === 'ADMIN' || u.role === 'ADMIN_PUBLISHER';
                   const isDeleted = Boolean(u.isDeleted);
@@ -1009,14 +1034,14 @@ export function UserManager({ currentUser }) {
                   <RefreshCw size={24} className="animate-spin inline-block text-indigo-400 mb-2" />
                   <p className="text-xs">Fetching chronological audit trail...</p>
                 </div>
-              ) : activityLogs.length === 0 ? (
+              ) : !Array.isArray(activityLogs) || activityLogs.length === 0 ? (
                 <div className="py-16 text-center text-slate-400 border border-dashed border-slate-800 rounded-xl">
                   <History size={28} className="inline-block text-slate-500 mb-2" />
                   <p className="text-xs font-medium text-slate-300">No recorded activities found.</p>
                   <p className="text-[11px] text-slate-500 mt-1">Try adjusting the filter criteria or date range.</p>
                 </div>
               ) : (
-                activityLogs.map((log) => {
+                (Array.isArray(activityLogs) ? activityLogs : []).map((log) => {
                   const isExpanded = expandedLogId === log._id;
                   const hasChanges = log.changes && (log.changes.previous || log.changes.updated);
                   const isFailed = log.status === 'FAILED';
