@@ -9,6 +9,7 @@ import {
 } from '../services/backupService.js';
 import BackupRecord from '../models/BackupRecord.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
+import { recordAuditLog } from '../services/auditService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,6 +28,21 @@ export const createBackup = async (req, res) => {
       month,
       description,
       user: req.user,
+    });
+
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'EXPORT',
+      module: 'BACKUP',
+      recordType: 'BackupRecord',
+      recordId: result.record._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} generated database backup for ${result.manifest.backupMonth} (${result.filename}).`,
+      metadata: { filename: result.filename, month: result.manifest.backupMonth, sizeBytes: result.buffer.length },
     });
 
     return apiSuccess(
@@ -170,6 +186,21 @@ export const restoreBackupFile = async (req, res) => {
       mode,
       updateExisting: shouldUpdate,
       user: req.user,
+    });
+
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'IMPORT',
+      module: 'BACKUP',
+      recordType: 'BackupRecord',
+      recordId: null,
+      status: 'SUCCESS',
+      description: `${req.user.name} restored backup data in ${mode} mode (Inserted: ${result.stats.inserted}, Updated: ${result.stats.updated}, Skipped: ${result.stats.skipped}).`,
+      metadata: { mode, stats: result.stats },
     });
 
     return apiSuccess(

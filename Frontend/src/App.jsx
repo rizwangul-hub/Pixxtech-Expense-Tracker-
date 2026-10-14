@@ -177,12 +177,27 @@ export function App() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
-    setCurrentSection('dashboard');
-    setSelectedPropertyId(null);
+  // Heartbeat ping to keep active online presence recorded
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      authAPI.heartbeat().catch(() => {});
+    }, 150000); // 2.5 minutes
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+    } catch {
+      // Ignore network error on logout
+    } finally {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setUser(null);
+      setCurrentSection('dashboard');
+      setSelectedPropertyId(null);
+    }
   };
 
   if (loading) {

@@ -28,6 +28,7 @@ import staffRoutes from './routes/staffRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
 import payrollRoutes from './routes/payrollRoutes.js';
 import communicationRoutes from './routes/communicationRoutes.js';
+import auditLogRoutes from './routes/auditLogRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -93,6 +94,7 @@ app.get('/favicon.ico', (req, res) => {
 // Mount Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/units', unitRoutes);
 app.use('/api/tenants', tenantRoutes);

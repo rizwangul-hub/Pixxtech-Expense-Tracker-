@@ -117,16 +117,22 @@ export const getLedgerEntities = async (req, res) => {
         name: p.propertyName || p.plazaName,
         type: 'PROPERTY',
         subtext: `Code: ${p.propertyCode || 'N/A'} - ${p.city || 'Lahore'}`,
+        units: (p.units || []).map((unit) => ({
+          id: unit._id,
+          name: unit.unitName || unit.unitNumber || 'Unit',
+          unitNumber: unit.unitNumber || '',
+          floor: unit.floor || '',
+        })),
       }));
     }
 
     if (!type || type === 'TENANT') {
-      const tenants = await Tenant.find({}).sort({ tenantName: 1 }).lean();
+      const tenants = await Tenant.find({}).sort({ fullName: 1, tenantName: 1 }).lean();
       results.tenants = tenants.map((t) => ({
         id: t._id,
-        name: t.tenantName || t.name,
+        name: t.tenantName || t.fullName || t.name || t.companyName,
         type: 'TENANT',
-        subtext: `CNIC: ${t.cnic || 'N/A'} - Phone: ${t.phone || 'N/A'}`,
+        subtext: `CNIC: ${t.cnic || t.identificationNumber || 'N/A'} - Phone: ${t.phone || 'N/A'}`,
       }));
     }
 
@@ -227,6 +233,7 @@ export const getLedgerReportData = async (queryParams = {}) => {
   const {
     type = 'BANK',
     entityId,
+    unitId,
     datePreset = 'THIS_MONTH',
     startDate,
     endDate,
@@ -411,10 +418,41 @@ export const getLedgerReportData = async (queryParams = {}) => {
       ledgerTitle = `Property Ledger: ${targetEntity.propertyName || targetEntity.plazaName}`;
       entitySubtext = `Code: ${targetEntity.propertyCode || 'N/A'} &bull; City: ${targetEntity.city || 'Lahore'} &bull; Address: ${targetEntity.address || ''}`;
 
+      let selectedUnit = null;
+      if (unitId) {
+        if (!mongoose.Types.ObjectId.isValid(unitId)) {
+          return {
+            type,
+            ledgerTitle,
+            entitySubtext: 'Selected unit not found for this property',
+            datePreset,
+            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+            entries: [],
+          };
+        }
+
+        selectedUnit = (targetEntity.units || []).find((unit) => String(unit._id) === String(unitId));
+        if (!selectedUnit) {
+          return {
+            type,
+            ledgerTitle,
+            entitySubtext: 'Selected unit not found for this property',
+            datePreset,
+            summary: { openingBalance: 0, totalDebit: 0, totalCredit: 0, closingBalance: 0, entryCount: 0 },
+            entries: [],
+          };
+        }
+
+        const unitName = selectedUnit.unitName || selectedUnit.unitNumber || 'Unit';
+        ledgerTitle = `Unit Ledger: ${unitName} — ${targetEntity.propertyName || targetEntity.plazaName}`;
+        entitySubtext = `${entitySubtext} &bull; Unit: ${unitName}${selectedUnit.floor ? ` &bull; Floor: ${selectedUnit.floor}` : ''}`;
+      }
+
       const txQuery = {
         ...baseStatusFilter,
         propertyId: entityId,
       };
+      if (selectedUnit) txQuery.unitId = selectedUnit._id;
 
       if (periodStart && periodEnd) txQuery.date = { $gte: periodStart, $lte: periodEnd };
       else if (periodStart) txQuery.date = { $gte: periodStart };
@@ -507,8 +545,8 @@ export const getLedgerReportData = async (queryParams = {}) => {
         };
       }
 
-      ledgerTitle = `Tenant Ledger: ${targetEntity.tenantName || targetEntity.name}`;
-      entitySubtext = `CNIC: ${targetEntity.cnic || 'N/A'} &bull; Phone: ${targetEntity.phone || 'N/A'}`;
+      ledgerTitle = `Tenant Ledger: ${targetEntity.tenantName || targetEntity.fullName || targetEntity.name}`;
+      entitySubtext = `CNIC: ${targetEntity.cnic || targetEntity.identificationNumber || 'N/A'} &bull; Phone: ${targetEntity.phone || 'N/A'}`;
 
       // Query RentDue (Billed) and RentReceived (Collections)
       const dueQuery = { tenantId: entityId };

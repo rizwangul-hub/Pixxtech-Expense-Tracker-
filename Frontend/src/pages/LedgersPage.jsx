@@ -35,6 +35,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
   // Selectable entities
   const [entities, setEntities] = useState([]);
   const [selectedEntityId, setSelectedEntityId] = useState(initialEntityId || '');
+  const [selectedUnitId, setSelectedUnitId] = useState('');
 
   // Sub-category drill-down (for ACCOUNT_HEAD type)
   const [subCategories, setSubCategories] = useState([]);
@@ -77,6 +78,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
     setSelectedEntityId('');
     setSelectedSubCategoryId('');
     setEntities([]);
+    setSelectedUnitId('');
     setSubCategories([]);
     setLedgerData(null);
   };
@@ -103,6 +105,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
 
       setEntities(list);
       setSelectedSubCategoryId('');
+      setSelectedUnitId('');
 
       // Auto select initial entity or first entity if available
       if (initialEntityId && list.some((item) => String(item.id) === String(initialEntityId))) {
@@ -124,15 +127,19 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
     loadEntities(ledgerType);
   }, [ledgerType]);
 
-  // When main head changes, reset sub-category selection
+  // Reset dependent selections when the main entity changes.
   useEffect(() => {
     setSelectedSubCategoryId('');
+    setSelectedUnitId('');
   }, [selectedEntityId]);
 
   // Sub-categories filtered to the current main head
   const filteredSubCategories = subCategories.filter(
     (sc) => selectedEntityId && String(sc.parentId) === String(selectedEntityId)
   );
+  const selectedProperty = ledgerType === 'PROPERTY'
+    ? entities.find((entity) => String(entity.id) === String(selectedEntityId))
+    : null;
 
   // Fetch actual ledger data from backend source of truth
   const fetchLedger = async () => {
@@ -145,6 +152,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
       const res = await ledgersAPI.queryLedger({
         type: ledgerType,
         entityId: effectiveEntityId,
+        ...(ledgerType === 'PROPERTY' && selectedUnitId ? { unitId: selectedUnitId } : {}),
         datePreset,
         startDate,
         endDate,
@@ -168,7 +176,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
     if (isValidEntityForQuery(ledgerType, effectiveEntityId, entities)) {
       fetchLedger();
     }
-  }, [ledgerType, effectiveEntityId, datePreset, entities]);
+  }, [ledgerType, effectiveEntityId, selectedUnitId, datePreset, entities]);
 
   const handleManualSearchSubmit = (e) => {
     e.preventDefault();
@@ -193,6 +201,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
         {
           type: ledgerType,
           entityId: effectiveEntityId,
+          ...(ledgerType === 'PROPERTY' && selectedUnitId ? { unitId: selectedUnitId } : {}),
           datePreset,
           startDate,
           endDate,
@@ -270,7 +279,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
           <Search size={16} className="text-blue-600" /> Select Financial Entity &amp; Search Controls
         </h2>
 
-        <form onSubmit={handleManualSearchSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+        <form onSubmit={handleManualSearchSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
           {/* 1. Ledger Type Selector */}
           <div>
             <label className="block font-bold text-slate-700 mb-1">Ledger Type</label>
@@ -342,6 +351,27 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
               )}
             </select>
           </div>
+
+          {ledgerType === 'PROPERTY' && (
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Select Unit</label>
+              <select
+                value={selectedUnitId}
+                onChange={(e) => setSelectedUnitId(e.target.value)}
+                disabled={loadingEntities || !selectedProperty}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-blue-600 disabled:opacity-50 disabled:bg-slate-50"
+              >
+                <option value="">All Units — Property Ledger</option>
+                {(selectedProperty?.units || []).map((unit) => (
+                  <option key={String(unit.id)} value={String(unit.id)}>
+                    {unit.name}
+                    {unit.unitNumber && unit.unitNumber !== unit.name ? ` (${unit.unitNumber})` : ''}
+                    {unit.floor ? ` — ${unit.floor}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* 3. Sub-category selector (only for Account Head) */}
           {isAccountHead ? (

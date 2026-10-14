@@ -21,6 +21,7 @@ import {
 import { getAgreedMonthlyRent } from '../services/rentPricing.js';
 import { isOwnerPersonalCategory, isOwnerPersonalTransaction } from '../services/expenseClassificationService.js';
 import { getRentalSummaryWithCarryForward } from '../services/rentalCarryForwardService.js';
+import { recordAuditLog } from '../services/auditService.js';
 
 /**
  * Helper to parse month query (defaults to current month)
@@ -236,6 +237,21 @@ export const verifyTransaction = async (req, res) => {
       .populate('crAccountId', 'name type')
       .populate('propertyId', 'plazaName')
       .populate('verifiedBy', 'name email');
+
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'VERIFY',
+      module: tx.reportCategory || 'FINANCIAL',
+      recordType: 'Transaction',
+      recordId: tx._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} verified voucher #${tx.voucherNo} for Rs. ${Number(tx.amount || 0).toLocaleString()}.`,
+      metadata: { voucherNo: tx.voucherNo, amount: tx.amount },
+    });
 
     return res.status(200).json({
       success: true,
@@ -486,6 +502,24 @@ export const updateTransactionMaster = async (req, res) => {
       .populate('crAccountId', 'name type currentBalance')
       .populate('propertyId', 'plazaName propertyName units');
 
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'UPDATE',
+      module: tx.reportCategory || 'FINANCIAL',
+      recordType: 'Transaction',
+      recordId: tx._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} modified transaction voucher #${tx.voucherNo} for Rs. ${Number(newAmount).toLocaleString()}.`,
+      changes: {
+        previous: { amount: oldAmount, drAccountId: oldDrId, crAccountId: oldCrId, detail: tx.detail },
+        updated: { amount: newAmount, drAccountId: newDrId, crAccountId: newCrId, detail },
+      },
+    });
+
     return res.status(200).json({
       success: true,
       message: `Voucher #${tx.voucherNo} successfully updated with balance adjustments.`,
@@ -534,6 +568,21 @@ export const deleteTransaction = async (req, res) => {
     if (drId || crId) {
       await syncAccountBalances([drId, crId]);
     }
+
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'DELETE',
+      module: tx.reportCategory || 'FINANCIAL',
+      recordType: 'Transaction',
+      recordId: tx._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} deleted transaction voucher #${tx.voucherNo} for Rs. ${Number(tx.amount || 0).toLocaleString()}.`,
+      metadata: { voucherNo: tx.voucherNo, amount: tx.amount, detail: tx.detail },
+    });
 
     return res.status(200).json({
       success: true,

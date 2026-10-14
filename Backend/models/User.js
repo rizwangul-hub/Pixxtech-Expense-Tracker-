@@ -48,6 +48,44 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    lastLogoutAt: {
+      type: Date,
+      default: null,
+    },
+    lastActiveAt: {
+      type: Date,
+      default: null,
+    },
+    loginCount: {
+      type: Number,
+      default: 0,
+    },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
+    mustChangePassword: {
+      type: Boolean,
+      default: false,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    deletedByName: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -49,6 +49,7 @@ import {
   normalizeBusinessPaymentDate,
   resolveSalaryPaymentDateOnVerification,
 } from '../services/salaryReportingService.js';
+import { recordAuditLog } from '../services/auditService.js';
 
 /**
  * Generate sequential Receipt Number for Rent
@@ -1095,6 +1096,21 @@ export const updatePendingEntry = async (req, res) => {
       .populate('receivingAccountId', 'name')
       .lean();
 
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'UPDATE',
+      module: entry.entryType || 'EXPENSE',
+      recordType: 'PendingEntry',
+      recordId: entry._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} updated voucher #${entry.voucherNo} for Rs. ${entry.amount.toLocaleString()}.`,
+      changes: { previous: previousSnapshot, updated: updates },
+    });
+
     return apiSuccess(res, populated, 'Pending entry updated successfully.');
   } catch (error) {
     console.error('[Update Pending Entry Error]:', error);
@@ -1651,6 +1667,21 @@ export const verifyEntry = async (req, res) => {
     await entry.save();
     claimedEntryId = null;
 
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'VERIFY',
+      module: entry.entryType || 'EXPENSE',
+      recordType: 'PendingEntry',
+      recordId: entry._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} verified ${entry.entryType} voucher #${entry.voucherNo} for Rs. ${entry.amount.toLocaleString()}.`,
+      metadata: { voucherNo: entry.voucherNo, amount: entry.amount, transactionId: postedTransaction?._id },
+    });
+
     return apiSuccess(
       res,
       {
@@ -1746,6 +1777,21 @@ export const rejectEntry = async (req, res) => {
       });
     }
 
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'REJECT',
+      module: entry.entryType || 'EXPENSE',
+      recordType: 'PendingEntry',
+      recordId: entry._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} rejected ${entry.entryType} voucher #${entry.voucherNo}. Reason: ${rejectionReason.trim()}`,
+      metadata: { voucherNo: entry.voucherNo, rejectionReason: rejectionReason.trim() },
+    });
+
     return apiSuccess(
       res,
       entry,
@@ -1785,6 +1831,20 @@ export const deletePendingEntry = async (req, res) => {
       });
     }
     await PendingEntry.findByIdAndDelete(id);
+
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'DELETE',
+      module: entry.entryType || 'EXPENSE',
+      recordType: 'PendingEntry',
+      recordId: entry._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} deleted draft entry #${entry.voucherNo} for Rs. ${entry.amount.toLocaleString()}.`,
+    });
 
     return apiSuccess(res, { id }, 'Pending entry deleted.');
   } catch (error) {
@@ -2561,6 +2621,21 @@ export const unverifyEntry = async (req, res) => {
         await entry.save();
       }
     }
+
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'UNVERIFY',
+      module: entry?.entryType || tx?.reportCategory || 'FINANCIAL',
+      recordType: 'PendingEntry',
+      recordId: entry?._id || tx?._id,
+      status: 'SUCCESS',
+      description: `${operatorName} unverified voucher #${entry?.voucherNo || tx?.voucherNo || ''} and returned it to pending queue.`,
+      metadata: { voucherNo: entry?.voucherNo || tx?.voucherNo, amount: entry?.amount || tx?.amount },
+    });
 
     return apiSuccess(
       res,

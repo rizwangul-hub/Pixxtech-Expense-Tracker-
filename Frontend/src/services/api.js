@@ -122,6 +122,18 @@ export const authAPI = {
     const res = await api.post('/auth/login', { email, password });
     return res.data;
   },
+  logout: async () => {
+    try {
+      const res = await api.post('/auth/logout');
+      return res.data;
+    } catch {
+      return { success: true };
+    }
+  },
+  heartbeat: async () => {
+    const res = await api.post('/auth/heartbeat');
+    return res.data;
+  },
   getMe: async () => {
     const res = await api.get('/auth/me');
     return res.data;
@@ -129,8 +141,8 @@ export const authAPI = {
 };
 
 export const usersAPI = {
-  getUsers: async () => {
-    const res = await api.get('/users');
+  getUsers: async (params = {}) => {
+    const res = await api.get('/users', { params });
     return res.data;
   },
   createUser: async (userData) => {
@@ -140,6 +152,54 @@ export const usersAPI = {
   toggleUserStatus: async (id) => {
     const res = await api.patch(`/users/${id}/status`);
     return res.data;
+  },
+  resetPassword: async (id, data) => {
+    const res = await api.post(`/users/${id}/reset-password`, data);
+    return res.data;
+  },
+  deleteUser: async (id) => {
+    const res = await api.delete(`/users/${id}`);
+    return res.data;
+  },
+  getUserActivity: async (id, params = {}) => {
+    const res = await api.get(`/users/${id}/activity`, { params });
+    return res.data;
+  },
+  exportUserActivityCsv: async (id, params = {}, filename = 'user_activity_history.csv') => {
+    const res = await api.get(`/users/${id}/activity/export`, {
+      params,
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 10000);
+    return true;
+  },
+  getAllAuditLogs: async (params = {}) => {
+    const res = await api.get('/audit-logs', { params });
+    return res.data;
+  },
+  exportAllAuditLogsCsv: async (params = {}, filename = 'audit_activity_logs.csv') => {
+    const res = await api.get('/audit-logs/export', {
+      params,
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 10000);
+    return true;
   },
 };
 

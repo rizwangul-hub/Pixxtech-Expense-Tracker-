@@ -43,11 +43,37 @@ export const protect = async (req, res, next) => {
       });
     }
 
+    if (user.isDeleted) {
+      return res.status(403).json({
+        success: false,
+        message: 'This user account has been deleted.',
+      });
+    }
+
     if (!user.isActive) {
       return res.status(403).json({
         success: false,
         message: 'User account has been deactivated.',
       });
+    }
+
+    // Invalidate sessions if tokenVersion does not match user's current version
+    if (
+      decoded.tokenVersion !== undefined &&
+      user.tokenVersion !== undefined &&
+      decoded.tokenVersion !== user.tokenVersion
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: 'Session has been invalidated due to a password reset or security update. Please log in again.',
+      });
+    }
+
+    // Refresh last active timestamp debounced to 1 minute
+    const nowMs = Date.now();
+    const lastActiveMs = user.lastActiveAt ? new Date(user.lastActiveAt).getTime() : 0;
+    if (nowMs - lastActiveMs > 60000) {
+      User.updateOne({ _id: user._id }, { $set: { lastActiveAt: new Date(nowMs) } }).catch(() => {});
     }
 
     req.user = user;

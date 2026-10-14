@@ -10,6 +10,7 @@ import { getLiquidityLedgerAmounts } from '../services/ledgerPresentation.js';
 import { getOrCreateCanonicalHead, provisionStandardCategories } from '../services/expenseClassificationService.js';
 import { calculateLiveAccountBalances } from '../services/accountBalance.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
+import { recordAuditLog } from '../services/auditService.js';
 
 /**
  * Recognized Cash Custodians in Pixx Technologies
@@ -270,6 +271,21 @@ export const createAccount = async (req, res) => {
       createdBy: req.user._id,
     });
 
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'CREATE',
+      module: 'BANK_CASH',
+      recordType: 'Account',
+      recordId: newAccount._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} created account "${newAccount.name}" (Type: ${newAccount.type}) with opening balance Rs. ${Number(newAccount.openingBalance || 0).toLocaleString()}.`,
+      metadata: { name: newAccount.name, type: newAccount.type, openingBalance: newAccount.openingBalance },
+    });
+
     return apiSuccess(
       res,
       newAccount,
@@ -400,6 +416,21 @@ export const updateAccount = async (req, res) => {
     const accountObj = account.toObject();
     accountObj.closingBalance = round2(account.currentBalance);
 
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'UPDATE',
+      module: 'BANK_CASH',
+      recordType: 'Account',
+      recordId: account._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} updated account "${account.name}".`,
+      metadata: { name: account.name, type: account.type, balance: account.currentBalance },
+    });
+
     return apiSuccess(res, accountObj, `Account '${account.name}' updated successfully.`);
   } catch (error) {
     console.error('[Update Account Error]:', error);
@@ -427,6 +458,21 @@ export const toggleAccountStatus = async (req, res) => {
     account.isActive = !account.isActive;
     account.updatedBy = req.user._id;
     await account.save();
+
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: account.isActive ? 'ENABLE' : 'DISABLE',
+      module: 'BANK_CASH',
+      recordType: 'Account',
+      recordId: account._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} ${account.isActive ? 'activated' : 'deactivated'} account "${account.name}".`,
+      metadata: { name: account.name, isActive: account.isActive },
+    });
 
     return apiSuccess(
       res,

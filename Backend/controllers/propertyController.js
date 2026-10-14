@@ -1,5 +1,6 @@
 import Property from '../models/Property.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
+import { recordAuditLog } from '../services/auditService.js';
 
 /**
  * @desc    Get all properties with filtering, search, and dynamic occupancy statistics
@@ -196,6 +197,21 @@ export const createProperty = async (req, res) => {
       units: [],
     });
 
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'CREATE',
+      module: 'PROPERTY',
+      recordType: 'Property',
+      recordId: newProperty._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} created property "${newProperty.propertyName}".`,
+      metadata: { propertyName: newProperty.propertyName, propertyType: newProperty.propertyType, city: newProperty.city },
+    });
+
     return apiSuccess(res, newProperty, `Property '${newProperty.propertyName}' created successfully.`, 201);
   } catch (error) {
     console.error('[Create Property Error]:', error);
@@ -272,6 +288,21 @@ export const updateProperty = async (req, res) => {
 
     await property.save();
 
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: 'UPDATE',
+      module: 'PROPERTY',
+      recordType: 'Property',
+      recordId: property._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} updated property "${property.propertyName}".`,
+      metadata: { propertyName: property.propertyName },
+    });
+
     return apiSuccess(res, property, `Property '${property.propertyName}' updated successfully.`);
   } catch (error) {
     console.error('[Update Property Error]:', error);
@@ -298,6 +329,21 @@ export const togglePropertyStatus = async (req, res) => {
     property.updatedBy = req.user._id;
 
     await property.save();
+
+    await recordAuditLog({
+      req,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: property.isActive ? 'ENABLE' : 'DISABLE',
+      module: 'PROPERTY',
+      recordType: 'Property',
+      recordId: property._id,
+      status: 'SUCCESS',
+      description: `${req.user.name} ${property.isActive ? 'activated' : 'deactivated'} property "${property.propertyName}".`,
+      metadata: { propertyName: property.propertyName, isActive: property.isActive },
+    });
 
     return apiSuccess(
       res,
