@@ -323,7 +323,7 @@ export function UserManager({ currentUser }) {
     }
   };
 
-  // Handle Activity History Modal
+  // Handle Activity History Modal (Individual User or Global System)
   const fetchUserActivity = useCallback(async () => {
     if (!historyModalUser) return;
     setActivityLoading(true);
@@ -339,7 +339,13 @@ export function UserManager({ currentUser }) {
       if (activityFilters.startDate) params.startDate = activityFilters.startDate;
       if (activityFilters.endDate) params.endDate = activityFilters.endDate;
 
-      const res = await usersAPI.getUserActivity(historyModalUser._id, params);
+      let res;
+      if (historyModalUser.isGlobal || historyModalUser._id === 'ALL') {
+        res = await usersAPI.getAllAuditLogs(params);
+      } else {
+        res = await usersAPI.getUserActivity(historyModalUser._id, params);
+      }
+
       if (res?.success) {
         const logList = Array.isArray(res.data)
           ? res.data
@@ -385,6 +391,29 @@ export function UserManager({ currentUser }) {
     setExpandedLogId(null);
   };
 
+  const handleOpenGlobalHistory = () => {
+    setHistoryModalUser({
+      _id: 'ALL',
+      isGlobal: true,
+      name: 'Entire System Audit Logs',
+      email: 'All User Operations & System Actions',
+      role: 'ALL USERS',
+      presence: 'ONLINE',
+      loginCount: summary.recentLogins || 0,
+      totalActivities: summary.totalActivities || 0,
+    });
+    setActivityPage(1);
+    setActivityFilters({
+      search: '',
+      category: 'ALL',
+      action: 'ALL',
+      status: 'ALL',
+      startDate: '',
+      endDate: '',
+    });
+    setExpandedLogId(null);
+  };
+
   const handleExportUserActivityCsv = async () => {
     if (!historyModalUser) return;
     setExportingCsv(true);
@@ -397,9 +426,14 @@ export function UserManager({ currentUser }) {
       if (activityFilters.startDate) params.startDate = activityFilters.startDate;
       if (activityFilters.endDate) params.endDate = activityFilters.endDate;
 
-      const cleanName = historyModalUser.name.replace(/[^a-zA-Z0-9]/g, '_');
-      const filename = `activity_history_${cleanName}_${new Date().toISOString().slice(0, 10)}.csv`;
-      await usersAPI.exportUserActivityCsv(historyModalUser._id, params, filename);
+      if (historyModalUser.isGlobal || historyModalUser._id === 'ALL') {
+        const filename = `system_audit_history_${new Date().toISOString().slice(0, 10)}.csv`;
+        await usersAPI.exportAllAuditLogsCsv(params, filename);
+      } else {
+        const cleanName = (historyModalUser.name || 'user').replace(/[^a-zA-Z0-9]/g, '_');
+        const filename = `activity_history_${cleanName}_${new Date().toISOString().slice(0, 10)}.csv`;
+        await usersAPI.exportUserActivityCsv(historyModalUser._id, params, filename);
+      }
     } catch (err) {
       alert('Failed to export activity logs CSV.');
     } finally {
@@ -514,6 +548,14 @@ export function UserManager({ currentUser }) {
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             </button>
             <button
+              onClick={handleOpenGlobalHistory}
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/70 transition shadow-sm cursor-pointer"
+              title="View Complete System Activity History & Audit Trail"
+            >
+              <History size={16} className="text-indigo-400 shrink-0" />
+              <span>System History</span>
+            </button>
+            <button
               onClick={() => {
                 setCreateFormErrors({});
                 setCreateModalOpen(true);
@@ -568,9 +610,16 @@ export function UserManager({ currentUser }) {
             </div>
           </div>
 
-          <div className="bg-slate-950/70 border border-slate-800/90 rounded-lg p-3 col-span-2 sm:col-span-1">
-            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Activity size={13} className="text-amber-400" /> Total Activities
+          <div
+            onClick={handleOpenGlobalHistory}
+            className="bg-slate-950/70 border border-indigo-900/50 hover:border-indigo-600/70 rounded-lg p-3 col-span-2 sm:col-span-1 cursor-pointer transition group"
+            title="Click to view complete system activity history & audit trail"
+          >
+            <div className="text-[11px] font-medium text-slate-400 group-hover:text-indigo-300 uppercase tracking-wider flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <History size={13} className="text-amber-400 group-hover:text-indigo-400 transition shrink-0" /> Total Activities
+              </span>
+              <span className="text-[10px] text-indigo-400 font-semibold opacity-0 group-hover:opacity-100 transition">View &rarr;</span>
             </div>
             <div className="text-xl font-bold text-amber-300 font-mono mt-1">
               {(summary.totalActivities || 0).toLocaleString()}
@@ -664,20 +713,26 @@ export function UserManager({ currentUser }) {
                 <th className="px-3 py-3">Last Logout</th>
                 <th className="px-3 py-3">Last Active</th>
                 <th className="px-3 py-3 text-center">Activities</th>
+                <th className="px-4 py-3 text-center text-indigo-300 font-bold uppercase tracking-wider bg-indigo-950/40 border-x border-slate-800">
+                  <span className="inline-flex items-center gap-1.5 justify-center">
+                    <History size={14} className="text-indigo-400 shrink-0" />
+                    History
+                  </span>
+                </th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {loading && (!Array.isArray(users) || users.length === 0) ? (
                 <tr>
-                  <td colSpan="10" className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan="11" className="px-4 py-12 text-center text-slate-400">
                     <RefreshCw size={20} className="animate-spin inline-block mb-2 text-indigo-400" />
                     <div>Loading system user accounts & activity statistics...</div>
                   </td>
                 </tr>
               ) : !Array.isArray(users) || users.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan="11" className="px-4 py-12 text-center text-slate-400">
                     No users matching the selected filters.
                   </td>
                 </tr>
@@ -766,18 +821,21 @@ export function UserManager({ currentUser }) {
                         </button>
                       </td>
 
+                      {/* Dedicated Clear History Button */}
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap bg-indigo-950/15 border-x border-slate-800/60">
+                        <button
+                          onClick={() => handleOpenHistoryModal(u)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md border border-indigo-400/40 transition active:scale-95 cursor-pointer"
+                          title={`View complete activity audit history for ${u.name}`}
+                        >
+                          <History size={14} className="text-white shrink-0" />
+                          <span>View History</span>
+                        </button>
+                      </td>
+
                       {/* Actions */}
                       <td className="px-4 py-3.5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Full History */}
-                          <button
-                            onClick={() => handleOpenHistoryModal(u)}
-                            className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:text-white transition"
-                            title="View Full Activity Audit History"
-                          >
-                            <History size={14} className="text-indigo-400" />
-                          </button>
-
                           {/* Reset Password */}
                           <button
                             onClick={() => handleOpenResetModal(u)}
@@ -868,10 +926,11 @@ export function UserManager({ currentUser }) {
             <div className="bg-slate-950 border-b border-slate-800 p-4 sm:p-5 flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-800">
-                    Activity Audit Trail
+                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-800 flex items-center gap-1.5">
+                    <History size={13} className="text-indigo-400" />
+                    {historyModalUser.isGlobal ? 'System Activity History' : 'User Activity History'}
                   </span>
-                  {renderPresenceBadge(historyModalUser.presence)}
+                  {!historyModalUser.isGlobal && renderPresenceBadge(historyModalUser.presence)}
                   {historyModalUser.isDeleted && (
                     <span className="text-xs font-mono px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800">
                       Account Deleted
@@ -879,17 +938,23 @@ export function UserManager({ currentUser }) {
                   )}
                 </div>
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <User size={18} className="text-indigo-400" />
+                  {historyModalUser.isGlobal ? (
+                    <History size={20} className="text-indigo-400" />
+                  ) : (
+                    <User size={18} className="text-indigo-400" />
+                  )}
                   {historyModalUser.name}{' '}
                   <span className="text-xs text-slate-400 font-mono font-normal">
                     ({historyModalUser.email})
                   </span>
                 </h2>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 pt-1 font-mono">
-                  <span>Role: <strong className="text-slate-200">{historyModalUser.role}</strong></span>
-                  <span>Joined: <strong className="text-slate-200">{formatDate(historyModalUser.createdAt, 'DD-MMM-YYYY')}</strong></span>
-                  <span>Total Logins: <strong className="text-slate-200">{historyModalUser.loginCount || 0}</strong></span>
-                  <span>Recorded Actions: <strong className="text-indigo-400">{activityTotalCount}</strong></span>
+                  <span>Scope: <strong className="text-slate-200">{historyModalUser.role}</strong></span>
+                  {historyModalUser.createdAt && (
+                    <span>Joined: <strong className="text-slate-200">{formatDate(historyModalUser.createdAt, 'DD-MMM-YYYY')}</strong></span>
+                  )}
+                  <span>Logins Recorded: <strong className="text-slate-200">{historyModalUser.loginCount || 0}</strong></span>
+                  <span>Total Activities: <strong className="text-indigo-400">{activityTotalCount}</strong></span>
                 </div>
               </div>
 
@@ -898,7 +963,7 @@ export function UserManager({ currentUser }) {
                   onClick={handleExportUserActivityCsv}
                   disabled={exportingCsv || activityTotalCount === 0}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-white text-xs font-semibold transition disabled:opacity-40"
-                  title="Download user audit history as CSV"
+                  title="Download activity history as CSV"
                 >
                   <Download size={14} />
                   {exportingCsv ? 'Exporting...' : 'Export CSV'}
