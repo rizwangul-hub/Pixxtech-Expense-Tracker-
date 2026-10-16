@@ -336,14 +336,14 @@ export function MainLayout({
             <div>
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <h1 className="text-xs sm:text-base font-black text-slate-900 tracking-tight leading-none">
-                  PIXX TECHNOLOGIES
+                  Pakistan Expense Tracker
                 </h1>
                 <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200/80 hidden xl:inline-block">
-                  ERP
+                  PK ERP
                 </span>
               </div>
               <p className="text-[11px] font-medium text-slate-500 mt-1 hidden sm:block">
-                Corporate Expense Tracker & Enterprise Ledger System
+                Corporate Expense Tracker & Enterprise Ledger System &bull; by Pixx Technologies
               </p>
             </div>
           </div>
@@ -535,7 +535,7 @@ export function MainLayout({
             <div>
               <div className="text-[11px] uppercase font-bold tracking-wider text-slate-500">Software Developer</div>
               <div className="text-sm font-black text-slate-900">Rizwan Ullah</div>
-              <div className="text-xs font-bold text-blue-700">Pixx Technologies</div>
+              <div className="text-xs font-bold text-blue-700">by Pixx Technologies</div>
             </div>
           </div>
         </aside>
@@ -609,7 +609,8 @@ export function MainLayout({
               </nav>
 
               <div className="p-4 border-t border-slate-200 text-xs text-slate-600 bg-slate-50">
-                Logged in as: <strong className="text-slate-900 font-bold">{user?.name}</strong>
+                <div>Logged in as: <strong className="text-slate-900 font-bold">{user?.name}</strong></div>
+                <div className="text-[11px] text-slate-400 mt-1">Pakistan Expense Tracker &bull; by Pixx Technologies</div>
               </div>
             </div>
           </div>

@@ -1682,7 +1682,7 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
 
       {/* Footer */}
       <footer className="bg-slate-950 border-t border-slate-900 py-4 px-6 text-center text-xs text-slate-500">
-        Pixx Technologies Financial Systems &bull; Publisher Control Center &bull; Automated Financial Reporting
+        Pakistan Expense Tracker &bull; Publisher Control Center &bull; by Pixx Technologies
       </footer>
     </div>
   );

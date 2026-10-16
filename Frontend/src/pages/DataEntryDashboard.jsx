@@ -792,7 +792,7 @@ export const DataEntryDashboard = ({ user }) => {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-500 font-medium">
-        Pixx Technologies Financial Systems &bull; Operational Workspace &bull; Double-Entry General Ledger
+        Pakistan Expense Tracker &bull; Operational Workspace &bull; by Pixx Technologies
       </footer>
     </div>
   );

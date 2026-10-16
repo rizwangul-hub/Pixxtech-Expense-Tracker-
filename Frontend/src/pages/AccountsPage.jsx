@@ -244,8 +244,8 @@ export function AccountsPage({ currentUser, onSelectAccount, onNavigateToTransfe
               Bank & Cash-in-Hand Accounts
             </h1>
             <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-              Manage financial custodian accounts for Pixx Technologies. Track real-time balances,
-              opening dates, cash-in-hand holders, and complete double-entry transaction ledgers.
+              Manage financial custodian accounts for Pakistan Expense Tracker. Track real-time balances,
+              opening dates, cash-in-hand holders, and complete double-entry transaction ledgers &bull; by Pixx Technologies.
             </p>
           </div>
 

@@ -68,7 +68,7 @@ export function StaffDashboardSubTab({ onNavigateTab, onOpenAddEmployeeModal }) 
               {stats?.activeEmployees || 0} Active
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-2 font-medium">Pixx Technologies workforce</p>
+          <p className="text-xs text-slate-500 mt-2 font-medium">Pakistan Expense Tracker workforce &bull; by Pixx Technologies</p>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">

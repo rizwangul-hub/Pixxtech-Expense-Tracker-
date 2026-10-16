@@ -181,7 +181,7 @@ export const StaffDirectorySubTab = ({
               <Users size={14} /> Employee Directory & Profiles
             </div>
             <h2 className="text-xl font-black text-white tracking-tight mt-0.5">
-              Pixx Technologies Staff Directory
+              Pakistan Expense Tracker Staff Directory
             </h2>
           </div>
 

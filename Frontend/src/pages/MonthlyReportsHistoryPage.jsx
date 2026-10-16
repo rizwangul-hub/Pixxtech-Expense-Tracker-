@@ -154,7 +154,7 @@ export function MonthlyReportsHistoryPage({ currentUser, onNavigateToReportDetai
             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/60">
               Audit & Compliance
             </span>
-            <span className="text-xs text-slate-400">Pixx Technologies Management</span>
+            <span className="text-xs text-slate-400">Pakistan Expense Tracker &bull; by Pixx Technologies</span>
           </div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
             <FileText size={24} className="text-emerald-400" />

@@ -58,7 +58,7 @@ export function StaffPage({ currentUser }) {
                 Standalone HR Module
               </span>
               <span className="text-xs text-slate-400 font-semibold">
-                Pixx Technologies HR, Daily Attendance & Payroll System
+                Pakistan Expense Tracker &bull; HR, Daily Attendance & Payroll System &bull; by Pixx Technologies
               </span>
             </div>
             <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">

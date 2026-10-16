@@ -44,10 +44,10 @@ export const LoginForm = ({ onLoginSuccess }) => {
             className="h-24 w-auto object-contain mb-3 drop-shadow-sm"
           />
           <h1 className="text-2xl font-black tracking-tight text-slate-900">
-            Pixx Technologies
+            Pakistan Expense Tracker
           </h1>
           <p className="text-sm font-semibold text-slate-600 mt-1">
-            Property Funds & Expense Tracking System
+            by Pixx Technologies &bull; Property Funds & Expense Tracking System
           </p>
         </div>
 
@@ -111,6 +111,10 @@ export const LoginForm = ({ onLoginSuccess }) => {
             <ArrowRight className="w-5 h-5 text-white-keep" />
           </button>
         </form>
+
+        <div className="mt-6 pt-4 border-t border-slate-100 text-center text-xs text-slate-400 font-medium">
+          Pakistan Expense Tracker &bull; by Pixx Technologies
+        </div>
       </div>
     </div>
   );

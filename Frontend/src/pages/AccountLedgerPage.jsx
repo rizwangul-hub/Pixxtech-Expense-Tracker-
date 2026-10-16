@@ -181,7 +181,7 @@ export function AccountLedgerPage({
                 {account?.type || 'ACCOUNT'}
               </span>
               <span className="text-xs text-slate-400">
-                Pixx Technologies Financial Ledger
+                Pakistan Expense Tracker Financial Ledger &bull; by Pixx Technologies
               </span>
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${

@@ -285,7 +285,7 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
               <span className="text-xs font-bold uppercase tracking-wider text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/60">
                 Non-Rental Inflow
               </span>
-              <span className="text-xs text-slate-400">Pixx Technologies Finance Management</span>
+              <span className="text-xs text-slate-400">Pakistan Expense Tracker &bull; by Pixx Technologies</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
               <Coins className="text-amber-400" size={26} />

@@ -356,7 +356,7 @@ export function FinancialReportsPage({ currentUser }) {
             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-violet-950/80 text-violet-300 border border-violet-700/60">
               Enterprise Reporting
             </span>
-            <span className="text-xs text-slate-400">Pixx Technologies Central Reporting</span>
+            <span className="text-xs text-slate-400">Pakistan Expense Tracker &bull; by Pixx Technologies</span>
           </div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
             <FileSpreadsheet size={24} className="text-violet-400" />

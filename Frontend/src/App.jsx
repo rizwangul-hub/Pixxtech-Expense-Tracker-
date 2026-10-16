@@ -206,13 +206,13 @@ export function App() {
         {/* Mobile / Responsive view loading artwork */}
         <img
           src={loadingMobileImg}
-          alt="PIXX TECHNOLOGIES Loading..."
+          alt="Pakistan Expense Tracker Loading..."
           className="w-full h-full object-cover object-center block md:hidden"
         />
         {/* Desktop view loading artwork */}
         <img
           src={loadingImg}
-          alt="PIXX TECHNOLOGIES Loading..."
+          alt="Pakistan Expense Tracker Loading..."
           className="w-full h-full object-cover object-center hidden md:block"
         />
       </div>

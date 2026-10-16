@@ -546,7 +546,7 @@ export function UserManager({ currentUser }) {
               <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/60">
                 Security & Audit Management
               </span>
-              <span className="text-xs text-slate-400">Pixx Technologies ERP</span>
+              <span className="text-xs text-slate-400">Pakistan Expense Tracker &bull; by Pixx Technologies</span>
             </div>
             <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
               <Users size={22} className="text-indigo-400" />
