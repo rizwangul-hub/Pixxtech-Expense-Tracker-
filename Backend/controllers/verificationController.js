@@ -48,6 +48,7 @@ import {
   getSalaryPaymentPeriod,
   normalizeBusinessPaymentDate,
   resolveSalaryPaymentDateOnVerification,
+  getUtcMonthDateRange,
 } from '../services/salaryReportingService.js';
 import { recordAuditLog } from '../services/auditService.js';
 
@@ -148,45 +149,66 @@ export const getPendingEntries = async (req, res) => {
       search,
       startDate,
       endDate,
+      month,
       page = 1,
       limit = 50,
     } = req.query;
 
-    const query = {};
+    const andConditions = [];
 
     if (status && status !== 'ALL') {
-      query.status =
-        status === 'PENDING_VERIFICATION'
-          ? { $in: ['PENDING_VERIFICATION', 'EDITED'] }
-          : status;
+      andConditions.push({
+        status:
+          status === 'PENDING_VERIFICATION'
+            ? { $in: ['PENDING_VERIFICATION', 'EDITED'] }
+            : status,
+      });
     } else if (!status) {
       // Default to unverified / pending entries if no status filter parameter is specified
-      query.status = { $in: ['PENDING_VERIFICATION', 'EDITED'] };
+      andConditions.push({ status: { $in: ['PENDING_VERIFICATION', 'EDITED'] } });
     }
 
     if (entryType && entryType !== 'ALL') {
-      query.entryType = entryType;
+      andConditions.push({ entryType });
     }
 
-    if (submittedBy && mongoose.Types.ObjectId.isValid(submittedBy)) query.submittedBy = submittedBy;
-    if (propertyId && mongoose.Types.ObjectId.isValid(propertyId)) query.propertyId = propertyId;
-    if (tenantId && mongoose.Types.ObjectId.isValid(tenantId)) query.tenantId = tenantId;
+    if (submittedBy && mongoose.Types.ObjectId.isValid(submittedBy)) andConditions.push({ submittedBy });
+    if (propertyId && mongoose.Types.ObjectId.isValid(propertyId)) andConditions.push({ propertyId });
+    if (tenantId && mongoose.Types.ObjectId.isValid(tenantId)) andConditions.push({ tenantId });
 
-    if (startDate || endDate) {
-      query.submittedAt = {};
-      if (startDate) query.submittedAt.$gte = new Date(startDate);
-      if (endDate) query.submittedAt.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+    if (month && /^\d{4}-\d{2}$/.test(month.trim())) {
+      const cleanMonth = month.trim();
+      const [year, m] = cleanMonth.split('-').map(Number);
+      const { startDate: mStart, endDate: mEnd } = getUtcMonthDateRange(year, m);
+      andConditions.push({
+        $or: [
+          { date: { $gte: mStart, $lte: mEnd } },
+          { rentMonth: cleanMonth },
+          { date: { $exists: false }, submittedAt: { $gte: mStart, $lte: mEnd } },
+        ],
+      });
+    } else if (startDate || endDate) {
+      const dCond = {};
+      if (startDate) dCond.$gte = new Date(startDate);
+      if (endDate) dCond.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+      andConditions.push({
+        $or: [{ date: dCond }, { submittedAt: dCond }],
+      });
     }
 
     if (search && search.trim()) {
-      const regex = new RegExp(search.trim(), 'i');
-      query.$or = [
-        { voucherNo: regex },
-        { detail: regex },
-        { submittedByName: regex },
-        { referenceNumber: regex },
-      ];
+      const regex = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      andConditions.push({
+        $or: [
+          { voucherNo: regex },
+          { detail: regex },
+          { submittedByName: regex },
+          { referenceNumber: regex },
+        ],
+      });
     }
+
+    const query = andConditions.length > 0 ? { $and: andConditions } : {};
 
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
@@ -1973,6 +1995,7 @@ export const getFilteredVouchersForEvidence = async (query = {}) => {
     startDate,
     endDate,
     month,
+    source,
     propertyId,
     unitId,
     categoryId,
@@ -1987,35 +2010,51 @@ export const getFilteredVouchersForEvidence = async (query = {}) => {
   const vouchersMap = new Map(); // voucherNo -> evidenceData
 
   // Determine if this is a pending verification queue query or a ledger/monthly verified query
-  const isPendingQueueQuery = status && ['PENDING_VERIFICATION', 'EDITED', 'REJECTED'].includes(status);
+  const isPendingQueueQuery =
+    source === 'queue' ||
+    Boolean(status && ['PENDING_VERIFICATION', 'EDITED', 'REJECTED', 'VERIFIED'].includes(status));
 
   // 1. If specifically querying the pending verification queue, fetch from PendingEntry
   if (isPendingQueueQuery) {
-    const pQuery = {};
-    pQuery.status = status === 'PENDING_VERIFICATION' ? { $in: ['PENDING_VERIFICATION', 'EDITED'] } : status;
+    const andConditions = [];
+
+    if (status && status !== 'ALL') {
+      andConditions.push({
+        status: status === 'PENDING_VERIFICATION' ? { $in: ['PENDING_VERIFICATION', 'EDITED'] } : status,
+      });
+    }
 
     if (entryType && entryType !== 'ALL') {
-      pQuery.entryType = entryType;
+      andConditions.push({ entryType });
     }
     if (propertyId && mongoose.Types.ObjectId.isValid(propertyId)) {
-      pQuery.propertyId = propertyId;
+      andConditions.push({ propertyId });
     }
     if (unitId && mongoose.Types.ObjectId.isValid(unitId)) {
-      pQuery.unitId = unitId;
+      andConditions.push({ unitId });
     }
     if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
-      pQuery.categoryId = categoryId;
+      andConditions.push({ categoryId });
     }
 
-    if (month && /^\d{4}-\d{2}$/.test(month)) {
-      const [year, m] = month.split('-').map(Number);
-      const mStart = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
-      const mEnd = new Date(Date.UTC(year, m, 0, 23, 59, 59, 999));
-      pQuery.date = { $gte: mStart, $lte: mEnd };
+    if (month && /^\d{4}-\d{2}$/.test(month.trim())) {
+      const cleanMonth = month.trim();
+      const [year, m] = cleanMonth.split('-').map(Number);
+      const { startDate: mStart, endDate: mEnd } = getUtcMonthDateRange(year, m);
+      andConditions.push({
+        $or: [
+          { date: { $gte: mStart, $lte: mEnd } },
+          { rentMonth: cleanMonth },
+          { date: { $exists: false }, submittedAt: { $gte: mStart, $lte: mEnd } },
+        ],
+      });
     } else if (startDate || endDate) {
-      pQuery.date = {};
-      if (startDate) pQuery.date.$gte = new Date(startDate);
-      if (endDate) pQuery.date.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+      const dCond = {};
+      if (startDate) dCond.$gte = new Date(startDate);
+      if (endDate) dCond.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+      andConditions.push({
+        $or: [{ date: dCond }, { submittedAt: dCond }],
+      });
     }
 
     if (typeof search === 'string' && search.trim()) {
@@ -2033,8 +2072,10 @@ export const getFilteredVouchersForEvidence = async (query = {}) => {
       if (matchingProperties.length > 0) {
         searchConditions.push({ propertyId: { $in: matchingProperties } });
       }
-      pQuery.$or = searchConditions;
+      andConditions.push({ $or: searchConditions });
     }
+
+    const pQuery = andConditions.length > 0 ? { $and: andConditions } : {};
 
     const pendingEntries = await PendingEntry.find(pQuery)
       .populate('propertyId', 'plazaName propertyName propertyCode location address units')
@@ -2075,10 +2116,10 @@ export const getFilteredVouchersForEvidence = async (query = {}) => {
   tQuery.$nor = [{ status: /^REVERSED$/i }, { status: /^VOID$/i }];
 
   // Month date range filter
-  if (month && /^\d{4}-\d{2}$/.test(month)) {
-    const [year, m] = month.split('-').map(Number);
-    const mStart = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
-    const mEnd = new Date(Date.UTC(year, m, 0, 23, 59, 59, 999));
+  if (month && /^\d{4}-\d{2}$/.test(month.trim())) {
+    const cleanMonth = month.trim();
+    const [year, m] = cleanMonth.split('-').map(Number);
+    const { startDate: mStart, endDate: mEnd } = getUtcMonthDateRange(year, m);
     tQuery.date = { $gte: mStart, $lte: mEnd };
   } else if (startDate || endDate) {
     tQuery.date = {};
@@ -2184,15 +2225,18 @@ export const downloadAllReceiptEvidencePDF = async (req, res) => {
 
     if (vouchers.length === 0) {
       const monthLabel = req.query.month ? `for month ${req.query.month}` : '';
+      const isQueue = req.query.source === 'queue' || req.query.status;
       return apiError(
         res,
-        `No verified transactions found ${monthLabel}. If you have newly submitted entries for this month, please verify them in the Verification Queue first, or select a month with verified transactions (such as September 2026).`,
+        isQueue
+          ? `No entries with receipt evidence found ${monthLabel}. Please ensure entries have photo/document attachments, or select a different month.`
+          : `No verified transactions found ${monthLabel}. If you have newly submitted entries for this month, please verify them in the Verification Queue first, or select a month with verified transactions.`,
         404
       );
     }
 
     const periodLabel = req.query.month
-      ? req.query.month
+      ? (req.query.status && req.query.status !== 'ALL' ? `${req.query.status}_${req.query.month}` : req.query.month)
       : req.query.status
       ? `Queue_${req.query.status}`
       : `Transactions_${new Date().toISOString().slice(0, 10)}`;
@@ -2224,15 +2268,18 @@ export const downloadAllReceiptEvidenceZIP = async (req, res) => {
 
     if (vouchers.length === 0) {
       const monthLabel = req.query.month ? `for month ${req.query.month}` : '';
+      const isQueue = req.query.source === 'queue' || req.query.status;
       return apiError(
         res,
-        `No verified transactions found ${monthLabel}. If you have newly submitted entries for this month, please verify them in the Verification Queue first, or select a month with verified transactions (such as September 2026).`,
+        isQueue
+          ? `No entries with receipt evidence found ${monthLabel}. Please ensure entries have photo/document attachments, or select a different month.`
+          : `No verified transactions found ${monthLabel}. If you have newly submitted entries for this month, please verify them in the Verification Queue first, or select a month with verified transactions.`,
         404
       );
     }
 
     const periodLabel = req.query.month
-      ? req.query.month
+      ? (req.query.status && req.query.status !== 'ALL' ? `${req.query.status}_${req.query.month}` : req.query.month)
       : req.query.status
       ? `Queue_${req.query.status}`
       : `Transactions_${new Date().toISOString().slice(0, 10)}`;

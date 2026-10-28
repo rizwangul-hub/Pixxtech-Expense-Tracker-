@@ -29,6 +29,7 @@ import {
   Upload,
   X,
   ImagePlus,
+  Calendar,
 } from 'lucide-react';
 import { verificationAPI, accountsAPI, propertiesAPI, uploadAPI, otherIncomeAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
@@ -42,6 +43,49 @@ import {
   downloadReceiptEvidenceImage,
 } from '../utils/downloadReceipt.js';
 import { isAdmin as checkAdmin, isVerifier } from '../utils/permissions.js';
+
+const getItemMonth = (item) => {
+  if (!item) return '';
+  if (item.rentMonth && /^\d{4}-\d{2}$/.test(item.rentMonth)) {
+    return item.rentMonth;
+  }
+  const rawDate =
+    item.date ||
+    item.receiptDate ||
+    item.transferDate ||
+    item.entryData?.date ||
+    item.submittedAt ||
+    item.createdAt;
+  if (!rawDate) return '';
+  if (typeof rawDate === 'string') {
+    const trimmed = rawDate.trim();
+    if (/^\d{4}-\d{2}/.test(trimmed)) {
+      return trimmed.slice(0, 7);
+    }
+  }
+  try {
+    const d = new Date(rawDate);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      return `${y}-${m}`;
+    }
+  } catch {
+    return '';
+  }
+  return '';
+};
+
+const formatMonthLabel = (mStr) => {
+  if (!mStr || mStr === 'ALL') return 'All Months';
+  try {
+    const [year, month] = mStr.split('-');
+    const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  } catch {
+    return mStr;
+  }
+};
 
 // Persistent in-memory cache for instant tab switching without blocking loading screens
 let verifierDataCache = {
@@ -193,6 +237,25 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   const [filterType, setFilterType] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('PENDING_VERIFICATION');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    return new Date().toISOString().slice(0, 7);
+  });
+
+  const availableMonths = useMemo(() => {
+    const set = new Set();
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      set.add(`${y}-${m}`);
+    }
+    (pendingEntries || []).forEach((e) => {
+      const m = getItemMonth(e);
+      if (m && /^\d{4}-\d{2}$/.test(m)) set.add(m);
+    });
+    return Array.from(set).sort().reverse();
+  }, [pendingEntries]);
 
   // Receipt Evidence Viewer & Downloader state
   const [viewingReceiptEntry, setViewingReceiptEntry] = useState(null);
@@ -290,12 +353,14 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     try {
       setDownloadingAllEvidencePdf(true);
       await verificationAPI.downloadAllReceiptEvidencePDF({
+        source: 'queue',
         status: filterStatus,
         entryType: filterType,
         search: searchQuery.trim() || undefined,
+        month: selectedMonth === 'ALL' ? undefined : selectedMonth,
       });
       setFeedback({
-        message: 'Downloaded merged multi-page receipt evidence PDF for all matching entries.',
+        message: `Downloaded merged multi-page receipt evidence PDF for ${selectedMonth === 'ALL' ? 'all' : selectedMonth} matching queue entries.`,
         type: 'success',
       });
     } catch (err) {
@@ -314,12 +379,14 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     try {
       setDownloadingAllEvidence(true);
       await verificationAPI.downloadAllReceiptEvidenceZIP({
+        source: 'queue',
         status: filterStatus,
         entryType: filterType,
         search: searchQuery.trim() || undefined,
+        month: selectedMonth === 'ALL' ? undefined : selectedMonth,
       });
       setFeedback({
-        message: 'Downloaded receipt evidence ZIP for all matching verification queue entries.',
+        message: `Downloaded receipt evidence ZIP for ${selectedMonth === 'ALL' ? 'all' : selectedMonth} matching verification queue entries.`,
         type: 'success',
       });
     } catch (err) {
@@ -351,6 +418,14 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       list = list.filter((e) => e.status === filterStatus);
     }
 
+    // Filter by Month
+    if (selectedMonth && selectedMonth !== 'ALL') {
+      list = list.filter((e) => {
+        const m = getItemMonth(e);
+        return !m || m === selectedMonth;
+      });
+    }
+
     // Filter by Search Query
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
@@ -365,7 +440,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     }
 
     return list;
-  }, [pendingEntries, filterType, filterStatus, searchQuery]);
+  }, [pendingEntries, filterType, filterStatus, selectedMonth, searchQuery]);
 
   // Edit Modal State
   const [editingEntry, setEditingEntry] = useState(null);
@@ -399,6 +474,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       const currentType   = overrides.filterType   !== undefined ? overrides.filterType   : filterType;
       const currentStatus = overrides.filterStatus !== undefined ? overrides.filterStatus : filterStatus;
       const currentSearch = overrides.searchQuery  !== undefined ? overrides.searchQuery  : searchQuery;
+      const currentMonth  = overrides.selectedMonth !== undefined ? overrides.selectedMonth : selectedMonth;
 
       if (forceShowLoading || verifierDataCache.pendingEntries === null) {
         setLoading(true);
@@ -410,6 +486,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
       if (currentType   !== 'ALL') params.entryType = currentType;
       if (currentStatus !== 'ALL') params.status    = currentStatus;
       if (currentSearch.trim())    params.search     = currentSearch.trim();
+      if (currentMonth  !== 'ALL') params.month      = currentMonth;
 
       // Only fetch heavy master dropdown data (accounts, categories, properties, otherIncomeHeads) if not loaded yet
       const needsMaster = accounts.length === 0 || categories.length === 0 || properties.length === 0 || otherIncomeHeads.length === 0;
@@ -488,25 +565,25 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
     }
   };
 
-  // Re-fetch whenever type or status filters change, resetting to page 1
+  // Re-fetch whenever type, status, or month filters change, resetting to page 1
   useEffect(() => {
     setCurrentPage(1);
-    loadData(false, { filterType, filterStatus, page: 1 });
+    loadData(false, { filterType, filterStatus, selectedMonth, page: 1 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterType, filterStatus]);
+  }, [filterType, filterStatus, selectedMonth]);
 
   // Handle Search Submission
   const handleSearch = (e) => {
     e.preventDefault();
     setCurrentPage(1);
-    loadData(true, { page: 1 });
+    loadData(true, { searchQuery, selectedMonth, page: 1 });
   };
 
   // Pagination Change Handler
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > (paginationInfo.pages || 1) || newPage === currentPage) return;
     setCurrentPage(newPage);
-    loadData(false, { page: newPage });
+    loadData(false, { page: newPage, selectedMonth });
   };
 
   // Verify / Approve Entry (Atomic post to Ledger)
@@ -1136,6 +1213,57 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
               </button>
             ))}
           </div>
+
+          {/* Month Selector Filter */}
+          <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300">
+            <Calendar className="w-4 h-4 text-indigo-400 shrink-0" />
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Month:</span>
+            <select
+              value={selectedMonth}
+              onChange={(e) => {
+                const newMonth = e.target.value;
+                setSelectedMonth(newMonth);
+                setCurrentPage(1);
+                loadData(false, { filterType, filterStatus, selectedMonth: newMonth, page: 1 });
+              }}
+              className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
+            >
+              <option value="ALL" className="bg-slate-900 text-white">All Months</option>
+              {availableMonths.map((m) => (
+                <option key={m} value={m} className="bg-slate-900 text-white">
+                  {formatMonthLabel(m)}
+                </option>
+              ))}
+            </select>
+            <input
+              type="month"
+              value={selectedMonth === 'ALL' ? '' : selectedMonth}
+              onChange={(e) => {
+                if (e.target.value) {
+                  const newMonth = e.target.value;
+                  setSelectedMonth(newMonth);
+                  setCurrentPage(1);
+                  loadData(false, { filterType, filterStatus, selectedMonth: newMonth, page: 1 });
+                }
+              }}
+              className="bg-transparent text-xs text-slate-300 focus:outline-none cursor-pointer border-l border-slate-800 pl-1.5 ml-0.5"
+              title="Pick specific month"
+            />
+            {selectedMonth !== 'ALL' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMonth('ALL');
+                  setCurrentPage(1);
+                  loadData(false, { filterType, filterStatus, selectedMonth: 'ALL', page: 1 });
+                }}
+                className="text-[10px] font-extrabold text-indigo-300 hover:text-white bg-indigo-950/80 hover:bg-indigo-900 px-1.5 py-0.5 rounded border border-indigo-700/60 transition cursor-pointer"
+                title="Clear month filter and show all months"
+              >
+                All
+              </button>
+            )}
+          </div>
         </div>
 
         <form onSubmit={handleSearch} className="flex items-center gap-2 w-full lg:w-80">
@@ -1168,6 +1296,10 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
                 ? `${(paginationInfo.page - 1) * paginationInfo.limit + 1}–${Math.min(paginationInfo.page * paginationInfo.limit, paginationInfo.total)} of ${paginationInfo.total} items`
                 : `${filteredEntries.length} items`}
             </span>
+            <span className="text-[11px] font-bold text-amber-300 bg-amber-950/70 border border-amber-800/60 px-2 py-0.5 rounded-md hidden sm:inline-flex items-center gap-1">
+              <Calendar size={12} className="text-amber-400" />
+              {formatMonthLabel(selectedMonth)}
+            </span>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <div className="text-xs text-slate-400">
@@ -1178,28 +1310,36 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
               onClick={handleDownloadAllReceiptEvidencePDF}
               disabled={downloadingAllEvidencePdf || paginationInfo.total === 0}
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-400 bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-800 disabled:text-emerald-100 disabled:opacity-100"
-              title="Download single merged multi-page PDF where each voucher evidence slip is on a dedicated A4 page"
+              title={`Download single merged multi-page PDF where each voucher evidence slip is on a dedicated A4 page (${formatMonthLabel(selectedMonth)})`}
             >
               {downloadingAllEvidencePdf ? (
                 <RefreshCw size={14} className="animate-spin" />
               ) : (
                 <FileText size={14} />
               )}
-              {downloadingAllEvidencePdf ? 'Generating Merged PDF...' : 'Download Merged Evidence PDF'}
+              {downloadingAllEvidencePdf
+                ? 'Generating Merged PDF...'
+                : selectedMonth !== 'ALL'
+                ? `Download Merged Evidence PDF (${selectedMonth})`
+                : 'Download Merged Evidence PDF'}
             </button>
             <button
               type="button"
               onClick={handleDownloadAllReceiptEvidence}
               disabled={downloadingAllEvidence || paginationInfo.total === 0}
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-indigo-400 bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:cursor-not-allowed disabled:bg-indigo-800 disabled:text-indigo-100 disabled:opacity-100"
-              title="Download ZIP containing individual voucher PDFs + combined master PDF"
+              title={`Download ZIP containing individual voucher PDFs + combined master PDF (${formatMonthLabel(selectedMonth)})`}
             >
               {downloadingAllEvidence ? (
                 <RefreshCw size={14} className="animate-spin" />
               ) : (
                 <Download size={14} />
               )}
-              {downloadingAllEvidence ? 'Preparing ZIP...' : 'Download All Evidence ZIP'}
+              {downloadingAllEvidence
+                ? 'Preparing ZIP...'
+                : selectedMonth !== 'ALL'
+                ? `Download All Evidence ZIP (${selectedMonth})`
+                : 'Download All Evidence ZIP'}
             </button>
           </div>
         </div>
@@ -1212,7 +1352,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         ) : filteredEntries.length === 0 ? (
           <div className="py-16 text-center text-slate-500 text-xs">
             <CheckCircle2 size={32} className="mx-auto mb-2 text-emerald-500/50" />
-            No pending entries found matching your selected filters. All clear!
+            No entries found matching your selected filters{selectedMonth !== 'ALL' ? ` for ${formatMonthLabel(selectedMonth)}` : ''}. All clear!
           </div>
         ) : (
           <>

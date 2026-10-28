@@ -310,6 +310,21 @@ export function MainLayout({
     }
   };
 
+  const handleBackToPortal = () => {
+    const portalUrl = 'https://pixx-tech.vercel.app'; // Central Portal URL
+    // If opened inside Central Portal iframe, notify parent or redirect top window
+    try {
+      if (window.top && window.top !== window.self) {
+        window.top.postMessage('PIXXTECH_RETURN', '*');
+        window.top.location.href = portalUrl;
+      } else {
+        window.location.href = portalUrl;
+      }
+    } catch {
+      window.location.href = portalUrl;
+    }
+  };
+
   return (
     <div className="h-screen overflow-hidden bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Top Header */}
@@ -458,6 +473,24 @@ export function MainLayout({
               </div>
             </div>
           </div>
+
+          {/* Back to Central Portal Button */}
+          <button
+            type="button"
+            onClick={handleBackToPortal}
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 transition shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer whitespace-nowrap hover:brightness-110"
+            style={{
+              backgroundColor: 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              color: '#38BDF8',
+              fontSize: '12px',
+              fontWeight: 600,
+              borderRadius: '8px',
+            }}
+            title="Return to Pixx Technologies Central Portal"
+          >
+            <span>← PixxTech Portal</span>
+          </button>
 
           {/* Logout Button */}
           <button
@@ -608,7 +641,23 @@ export function MainLayout({
                 })}
               </nav>
 
-              <div className="p-4 border-t border-slate-200 text-xs text-slate-600 bg-slate-50">
+              <div className="p-4 border-t border-slate-200 text-xs text-slate-600 bg-slate-50 space-y-3">
+                <button
+                  type="button"
+                  onClick={handleBackToPortal}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 transition active:scale-95 cursor-pointer whitespace-nowrap shadow-2xs hover:brightness-110"
+                  style={{
+                    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                    border: '1px solid rgba(56, 189, 248, 0.35)',
+                    color: '#38BDF8',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: '8px',
+                  }}
+                  title="Return to Pixx Technologies Central Portal"
+                >
+                  <span>← PixxTech Portal</span>
+                </button>
                 <div>Logged in as: <strong className="text-slate-900 font-bold">{user?.name}</strong></div>
                 <div className="text-[11px] text-slate-400 mt-1">Pakistan Expense Tracker &bull; by Pixx Technologies</div>
               </div>

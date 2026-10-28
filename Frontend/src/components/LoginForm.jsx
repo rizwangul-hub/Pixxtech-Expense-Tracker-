@@ -34,9 +34,43 @@ export const LoginForm = ({ onLoginSuccess }) => {
     }
   };
 
+  const handleBackToPortal = () => {
+    const portalUrl = 'https://pixx-tech.vercel.app'; // Central Portal URL
+    // If opened inside Central Portal iframe, notify parent or redirect top window
+    try {
+      if (window.top && window.top !== window.self) {
+        window.top.postMessage('PIXXTECH_RETURN', '*');
+        window.top.location.href = portalUrl;
+      } else {
+        window.location.href = portalUrl;
+      }
+    } catch {
+      window.location.href = portalUrl;
+    }
+  };
+
   return (
     <div className="min-h-[85vh] flex items-center justify-center p-4 bg-slate-50">
       <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-8 shadow-xl">
+        <div className="mb-4 flex items-center justify-start">
+          <button
+            type="button"
+            onClick={handleBackToPortal}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 transition active:scale-95 cursor-pointer shadow-2xs hover:brightness-110"
+            style={{
+              backgroundColor: 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              color: '#0284c7',
+              fontSize: '12px',
+              fontWeight: 600,
+              borderRadius: '8px',
+            }}
+            title="Return to Pixx Technologies Central Portal"
+          >
+            <span>← PixxTech Portal</span>
+          </button>
+        </div>
+
         <div className="text-center mb-8 flex flex-col items-center">
           <img
             src={logo}

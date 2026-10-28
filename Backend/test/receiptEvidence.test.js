@@ -62,3 +62,14 @@ test('bulk receipt evidence ZIP streams a merged PDF and receipt images', async 
   assert.equal((await pdfEntry.async('nodebuffer')).subarray(0, 5).toString(), '%PDF-');
   assert.deepEqual(await imageEntry.async('nodebuffer'), image);
 });
+
+
+test('month date range accurately covers the full Pakistan business month for evidence and queue filtering', async () => {
+  const { getUtcMonthDateRange } = await import('../services/salaryReportingService.js');
+  const { startDate, endDate } = getUtcMonthDateRange(2026, 10);
+  assert.ok(startDate instanceof Date);
+  assert.ok(endDate instanceof Date);
+  assert.equal(startDate.toISOString(), '2026-09-30T19:00:00.000Z'); // 2026-10-01 00:00:00 PKT
+  assert.equal(endDate.toISOString(), '2026-10-31T18:59:59.999Z');   // 2026-10-31 23:59:59 PKT
+  assert.ok(startDate < endDate);
+});
