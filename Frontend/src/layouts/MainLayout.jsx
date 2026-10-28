@@ -38,6 +38,7 @@ export function MainLayout({
   children,
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [portalBtnHover, setPortalBtnHover] = useState(false);
   const [communicationNotificationsOpen, setCommunicationNotificationsOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const userIsAdmin = isAdmin(user);
@@ -311,17 +312,19 @@ export function MainLayout({
   };
 
   const handleBackToPortal = () => {
-    const portalUrl = 'https://pixx-tech.vercel.app'; // Central Portal URL
-    // If opened inside Central Portal iframe, notify parent or redirect top window
-    try {
-      if (window.top && window.top !== window.self) {
+    const PORTAL_URL = 'https://pixxtech.vercel.app';
+
+    // If inside Central Portal iframe, notify parent portal and redirect the main window
+    if (window.top && window.top !== window.self) {
+      try {
         window.top.postMessage('PIXXTECH_RETURN', '*');
-        window.top.location.href = portalUrl;
-      } else {
-        window.location.href = portalUrl;
+        window.top.location.href = PORTAL_URL;
+      } catch (e) {
+        window.location.href = PORTAL_URL;
       }
-    } catch {
-      window.location.href = portalUrl;
+    } else {
+      // If opened directly in a browser tab
+      window.location.href = PORTAL_URL;
     }
   };
 
@@ -478,14 +481,18 @@ export function MainLayout({
           <button
             type="button"
             onClick={handleBackToPortal}
-            className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 transition shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer whitespace-nowrap hover:brightness-110"
+            onMouseEnter={() => setPortalBtnHover(true)}
+            onMouseLeave={() => setPortalBtnHover(false)}
+            className="flex items-center gap-1.5 transition active:scale-95 cursor-pointer whitespace-nowrap shadow-2xs"
             style={{
-              backgroundColor: 'rgba(56, 189, 248, 0.12)',
-              border: '1px solid rgba(56, 189, 248, 0.35)',
+              backgroundColor: portalBtnHover ? 'rgba(56, 189, 248, 0.22)' : 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
               color: '#38BDF8',
+              padding: '6px 14px',
               fontSize: '12px',
               fontWeight: 600,
               borderRadius: '8px',
+              transition: 'all 0.15s ease',
             }}
             title="Return to Pixx Technologies Central Portal"
           >
@@ -645,14 +652,16 @@ export function MainLayout({
                 <button
                   type="button"
                   onClick={handleBackToPortal}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 transition active:scale-95 cursor-pointer whitespace-nowrap shadow-2xs hover:brightness-110"
+                  className="w-full flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer whitespace-nowrap shadow-2xs hover:bg-[rgba(56,189,248,0.22)]"
                   style={{
                     backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                    border: '1px solid rgba(56, 189, 248, 0.35)',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
                     color: '#38BDF8',
+                    padding: '8px 14px',
                     fontSize: '12px',
                     fontWeight: 600,
                     borderRadius: '8px',
+                    transition: 'all 0.15s ease',
                   }}
                   title="Return to Pixx Technologies Central Portal"
                 >
