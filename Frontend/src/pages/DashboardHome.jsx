@@ -18,6 +18,9 @@ import {
   Calendar,
   Hash,
   RefreshCw,
+  Eye,
+  EyeOff,
+  LayoutDashboard,
 } from 'lucide-react';
 import { formatPKR } from '../utils/formatters.js';
 import {
@@ -63,6 +66,27 @@ export function DashboardHome({
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth);
   const [totalEntriesCount, setTotalEntriesCount] = useState(0);
   const [monthlyLoading, setMonthlyLoading] = useState(true);
+
+  // Hide / Show Dashboard State
+  const [isDashboardHidden, setIsDashboardHidden] = useState(() => {
+    try {
+      return localStorage.getItem('pak_expense_hide_dashboard') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleHideDashboard = () => {
+    setIsDashboardHidden((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('pak_expense_hide_dashboard', String(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
 
   // Live Portfolio Stats from Database (loaded once on mount)
   const [portfolioStats, setPortfolioStats] = useState(null);
@@ -172,8 +196,119 @@ export function DashboardHome({
     setSelectedMonth(getCurrentMonth());
   };
 
+  // If dashboard is hidden, render compact single-card view with NO scrolling needed
+  if (isDashboardHidden) {
+    return (
+      <div className="p-3 sm:p-5 overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-2xs">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl shrink-0">
+                <LayoutDashboard className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight">
+                    Dashboard Overview
+                  </h2>
+                  <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                    Hidden / Compact View
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dashboard cards and tables are hidden. Click &ldquo;Show Dashboard&rdquo; to expand full metrics.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Month Selector Controls */}
+              <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  title="Previous Month"
+                  className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                <div className="relative flex items-center">
+                  <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={(e) => e.target.value && setSelectedMonth(e.target.value)}
+                    className="bg-white text-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-xs"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  title="Next Month"
+                  className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition"
+                >
+                  <ChevronRight size={16} />
+                </button>
+
+                {selectedMonth !== getCurrentMonth() && (
+                  <button
+                    type="button"
+                    onClick={handleResetToCurrentMonth}
+                    title="Reset to current month"
+                    className="flex items-center gap-1 text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1.5 rounded-lg transition ml-1"
+                  >
+                    <RefreshCw size={11} />
+                    <span>Current</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Show Dashboard Button */}
+              <button
+                type="button"
+                onClick={toggleHideDashboard}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm active:scale-95 transition cursor-pointer whitespace-nowrap"
+                title="Show Dashboard"
+              >
+                <Eye size={15} />
+                <span>Show Dashboard</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Minimal 1-row summary indicators */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-2.5 text-center">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Selected Month</div>
+              <div className="text-xs font-bold text-indigo-700 mt-0.5 truncate">{formatMonthLabel(selectedMonth)}</div>
+            </div>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-2.5 text-center">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Total Entries</div>
+              <div className="text-xs font-black text-slate-900 mt-0.5 font-mono">
+                {monthlyLoading ? '...' : totalEntriesCount}
+              </div>
+            </div>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-2.5 text-center">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Unique Vouchers</div>
+              <div className="text-xs font-black text-slate-900 mt-0.5 font-mono">
+                {monthlyLoading ? '...' : (transactionStats?.uniqueVouchersCount ?? 0)}
+              </div>
+            </div>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-2.5 text-center">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Monthly Volume</div>
+              <div className="text-xs font-black text-emerald-700 mt-0.5 font-mono truncate">
+                {monthlyLoading ? '...' : formatPKR(transactionStats?.filteredLineTotal ?? 0)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="p-3 sm:p-5 space-y-6">
       {/* Monthly Activity & Total Entries Banner */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
@@ -206,46 +341,59 @@ export function DashboardHome({
             </div>
           </div>
 
-          {/* Month Selector Controls */}
-          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
-            <button
-              type="button"
-              onClick={handlePrevMonth}
-              title="Previous Month"
-              className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition"
-            >
-              <ChevronLeft size={16} />
-            </button>
-
-            <div className="relative flex items-center">
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => e.target.value && setSelectedMonth(e.target.value)}
-                className="bg-white text-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-xs"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={handleNextMonth}
-              title="Next Month"
-              className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition"
-            >
-              <ChevronRight size={16} />
-            </button>
-
-            {selectedMonth !== getCurrentMonth() && (
+          {/* Month Selector Controls & Hide Dashboard Action */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
               <button
                 type="button"
-                onClick={handleResetToCurrentMonth}
-                title="Reset to current month"
-                className="flex items-center gap-1 text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1.5 rounded-lg transition ml-1"
+                onClick={handlePrevMonth}
+                title="Previous Month"
+                className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition"
               >
-                <RefreshCw size={11} />
-                <span>Current</span>
+                <ChevronLeft size={16} />
               </button>
-            )}
+
+              <div className="relative flex items-center">
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => e.target.value && setSelectedMonth(e.target.value)}
+                  className="bg-white text-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-xs"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                title="Next Month"
+                className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition"
+              >
+                <ChevronRight size={16} />
+              </button>
+
+              {selectedMonth !== getCurrentMonth() && (
+                <button
+                  type="button"
+                  onClick={handleResetToCurrentMonth}
+                  title="Reset to current month"
+                  className="flex items-center gap-1 text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1.5 rounded-lg transition ml-1"
+                >
+                  <RefreshCw size={11} />
+                  <span>Current</span>
+                </button>
+              )}
+            </div>
+
+            {/* Hide Dashboard Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleHideDashboard}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition shadow-2xs active:scale-95 cursor-pointer whitespace-nowrap"
+              title="Hide Dashboard"
+            >
+              <EyeOff size={14} className="text-slate-600" />
+              <span>Hide Dashboard</span>
+            </button>
           </div>
         </div>
 
