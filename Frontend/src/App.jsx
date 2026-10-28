@@ -95,6 +95,28 @@ export function App() {
   const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [ledgerParams, setLedgerParams] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [hideSidebar, setHideSidebar] = useState(() => {
+    return localStorage.getItem('pixx_hide_sidebar') === 'true';
+  });
+  const [hideNavbar, setHideNavbar] = useState(() => {
+    return localStorage.getItem('pixx_hide_navbar') === 'true';
+  });
+
+  const handleToggleSidebar = () => {
+    setHideSidebar((prev) => {
+      const next = !prev;
+      localStorage.setItem('pixx_hide_sidebar', String(next));
+      return next;
+    });
+  };
+
+  const handleToggleNavbar = () => {
+    setHideNavbar((prev) => {
+      const next = !prev;
+      localStorage.setItem('pixx_hide_navbar', String(next));
+      return next;
+    });
+  };
 
   // Initialize auth state from localStorage
   useEffect(() => {
@@ -291,6 +313,10 @@ export function App() {
         setCurrentSection('operational');
         window.history.pushState({}, '', '/operational');
       }}
+      hideSidebar={hideSidebar}
+      onToggleSidebar={handleToggleSidebar}
+      hideNavbar={hideNavbar}
+      onToggleNavbar={handleToggleNavbar}
     >
       {currentSection === 'communications' && canUseCommunications(user) ? (
         <MessagesCallsPage />
@@ -411,6 +437,10 @@ export function App() {
       ) : (
         <DashboardHome
           user={user}
+          hideSidebar={hideSidebar}
+          onToggleSidebar={handleToggleSidebar}
+          hideNavbar={hideNavbar}
+          onToggleNavbar={handleToggleNavbar}
           onNavigateToUsers={() => setCurrentSection('users')}
           onNavigateToProperties={() => setCurrentSection('properties')}
           onNavigateToTenants={() => setCurrentSection('tenants')}
