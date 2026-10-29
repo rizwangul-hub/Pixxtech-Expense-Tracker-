@@ -25,8 +25,6 @@ import {
   Database,
   PanelLeftClose,
   PanelLeftOpen,
-  PanelTopClose,
-  PanelTopOpen,
 } from 'lucide-react';
 import { hasPermission, isAdmin, isVerifier, isDataEntry, PERMISSIONS } from '../utils/permissions.js';
 import { verificationAPI } from '../services/api.js';
@@ -39,10 +37,8 @@ export function MainLayout({
   onViewChange,
   onLogout,
   onOpenTerminal,
-  hideSidebar = false,
+  sidebarHidden = false,
   onToggleSidebar,
-  hideNavbar = false,
-  onToggleNavbar,
   children,
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -339,32 +335,19 @@ export function MainLayout({
   return (
     <div className="h-screen overflow-hidden bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Top Header */}
-      {!hideNavbar && (
-        <header className="shrink-0 sticky top-0 z-40 h-16 sm:h-20 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-2.5 sm:px-6 lg:px-8 py-0 flex items-center justify-between shadow-2xs">
-          {/* Left Branding */}
-          <div className="flex items-center gap-2 sm:gap-3.5">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 transition"
-              aria-label="Toggle navigation menu"
-            >
-              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
+      <header className="shrink-0 sticky top-0 z-40 h-16 sm:h-20 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-2.5 sm:px-6 lg:px-8 py-0 flex items-center justify-between shadow-2xs">
+        {/* Left Branding */}
+        <div className="flex items-center gap-2 sm:gap-3.5">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 rounded-xl bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 transition"
+            aria-label="Toggle navigation menu"
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
 
-            {onToggleSidebar && (
-              <button
-                type="button"
-                onClick={onToggleSidebar}
-                className="hidden md:flex p-2 rounded-xl bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 transition cursor-pointer"
-                title={hideSidebar ? "Show Sidebar" : "Hide Sidebar"}
-                aria-label={hideSidebar ? "Show Sidebar" : "Hide Sidebar"}
-              >
-                {hideSidebar ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-              </button>
-            )}
-
-            <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="h-10 w-10 sm:h-14 sm:w-14 rounded-xl sm:rounded-2xl p-1 bg-gradient-to-b from-slate-50 to-slate-100 border border-slate-200/80 shadow-2xs flex items-center justify-center shrink-0">
               <img
                 src={logo}
@@ -386,6 +369,32 @@ export function MainLayout({
               </p>
             </div>
           </div>
+
+          {/* Desktop Toggle Sidebar Button */}
+          {onToggleSidebar && (
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition shadow-2xs active:scale-95 cursor-pointer whitespace-nowrap ml-1 ${
+                sidebarHidden
+                  ? 'bg-sky-50 text-sky-700 border-sky-300 hover:bg-sky-100'
+                  : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+              }`}
+              title={sidebarHidden ? 'Show Sidebar Navigation' : 'Hide Sidebar Navigation'}
+            >
+              {sidebarHidden ? (
+                <>
+                  <PanelLeftOpen size={16} className="text-sky-600" />
+                  <span className="hidden xl:inline">Show Sidebar</span>
+                </>
+              ) : (
+                <>
+                  <PanelLeftClose size={16} className="text-slate-600" />
+                  <span className="hidden xl:inline">Hide Sidebar</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Right User & Actions */}
@@ -532,45 +541,32 @@ export function MainLayout({
           </button>
         </div>
       </header>
-      )}
-
-      {/* Floating Restore Navbar Button (shown when Navbar is hidden) */}
-      {hideNavbar && onToggleNavbar && (
-        <div className="fixed top-2 right-4 z-50 animate-in fade-in duration-200">
-          <button
-            type="button"
-            onClick={onToggleNavbar}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-900 text-white text-xs font-bold shadow-lg backdrop-blur border border-slate-700 transition active:scale-95 cursor-pointer"
-            title="Click to show top navbar"
-          >
-            <PanelTopOpen size={14} />
-            <span>Show Navbar</span>
-          </button>
-        </div>
-      )}
 
       {/* Body: Sidebar + Main Content */}
       <div className="min-h-0 flex-1 flex overflow-hidden">
         {/* Desktop Sidebar */}
-        {!hideSidebar && (
-          <aside className="hidden md:flex md:w-72 h-full flex-col bg-white border-r border-slate-200 shrink-0 shadow-xs">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-              <div className="text-xs uppercase font-black tracking-wider text-slate-700 flex items-center gap-2">
-                <Layers size={16} className="text-blue-600" />
-                Navigation Modules
-              </div>
-              {onToggleSidebar && (
-                <button
-                  type="button"
-                  onClick={onToggleSidebar}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-                  title="Hide Sidebar"
-                  aria-label="Hide Sidebar"
-                >
-                  <PanelLeftClose size={16} />
-                </button>
-              )}
+        <aside
+          className={`hidden md:flex flex-col bg-white border-r border-slate-200 shrink-0 shadow-xs transition-all duration-300 ease-in-out ${
+            sidebarHidden ? 'w-0 overflow-hidden border-none opacity-0 pointer-events-none' : 'w-72 opacity-100'
+          }`}
+          aria-hidden={sidebarHidden}
+        >
+          <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+            <div className="text-xs uppercase font-black tracking-wider text-slate-700 flex items-center gap-2">
+              <Layers size={16} className="text-blue-600" />
+              Navigation Modules
             </div>
+            {onToggleSidebar && (
+              <button
+                type="button"
+                onClick={onToggleSidebar}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                title="Hide Sidebar Navigation"
+              >
+                <PanelLeftClose size={16} />
+              </button>
+            )}
+          </div>
 
           <nav className="flex-1 overflow-y-auto p-3 space-y-1.5">
             {visibleNavigationItems.map((item) => {
@@ -628,7 +624,6 @@ export function MainLayout({
             </div>
           </div>
         </aside>
-        )}
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
@@ -725,8 +720,8 @@ export function MainLayout({
         )}
 
         {/* Main Scrollable Content Area */}
-        <main className="min-w-0 min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 p-0">
-          <div className="w-full">
+        <main className="min-w-0 min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 p-0 transition-all duration-300">
+          <div className="w-full space-y-6">
             {children}
           </div>
         </main>

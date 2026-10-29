@@ -95,25 +95,26 @@ export function App() {
   const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [ledgerParams, setLedgerParams] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [hideSidebar, setHideSidebar] = useState(() => {
-    return localStorage.getItem('pixx_hide_sidebar') === 'true';
-  });
-  const [hideNavbar, setHideNavbar] = useState(() => {
-    return localStorage.getItem('pixx_hide_navbar') === 'true';
+  const [sidebarHidden, setSidebarHidden] = useState(() => {
+    try {
+      return (
+        localStorage.getItem('pak_expense_sidebar_hidden') === 'true' ||
+        localStorage.getItem('pixx_hide_sidebar') === 'true'
+      );
+    } catch {
+      return false;
+    }
   });
 
   const handleToggleSidebar = () => {
-    setHideSidebar((prev) => {
+    setSidebarHidden((prev) => {
       const next = !prev;
-      localStorage.setItem('pixx_hide_sidebar', String(next));
-      return next;
-    });
-  };
-
-  const handleToggleNavbar = () => {
-    setHideNavbar((prev) => {
-      const next = !prev;
-      localStorage.setItem('pixx_hide_navbar', String(next));
+      try {
+        localStorage.setItem('pak_expense_sidebar_hidden', String(next));
+        localStorage.setItem('pixx_hide_sidebar', String(next));
+      } catch {
+        // ignore
+      }
       return next;
     });
   };
@@ -298,6 +299,8 @@ export function App() {
     >
     <MainLayout
       user={user}
+      sidebarHidden={sidebarHidden}
+      onToggleSidebar={handleToggleSidebar}
       currentView={
         currentSection === 'property-detail'
           ? 'properties'
@@ -313,10 +316,6 @@ export function App() {
         setCurrentSection('operational');
         window.history.pushState({}, '', '/operational');
       }}
-      hideSidebar={hideSidebar}
-      onToggleSidebar={handleToggleSidebar}
-      hideNavbar={hideNavbar}
-      onToggleNavbar={handleToggleNavbar}
     >
       {currentSection === 'communications' && canUseCommunications(user) ? (
         <MessagesCallsPage />
@@ -437,10 +436,9 @@ export function App() {
       ) : (
         <DashboardHome
           user={user}
-          hideSidebar={hideSidebar}
+          sidebarHidden={sidebarHidden}
+          hideSidebar={sidebarHidden}
           onToggleSidebar={handleToggleSidebar}
-          hideNavbar={hideNavbar}
-          onToggleNavbar={handleToggleNavbar}
           onNavigateToUsers={() => setCurrentSection('users')}
           onNavigateToProperties={() => setCurrentSection('properties')}
           onNavigateToTenants={() => setCurrentSection('tenants')}
