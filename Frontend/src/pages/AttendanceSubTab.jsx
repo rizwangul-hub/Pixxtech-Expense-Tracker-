@@ -82,6 +82,56 @@ const employeeOrderIndex = (name, location) => {
   return aliasIndex >= 0 ? aliasIndex : Number.MAX_SAFE_INTEGER;
 };
 
+/**
+ * Helper to determine default shift opening time for an employee row on a given date.
+ * Rules:
+ * - Before 26 October 2026: Bahria Town Office default shift was 12:30.
+ * - From 26 October 2026 onwards:
+ *   - Friday: Shift starts at 14:30 (2:30 PM).
+ *   - Other days (Mon-Thu, Sat-Sun): Shift starts at 13:30 (1:30 PM, 1 hour later).
+ * - Early morning staff (Zaffar Hussain Driver 07:00, Sabir Nawaz 09:00) retain their custom shifts.
+ * - IT Office staff retain their custom shifts.
+ */
+export const getDefaultShiftOpeningTime = (row, dateStr) => {
+  const isFriday = dateStr ? new Date(`${dateStr}T00:00:00Z`).getUTCDay() === 5 : false;
+  const isFromOct26 = dateStr ? dateStr >= '2026-10-26' : false;
+
+  const dept = row?.department || '';
+  const desig = row?.designation || '';
+  const name = (row?.name || '').toLowerCase();
+
+  // Custom driver / guard morning shifts
+  if (name.includes('zaffar hussain') || desig.toLowerCase().includes('driver')) {
+    return row?.shiftOpeningTime || '07:00';
+  }
+  if (name.includes('sabir nawaz')) {
+    return row?.shiftOpeningTime || '09:00';
+  }
+
+  const isBahriaTown =
+    dept !== 'IT Office' &&
+    (dept === 'Bahria Town Office' ||
+      dept === 'Admin Rider' ||
+      desig === 'Admin Rider' ||
+      name.includes('majid javed'));
+
+  if (isBahriaTown) {
+    if (isFromOct26) {
+      if (row?.shiftOpeningTime && row.shiftOpeningTime !== '12:30') {
+        return row.shiftOpeningTime;
+      }
+      return isFriday ? '14:30' : '13:30';
+    }
+    return row?.shiftOpeningTime || '12:30';
+  }
+
+  if (dept === 'IT Office') {
+    return row?.shiftOpeningTime || '12:00';
+  }
+
+  return row?.shiftOpeningTime || (isFromOct26 ? (isFriday ? '14:30' : '13:30') : '12:30');
+};
+
 export const AttendanceSubTab = () => {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [activeLocationTab, setActiveLocationTab] = useState('IT Office'); // 'IT Office' | 'Bahria Town Office'
@@ -245,10 +295,13 @@ export const AttendanceSubTab = () => {
             };
           }
 
+          const defaultShift = r.shiftOpeningTime || getDefaultShiftOpeningTime(r, selectedDate);
+
           return {
             ...r,
+            shiftOpeningTime: defaultShift,
             status: 'PRESENT',
-            arrivalTime: r.arrivalTime || r.shiftOpeningTime || '12:30',
+            arrivalTime: r.arrivalTime || defaultShift,
             lateMinutes: 0,
           };
         }
@@ -264,7 +317,7 @@ export const AttendanceSubTab = () => {
 
       const records = attendanceRows.map((r) => ({
         employeeId: r.employeeId,
-        shiftOpeningTime: r.shiftOpeningTime || '12:30',
+        shiftOpeningTime: r.shiftOpeningTime || getDefaultShiftOpeningTime(r, selectedDate),
         arrivalTime: r.arrivalTime || '',
         status: r.status,
         lateMinutes: r.lateMinutes !== undefined ? r.lateMinutes : 0,
@@ -393,7 +446,7 @@ export const AttendanceSubTab = () => {
         <td style="text-align: center;">${idx + 1}</td>
         <td style="font-weight: bold;">${r.name}</td>
         <td>${r.designation}</td>
-        <td style="text-align: center; font-family: monospace;">${r.shiftOpeningTime || '12:30'}</td>
+        <td style="text-align: center; font-family: monospace;">${r.shiftOpeningTime || getDefaultShiftOpeningTime(r, selectedDate)}</td>
         <td style="text-align: center; font-family: monospace;">${r.arrivalTime || '—'}</td>
         <td style="text-align: center; font-weight: bold; color: ${r.lateMinutes > 0 ? '#dc2626' : '#16a34a'};">
           ${r.lateMinutes > 0 ? `+${r.lateMinutes} mins` : '—'}
@@ -523,28 +576,47 @@ export const AttendanceSubTab = () => {
         </div>
 
         {/* Location Workplace Tabs (IT Office vs Bahria Town Office) */}
-        <div className="flex items-center gap-2 pt-1 border-b border-slate-800/80 pb-3">
-          <button
-            onClick={() => setActiveLocationTab('IT Office')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-              activeLocationTab === 'IT Office'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Building2 size={15} /> IT Office Attendance ({attendanceRows.filter(isITOfficeRow).length})
-          </button>
+        <div className="flex items-center justify-between gap-2 pt-1 border-b border-slate-800/80 pb-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setActiveLocationTab('IT Office')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                activeLocationTab === 'IT Office'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Building2 size={15} /> IT Office Attendance ({attendanceRows.filter(isITOfficeRow).length})
+            </button>
 
-          <button
-            onClick={() => setActiveLocationTab('Bahria Town Office')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-              activeLocationTab === 'Bahria Town Office'
-                ? 'bg-purple-600 text-white shadow-md'
-                : 'bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Building2 size={15} /> Bahria Town Office & Admin Rider ({attendanceRows.filter(isBahriaTownRow).length})
-          </button>
+            <button
+              onClick={() => setActiveLocationTab('Bahria Town Office')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                activeLocationTab === 'Bahria Town Office'
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Building2 size={15} /> Bahria Town Office & Admin Rider ({attendanceRows.filter(isBahriaTownRow).length})
+            </button>
+          </div>
+
+          {activeLocationTab === 'Bahria Town Office' && (
+            <div className="flex items-center gap-2 text-xs font-mono font-bold bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
+              <Clock size={14} className="text-amber-400" />
+              <span className="text-slate-400">Shift Start:</span>
+              <span className="text-amber-300 font-black">
+                {selectedDate >= '2026-10-26'
+                  ? new Date(`${selectedDate}T00:00:00Z`).getUTCDay() === 5
+                    ? '2:30 PM (Friday)'
+                    : '1:30 PM'
+                  : '12:30 PM (Prior to 26 Oct)'}
+              </span>
+              <span className="text-[10px] text-slate-500 font-sans font-semibold border-l border-slate-800 pl-2">
+                15m Grace
+              </span>
+            </div>
+          )}
         </div>
 
         {msg.text && (
@@ -607,7 +679,7 @@ export const AttendanceSubTab = () => {
                       <td className="py-3 px-4 text-center">
                         <input
                           type="time"
-                          value={row.shiftOpeningTime || '12:30'}
+                          value={row.shiftOpeningTime || getDefaultShiftOpeningTime(row, selectedDate)}
                           onChange={(e) => handleRowChange(row.employeeId, 'shiftOpeningTime', e.target.value)}
                           className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-amber-300 font-mono font-bold text-center focus:outline-none focus:border-amber-500"
                         />

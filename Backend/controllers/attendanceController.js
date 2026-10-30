@@ -3,11 +3,72 @@ import Employee from '../models/Employee.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 
 /**
+ * Helper to check if an employee belongs to the Bahria Town Office workplace
+ */
+export const isBahriaTownEmployee = (emp) => {
+  if (!emp) return false;
+  const dept = (emp.department || '').trim();
+  const desig = (emp.designation || '').trim();
+  const name = (emp.name || '').trim().toLowerCase();
+
+  if (dept === 'IT Office') return false;
+
+  return (
+    dept === 'Bahria Town Office' ||
+    dept === 'Admin Rider' ||
+    desig === 'Admin Rider' ||
+    name.includes('majid javed')
+  );
+};
+
+/**
+ * Helper to determine default shift opening time for an employee on a given date.
+ * Rules:
+ * - Before 26 October 2026: Bahria Town Office default shift was 12:30.
+ * - From 26 October 2026 onwards:
+ *   - Friday: Shift starts at 14:30 (2:30 PM).
+ *   - Other days (Mon-Thu, Sat-Sun): Shift starts at 13:30 (1:30 PM, 1 hour later).
+ * - Early morning staff (Zaffar Hussain Driver 07:00, Sabir Nawaz 09:00) retain their custom shifts.
+ * - IT Office staff retain their custom shifts.
+ */
+export const getDefaultShiftOpeningTime = (emp, dateStr) => {
+  const isFromOct26 = dateStr ? dateStr >= '2026-10-26' : false;
+  const isFriday = dateStr ? new Date(`${dateStr}T00:00:00Z`).getUTCDay() === 5 : false;
+
+  const dept = (emp?.department || '').trim();
+  const desig = (emp?.designation || '').trim();
+  const name = (emp?.name || '').trim().toLowerCase();
+
+  // Custom early morning staff
+  if (name.includes('zaffar hussain') || desig.toLowerCase().includes('driver')) {
+    return emp?.shiftOpeningTime || '07:00';
+  }
+  if (name.includes('sabir nawaz')) {
+    return emp?.shiftOpeningTime || '09:00';
+  }
+
+  // Bahria Town Office staff
+  if (isBahriaTownEmployee(emp)) {
+    if (isFromOct26) {
+      return isFriday ? '14:30' : '13:30';
+    }
+    return '12:30';
+  }
+
+  // IT Office staff
+  if (dept === 'IT Office') {
+    return emp?.shiftOpeningTime || '12:00';
+  }
+
+  return emp?.shiftOpeningTime || (isFromOct26 ? (isFriday ? '14:30' : '13:30') : '12:30');
+};
+
+/**
  * Helper to calculate late minutes between arrivalTime and shiftOpeningTime (HH:mm format)
  * Rule:
  * 15-minute grace period:
- * If arrival <= shiftOpeningTime + 15 minutes (e.g. 12:30 shift, arrived <= 12:45), late = 0 mins.
- * If arrival > shiftOpeningTime + 15 minutes (e.g. 12:50), late = arrival - (shiftStart + 15) = 5 mins.
+ * If arrival <= shiftOpeningTime + 15 minutes (e.g. 13:30 shift, arrived <= 13:45), late = 0 mins.
+ * If arrival > shiftOpeningTime + 15 minutes (e.g. 13:50), late = arrival - (shiftStart + 15) = 5 mins.
  */
 const calculateLateMinutes = (arrivalTime, shiftOpeningTime) => {
   if (!arrivalTime || !shiftOpeningTime) return 0;
@@ -34,8 +95,14 @@ const calculateLateMinutes = (arrivalTime, shiftOpeningTime) => {
 export const getDailyAttendance = async (req, res) => {
   try {
     const { date, department } = req.query;
-    const targetDate = date ? new Date(date) : new Date();
-    const dateStr = targetDate.toISOString().split('T')[0];
+    let dateStr;
+    if (date && typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+      dateStr = date.trim();
+    } else if (date) {
+      dateStr = new Date(date).toISOString().split('T')[0];
+    } else {
+      dateStr = new Date().toISOString().split('T')[0];
+    }
 
     const empQuery = { isActive: true };
     if (department && department !== 'ALL') empQuery.department = department;
@@ -50,7 +117,15 @@ export const getDailyAttendance = async (req, res) => {
 
     const rows = employees.map((emp) => {
       const att = attMap.get(emp._id.toString());
-      const shiftOpeningTime = att?.shiftOpeningTime || emp.shiftOpeningTime || '12:30';
+      const defaultShift = getDefaultShiftOpeningTime(emp, dateStr);
+      let shiftOpeningTime = att?.shiftOpeningTime || defaultShift;
+
+      // If an attendance was saved with the old 12:30 default for a date >= 2026-10-26 for Bahria Town Office,
+      // upgrade to the new default (14:30 on Friday, 13:30 on other days)
+      if (dateStr >= '2026-10-26' && isBahriaTownEmployee(emp) && shiftOpeningTime === '12:30') {
+        shiftOpeningTime = defaultShift;
+      }
+
       const arrivalTime = att?.arrivalTime || '';
 
       // Default status:
@@ -107,16 +182,19 @@ export const getDailyAttendance = async (req, res) => {
  */
 export const markAttendance = async (req, res) => {
   try {
-    const { employeeId, dateStr, shiftOpeningTime = '12:30', arrivalTime = '', status = 'PRESENT', lateMinutes, remarks = '' } = req.body;
+    const { employeeId, dateStr, shiftOpeningTime, arrivalTime = '', status = 'PRESENT', lateMinutes, remarks = '' } = req.body;
 
     if (!employeeId || !dateStr) {
       return apiError(res, 'Employee ID and date string (YYYY-MM-DD) are required.', 400);
     }
 
+    const emp = await Employee.findById(employeeId).lean();
+    const effectiveShift = shiftOpeningTime || getDefaultShiftOpeningTime(emp, dateStr);
+
     let lateMins = 0;
     if (status !== 'ABSENT' && status !== 'LEAVE' && status !== 'NOT_JOINED') {
-      if (arrivalTime && shiftOpeningTime) {
-        lateMins = calculateLateMinutes(arrivalTime, shiftOpeningTime);
+      if (arrivalTime && effectiveShift) {
+        lateMins = calculateLateMinutes(arrivalTime, effectiveShift);
       } else if (lateMinutes !== undefined && !isNaN(Number(lateMinutes))) {
         lateMins = Math.max(0, Number(lateMinutes));
       }
@@ -137,7 +215,7 @@ export const markAttendance = async (req, res) => {
         employeeId,
         date: dateObj,
         dateStr,
-        shiftOpeningTime,
+        shiftOpeningTime: effectiveShift,
         arrivalTime,
         status: finalStatus,
         lateMinutes: lateMins,
@@ -167,11 +245,18 @@ export const bulkMarkAttendance = async (req, res) => {
     }
 
     const dateObj = new Date(dateStr);
+    const empIds = records.map((r) => r.employeeId);
+    const employees = await Employee.find({ _id: { $in: empIds } }).lean();
+    const empMap = new Map(employees.map((e) => [e._id.toString(), e]));
+
     const operations = records.map((rec) => {
+      const emp = empMap.get(rec.employeeId?.toString());
+      const effectiveShift = rec.shiftOpeningTime || getDefaultShiftOpeningTime(emp, dateStr);
+
       let lateMins = 0;
       if (rec.status !== 'ABSENT' && rec.status !== 'LEAVE' && rec.status !== 'NOT_JOINED') {
-        if (rec.arrivalTime && rec.shiftOpeningTime) {
-          lateMins = calculateLateMinutes(rec.arrivalTime, rec.shiftOpeningTime);
+        if (rec.arrivalTime && effectiveShift) {
+          lateMins = calculateLateMinutes(rec.arrivalTime, effectiveShift);
         } else if (rec.lateMinutes !== undefined && !isNaN(Number(rec.lateMinutes))) {
           lateMins = Math.max(0, Number(rec.lateMinutes));
         }
@@ -192,7 +277,7 @@ export const bulkMarkAttendance = async (req, res) => {
               employeeId: rec.employeeId,
               date: dateObj,
               dateStr,
-              shiftOpeningTime: rec.shiftOpeningTime || '12:30',
+              shiftOpeningTime: effectiveShift,
               arrivalTime: rec.arrivalTime || '',
               status: finalStatus,
               lateMinutes: lateMins,
