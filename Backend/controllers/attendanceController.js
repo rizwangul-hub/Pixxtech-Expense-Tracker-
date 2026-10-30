@@ -57,7 +57,32 @@ export const getDefaultShiftOpeningTime = (emp, dateStr) => {
 
   // IT Office staff
   if (dept === 'IT Office') {
-    return emp?.shiftOpeningTime || '12:00';
+    if (emp?.shiftOpeningTime) return emp.shiftOpeningTime;
+    if (name.includes('saeed') || name.includes('faiz') || name.includes('naveed')) {
+      return '13:00';
+    }
+    if (name.includes('sawera')) {
+      return '15:00';
+    }
+    if (name.includes('nousheen') || name.includes('nausheen') || name.includes('noushin')) {
+      return '15:30';
+    }
+    if (name.includes('rafey') || name.includes('abdul rafey')) {
+      return '17:00';
+    }
+    if (name.includes('samina')) {
+      return '14:00';
+    }
+    if (name.includes('gulzaib')) {
+      return '13:00';
+    }
+    if (name.includes('zulaikha')) {
+      return '15:00';
+    }
+    if (name.includes('armaghan')) {
+      return '12:30';
+    }
+    return '12:00';
   }
 
   return emp?.shiftOpeningTime || (isFromOct26 ? (isFriday ? '14:30' : '13:30') : '12:30');

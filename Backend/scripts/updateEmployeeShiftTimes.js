@@ -6,16 +6,16 @@ dotenv.config();
 
 const specificRules = [
   // IT Office Specific Shift Times
-  { matchName: 'Malik Naveed', dept: 'IT Office', time: '12:00' },
-  { matchName: 'Saeed Sb', dept: 'IT Office', time: '12:00' },
-  { matchName: 'Faiz Mujahid', dept: 'IT Office', time: '12:00' },
+  { matchName: 'Malik Naveed', dept: 'IT Office', time: '13:00' },
+  { matchName: 'Saeed Sb', dept: 'IT Office', time: '13:00' },
+  { matchName: 'Faiz Mujahid', dept: 'IT Office', time: '13:00' },
   { matchName: 'Gulzaib Hamid', dept: 'IT Office', time: '13:00' },
   { matchName: 'Samina Iqbal', dept: 'IT Office', time: '14:00' },
-  { matchName: 'Miss Nausheen', dept: 'IT Office', time: '15:00' },
-  { matchName: 'Nausheen', dept: 'IT Office', time: '15:00' },
+  { matchName: 'Miss Nausheen', dept: 'IT Office', time: '15:30' },
+  { matchName: 'Nausheen', dept: 'IT Office', time: '15:30' },
   { matchName: 'Zulaikha Afzaal', dept: 'IT Office', time: '15:00' },
-  { matchName: 'Sawera', dept: 'IT Office', time: '12:30' },
-  { matchName: 'Abdul Rafey', dept: 'IT Office', time: '16:00' },
+  { matchName: 'Sawera', dept: 'IT Office', time: '15:00' },
+  { matchName: 'Abdul Rafey', dept: 'IT Office', time: '17:00' },
 
   // Bahria Town Office & 4A Driver Shift Times
   { matchName: 'Sabir Nawaz', dept: 'Bahria Town Office', desig: 'Admin Rider', time: '09:00' },

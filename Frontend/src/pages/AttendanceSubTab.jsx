@@ -126,6 +126,31 @@ export const getDefaultShiftOpeningTime = (row, dateStr) => {
   }
 
   if (dept === 'IT Office') {
+    const itName = name.toLowerCase();
+    if (itName.includes('saeed') || itName.includes('faiz') || itName.includes('naveed')) {
+      return row?.shiftOpeningTime && row.shiftOpeningTime !== '12:00' ? row.shiftOpeningTime : '13:00';
+    }
+    if (itName.includes('sawera')) {
+      return row?.shiftOpeningTime && row.shiftOpeningTime !== '12:30' ? row.shiftOpeningTime : '15:00';
+    }
+    if (itName.includes('nousheen') || itName.includes('nausheen') || itName.includes('noushin')) {
+      return row?.shiftOpeningTime && row.shiftOpeningTime !== '15:00' ? row.shiftOpeningTime : '15:30';
+    }
+    if (itName.includes('rafey') || itName.includes('abdul rafey')) {
+      return row?.shiftOpeningTime && row.shiftOpeningTime !== '16:00' ? row.shiftOpeningTime : '17:00';
+    }
+    if (itName.includes('samina')) {
+      return row?.shiftOpeningTime || '14:00';
+    }
+    if (itName.includes('gulzaib')) {
+      return row?.shiftOpeningTime || '13:00';
+    }
+    if (itName.includes('zulaikha')) {
+      return row?.shiftOpeningTime || '15:00';
+    }
+    if (itName.includes('armaghan')) {
+      return row?.shiftOpeningTime || '12:30';
+    }
     return row?.shiftOpeningTime || '12:00';
   }
 
