@@ -388,6 +388,17 @@ export const RentCollectionModal = ({
                   </option>
                 ))}
             </optgroup>
+            {accounts.some((a) => a.type === 'SUSPENSE' || a.name?.toLowerCase().includes('suspense')) && (
+              <optgroup label="Suspense Accounts">
+                {accounts
+                  .filter((a) => a.type === 'SUSPENSE' || a.name?.toLowerCase().includes('suspense'))
+                  .map((a) => (
+                    <option key={a._id} value={a._id}>
+                      {a.name} (PKR {a.currentBalance?.toLocaleString()})
+                    </option>
+                  ))}
+              </optgroup>
+            )}
           </select>
         </div>
 

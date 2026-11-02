@@ -264,6 +264,7 @@ export function RentReceivedPage({
 
   // Filter accounts according to payment method
   const filteredReceivingAccounts = accountsList.filter((a) => {
+    if (a.type === 'SUSPENSE' || a.name?.toLowerCase().includes('suspense')) return true;
     if (formData.paymentMethod === 'BANK_TRANSFER') return a.type === 'BANK';
     if (formData.paymentMethod === 'CASH') return a.type === 'CASH';
     return true; // CHEQUE or OTHER can deposit into either

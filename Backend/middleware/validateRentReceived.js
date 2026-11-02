@@ -138,22 +138,28 @@ export const validateRentReceived = async (req, res, next) => {
 
     // 7. Payment Method & Account Type Compatibility
     const normalizedMethod = paymentMethod.toUpperCase();
-    if (normalizedMethod === 'BANK_TRANSFER' && receivingAccount.type !== 'BANK') {
-      return apiError(
-        res,
-        `Payment method "BANK_TRANSFER" requires a Bank Account. "${receivingAccount.name}" is a Cash account.`,
-        400,
-        { receivingAccountId: 'Account must be of type BANK for bank transfers.' }
-      );
-    }
+    const isSuspense =
+      receivingAccount.type === 'SUSPENSE' ||
+      (receivingAccount.name || '').toLowerCase().includes('suspense');
 
-    if (normalizedMethod === 'CASH' && receivingAccount.type !== 'CASH') {
-      return apiError(
-        res,
-        `Payment method "CASH" requires a Cash Custodian Account. "${receivingAccount.name}" is a Bank account.`,
-        400,
-        { receivingAccountId: 'Account must be of type CASH for cash payments.' }
-      );
+    if (!isSuspense) {
+      if (normalizedMethod === 'BANK_TRANSFER' && receivingAccount.type !== 'BANK') {
+        return apiError(
+          res,
+          `Payment method "BANK_TRANSFER" requires a Bank Account or Suspense Account. "${receivingAccount.name}" is a Cash account.`,
+          400,
+          { receivingAccountId: 'Account must be of type BANK or SUSPENSE for bank transfers.' }
+        );
+      }
+
+      if (normalizedMethod === 'CASH' && receivingAccount.type !== 'CASH') {
+        return apiError(
+          res,
+          `Payment method "CASH" requires a Cash Custodian Account or Suspense Account. "${receivingAccount.name}" is a Bank account.`,
+          400,
+          { receivingAccountId: 'Account must be of type CASH or SUSPENSE for cash payments.' }
+        );
+      }
     }
 
     // Attach verified records to req
