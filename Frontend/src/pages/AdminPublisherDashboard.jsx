@@ -1109,6 +1109,17 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                         </option>
                       ))}
                   </optgroup>
+                  {accountsList.some((a) => a.type === 'SUSPENSE' || a.name?.toLowerCase().includes('suspense')) && (
+                    <optgroup label="Suspense Accounts">
+                      {accountsList
+                        .filter((a) => a.type === 'SUSPENSE' || a.name?.toLowerCase().includes('suspense'))
+                        .map((a) => (
+                          <option key={a._id} value={a._id}>
+                            {a.name} (PKR {formatPKR(a.currentBalance)})
+                          </option>
+                        ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 
