@@ -480,6 +480,17 @@ export function FinancialReportsPage({ currentUser }) {
                       </option>
                     ))}
                 </optgroup>
+                {accountsList.some((a) => a.type === 'SUSPENSE' || a.name?.toLowerCase().includes('suspense')) && (
+                  <optgroup label="⚖️ Suspense Accounts">
+                    {accountsList
+                      .filter((a) => a.type === 'SUSPENSE' || a.name?.toLowerCase().includes('suspense'))
+                      .map((a) => (
+                        <option key={a._id} value={a._id}>
+                          {a.name} (Suspense) — {formatPKR(a.currentBalance)}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
               </select>
 
               <button
