@@ -12,8 +12,9 @@ const Transaction = (await import('../models/Transaction.js')).default;
 const Property = (await import('../models/Property.js')).default;
 const Category = (await import('../models/Category.js')).default;
 const Account = (await import('../models/Account.js')).default;
-const { round2, isOwnerPersonalTransaction } = await import('../services/ledgerService.js');
+const { round2 } = await import('../services/ledgerService.js');
 const { getUtcMonthDateRange } = await import('../services/salaryReportingService.js');
+const { isOwnerPersonalTransaction } = await import('../services/expenseClassificationService.js');
 
 function is40ABTransaction(tx) {
   const catName = (tx.categoryId?.name || '').toLowerCase();
