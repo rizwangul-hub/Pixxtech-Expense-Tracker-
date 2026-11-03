@@ -318,7 +318,11 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   };
 
   // 2. Format Page 2: Cash & Bank Opening & Closing Balance Detail (Pure Dynamic from DB)
-  const sortedRows = matrixRows.map((r) => ({
+  // Only display accounts that had active entries/transactions during this month
+  const displayRowsSource = matrixData.activeRows || matrixRows.filter((r) => r.totalInput > 0 || r.totalOutput > 0);
+  const displayTotalsSource = matrixData.activeGrandTotal || grandTotal;
+
+  const sortedRows = displayRowsSource.map((r) => ({
     name: r.accountName,
     openingBalance: r.openingBalance,
     rentalIncome: r.rentalIncome,
@@ -335,16 +339,16 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   const page2Matrix = {
     rows: sortedRows,
     totals: {
-      openingBalance: grandTotal.openingBalance,
-      rentalIncome: grandTotal.rentalIncome,
-      input40AB: grandTotal.input40AB || 0,
-      otherInput: grandTotal.otherInput,
-      totalInput: grandTotal.totalInput,
-      rentalExpenses: grandTotal.rentalExpenses,
-      expense40AB: grandTotal.expense40AB || 0,
-      otherExpenses: grandTotal.otherExpenses,
-      totalOutput: grandTotal.totalOutput,
-      closingBalance: grandTotal.closingBalance,
+      openingBalance: displayTotalsSource.openingBalance,
+      rentalIncome: displayTotalsSource.rentalIncome,
+      input40AB: displayTotalsSource.input40AB || 0,
+      otherInput: displayTotalsSource.otherInput,
+      totalInput: displayTotalsSource.totalInput,
+      rentalExpenses: displayTotalsSource.rentalExpenses,
+      expense40AB: displayTotalsSource.expense40AB || 0,
+      otherExpenses: displayTotalsSource.otherExpenses,
+      totalOutput: displayTotalsSource.totalOutput,
+      closingBalance: displayTotalsSource.closingBalance,
     },
   };
 
