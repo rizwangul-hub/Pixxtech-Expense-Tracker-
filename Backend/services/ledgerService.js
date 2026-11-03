@@ -783,6 +783,40 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
     grandTotal[key] = round2(grandTotal[key]);
   }
 
+  // Filter accounts that had active entries/transactions during this month
+  const activeRows = rows.filter((r) => r.totalInput > 0 || r.totalOutput > 0);
+  const activeGrandTotal = activeRows.reduce(
+    (acc, r) => {
+      acc.openingBalance += r.openingBalance;
+      acc.rentalIncome += r.rentalIncome;
+      acc.input40AB += r.input40AB;
+      acc.otherInput += r.otherInput;
+      acc.totalInput += r.totalInput;
+      acc.rentalExpenses += r.rentalExpenses;
+      acc.expense40AB += r.expense40AB;
+      acc.otherExpenses += r.otherExpenses;
+      acc.totalOutput += r.totalOutput;
+      acc.closingBalance += r.closingBalance;
+      return acc;
+    },
+    {
+      openingBalance: 0,
+      rentalIncome: 0,
+      input40AB: 0,
+      otherInput: 0,
+      totalInput: 0,
+      rentalExpenses: 0,
+      expense40AB: 0,
+      otherExpenses: 0,
+      totalOutput: 0,
+      closingBalance: 0,
+    }
+  );
+
+  for (const key of Object.keys(activeGrandTotal)) {
+    activeGrandTotal[key] = round2(activeGrandTotal[key]);
+  }
+
   return {
     year,
     month,
@@ -791,6 +825,8 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
     endDate: endOfMonth.toISOString().split('T')[0],
     rows,
     grandTotal,
+    activeRows,
+    activeGrandTotal,
   };
 };
 
