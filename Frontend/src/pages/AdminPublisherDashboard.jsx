@@ -592,11 +592,13 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                           <th className="py-2.5 px-3">Cash & Bank A/C</th>
                           <th className="py-2.5 px-3 text-right">Opening Balance</th>
                           <th className="py-2.5 px-3 text-right">Rental Income (In)</th>
+                          <th className="py-2.5 px-3 text-right text-amber-300">40-AB Income</th>
                           <th className="py-2.5 px-3 text-right">Other Input</th>
                           <th className="py-2.5 px-3 text-right bg-slate-900 font-bold text-white">
                             Total Input
                           </th>
                           <th className="py-2.5 px-3 text-right">Rental Exp</th>
+                          <th className="py-2.5 px-3 text-right text-amber-300">40-AB Exp</th>
                           <th className="py-2.5 px-3 text-right">Other Exp</th>
                           <th className="py-2.5 px-3 text-right bg-slate-900 font-bold text-white">
                             Total Output
@@ -616,6 +618,9 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                             <td className="py-2 px-3 text-right text-emerald-300/80">
                               {formatPKR(r.rentalIncome)}
                             </td>
+                            <td className="py-2 px-3 text-right text-amber-300 font-semibold">
+                              {formatPKR(r.input40AB)}
+                            </td>
                             <td className="py-2 px-3 text-right text-slate-400">
                               {formatPKR(r.otherInput)}
                             </td>
@@ -624,6 +629,9 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                             </td>
                             <td className="py-2 px-3 text-right text-rose-300/80">
                               {formatPKR(r.rentalExpenses)}
+                            </td>
+                            <td className="py-2 px-3 text-right text-amber-300 font-semibold">
+                              {formatPKR(r.expense40AB)}
                             </td>
                             <td className="py-2 px-3 text-right text-slate-400">
                               {formatPKR(r.otherExpenses)}
@@ -650,6 +658,9 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                           <td className="py-3 px-3 text-right text-emerald-400">
                             {formatPKR(glanceData.matrix?.grandTotal?.rentalIncome)}
                           </td>
+                          <td className="py-3 px-3 text-right text-amber-400">
+                            {formatPKR(glanceData.matrix?.grandTotal?.input40AB)}
+                          </td>
                           <td className="py-3 px-3 text-right">
                             {formatPKR(glanceData.matrix?.grandTotal?.otherInput)}
                           </td>
@@ -658,6 +669,9 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                           </td>
                           <td className="py-3 px-3 text-right text-rose-400">
                             {formatPKR(glanceData.matrix?.grandTotal?.rentalExpenses)}
+                          </td>
+                          <td className="py-3 px-3 text-right text-amber-400">
+                            {formatPKR(glanceData.matrix?.grandTotal?.expense40AB)}
                           </td>
                           <td className="py-3 px-3 text-right">
                             {formatPKR(glanceData.matrix?.grandTotal?.otherExpenses)}
