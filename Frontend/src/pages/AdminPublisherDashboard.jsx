@@ -609,7 +609,7 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-mono">
-                        {glanceData.matrix?.rows?.map((r) => (
+                        {(glanceData.matrix?.activeRows || glanceData.matrix?.rows?.filter((r) => r.totalInput > 0 || r.totalOutput > 0))?.map((r) => (
                           <tr key={r.accountId} className="hover:bg-slate-800/40 text-slate-300">
                             <td className="py-2 px-3 font-sans font-medium text-slate-200">
                               {r.accountName}
@@ -650,39 +650,44 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-slate-950 text-white font-mono font-black border-t-2 border-slate-700">
-                          <td className="py-3 px-3 font-sans">GRAND TOTAL</td>
-                          <td className="py-3 px-3 text-right">
-                            {formatPKR(glanceData.matrix?.grandTotal?.openingBalance)}
-                          </td>
-                          <td className="py-3 px-3 text-right text-emerald-400">
-                            {formatPKR(glanceData.matrix?.grandTotal?.rentalIncome)}
-                          </td>
-                          <td className="py-3 px-3 text-right text-amber-400">
-                            {formatPKR(glanceData.matrix?.grandTotal?.input40AB)}
-                          </td>
-                          <td className="py-3 px-3 text-right">
-                            {formatPKR(glanceData.matrix?.grandTotal?.otherInput)}
-                          </td>
-                          <td className="py-3 px-3 text-right bg-slate-900 text-blue-400">
-                            {formatPKR(glanceData.matrix?.grandTotal?.totalInput)}
-                          </td>
-                          <td className="py-3 px-3 text-right text-rose-400">
-                            {formatPKR(glanceData.matrix?.grandTotal?.rentalExpenses)}
-                          </td>
-                          <td className="py-3 px-3 text-right text-amber-400">
-                            {formatPKR(glanceData.matrix?.grandTotal?.expense40AB)}
-                          </td>
-                          <td className="py-3 px-3 text-right">
-                            {formatPKR(glanceData.matrix?.grandTotal?.otherExpenses)}
-                          </td>
-                          <td className="py-3 px-3 text-right bg-slate-900 text-amber-400">
-                            {formatPKR(glanceData.matrix?.grandTotal?.totalOutput)}
-                          </td>
-                          <td className="py-3 px-3 text-right bg-slate-900 text-emerald-400 text-sm">
-                            {formatPKR(glanceData.matrix?.grandTotal?.closingBalance)}
-                          </td>
-                        </tr>
+                        {(() => {
+                          const totals = glanceData.matrix?.activeGrandTotal || glanceData.matrix?.grandTotal;
+                          return (
+                            <tr className="bg-slate-950 text-white font-mono font-black border-t-2 border-slate-700">
+                              <td className="py-3 px-3 font-sans">GRAND TOTAL</td>
+                              <td className="py-3 px-3 text-right">
+                                {formatPKR(totals?.openingBalance)}
+                              </td>
+                              <td className="py-3 px-3 text-right text-emerald-400">
+                                {formatPKR(totals?.rentalIncome)}
+                              </td>
+                              <td className="py-3 px-3 text-right text-amber-400">
+                                {formatPKR(totals?.input40AB)}
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                {formatPKR(totals?.otherInput)}
+                              </td>
+                              <td className="py-3 px-3 text-right bg-slate-900 text-blue-400">
+                                {formatPKR(totals?.totalInput)}
+                              </td>
+                              <td className="py-3 px-3 text-right text-rose-400">
+                                {formatPKR(totals?.rentalExpenses)}
+                              </td>
+                              <td className="py-3 px-3 text-right text-amber-400">
+                                {formatPKR(totals?.expense40AB)}
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                {formatPKR(totals?.otherExpenses)}
+                              </td>
+                              <td className="py-3 px-3 text-right bg-slate-900 text-amber-400">
+                                {formatPKR(totals?.totalOutput)}
+                              </td>
+                              <td className="py-3 px-3 text-right bg-slate-900 text-emerald-400 text-sm">
+                                {formatPKR(totals?.closingBalance)}
+                              </td>
+                            </tr>
+                          );
+                        })()}
                       </tfoot>
                     </table>
                   </div>
