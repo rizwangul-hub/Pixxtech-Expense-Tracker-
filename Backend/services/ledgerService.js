@@ -571,6 +571,39 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
  * @param {number} month - 1-indexed month (1 = Jan, 8 = August)
  * @returns {Promise<Object>} - Matrix rows for each account and a grand total row
  */
+/**
+ * Helper to identify whether a transaction belongs to 40-AB / 48-AB property activities
+ * Includes: G1 to G6 shops, Saad Manzoor, token money, security, partners (Rana Zeeshan, Adnan Saleem),
+ * meter connection charges, repairs/sanitary/shutter expenses for 40-AB.
+ */
+export const is40ABTransaction = (tx) => {
+  if (!tx) return false;
+  const cat = tx.categoryId;
+  const catName = (typeof cat === 'object' && cat !== null ? cat.name : '') || '';
+  const detail = tx.detail || '';
+  const notes = tx.notes || '';
+  const propName = (tx.propertyId && typeof tx.propertyId === 'object' ? tx.propertyId.plazaName : '') || '';
+  const text = `${catName} ${detail} ${notes} ${propName}`.toLowerCase();
+
+  // 1. Explicit 40-AB or 48-AB or 40AB or 48AB
+  if (/(?:40|48)\s*[-_]?\s*ab\b/i.test(text)) return true;
+
+  // 2. Shops G1 to G6
+  if (/\bg[1-6]\b/i.test(text) || /\bg-[1-6]\b/i.test(text) || /\bshop\b/i.test(catName.toLowerCase())) return true;
+
+  // 3. Saad Manzoor / Saad Manzor
+  if (text.includes('saad manzoor') || text.includes('saad manzor')) return true;
+
+  // 4. 40AB Partners: Rana Muhammad Zeeshan, Adnan Saleem
+  if (text.includes('rana muhammad zeeshan') || text.includes('adnan saleem')) return true;
+
+  // 5. Specific categories for 40AB
+  const cLow = catName.toLowerCase();
+  if (cLow.includes('g1') || cLow.includes('g2') || cLow.includes('g3') || cLow.includes('g4') || cLow.includes('g5') || cLow.includes('g6')) return true;
+
+  return false;
+};
+
 export const getMonthlyOpeningClosingMatrix = async (year, month) => {
   if (typeof year === 'string' && year.includes('-')) {
     const [y, m] = year.split('-').map(Number);
@@ -630,9 +663,11 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
   const grandTotal = {
     openingBalance: 0,
     rentalIncome: 0,
+    input40AB: 0,
     otherInput: 0,
     totalInput: 0,
     rentalExpenses: 0,
+    expense40AB: 0,
     otherExpenses: 0,
     totalOutput: 0,
     closingBalance: 0,
@@ -646,8 +681,10 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
     const openingBalance = round2(account.openingBalance + prior.debits - prior.credits);
 
     let rentalIncome = 0;
+    let input40AB = 0;
     let otherInput = 0;
     let rentalExpenses = 0;
+    let expense40AB = 0;
     let otherExpenses = 0;
     let transferOut = 0; // outflows from TRANSFER txs — kept separate so closing balance stays correct
 
@@ -658,10 +695,13 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
 
       const isRentalCat = cat?.isRentalHead || cat?.name === 'Rental Income';
       const isPropertyTied = !!tx.propertyId;
+      const is40AB = is40ABTransaction(tx);
 
       // Inflow into this account (Debited)
       if (isDr) {
-        if (isRentalCat || isPropertyTied) {
+        if (is40AB) {
+          input40AB += tx.amount;
+        } else if (isRentalCat || isPropertyTied) {
           rentalIncome += tx.amount;
         } else {
           otherInput += tx.amount;
@@ -671,15 +711,19 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
       // Outflow from this account (Credited) — categorise by transaction type
       if (isCr) {
         if (tx.transactionType === 'EXPENSE') {
-          // Only real EXPENSE transactions split into Rental vs Other Expenses
-          const isOwnerPersonal =
-            tx.sourceModule === 'OWNER_PERSONAL' ||
-            tx.reportCategory === 'Owner Personal' ||
-            isOwnerPersonalTransaction(tx);
-          if (isOwnerPersonal) {
-            otherExpenses += tx.amount;
+          if (is40AB) {
+            expense40AB += tx.amount;
           } else {
-            rentalExpenses += tx.amount;
+            // Only real EXPENSE transactions split into Rental vs Other Expenses
+            const isOwnerPersonal =
+              tx.sourceModule === 'OWNER_PERSONAL' ||
+              tx.reportCategory === 'Owner Personal' ||
+              isOwnerPersonalTransaction(tx);
+            if (isOwnerPersonal) {
+              otherExpenses += tx.amount;
+            } else {
+              rentalExpenses += tx.amount;
+            }
           }
         } else {
           // TRANSFER or any other outflow — tracked separately (still affects closing balance)
@@ -689,14 +733,16 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
     }
 
     rentalIncome = round2(rentalIncome);
+    input40AB = round2(input40AB);
     otherInput = round2(otherInput);
-    const totalInput = round2(rentalIncome + otherInput);
+    const totalInput = round2(rentalIncome + input40AB + otherInput);
 
     rentalExpenses = round2(rentalExpenses);
+    expense40AB = round2(expense40AB);
     otherExpenses = round2(otherExpenses);
     transferOut = round2(transferOut);
     // totalOutput must include transferOut to keep closing balance correct
-    const totalOutput = round2(rentalExpenses + otherExpenses + transferOut);
+    const totalOutput = round2(rentalExpenses + expense40AB + otherExpenses + transferOut);
 
     const closingBalance = round2(openingBalance + totalInput - totalOutput);
 
@@ -707,9 +753,11 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
       accountNumber: account.accountNumber,
       openingBalance,
       rentalIncome,
+      input40AB,
       otherInput,
       totalInput,
       rentalExpenses,
+      expense40AB,
       otherExpenses,
       totalOutput,
       closingBalance,
@@ -720,9 +768,11 @@ export const getMonthlyOpeningClosingMatrix = async (year, month) => {
     // Add to Grand Total
     grandTotal.openingBalance += openingBalance;
     grandTotal.rentalIncome += rentalIncome;
+    grandTotal.input40AB += input40AB;
     grandTotal.otherInput += otherInput;
     grandTotal.totalInput += totalInput;
     grandTotal.rentalExpenses += rentalExpenses;
+    grandTotal.expense40AB += expense40AB;
     grandTotal.otherExpenses += otherExpenses;
     grandTotal.totalOutput += totalOutput;
     grandTotal.closingBalance += closingBalance;
