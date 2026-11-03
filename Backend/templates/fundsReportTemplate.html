@@ -302,22 +302,24 @@
     <div class="report-subtitle">Opening & Closing Balance Detail</div>
     <div class="report-date">{{asOfDate}}</div>
 
-    <table style="font-size: 7pt;">
+    <table style="font-size: 6.8pt;">
       <thead>
         <tr>
-          <th rowspan="2" style="width: 20%;" class="text-center">Cash & Bank A/C</th>
-          <th rowspan="2" style="width: 10%;" class="text-center">Opening<br>Balance</th>
-          <th colspan="3" class="bg-income-hdr text-center">INPUT</th>
-          <th colspan="3" class="bg-expense-hdr text-center">OUTPUT</th>
-          <th rowspan="2" style="width: 11%;" class="text-center">Closing Balances<br>As On {{shortAsOfDate}}</th>
+          <th rowspan="2" style="width: 17%;" class="text-center">Cash & Bank A/C</th>
+          <th rowspan="2" style="width: 9%;" class="text-center">Opening<br>Balance</th>
+          <th colspan="4" class="bg-income-hdr text-center">INPUT</th>
+          <th colspan="4" class="bg-expense-hdr text-center">OUTPUT</th>
+          <th rowspan="2" style="width: 10%;" class="text-center">Closing Balances<br>As On {{shortAsOfDate}}</th>
         </tr>
         <tr>
-          <th class="bg-income-hdr text-center" style="width: 9%;">Rental Income</th>
-          <th class="bg-income-hdr text-center" style="width: 9%;">Other Input</th>
-          <th class="bg-income-hdr text-center" style="width: 9%;">Total Input</th>
-          <th class="bg-expense-hdr text-center" style="width: 9%;">Rental Expenses</th>
-          <th class="bg-expense-hdr text-center" style="width: 9%;">Other Expenses</th>
-          <th class="bg-expense-hdr text-center" style="width: 9%;">Total Output</th>
+          <th class="bg-income-hdr text-center" style="width: 8%;">Rental Income</th>
+          <th class="bg-income-hdr text-center" style="width: 8%;">40-AB Income</th>
+          <th class="bg-income-hdr text-center" style="width: 8%;">Other Input</th>
+          <th class="bg-income-hdr text-center" style="width: 8%;">Total Input</th>
+          <th class="bg-expense-hdr text-center" style="width: 8%;">Rental Expenses</th>
+          <th class="bg-expense-hdr text-center" style="width: 8%;">40-AB Expenses</th>
+          <th class="bg-expense-hdr text-center" style="width: 8%;">Other Expenses</th>
+          <th class="bg-expense-hdr text-center" style="width: 8%;">Total Output</th>
         </tr>
       </thead>
       <tbody>
@@ -326,9 +328,11 @@
           <td><strong>{{this.name}}</strong></td>
           <td class="text-right font-mono">{{formatPKR this.openingBalance}}</td>
           <td class="text-right font-mono">{{formatPKR this.rentalIncome}}</td>
+          <td class="text-right font-mono">{{formatPKR this.input40AB}}</td>
           <td class="text-right font-mono">{{formatPKR this.otherInput}}</td>
           <td class="text-right font-mono font-bold">{{formatPKR this.totalInput}}</td>
           <td class="text-right font-mono">{{formatPKR this.rentalExpenses}}</td>
+          <td class="text-right font-mono">{{formatPKR this.expense40AB}}</td>
           <td class="text-right font-mono">{{formatPKR this.otherExpenses}}</td>
           <td class="text-right font-mono font-bold">{{formatPKR this.totalOutput}}</td>
           <td class="text-right font-mono font-bold">{{formatPKR this.closingBalance}}</td>
@@ -340,9 +344,11 @@
           <td class="text-center">TOTAL</td>
           <td class="text-right font-mono">{{formatPKR page2Matrix.totals.openingBalance}}</td>
           <td class="text-right font-mono bg-yellow-highlight">{{formatPKR page2Matrix.totals.rentalIncome}}</td>
+          <td class="text-right font-mono bg-yellow-highlight">{{formatPKR page2Matrix.totals.input40AB}}</td>
           <td class="text-right font-mono">{{formatPKR page2Matrix.totals.otherInput}}</td>
           <td class="text-right font-mono">{{formatPKR page2Matrix.totals.totalInput}}</td>
           <td class="text-right font-mono bg-yellow-highlight">{{formatPKR page2Matrix.totals.rentalExpenses}}</td>
+          <td class="text-right font-mono bg-yellow-highlight">{{formatPKR page2Matrix.totals.expense40AB}}</td>
           <td class="text-right font-mono">{{formatPKR page2Matrix.totals.otherExpenses}}</td>
           <td class="text-right font-mono">{{formatPKR page2Matrix.totals.totalOutput}}</td>
           <td class="text-right font-mono">{{formatPKR page2Matrix.totals.closingBalance}}</td>
