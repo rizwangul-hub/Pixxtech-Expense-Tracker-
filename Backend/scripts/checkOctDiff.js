@@ -1,21 +1,20 @@
 import connectDB from '../config/db.js';
-import RentReceived from '../models/RentReceived.js';
-import Account from '../models/Account.js';
-import Property from '../models/Property.js';
+import MonthlyReport from '../models/MonthlyReport.js';
 
 async function check() {
   await connectDB();
-  const rents = await RentReceived.find({ rentMonth: '2026-10' })
-    .populate('propertyId receivingAccountId')
-    .lean();
-
-  console.log('Total RentReceived for 2026-10:', rents.length);
-  let total = 0;
-  rents.forEach(r => {
-    total += r.amount;
-    console.log(`${r.amount.toString().padStart(8)} | ${r.propertyId?.plazaName} | unit=${r.unitId} | acc=${r.receivingAccountId?.name} | date=${r.receiptDate?.toISOString()?.slice(0,10)}`);
-  });
-  console.log('TOTAL:', total);
+  const report = await MonthlyReport.findOne({ month: '2026-10' }).lean();
+  if (!report) {
+    console.log('No MonthlyReport found for 2026-10');
+  } else {
+    console.log('MonthlyReport 2026-10 found, status:', report.status);
+    console.log('Keys in report:', Object.keys(report));
+    if (report.matrix) {
+      console.log('report.matrix rows count:', report.matrix.rows?.length);
+      console.log('report.matrix grandTotal:', report.matrix.grandTotal);
+      report.matrix.rows?.forEach(r => console.log(' ', r.accountName, 'in:', r.totalInput, 'out:', r.totalOutput));
+    }
+  }
   process.exit(0);
 }
 
