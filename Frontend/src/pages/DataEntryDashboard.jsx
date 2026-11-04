@@ -35,6 +35,7 @@ import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 import { RecentEntriesTable } from '../components/RecentEntriesTable.jsx';
 import { accountsAPI, transactionsAPI, otherIncomeAPI, transfersAPI, uploadAPI, verificationAPI } from '../services/api.js';
 import { EvidenceImageUpload } from '../components/EvidenceImageUpload.jsx';
+import { AiNarrationButton } from '../components/AiNarrationButton.jsx';
 import { formatPKR, resolveTransactionAccounts } from '../utils/formatters.js';
 import { isAdmin, isVerifier } from '../utils/permissions.js';
 
