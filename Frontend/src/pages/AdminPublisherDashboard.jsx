@@ -32,6 +32,7 @@ import {
 import { adminAPI, reportsAPI, accountsAPI, propertiesAPI, otherIncomeAPI } from '../services/api.js';
 import { MonthlyReportsHistoryPage } from './MonthlyReportsHistoryPage.jsx';
 import { DatabaseBackupSection } from '../components/DatabaseBackupSection.jsx';
+import { AdminSystemUpdateModal } from '../components/updates/AdminSystemUpdateModal.jsx';
 import { resolveTransactionAccounts } from '../utils/formatters.js';
 import { isAdmin } from '../utils/permissions.js';
 
@@ -94,6 +95,7 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
   const [signOffChecked, setSignOffChecked] = useState(false);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(null);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
 
   // ----------------------------------------------------
   // Load Categories & Accounts for dropdowns
@@ -352,6 +354,16 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                   Publish & Download PDF
                 </>
               )}
+            </button>
+
+            {/* Smart System Updates Control Button */}
+            <button
+              onClick={() => setUpdateModalOpen(true)}
+              title="Publish & Manage System Updates"
+              className="flex items-center gap-1.5 text-slate-200 bg-indigo-950 hover:bg-indigo-900 border border-indigo-700/60 px-3 py-1.5 rounded-lg font-medium shadow-sm transition"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              <span>System Updates</span>
             </button>
 
             {/* Quick Switch to Data Entry view if requested */}
@@ -1708,6 +1720,11 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
             </form>
           </div>
         </div>
+      )}
+
+      {/* System Update Publishing Modal */}
+      {updateModalOpen && (
+        <AdminSystemUpdateModal onClose={() => setUpdateModalOpen(false)} />
       )}
 
       {/* Footer */}

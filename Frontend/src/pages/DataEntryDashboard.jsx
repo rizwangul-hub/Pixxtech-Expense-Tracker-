@@ -39,6 +39,7 @@ import { AiNarrationButton } from '../components/AiNarrationButton.jsx';
 import CelebrationOverlay from '../components/CelebrationOverlay.jsx';
 import { formatPKR, resolveTransactionAccounts } from '../utils/formatters.js';
 import { isAdmin, isVerifier } from '../utils/permissions.js';
+import { useUnsavedGuard } from '../utils/unsavedChangesRegistry.js';
 
 // Persistent in-memory cache for instant DataEntryDashboard rendering
 let dataEntryCache = {
@@ -96,6 +97,21 @@ export const DataEntryDashboard = ({ user }) => {
   const [submittingTransfer, setSubmittingTransfer] = useState(false);
   const [transferEvidenceFiles, setTransferEvidenceFiles] = useState([]);
   const [dashboardCelebration, setDashboardCelebration] = useState({ show: false, title: '', subtitle: '' });
+
+  // Unsaved Data Protection guards for Other Income and Transfers
+  const isOtherDirty = Boolean(
+    (otherForm.amount && String(otherForm.amount).trim() !== '') ||
+    (otherForm.detail && otherForm.detail.trim() !== '') ||
+    otherEvidenceFiles.length > 0
+  );
+  useUnsavedGuard('DataEntryOtherIncomeForm', activeTab === 'other' && isOtherDirty, 'Other Income Entry');
+
+  const isTransferDirty = Boolean(
+    (transferForm.amount && String(transferForm.amount).trim() !== '') ||
+    (transferForm.description && transferForm.description.trim() !== '') ||
+    transferEvidenceFiles.length > 0
+  );
+  useUnsavedGuard('DataEntryTransferForm', activeTab === 'transfer' && isTransferDirty, 'Internal Transfer Entry');
 
   // Load active accounts and metadata
   const loadMasterData = async (showLoading = false) => {

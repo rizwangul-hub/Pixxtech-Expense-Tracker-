@@ -91,22 +91,41 @@ export const communicationsAPI = {
   setTyping: async (typing) => (await api.post('/communications/typing', { typing })).data,
 };
 
-// Request interceptor: attach JWT token if present in localStorage
+let activeRequestsCount = 0;
+export const getActiveRequestsCount = () => activeRequestsCount;
+
+export const waitForActiveRequests = async (timeoutMs = 6000) => {
+  const startTime = Date.now();
+  while (activeRequestsCount > 0 && Date.now() - startTime < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return activeRequestsCount === 0;
+};
+
+// Request interceptor: attach JWT token if present in localStorage and track in-flight count
 api.interceptors.request.use(
   (config) => {
+    activeRequestsCount++;
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    activeRequestsCount = Math.max(0, activeRequestsCount - 1);
+    return Promise.reject(error);
+  }
 );
 
-// Response interceptor: catch 401 unauthenticated
+// Response interceptor: decrement in-flight count and catch 401 unauthenticated
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    activeRequestsCount = Math.max(0, activeRequestsCount - 1);
+    return response;
+  },
   (error) => {
+    activeRequestsCount = Math.max(0, activeRequestsCount - 1);
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
@@ -1412,6 +1431,13 @@ export const aiAPI = {
     const res = await api.post('/ai/enhance-narration', { text, context });
     return res.data;
   },
+};
+
+export const systemAPI = {
+  getVersion: async () => (await api.get('/system/version')).data,
+  getHistory: async () => (await api.get('/system/history')).data,
+  publishUpdate: async (payload) => (await api.post('/system/publish-update', payload)).data,
+  toggleUpdate: async (id) => (await api.patch(`/system/update/${id}/toggle`)).data,
 };
 
 export default api;

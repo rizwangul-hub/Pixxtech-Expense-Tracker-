@@ -30,6 +30,7 @@ import payrollRoutes from './routes/payrollRoutes.js';
 import communicationRoutes from './routes/communicationRoutes.js';
 import auditLogRoutes from './routes/auditLogRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
+import systemRoutes from './routes/systemRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -119,6 +120,7 @@ app.use('/api/staff/attendance', attendanceRoutes);
 app.use('/api/staff/payroll', payrollRoutes);
 app.use('/api/communications', communicationRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/system', systemRoutes);
 
 // 404 Not Found Handler
 app.use((req, res, next) => {

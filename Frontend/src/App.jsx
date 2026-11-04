@@ -26,6 +26,8 @@ import { MessagesCallsPage } from './pages/MessagesCallsPage.jsx';
 import { DatabaseBackupSection } from './components/DatabaseBackupSection.jsx';
 import { LoginForm } from './components/LoginForm.jsx';
 import { CommunicationsProvider, canUseCommunications } from './communications/CommunicationsProvider.jsx';
+import { SystemUpdateProvider } from './context/SystemUpdateContext.jsx';
+import { SystemUpdateManager } from './components/updates/SystemUpdateManager.jsx';
 import loadingImg from './assets/image/loading.png';
 import loadingMobileImg from './assets/image/loadingmb.jpg';
 import { authAPI } from './services/api.js';
@@ -87,7 +89,7 @@ const getAccessibleSection = (section, user) => {
   return section;
 };
 
-export function App() {
+function AppContent() {
   const [user, setUser] = useState(null);
   const [currentSection, setCurrentSection] = useState(() => sectionFromPath(window.location.pathname));
   const [selectedPropertyId, setSelectedPropertyId] = useState(null);
@@ -455,6 +457,15 @@ export function App() {
       )}
     </MainLayout>
     </CommunicationsProvider>
+  );
+}
+
+export function App() {
+  return (
+    <SystemUpdateProvider>
+      <SystemUpdateManager />
+      <AppContent />
+    </SystemUpdateProvider>
   );
 }
 

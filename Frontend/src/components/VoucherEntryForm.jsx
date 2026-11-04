@@ -3,6 +3,7 @@ import { accountsAPI, transactionsAPI, uploadAPI } from '../services/api.js';
 import { EvidenceImageUpload } from './EvidenceImageUpload.jsx';
 import { AiNarrationButton } from './AiNarrationButton.jsx';
 import CelebrationOverlay from './CelebrationOverlay.jsx';
+import { useUnsavedGuard } from '../utils/unsavedChangesRegistry.js';
 import {
   Send,
   AlertCircle,
@@ -71,6 +72,13 @@ export const VoucherEntryForm = ({
   const [customCategoryName, setCustomCategoryName] = useState('');
   const [savingCategory, setSavingCategory] = useState(false);
   const [celebration, setCelebration] = useState({ show: false, voucherNo: '' });
+
+  const isVoucherDirty = Boolean(
+    (amount && String(amount).trim() !== '') ||
+    (detail && detail.trim() !== '') ||
+    (evidenceFiles && evidenceFiles.length > 0)
+  );
+  useUnsavedGuard('VoucherEntryForm', isVoucherDirty, 'Expense Voucher Entry');
 
   const detailInputRef = useRef(null);
 
