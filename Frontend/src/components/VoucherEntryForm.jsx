@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { accountsAPI, transactionsAPI, uploadAPI } from '../services/api.js';
 import { EvidenceImageUpload } from './EvidenceImageUpload.jsx';
 import { AiNarrationButton } from './AiNarrationButton.jsx';
+import CelebrationOverlay from './CelebrationOverlay.jsx';
 import {
   Send,
   AlertCircle,
@@ -69,6 +70,7 @@ export const VoucherEntryForm = ({
   const [success, setSuccess] = useState(null);
   const [customCategoryName, setCustomCategoryName] = useState('');
   const [savingCategory, setSavingCategory] = useState(false);
+  const [celebration, setCelebration] = useState({ show: false, voucherNo: '' });
 
   const detailInputRef = useRef(null);
 
@@ -289,7 +291,9 @@ export const VoucherEntryForm = ({
         rentMonth: date ? date.slice(0, 7) : null,
       });
 
-      setSuccess(`Voucher #${voucherNo} recorded successfully!`);
+      const currentVn = voucherNo.trim();
+      setSuccess(`Voucher #${currentVn} recorded successfully!`);
+      setCelebration({ show: true, voucherNo: `#${currentVn}` });
 
       // Reset form fields for rapid next entry
       setAmount('');
@@ -765,6 +769,14 @@ export const VoucherEntryForm = ({
           </button>
         </div>
       </form>
+
+      {/* Premium Celebration Animation for Successful Voucher Recording */}
+      <CelebrationOverlay
+        isOpen={celebration.show}
+        type="voucher"
+        voucherNo={celebration.voucherNo}
+        onClose={() => setCelebration({ show: false, voucherNo: '' })}
+      />
     </div>
   );
 };
