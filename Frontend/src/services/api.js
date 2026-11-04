@@ -1407,4 +1407,11 @@ export const payrollAPI = {
   },
 };
 
+export const aiAPI = {
+  enhanceNarration: async (text, context = {}) => {
+    const res = await api.post('/ai/enhance-narration', { text, context });
+    return res.data;
+  },
+};
+
 export default api;

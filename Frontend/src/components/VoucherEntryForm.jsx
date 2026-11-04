@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { accountsAPI, transactionsAPI, uploadAPI } from '../services/api.js';
 import { EvidenceImageUpload } from './EvidenceImageUpload.jsx';
+import { AiNarrationButton } from './AiNarrationButton.jsx';
 import {
   Send,
   AlertCircle,
@@ -375,27 +376,27 @@ export const VoucherEntryForm = ({
         {/* Row 1: Date & Voucher No */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1 flex items-center justify-between">
-              <span className="flex items-center gap-1">
-                <Calendar className="w-4 h-4 text-blue-600" /> Entry Date (Voucher Date) <span className="text-red-500">*</span>
+            <label className="block text-sm font-extrabold text-slate-900 mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-blue-600" /> Entry Date (Voucher Date) <span className="text-red-500 font-bold">*</span>
               </span>
-              <span className="text-[11px] font-mono text-blue-600 font-bold">Month: {date ? date.slice(0, 7) : ''}</span>
+              <span className="text-xs font-mono text-blue-600 font-bold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">Month: {date ? date.slice(0, 7) : ''}</span>
             </label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
+              className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600 shadow-2xs"
               required
             />
-            <p className="text-[10px] text-slate-500 mt-1 font-normal">
+            <p className="text-xs text-slate-500 mt-1 font-normal">
               Transaction will be saved & reported in this entry date&apos;s month.
             </p>
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1 flex items-center gap-1">
-              <Hash className="w-4 h-4 text-blue-600" /> Voucher No (V.N)
+            <label className="block text-sm font-extrabold text-slate-900 mb-1.5 flex items-center gap-1.5">
+              <Hash className="w-4 h-4 text-blue-600" /> Voucher No (V.N) <span className="text-red-500 font-bold">*</span>
             </label>
             <div className="relative">
               <input
@@ -403,7 +404,7 @@ export const VoucherEntryForm = ({
                 value={voucherNo}
                 onChange={(e) => setVoucherNo(e.target.value)}
                 placeholder="e.g. 3067"
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-mono text-blue-700 font-bold focus:outline-none focus:border-blue-600"
+                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-mono text-blue-700 font-bold focus:outline-none focus:border-blue-600 shadow-2xs"
                 required
               />
               {fetchingVn && (
@@ -416,12 +417,17 @@ export const VoucherEntryForm = ({
         </div>
 
         {/* Row 2: Property & Unit Pickers (Derives Scope automatically) */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 shadow-2xs">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Property Picker */}
             <div>
-              <label className="block text-xs font-bold uppercase text-slate-700 mb-1 flex items-center gap-1">
-                <Building className="w-4 h-4 text-blue-600" /> Select Property (Optional / Leave empty for General Expense)
+              <label className="block text-sm font-extrabold text-slate-900 mb-1.5 flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1.5">
+                  <Building className="w-4 h-4 text-blue-600" /> Select Property
+                </span>
+                <span className="text-xs font-normal text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                  Optional &bull; Leave empty for General Expense
+                </span>
               </label>
               <select
                 value={propertyId}
@@ -432,7 +438,7 @@ export const VoucherEntryForm = ({
                   setParentCategoryId('');
                   setCategoryId(''); // Reset head selection on scope change
                 }}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
+                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600 shadow-2xs"
               >
                 <option value="">-- None (General Company Expense) --</option>
                 {properties.map((p) => (
@@ -446,8 +452,11 @@ export const VoucherEntryForm = ({
             {/* Unit Picker (Shown only if property is selected) */}
             {propertyId ? (
               <div>
-                <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
-                  Select Unit (Optional / Leave empty for Property Own Expense)
+                <label className="block text-sm font-extrabold text-slate-900 mb-1.5 flex flex-wrap items-center gap-2">
+                  <span>Select Unit / Tenant</span>
+                  <span className="text-xs font-normal text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                    Optional &bull; Leave empty for Property Own Expense
+                  </span>
                 </label>
                 <select
                   value={unitId}
@@ -456,7 +465,7 @@ export const VoucherEntryForm = ({
                     setParentCategoryId('');
                     setCategoryId(''); // Reset head selection on scope change
                   }}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:border-blue-600 shadow-2xs"
                 >
                   <option value="">-- None (Property Own Expense) --</option>
                   {units.map((unit) => (
@@ -467,8 +476,10 @@ export const VoucherEntryForm = ({
                 </select>
               </div>
             ) : (
-              <div className="hidden md:flex items-center text-xs font-bold text-slate-500 pt-5">
-                <span>🌐 General Company Expense (No Property Selected)</span>
+              <div className="hidden md:flex items-center text-xs font-bold text-slate-500 pt-7">
+                <span className="bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-300">
+                  🌐 General Company Expense (No Property Selected)
+                </span>
               </div>
             )}
           </div>
