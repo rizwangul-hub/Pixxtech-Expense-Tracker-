@@ -113,7 +113,7 @@ export const PERMISSIONS = Object.freeze({
 
 /**
  * Role-Permission Mapping Matrix
- * - ADMIN (Fahad): Executive monitoring, master data creation (banks, cash accounts, properties), reports, but cannot add operational rent/expense.
+ * - ADMIN (Fahad): Full executive authority, master data creation (banks, cash accounts, properties), reports, and direct operational voucher/rent recording.
  * - VERIFIER / VERIFICATION_MANAGER (Khurshid Anwar): Full monitoring, master data creation, pending entry review/edit/verify/reject/delete, and direct data entry.
  * - DATA_ENTRY (Sarfraz): Data entry (creates temporary pending entries awaiting verification).
  */

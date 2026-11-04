@@ -29,14 +29,6 @@ export const collectRent = async (req, res) => {
       attachments = [],
     } = req.body;
 
-    // 0. Role check: Executive Managers (Fahad) have supervisory oversight only
-    if (req.user.role === 'ADMIN' || req.user.role === 'ADMIN_PUBLISHER') {
-      return res.status(403).json({
-        success: false,
-        message: 'Executive Managers (Fahad) have supervisory oversight and cannot record operational rent receipts.',
-      });
-    }
-
     if (!propertyId || !unitId || !rentMonth || !receivingAccountId || amountPaid === undefined) {
       return res.status(400).json({
         success: false,
