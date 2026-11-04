@@ -26,6 +26,7 @@ import {
 import { otherIncomeAPI, accountsAPI, propertiesAPI, vouchersAPI, verificationAPI } from '../services/api.js';
 import { formatPKR, formatDate } from '../utils/formatters.js';
 import { isAdmin } from '../utils/permissions.js';
+import AiNarrationButton from '../components/AiNarrationButton.jsx';
 
 export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateToTransactions }) {
   const userIsAdmin = isAdmin(currentUser);
@@ -908,9 +909,23 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
 
               {/* Transaction Detail (Required Narration) */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">
-                  Transaction Detail / Narration <span className="text-amber-400">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-slate-300 font-bold">
+                    Transaction Detail / Narration <span className="text-amber-400">*</span>
+                  </label>
+                  <AiNarrationButton
+                    narration={recordForm.transactionDetail}
+                    onEnhanced={(enhanced) =>
+                      setRecordForm((prev) => ({ ...prev, transactionDetail: enhanced }))
+                    }
+                    context={{
+                      type: 'OTHER_INCOME',
+                      amount: recordForm.amount,
+                      head: heads.find((h) => (h._id || h.id) === recordForm.headId)?.name,
+                      property: properties.find((p) => p._id === recordForm.propertyId)?.plazaName,
+                    }}
+                  />
+                </div>
                 <input
                   type="text"
                   required
@@ -919,7 +934,7 @@ export function OtherIncomePage({ currentUser, onNavigateToAccounts, onNavigateT
                   onChange={(e) =>
                     setRecordForm({ ...recordForm, transactionDetail: e.target.value })
                   }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 font-semibold"
                 />
               </div>
 

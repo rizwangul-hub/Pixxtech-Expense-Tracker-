@@ -108,6 +108,8 @@ export const getFinancialAtAGlance = async (req, res) => {
       matrix: {
         rows,
         grandTotal,
+        activeRows: matrixData.activeRows,
+        activeGrandTotal: matrixData.activeGrandTotal,
       },
     });
   } catch (error) {

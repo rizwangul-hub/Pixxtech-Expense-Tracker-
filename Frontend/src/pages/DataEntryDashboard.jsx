@@ -466,9 +466,9 @@ export const DataEntryDashboard = ({ user }) => {
               <form onSubmit={handleOtherIncomeSubmit} className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5 flex items-center justify-between">
                       <span>Entry Date (Receipt Date) <span className="text-red-500">*</span></span>
-                      <span className="text-[10px] font-mono text-amber-600 font-bold">Month: {otherForm.date ? otherForm.date.slice(0, 7) : ''}</span>
+                      <span className="text-xs font-mono text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-bold">Month: {otherForm.date ? otherForm.date.slice(0, 7) : ''}</span>
                     </label>
                     <input
                       type="date"
@@ -477,13 +477,13 @@ export const DataEntryDashboard = ({ user }) => {
                       required
                       className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     />
-                    <p className="text-[10px] text-slate-500 mt-0.5 font-normal">
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
                       Saved & reported in this entry date&apos;s month.
                     </p>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Amount (PKR)</label>
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5">Amount (PKR) <span className="text-red-500">*</span></label>
                     <input
                       type="number"
                       step="0.01"
@@ -492,12 +492,12 @@ export const DataEntryDashboard = ({ user }) => {
                       value={otherForm.amount}
                       onChange={(e) => setOtherForm({ ...otherForm, amount: e.target.value })}
                       required
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold text-base"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Receiving Account (Dr.)</label>
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5">Receiving Account (Dr.) <span className="text-red-500">*</span></label>
                     <select
                       value={otherForm.accountId}
                       onChange={(e) => setOtherForm({ ...otherForm, accountId: e.target.value })}
@@ -520,8 +520,8 @@ export const DataEntryDashboard = ({ user }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">
-                      Received From / Income Head (Select Source)
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5">
+                      Received From / Income Head <span className="text-xs font-normal text-slate-500">(Select Source)</span> <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={otherForm.headId}
@@ -547,8 +547,8 @@ export const DataEntryDashboard = ({ user }) => {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">
-                      Received From (Payee / Party Name)
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5">
+                      Received From <span className="text-xs font-normal text-slate-500">(Payee / Party Name)</span> <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -563,8 +563,8 @@ export const DataEntryDashboard = ({ user }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">
-                      Property Allocation (Optional)
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5">
+                      Property Allocation <span className="text-xs font-normal text-slate-500">(Optional)</span>
                     </label>
                     <select
                       value={otherForm.propertyId}
@@ -584,8 +584,8 @@ export const DataEntryDashboard = ({ user }) => {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">
-                      Shop / Unit Allocation (Optional)
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5">
+                      Shop / Unit Allocation <span className="text-xs font-normal text-slate-500">(Optional)</span>
                     </label>
                     <select
                       value={otherForm.unitId}
@@ -604,7 +604,21 @@ export const DataEntryDashboard = ({ user }) => {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Narration / Detail</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm font-extrabold text-slate-900">
+                      Narration / Detail <span className="text-red-500">*</span>
+                    </label>
+                    <AiNarrationButton
+                      narration={otherForm.detail}
+                      onEnhanced={(enhanced) => setOtherForm((prev) => ({ ...prev, detail: enhanced }))}
+                      context={{
+                        type: 'OTHER_INCOME',
+                        amount: otherForm.amount,
+                        party: otherForm.receivedFrom,
+                        property: properties.find((p) => String(p._id) === String(otherForm.propertyId))?.plazaName,
+                      }}
+                    />
+                  </div>
                   <textarea
                     rows="2"
                     placeholder="Description of the receipt..."
@@ -638,8 +652,9 @@ export const DataEntryDashboard = ({ user }) => {
               <form onSubmit={handleTransferSubmit} className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1 flex items-center gap-1">
-                      <span className="text-rose-700 font-extrabold">From Account (Source &bull; Money Leaves)</span>
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5 flex items-center gap-1.5">
+                      <span className="text-rose-700">From Account (Source &bull; Money Leaves)</span>
+                      <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={transferForm.fromAccountId}
@@ -654,8 +669,9 @@ export const DataEntryDashboard = ({ user }) => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1 flex items-center gap-1">
-                      <span className="text-emerald-700 font-extrabold">To Account (Destination &bull; Money Enters)</span>
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5 flex items-center gap-1.5">
+                      <span className="text-emerald-700">To Account (Destination &bull; Money Enters)</span>
+                      <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={transferForm.toAccountId}
@@ -670,7 +686,7 @@ export const DataEntryDashboard = ({ user }) => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Transfer Amount (PKR)</label>
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5">Transfer Amount (PKR) <span className="text-red-500">*</span></label>
                     <input
                       type="number"
                       step="0.01"
@@ -679,7 +695,7 @@ export const DataEntryDashboard = ({ user }) => {
                       value={transferForm.amount}
                       onChange={(e) => setTransferForm({ ...transferForm, amount: e.target.value })}
                       required
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold text-base"
                     />
                   </div>
                 </div>
@@ -704,9 +720,9 @@ export const DataEntryDashboard = ({ user }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5 flex items-center justify-between">
                       <span>Entry Date (Transfer Date) <span className="text-red-500">*</span></span>
-                      <span className="text-[10px] font-mono text-sky-600 font-bold">Month: {transferForm.transferDate ? transferForm.transferDate.slice(0, 7) : ''}</span>
+                      <span className="text-xs font-mono text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200 font-bold">Month: {transferForm.transferDate ? transferForm.transferDate.slice(0, 7) : ''}</span>
                     </label>
                     <input
                       type="date"
@@ -715,12 +731,14 @@ export const DataEntryDashboard = ({ user }) => {
                       required
                       className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
                     />
-                    <p className="text-[10px] text-slate-500 mt-0.5 font-normal">
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
                       Saved & reported in this entry date&apos;s month.
                     </p>
                   </div>
                   <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Reference / Cheque No.</label>
+                    <label className="block text-sm font-extrabold text-slate-900 mb-1.5">
+                      Reference / Cheque No. <span className="text-xs font-normal text-slate-500">(Optional)</span>
+                    </label>
                     <input
                       type="text"
                       placeholder="e.g. Cheque #49202"
@@ -732,7 +750,21 @@ export const DataEntryDashboard = ({ user }) => {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] uppercase font-bold text-slate-700 mb-1">Transfer Description / Reason</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm font-extrabold text-slate-900">
+                      Transfer Description / Reason <span className="text-red-500">*</span>
+                    </label>
+                    <AiNarrationButton
+                      narration={transferForm.description}
+                      onEnhanced={(enhanced) => setTransferForm((prev) => ({ ...prev, description: enhanced }))}
+                      context={{
+                        type: 'TRANSFER',
+                        amount: transferForm.amount,
+                        from: accounts.find((a) => a._id === transferForm.fromAccountId)?.name,
+                        to: accounts.find((a) => a._id === transferForm.toAccountId)?.name,
+                      }}
+                    />
+                  </div>
                   <textarea
                     rows="2"
                     placeholder="e.g. Cash withdrawal from bank for operational expenses"
@@ -744,11 +776,11 @@ export const DataEntryDashboard = ({ user }) => {
                 </div>
 
                 <div className="border-t border-slate-200 pt-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[11px] uppercase font-bold text-slate-700">
-                      Transfer Evidence / Supporting Document (Optional)
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm font-extrabold text-slate-900">
+                      Transfer Evidence / Supporting Document <span className="text-xs font-normal text-slate-500">(Optional)</span>
                     </label>
-                    <span className="text-[10px] text-slate-500">{transferEvidenceFiles.length}/3 files</span>
+                    <span className="text-xs text-slate-500">{transferEvidenceFiles.length}/3 files</span>
                   </div>
                   <EvidenceImageUpload
                     files={transferEvidenceFiles}
