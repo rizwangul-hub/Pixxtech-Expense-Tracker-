@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { rentAPI, uploadAPI } from '../services/api.js';
 import { EvidenceImageUpload } from './EvidenceImageUpload.jsx';
+import { AiNarrationButton } from './AiNarrationButton.jsx';
 import {
   Building2,
   Home,
@@ -215,13 +216,13 @@ export const RentCollectionModal = ({
         {/* Row 1: Plaza and Target Rent Month */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-400 mb-1 flex items-center gap-1">
-              <Building2 className="w-3.5 h-3.5" /> Plaza / Property
+            <label className="block text-sm font-extrabold text-slate-200 mb-1.5 flex items-center gap-1.5">
+              <Building2 className="w-4 h-4 text-blue-400" /> Plaza / Property <span className="text-rose-400">*</span>
             </label>
             <select
               value={selectedPropertyId}
               onChange={(e) => setSelectedPropertyId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 font-semibold focus:outline-none focus:border-blue-500 transition"
               required
             >
               <option value="">-- Select Plaza --</option>
@@ -234,14 +235,17 @@ export const RentCollectionModal = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-400 mb-1 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" /> Rent Billing Month (YYYY-MM)
+            <label className="block text-sm font-extrabold text-slate-200 mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-blue-400" /> Rent Billing Month <span className="text-rose-400">*</span>
+              </span>
+              <span className="text-xs font-mono text-blue-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">YYYY-MM</span>
             </label>
             <input
               type="month"
               value={rentMonth}
               onChange={(e) => setRentMonth(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 font-semibold focus:outline-none focus:border-blue-500 transition"
               required
             />
           </div>
@@ -249,8 +253,8 @@ export const RentCollectionModal = ({
 
         {/* Row 2: Unit Selector */}
         <div>
-          <label className="block text-xs font-semibold uppercase text-slate-400 mb-1 flex items-center gap-1">
-            <Home className="w-3.5 h-3.5" /> Leasable Unit / Floor
+          <label className="block text-sm font-extrabold text-slate-200 mb-1.5 flex items-center gap-1.5">
+            <Home className="w-4 h-4 text-blue-400" /> Leasable Unit / Floor <span className="text-rose-400">*</span>
           </label>
           <select
             value={selectedUnitId}
@@ -321,11 +325,11 @@ export const RentCollectionModal = ({
         {/* Row 3: Amount Paid & Payment Date */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold uppercase text-slate-400">
-                Amount Paid (PKR)
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-extrabold text-slate-200">
+                Amount Paid (PKR) <span className="text-rose-400">*</span>
               </label>
-              <span className="font-mono text-sm font-bold text-emerald-400">
+              <span className="font-mono text-sm font-bold text-emerald-400 bg-slate-900 px-2.5 py-0.5 rounded border border-slate-800">
                 {formatPKR(amountPaid)}
               </span>
             </div>
@@ -341,9 +345,9 @@ export const RentCollectionModal = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-400 mb-1 flex items-center justify-between">
+            <label className="block text-sm font-extrabold text-slate-200 mb-1.5 flex items-center justify-between">
               <span>Entry Date (Payment Date) <span className="text-emerald-400">*</span></span>
-              <span className="text-[11px] font-mono text-emerald-400">Month: {paymentDate ? paymentDate.slice(0, 7) : ''}</span>
+              <span className="text-xs font-mono text-emerald-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">Month: {paymentDate ? paymentDate.slice(0, 7) : ''}</span>
             </label>
             <input
               type="date"
@@ -352,7 +356,7 @@ export const RentCollectionModal = ({
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition"
               required
             />
-            <p className="text-[10px] text-slate-500 mt-1 font-normal">
+            <p className="text-xs text-slate-500 mt-1 font-normal">
               Income will be saved & reported in this entry date&apos;s month.
             </p>
           </div>
@@ -360,8 +364,8 @@ export const RentCollectionModal = ({
 
         {/* Row 4: Receiving Account */}
         <div>
-          <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-            Receiving Bank / Cash Account
+          <label className="block text-sm font-extrabold text-slate-200 mb-1.5 flex items-center gap-1.5">
+            <CreditCard className="w-4 h-4 text-emerald-400" /> Receiving Bank / Cash Account <span className="text-rose-400">*</span>
           </label>
           <select
             value={receivingAccountId}
@@ -439,21 +443,36 @@ export const RentCollectionModal = ({
 
         {/* Transaction Detail / Narration */}
         <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-bold uppercase text-slate-300 flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+            <label className="text-sm font-extrabold text-slate-200 flex items-center gap-1.5">
               <FileText className="w-4 h-4 text-blue-400" />
               Transaction Detail / Narration <span className="text-rose-400">*</span>
             </label>
-            <button
-              type="button"
-              onClick={() =>
-                setNarration(generateDefaultNarration(selectedPropertyId, selectedUnit, rentMonth, notes))
-              }
-              className="text-[11px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 transition"
-              title="Auto-generate standard rent narration"
-            >
-              <Sparkles className="w-3.5 h-3.5" /> Auto-generate Narration
-            </button>
+            <div className="flex items-center gap-2">
+              <AiNarrationButton
+                narration={narration}
+                onEnhanced={(enhanced) => setNarration(enhanced)}
+                context={{
+                  type: 'RENT',
+                  property: properties.find((p) => p._id === selectedPropertyId)?.plazaName,
+                  unit: selectedUnit?.unitName,
+                  tenant: selectedUnit?.tenantName,
+                  amount: amountPaid,
+                  rentMonth,
+                  toAccount: accounts.find((a) => a._id === receivingAccountId)?.name,
+                }}
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  setNarration(generateDefaultNarration(selectedPropertyId, selectedUnit, rentMonth, notes))
+                }
+                className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 transition px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 cursor-pointer"
+                title="Auto-generate standard rent narration"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Auto-generate
+              </button>
+            </div>
           </div>
           <textarea
             rows="2"
