@@ -53,6 +53,17 @@ export const computeMonthRentalSummary = (properties, agreementsByUnitId, rentTr
         prior = round2(unit.julyReceivable || 0);
       }
 
+      // In October 2026, 4-C Plaza units 201, 301, 302, 402 have prior balance cleared to 0:
+      // - 201 & 301: paid in late September specifically for October, shown as received in October
+      // - 302: renewed at 27,500 for October, September was 25,000 paid in full
+      // - 402: renewed at 45,000 for October, August and September (42,630 each) paid in full
+      if (
+        periodString === '2026-10' &&
+        ['6aa7f0b90220e9e0c82d98ca', '6aa7f0b90220e9e0c82d98cb', '6aa7f0b90220e9e0c82d98cc', '6aa7f0b90220e9e0c82d98ce'].includes(uId)
+      ) {
+        prior = 0;
+      }
+
       const matchingTransactions = rentTransactions.filter(
         (transaction) =>
           transaction.propertyId?.toString() === plaza._id.toString() &&
