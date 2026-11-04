@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { verificationAPI, accountsAPI, propertiesAPI, uploadAPI, otherIncomeAPI } from '../services/api.js';
 import { formatPKR } from '../utils/formatters.js';
+import CelebrationOverlay from '../components/CelebrationOverlay.jsx';
 import { VoucherEntryForm } from '../components/VoucherEntryForm.jsx';
 import { RentCollectionModal } from '../components/RentCollectionModal.jsx';
 import { ReceiptViewerModal } from '../components/ReceiptViewerModal.jsx';
@@ -232,6 +233,7 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
   // so only that row's buttons are disabled (not the entire table)
   const [savingEntryId, setSavingEntryId] = useState(null);
   const [feedback, setFeedback] = useState({ message: '', type: '' });
+  const [verificationCelebration, setVerificationCelebration] = useState({ show: false, voucherNo: '' });
 
   // Filter state
   const [filterType, setFilterType] = useState('ALL');
@@ -610,6 +612,11 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
         setFeedback({
           message: `Entry verified successfully! Officially posted to central financial ledger.`,
           type: 'success',
+        });
+        const vn = entry.voucherNo || entry.entryData?.voucherNo || '';
+        setVerificationCelebration({
+          show: true,
+          voucherNo: vn ? `#${vn}` : '',
         });
         // Optimistically remove or mark as VERIFIED in local state immediately
         setPendingEntries((prev) =>
@@ -2975,6 +2982,14 @@ export const VerifierDashboard = ({ user, onOpenMasterAccounts, onOpenProperties
           onClose={() => setViewingReceiptEntry(null)}
         />
       )}
+
+      {/* Premium Celebration Animation for Successful Verification */}
+      <CelebrationOverlay
+        isOpen={verificationCelebration.show}
+        type="verification"
+        voucherNo={verificationCelebration.voucherNo}
+        onClose={() => setVerificationCelebration({ show: false, voucherNo: '' })}
+      />
     </div>
   );
 };

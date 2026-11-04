@@ -36,6 +36,7 @@ import { RecentEntriesTable } from '../components/RecentEntriesTable.jsx';
 import { accountsAPI, transactionsAPI, otherIncomeAPI, transfersAPI, uploadAPI, verificationAPI } from '../services/api.js';
 import { EvidenceImageUpload } from '../components/EvidenceImageUpload.jsx';
 import { AiNarrationButton } from '../components/AiNarrationButton.jsx';
+import CelebrationOverlay from '../components/CelebrationOverlay.jsx';
 import { formatPKR, resolveTransactionAccounts } from '../utils/formatters.js';
 import { isAdmin, isVerifier } from '../utils/permissions.js';
 
@@ -94,6 +95,7 @@ export const DataEntryDashboard = ({ user }) => {
   });
   const [submittingTransfer, setSubmittingTransfer] = useState(false);
   const [transferEvidenceFiles, setTransferEvidenceFiles] = useState([]);
+  const [dashboardCelebration, setDashboardCelebration] = useState({ show: false, title: '', subtitle: '' });
 
   // Load active accounts and metadata
   const loadMasterData = async (showLoading = false) => {
@@ -232,6 +234,11 @@ export const DataEntryDashboard = ({ user }) => {
       setOtherEvidenceFiles([]);
       if (res.success) {
         setActionMessage({ text: 'Other income submitted and is waiting for admin verification.', type: 'success' });
+        setDashboardCelebration({
+          show: true,
+          title: '🎉 Other Income Recorded Successfully!',
+          subtitle: 'Your transaction has been saved successfully.',
+        });
         setOtherForm({
           date: new Date().toISOString().split('T')[0],
           amount: '',
@@ -277,6 +284,11 @@ export const DataEntryDashboard = ({ user }) => {
         setActionMessage({
           text: res.message || (res.data?.isPending ? 'Internal transfer submitted to Admin Verification Queue.' : 'Internal transfer completed successfully.'),
           type: 'success',
+        });
+        setDashboardCelebration({
+          show: true,
+          title: '🎉 Internal Transfer Recorded Successfully!',
+          subtitle: 'Your transaction has been saved successfully.',
         });
         setTransferForm({
           fromAccountId: '',
@@ -827,6 +839,15 @@ export const DataEntryDashboard = ({ user }) => {
       <footer className="bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-500 font-medium">
         Pakistan Expense Tracker &bull; Operational Workspace &bull; by Pixx Technologies
       </footer>
+
+      {/* Celebration Animation for Tab C / Tab D submissions */}
+      <CelebrationOverlay
+        isOpen={dashboardCelebration.show}
+        type="voucher"
+        title={dashboardCelebration.title}
+        subtitle={dashboardCelebration.subtitle}
+        onClose={() => setDashboardCelebration({ show: false, title: '', subtitle: '' })}
+      />
     </div>
   );
 };
