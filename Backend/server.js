@@ -31,6 +31,7 @@ import communicationRoutes from './routes/communicationRoutes.js';
 import auditLogRoutes from './routes/auditLogRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import systemRoutes from './routes/systemRoutes.js';
+import bankStatementRoutes from './routes/bankStatementRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -123,6 +124,8 @@ app.use('/api/ai', aiRoutes);
 // Defensive alias for clients or proxies with duplicate /api prefixes
 app.use('/api/api/ai', aiRoutes);
 app.use('/api/system', systemRoutes);
+app.use('/api/bank-statements', bankStatementRoutes);
+app.use('/api/monthly-reports/bank-statements', bankStatementRoutes);
 
 // 404 Not Found Handler
 app.use((req, res, next) => {
