@@ -3,6 +3,17 @@ import RentalAgreement from '../models/RentalAgreement.js';
 import Transaction from '../models/Transaction.js';
 import { getAgreedMonthlyRent } from './rentPricing.js';
 import { round2 } from './ledgerService.js';
+import { getUtcMonthDateRange } from './salaryReportingService.js';
+
+// Assistant allocation reports give an explicit rentMonth priority over posting date.
+// Date fallback is reserved for legacy unallocated records and uses Pakistan boundaries.
+const assistantRentPeriod = (period, year, month) => {
+  const { startDate, endDate } = getUtcMonthDateRange(year, month);
+  return { $or: [
+    { rentMonth: period },
+    { $and: [{ $or: [{ rentMonth: null }, { rentMonth: '' }] }, { date: { $gte: startDate, $lte: endDate }, propertyId: { $ne: null } }] },
+  ] };
+};
 
 /**
  * Returns previous YYYY-MM
@@ -210,6 +221,7 @@ export const getRentalSummaryWithCarryForward = async (targetMonthStr, { rentOnl
         { date: { $gte: startDate, $lte: endDate }, propertyId: { $ne: null } },
       ],
       $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+      ...(rentOnly ? assistantRentPeriod(targetMonthStr, y, m) : {}),
     })
       .populate('drAccountId', 'name type')
       .lean();
@@ -228,6 +240,7 @@ export const getRentalSummaryWithCarryForward = async (targetMonthStr, { rentOnl
       { date: { $gte: sepStart, $lte: sepEnd }, propertyId: { $ne: null } },
     ],
     $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+    ...(rentOnly ? assistantRentPeriod('2026-09', 2026, 9) : {}),
   })
     .populate('drAccountId', 'name type')
     .lean();
@@ -263,6 +276,7 @@ export const getRentalSummaryWithCarryForward = async (targetMonthStr, { rentOnl
         { date: { $gte: nextStart, $lte: nextEnd }, propertyId: { $ne: null } },
       ],
       $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
+      ...(rentOnly ? assistantRentPeriod(nextMonthStr, nextY, nextM) : {}),
     })
       .populate('drAccountId', 'name type')
       .lean();

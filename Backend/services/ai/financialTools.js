@@ -1,9 +1,6 @@
 import Transaction from '../../models/Transaction.js';
 import Account from '../../models/Account.js';
 import Property from '../../models/Property.js';
-import Tenant from '../../models/Tenant.js';
-import Category from '../../models/Category.js';
-import RentalAgreement from '../../models/RentalAgreement.js';
 import Payroll from '../../models/Payroll.js';
 import { calculateLiveAccountBalances } from '../accountBalance.js';
 import { getRentalSummaryWithCarryForward } from '../rentalCarryForwardService.js';
@@ -35,6 +32,13 @@ export const resolveMonthDateRange = (month, year) => {
     startDate,
     endDate,
   };
+};
+
+const comparisonPeriods = ({ month1, year1, month2, year2 }) => {
+  const first = resolveMonthDateRange(month1, year1);
+  const prior = new Date(Date.UTC(first.year, first.month - 2, 1));
+  const second = resolveMonthDateRange(month2 ?? prior.getUTCMonth() + 1, year2 ?? prior.getUTCFullYear());
+  return { first, second };
 };
 
 /**
@@ -148,6 +152,7 @@ export const getOutstandingRent = async ({ month, year, propertyId = null }, use
   return {
     period: `${monthName} ${y} (${periodString})`,
     totalOutstandingAmount: round2(totalOutstanding),
+    basis: 'Outstanding balance including prior arrears and advance offsets, not only overdue rent. Uses current active agreements and allocation months.',
     outstandingUnitsCount: unitsWithBalance.length,
     overdueUnits: unitsWithBalance.slice(0, 30),
     truncated: unitsWithBalance.length > 30,
@@ -239,17 +244,19 @@ export const getRecentTransactions = async ({ limit = 10, transactionType = null
   }
 
   const txs = await Transaction.find(query)
+    .select('voucherNo date transactionType reportCategory categoryId propertyId drAccountId crAccountId amount')
     .sort({ date: -1, createdAt: -1 })
     .limit(safeLimit)
     .populate('categoryId', 'name')
     .populate('propertyId', 'plazaName')
     .populate('drAccountId', 'name')
     .populate('crAccountId', 'name')
+    .maxTimeMS(10000)
     .lean();
 
   const transactions = txs.map(t => ({
     voucherNo: t.voucherNo || 'N/A',
-    date: t.date ? new Date(t.date).toISOString().split('T')[0] : 'N/A',
+    date: t.date ? new Date(new Date(t.date).getTime() + 18000000).toISOString().slice(0, 10) : 'N/A',
     type: t.transactionType,
     head: t.categoryId?.name || t.reportCategory || 'General',
     property: t.propertyId?.plazaName || null,
@@ -260,6 +267,7 @@ export const getRecentTransactions = async ({ limit = 10, transactionType = null
 
   return {
     period: period.periodString,
+    timeZone: 'Asia/Karachi',
     count: transactions.length,
     transactions,
   };
@@ -323,22 +331,12 @@ export const getPropertyFinancialSummary = async ({ propertyId, propertyName = n
  */
 export const getMonthlyComparison = async ({ month1, year1, month2, year2 }, user) => {
   assertFinancialAccess(user);
-  const first = resolveMonthDateRange(month1, year1);
+  const { first, second } = comparisonPeriods({ month1, year1, month2, year2 });
   const m1 = first.month;
   const y1 = first.year;
 
-  // If month2 not supplied, default to prior month
-  let m2 = Number(month2);
-  let y2 = Number(year2);
-  if (!m2 || !y2) {
-    if (m1 === 1) {
-      m2 = 12;
-      y2 = y1 - 1;
-    } else {
-      m2 = m1 - 1;
-      y2 = y1;
-    }
-  }
+  const m2 = second.month;
+  const y2 = second.year;
 
   const [exp1, inc1, rent1] = await Promise.all([
     getExpenseSummary({ month: m1, year: y1 }, user),
@@ -358,6 +356,7 @@ export const getMonthlyComparison = async ({ month1, year1, month2, year2 }, use
   return {
     period1: exp1.period,
     period2: exp2.period,
+    basis: 'Income uses allocated rent plus posted Other Income; expenses use posting dates. Current month may be incomplete. Positive variance means period1 minus period2.',
     period1Data: {
       totalIncome: inc1.totalIncome,
       rentalIncome: inc1.rentalIncome,
@@ -394,6 +393,7 @@ export const getSalarySummary = async ({ month, year, startDate, endDate }, user
     period: startDate ? `${startDate} to ${endDate} (Pakistan time)` : period.periodString,
     totalSalariesDisbursed: round2(salary.reduce((n, h) => n + h.totalSpent, 0)),
     totalPayrollCommitted: round2(payrolls.reduce((n, p) => n + (p.netPayable || 0), 0)),
+    payrollCommitmentPeriod: period.periodString,
     paidEmployeesCount: payrolls.filter(p => p.paymentStatus === 'PAID' || p.status === 'PAID').length,
     employeesCount: payrolls.length,
     basis: 'Disbursements use expense posting date and existing Salary classification; payroll commitment uses payroll month. Staff loans are excluded.',
@@ -566,14 +566,12 @@ export function validateToolArguments(name, args) {
     if (key === 'limit' && (value < 1 || value > 25)) throw new AiError('Transaction limit must be 1–25.');
   }
   if (name === 'getMonthlyComparison') {
-    const first = resolveMonthDateRange(args.month1, args.year1);
-    const prior = new Date(Date.UTC(first.year, first.month - 2, 1));
-    const second = resolveMonthDateRange(args.month2 ?? prior.getUTCMonth() + 1, args.year2 ?? prior.getUTCFullYear());
+    const { first, second } = comparisonPeriods(args);
     if (first.periodString < '2026-09' || second.periodString < '2026-09') throw new AiError('Rental comparison is available from September 2026.');
   } else if (name !== 'getAccountBalances') {
     const period = resolveMonthDateRange(args.month, args.year);
     if (['getIncomeSummary', 'getRentCollectionSummary', 'getOutstandingRent', 'getPropertyFinancialSummary'].includes(name) && period.periodString < '2026-09') throw new AiError('Rental reports are available from September 2026.');
-    if (args.startDate || args.endDate) {
+    if (Object.hasOwn(args, 'startDate') || Object.hasOwn(args, 'endDate')) {
       for (const d of [args.startDate, args.endDate]) if (typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(Date.parse(d)) || new Date(d).toISOString().slice(0, 10) !== d || d.slice(0, 7) !== period.periodString) throw new AiError('Choose valid dates within the selected month.');
       if (args.startDate > args.endDate) throw new AiError('Start date must precede end date.');
     }

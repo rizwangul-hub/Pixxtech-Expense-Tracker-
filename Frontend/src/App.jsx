@@ -93,8 +93,13 @@ const getAccessibleSection = (section, user) => {
 
 function AppContent() {
   const [user, setUser] = useState(null);
-  const [assistantMessages, setAssistantMessages] = useState([]);
-  useEffect(() => { setAssistantMessages([]); }, [user?._id]);
+  const [assistantConversation, setAssistantConversation] = useState({ owner: null, messages: [] });
+  const assistantMessages = assistantConversation.owner === user?._id ? assistantConversation.messages : [];
+  const setAssistantMessages = update => setAssistantConversation(previous => ({
+    owner: user?._id,
+    messages: typeof update === 'function' ? update(previous.owner === user?._id ? previous.messages : []) : update,
+  }));
+  useEffect(() => { setAssistantConversation({ owner: null, messages: [] }); }, [user?._id]);
   const [currentSection, setCurrentSection] = useState(() => sectionFromPath(window.location.pathname));
   const [selectedPropertyId, setSelectedPropertyId] = useState(null);
   const [selectedTenantId, setSelectedTenantId] = useState(null);
@@ -324,7 +329,7 @@ function AppContent() {
       }}
     >
       {currentSection === 'ai-finance-assistant' && hasPermission(user, PERMISSIONS.VIEW_FINANCIALS) ? (
-        <AiFinanceAssistantPage currentUser={user} />
+        <AiFinanceAssistantPage key={user?._id || user?.id || 'ai-assistant'} currentUser={user} messages={assistantMessages || []} setMessages={setAssistantMessages} />
       ) : currentSection === 'communications' && canUseCommunications(user) ? (
         <MessagesCallsPage />
       ) : currentSection === 'verification' && (isVerifier(user) || isAdmin(user)) ? (

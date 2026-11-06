@@ -1,4 +1,4 @@
-import { FINANCIAL_TOOL_DECLARATIONS, executeFinancialTool } from './financialTools.js';
+import { FINANCIAL_TOOL_DECLARATIONS, executeFinancialTool, validateToolArguments } from './financialTools.js';
 import { AiError, assertFinancialAccess, getAiConfiguration, validateQuestion } from './assistantSecurity.js';
 import { getUtcMonthKey } from '../salaryReportingService.js';
 import { round2 } from '../ledgerService.js';
@@ -59,10 +59,13 @@ async function runProvider(provider, userMessage, history, user, { fetchImpl = f
     if (calls.length > 4) throw new Error('Too many tools');
   } catch { throw new AiError('AI provider is unavailable or returned an invalid response. Please retry.', 502); }
   if (!calls.length) return { message: limitation, toolCalls: [], engine: provider };
+  // Validate the entire batch before performing even a read; malformed calls never broaden scope.
+  for (const call of calls) validateToolArguments(call.name, call.args === undefined ? {} : call.args);
   const results = [];
   for (const call of calls) {
-    const result = await executeFinancialTool(call.name, call.args || {}, user);
-    results.push({ name: call.name, args: call.args || {}, result });
+    const args = call.args === undefined ? {} : call.args;
+    const result = await executeFinancialTool(call.name, args, user);
+    results.push({ name: call.name, args, result });
   }
   const income = results.find(r => r.name === 'getIncomeSummary');
   const expenses = results.find(r => r.name === 'getExpenseSummary' && !r.args.propertyId && !r.args.startDate);
