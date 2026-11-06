@@ -115,7 +115,32 @@ test('AI Operations - Extract amount from various currency patterns', () => {
   assert.equal(extractAmount('Receive Rs 50000 rent'), 50000);
   assert.equal(extractAmount('Record 10k petrol expense'), 10000);
   assert.equal(extractAmount('Transfer Rs. 100,000 from UBL'), 100000);
+  assert.equal(extractAmount('Transfer Rs. 1 from UBL(Saba Kamran) to ABL (Abida Ijaz)'), 1);
+  assert.equal(extractAmount('Rs 1'), 1);
   assert.equal(extractAmount('No amount mentioned in this prompt'), null);
+});
+
+// 1b. Proposal Resolution for Internal Transfer with Parentheses in Account Names
+test('AI Operations - Resolve internal transfer with parenthesized account names and Rs. 1', async (t) => {
+  const accUbl = { _id: '507f191e810c19729de86051', name: 'UBL (Saba Kamran)', type: 'BANK', isActive: true };
+  const accAbl = { _id: '507f191e810c19729de86052', name: 'ABL (Abida Ijaz)', type: 'BANK', isActive: true };
+
+  t.mock.method(Account, 'find', () => queryChain([accUbl, accAbl]));
+  t.mock.method(Property, 'find', () => queryChain([]));
+  t.mock.method(Tenant, 'find', () => queryChain([]));
+  t.mock.method(Employee, 'find', () => queryChain([]));
+  t.mock.method(Category, 'find', () => queryChain([]));
+
+  const proposal = await resolveActionProposal('Transfer Rs. 1 from UBL(Saba Kamran) to ABL (Abida Ijaz)', adminUser);
+
+  assert.equal(proposal.isProposal, true);
+  assert.equal(proposal.actionType, 'CREATE_TRANSFER');
+  assert.equal(proposal.summary.amount, 1);
+  assert.equal(proposal.payload.fromAccountId, String(accUbl._id));
+  assert.equal(proposal.payload.toAccountId, String(accAbl._id));
+  assert.match(proposal.confirmationPrompt, /UBL \(Saba Kamran\)/);
+  assert.match(proposal.confirmationPrompt, /ABL \(Abida Ijaz\)/);
+  assert.match(proposal.confirmationPrompt, /1/);
 });
 
 // 2. Proposal Resolution for Rent Collection

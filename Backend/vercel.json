@@ -5,7 +5,11 @@
       "src": "api/index.js",
       "use": "@vercel/node",
       "config": {
-        "maxDuration": 300
+        "maxDuration": 300,
+        "includeFiles": [
+          "node_modules/@sparticuz/chromium/bin/**",
+          "templates/**"
+        ]
       }
     }
   ],

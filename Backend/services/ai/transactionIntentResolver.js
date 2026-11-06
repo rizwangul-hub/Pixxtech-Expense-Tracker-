@@ -10,34 +10,75 @@ import { round2, suggestNextVoucherNumber } from '../ledgerService.js';
 import { resolvePeriodFromText } from './naturalLanguageResolver.js';
 import { getUtcMonthKey } from '../salaryReportingService.js';
 
-// Regex to extract monetary amounts (e.g. Rs. 25,000, 25000, 50k, 10,000)
+export function escapeRegex(str) {
+  return typeof str === 'string' ? str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+}
+
+// Regex to extract monetary amounts (e.g. Rs. 1, Rs. 25,000, 25000, 50k, 10,000)
 export function extractAmount(text) {
   if (!text) return null;
   const clean = text.replace(/,/g, '');
 
-  // Match e.g. 50k
+  // 1. Match 'k' notation: e.g. 50k, 1.5k
   const kMatch = clean.match(/(?:rs\.?|pkr)?\s*([0-9]+(?:\.[0-9]+)?)\s*k\b/i);
   if (kMatch) {
     return Math.round(parseFloat(kMatch[1]) * 1000);
   }
 
-  // Match e.g. Rs. 25,000, 25000 PKR, 5000
-  const match = clean.match(/(?:rs\.?|pkr|rupees?)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:rs\.?|pkr|rupees?)?/i);
-  if (match) {
-    // Look specifically for numbers following Rs or action verbs
-    const matches = [...clean.matchAll(/(?:rs\.?|pkr|rupees?|amount|sum|price|of)?\s*([0-9]{2,10}(?:\.[0-9]{1,2})?)/gi)];
-    for (const m of matches) {
-      const val = parseFloat(m[1]);
-      // Avoid matching years like 2024, 2025, 2026 if they represent dates
-      if (val >= 2020 && val <= 2030 && !/(?:rs|pkr|amount|rupees)/i.test(m[0])) {
-        continue;
-      }
-      if (val > 0) return round2(val);
+  // 2. Explicit currency prefix: e.g. "Rs. 1", "Rs 50", "PKR 1000"
+  const explicitPrefix = clean.match(/(?:rs\.?|pkr|rupees?)\s*([0-9]+(?:\.[0-9]{1,2})?)/i);
+  if (explicitPrefix) {
+    const val = parseFloat(explicitPrefix[1]);
+    if (val > 0) return round2(val);
+  }
+
+  // 3. Explicit currency suffix: e.g. "500 rs", "100 pkr"
+  const explicitSuffix = clean.match(/([0-9]+(?:\.[0-9]{1,2})?)\s*(?:rs\.?|pkr|rupees?)\b/i);
+  if (explicitSuffix) {
+    const val = parseFloat(explicitSuffix[1]);
+    if (val > 0) return round2(val);
+  }
+
+  // 4. Numbers following verbs or amount markers: e.g. "amount 500", "transfer 1"
+  const verbMatch = clean.match(/(?:amount|of|transfer|collect|pay|record|add)\s+([0-9]+(?:\.[0-9]{1,2})?)\b/i);
+  if (verbMatch) {
+    const val = parseFloat(verbMatch[1]);
+    if (val > 0 && !(val >= 2020 && val <= 2035 && Number.isInteger(val))) {
+      return round2(val);
     }
+  }
+
+  // 5. Freestanding numbers
+  const matches = [...clean.matchAll(/\b([0-9]+(?:\.[0-9]{1,2})?)\b/g)];
+  for (const m of matches) {
+    const val = parseFloat(m[1]);
+    if (val >= 2020 && val <= 2035 && Number.isInteger(val)) {
+      continue;
+    }
+    if (val > 0) return round2(val);
   }
 
   return null;
 }
+
+export const ACCOUNT_STOP_WORDS = new Set(['bank', 'account', 'cash', 'hand', 'the', 'and', 'for', 'ltd', 'pvt', 'limited']);
+
+export const BANK_ALIASES = [
+  { alias: 'ubl', pattern: /\bubl\b/i },
+  { alias: 'hbl', pattern: /\bhbl\b/i },
+  { alias: 'mcb', pattern: /\bmcb\b/i },
+  { alias: 'abl', pattern: /\b(abl|allied)\b/i },
+  { alias: 'meezan', pattern: /\bmeezan\b/i },
+  { alias: 'alfalah', pattern: /\b(alfalah|al\s*falah)\b/i },
+  { alias: 'faysal', pattern: /\bfaysal\b/i },
+  { alias: 'askari', pattern: /\baskari\b/i },
+  { alias: 'bop', pattern: /\b(bop|punjab)\b/i },
+  { alias: 'nbp', pattern: /\b(nbp|national\s*bank)\b/i },
+  { alias: 'js', pattern: /\bjs\b/i },
+  { alias: 'soneri', pattern: /\bsoneri\b/i },
+  { alias: 'scb', pattern: /\b(scb|standard\s*chartered)\b/i },
+  { alias: 'cash', pattern: /\b(cash|rokad|naqad|petty\s*cash|cash\s*in\s*hand)\b/i },
+];
 
 /**
  * Intelligent Entity Resolver for Accounts, Properties, Tenants, Employees, Categories
@@ -55,31 +96,44 @@ export async function resolveEntities(text) {
 
   // Match Accounts (Bank & Cash)
   let matchedAccounts = [];
-  const ACCOUNT_STOP_WORDS = new Set(['bank', 'account', 'cash', 'hand', 'the', 'and', 'for', 'ltd', 'pvt']);
   for (const acc of accounts) {
-    const accName = acc.name.toLowerCase();
-    const tokens = accName.split(/[\s-]+/).filter(t => t.length > 2 && !ACCOUNT_STOP_WORDS.has(t));
-    const hasFullMatch = clean.includes(accName);
-    const hasTokenMatch = tokens.length > 0 && tokens.some(t => new RegExp(`\\b${t}\\b`, 'i').test(clean));
+    const accName = (acc.name || '').toLowerCase();
+    const bankName = (acc.bankName || '').toLowerCase();
+    const holder = (acc.cashHolder || '').toLowerCase();
+    const cleanAccName = accName.replace(/[^a-z0-9]+/g, ' ').trim();
+    const cleanInput = clean.replace(/[^a-z0-9]+/g, ' ');
 
-    if (hasFullMatch || hasTokenMatch) {
+    const tokens = accName
+      .split(/[^a-z0-9]+/)
+      .filter(t => t.length > 2 && !ACCOUNT_STOP_WORDS.has(t));
+
+    const hasFullMatch = (cleanAccName && cleanInput.includes(cleanAccName)) || (accName && clean.includes(accName));
+    const hasTokenMatch = tokens.length > 0 && tokens.some(t => {
+      const esc = escapeRegex(t);
+      return new RegExp(`\\b${esc}\\b`, 'i').test(clean);
+    });
+
+    // Check bankName or cashHolder tokens
+    const holderTokens = `${bankName} ${holder}`
+      .split(/[^a-z0-9]+/)
+      .filter(t => t.length > 2 && !ACCOUNT_STOP_WORDS.has(t));
+    const hasHolderMatch = holderTokens.length > 0 && holderTokens.some(t => {
+      const esc = escapeRegex(t);
+      return new RegExp(`\\b${esc}\\b`, 'i').test(clean);
+    });
+
+    if (hasFullMatch || hasTokenMatch || hasHolderMatch) {
       matchedAccounts.push(acc);
     }
   }
 
-  // Special checks for common bank abbreviations: UBL, HBL, MCB, Meezan, Alfalah
-  const bankAliases = [
-    { alias: 'ubl', pattern: /\bubl\b/i },
-    { alias: 'hbl', pattern: /\bhbl\b/i },
-    { alias: 'mcb', pattern: /\bmcb\b/i },
-    { alias: 'meezan', pattern: /\bmeezan\b/i },
-    { alias: 'alfalah', pattern: /\b(alfalah|al\s*falah)\b/i },
-    { alias: 'cash', pattern: /\b(cash|rokad|naqad|petty\s*cash|cash\s*in\s*hand)\b/i },
-  ];
-
-  for (const ba of bankAliases) {
+  for (const ba of BANK_ALIASES) {
     if (ba.pattern.test(clean)) {
-      const found = accounts.find(a => new RegExp(ba.alias, 'i').test(a.name) || (ba.alias === 'cash' && a.type === 'CASH'));
+      const found = accounts.find(a =>
+        new RegExp(ba.alias, 'i').test(a.name) ||
+        (a.bankName && new RegExp(ba.alias, 'i').test(a.bankName)) ||
+        (ba.alias === 'cash' && a.type === 'CASH')
+      );
       if (found && !matchedAccounts.some(a => String(a._id) === String(found._id))) {
         matchedAccounts.push(found);
       }
@@ -91,8 +145,8 @@ export async function resolveEntities(text) {
   let matchedUnit = null;
   for (const p of properties) {
     const pName = (p.plazaName || p.propertyName || '').toLowerCase();
-    const tokens = pName.split(/[\s-]+/).filter(t => t.length > 2);
-    if (clean.includes(pName) || tokens.some(t => new RegExp(`\\b${t}\\b`, 'i').test(clean))) {
+    const tokens = pName.split(/[^a-z0-9]+/).filter(t => t.length > 2);
+    if (clean.includes(pName) || (tokens.length > 0 && tokens.some(t => new RegExp(`\\b${escapeRegex(t)}\\b`, 'i').test(clean)))) {
       matchedProperty = p;
       break;
     }
@@ -137,9 +191,9 @@ export async function resolveEntities(text) {
   let matchedAgreement = null;
   const tenants = await Tenant.find({}).select('_id fullName phone identificationNumber').lean();
   for (const t of tenants) {
-    const tName = t.fullName.toLowerCase();
-    const tokens = tName.split(/[\s-]+/).filter(tok => tok.length > 2);
-    if (clean.includes(tName) || tokens.some(tok => new RegExp(`\\b${tok}\\b`, 'i').test(clean))) {
+    const tName = (t.fullName || '').toLowerCase();
+    const tokens = tName.split(/[^a-z0-9]+/).filter(tok => tok.length > 2);
+    if (clean.includes(tName) || (tokens.length > 0 && tokens.some(tok => new RegExp(`\\b${escapeRegex(tok)}\\b`, 'i').test(clean)))) {
       matchedTenant = t;
       break;
     }
@@ -174,9 +228,9 @@ export async function resolveEntities(text) {
   // Match Employee
   let matchedEmployee = null;
   for (const emp of employees) {
-    const eName = emp.name.toLowerCase();
-    const tokens = eName.split(/[\s-]+/).filter(t => t.length > 2);
-    if (clean.includes(eName) || tokens.some(t => new RegExp(`\\b${t}\\b`, 'i').test(clean))) {
+    const eName = (emp.name || '').toLowerCase();
+    const tokens = eName.split(/[^a-z0-9]+/).filter(t => t.length > 2);
+    if (clean.includes(eName) || (tokens.length > 0 && tokens.some(t => new RegExp(`\\b${escapeRegex(t)}\\b`, 'i').test(clean)))) {
       matchedEmployee = emp;
       break;
     }
@@ -186,9 +240,9 @@ export async function resolveEntities(text) {
   let matchedCategory = null;
   const expenseCategories = categories.filter(c => c.type === 'EXPENSE');
   for (const cat of expenseCategories) {
-    const cName = cat.name.toLowerCase();
-    const tokens = cName.split(/[\s-]+/).filter(t => t.length > 2);
-    if (clean.includes(cName) || tokens.some(t => new RegExp(`\\b${t}\\b`, 'i').test(clean))) {
+    const cName = (cat.name || '').toLowerCase();
+    const tokens = cName.split(/[^a-z0-9]+/).filter(t => t.length > 2);
+    if (clean.includes(cName) || (tokens.length > 0 && tokens.some(t => new RegExp(`\\b${escapeRegex(t)}\\b`, 'i').test(clean)))) {
       matchedCategory = cat;
       break;
     }
@@ -222,6 +276,67 @@ export async function resolveEntities(text) {
     allEmployees: employees,
     allCategories: categories,
   };
+}
+
+/**
+ * Fuzzy and token-based account finder for transfer snippets
+ * Supports snippets with parentheses or holders, e.g. "UBL(Saba Kamran)", "ABL (Abida Ijaz)"
+ */
+export function findAccountBySnippet(snippet, allAccounts = []) {
+  if (!snippet || !Array.isArray(allAccounts) || allAccounts.length === 0) return null;
+  const cleanSnippet = snippet.toLowerCase().trim();
+  const normalizedSnippet = cleanSnippet.replace(/[^a-z0-9]+/g, ' ').trim();
+  const snippetTokens = normalizedSnippet
+    .split(/\s+/)
+    .filter(t => t.length > 2 && !ACCOUNT_STOP_WORDS.has(t));
+
+  // 1. Direct or normalized full match on name, bankName, or cashHolder
+  for (const acc of allAccounts) {
+    const accName = (acc.name || '').toLowerCase();
+    const bankName = (acc.bankName || '').toLowerCase();
+    const holder = (acc.cashHolder || '').toLowerCase();
+    const combined = `${accName} ${bankName} ${holder}`;
+    const cleanCombined = combined.replace(/[^a-z0-9]+/g, ' ').trim();
+
+    if (cleanCombined && normalizedSnippet && (cleanCombined.includes(normalizedSnippet) || normalizedSnippet.includes(cleanCombined))) {
+      return acc;
+    }
+  }
+
+  // 2. High-confidence token match (e.g. distinct names: "saba", "kamran", "abida", "ijaz")
+  let bestAccount = null;
+  let maxMatches = 0;
+  for (const acc of allAccounts) {
+    const combined = `${acc.name || ''} ${acc.bankName || ''} ${acc.cashHolder || ''}`.toLowerCase();
+    let matches = 0;
+    for (const t of snippetTokens) {
+      const esc = escapeRegex(t);
+      if (new RegExp(`\\b${esc}\\b`, 'i').test(combined)) {
+        matches++;
+      }
+    }
+    if (matches > maxMatches) {
+      maxMatches = matches;
+      bestAccount = acc;
+    }
+  }
+  if (bestAccount && maxMatches > 0) {
+    return bestAccount;
+  }
+
+  // 3. Check bank acronym / alias within snippet
+  for (const ba of BANK_ALIASES) {
+    if (ba.pattern.test(cleanSnippet)) {
+      const found = allAccounts.find(a =>
+        new RegExp(ba.alias, 'i').test(a.name) ||
+        (a.bankName && new RegExp(ba.alias, 'i').test(a.bankName)) ||
+        (ba.alias === 'cash' && a.type === 'CASH')
+      );
+      if (found) return found;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -270,6 +385,7 @@ export async function resolveActionProposal(message, user) {
     return {
       isProposal: true,
       actionType: 'DELETE_TRANSACTION',
+      confirmationPrompt: `Are you sure you want to reverse and delete transaction voucher **#${targetTx.voucherNo}** (PKR ${round2(targetTx.amount).toLocaleString('en-PK', { minimumFractionDigits: 2 })})?`,
       summary: {
         type: 'Reverse & Delete Transaction',
         voucherNo: targetTx.voucherNo,
@@ -327,6 +443,7 @@ export async function resolveActionProposal(message, user) {
     return {
       isProposal: true,
       actionType: 'EDIT_TRANSACTION',
+      confirmationPrompt: `Would you like me to update transaction voucher **#${targetTx.voucherNo}** amount to **PKR ${round2(newAmount).toLocaleString('en-PK', { minimumFractionDigits: 2 })}**?`,
       summary: {
         type: 'Edit Transaction Amount',
         voucherNo: targetTx.voucherNo,
@@ -360,24 +477,25 @@ export async function resolveActionProposal(message, user) {
     }
 
     // Identify from and to accounts
-    // e.g. "from UBL to Bank Al Falah"
+    // e.g. "from UBL to Bank Al Falah" or "from UBL(Saba Kamran) to ABL (Abida Ijaz)"
     let fromAccount = null;
     let toAccount = null;
 
-    const fromMatch = clean.match(/(?:from|se)\s+([a-z0-9\s]+?)(?:\s+(?:to|mein|main|into)|\s*$)/i);
-    const toMatch = clean.match(/(?:to|mein|main|into)\s+([a-z0-9\s]+?)(?:\s+(?:from|se)|\s*$)/i);
+    const fromMatch = clean.match(/(?:from|se)\s+(.+?)(?:\s+(?:to|mein|main|into)|\s*$)/i);
+    const toMatch = clean.match(/(?:to|mein|main|into)\s+(.+?)(?:\s+(?:from|se)|\s*$)/i);
 
     if (fromMatch) {
-      const fromToken = fromMatch[1].trim();
-      fromAccount = entities.allAccounts.find(a => a.name.toLowerCase().includes(fromToken) || (fromToken.includes('cash') && a.type === 'CASH'));
+      fromAccount = findAccountBySnippet(fromMatch[1], entities.allAccounts);
     }
     if (toMatch) {
-      const toToken = toMatch[1].trim();
-      toAccount = entities.allAccounts.find(a => a.name.toLowerCase().includes(toToken) || (toToken.includes('cash') && a.type === 'CASH'));
+      toAccount = findAccountBySnippet(toMatch[1], entities.allAccounts);
     }
 
     // Fallback to matched accounts array if explicit from/to not parsed
     if (!fromAccount && entities.accounts.length >= 1) fromAccount = entities.accounts[0];
+    if (!toAccount && entities.accounts.length >= 2) {
+      toAccount = entities.accounts.find(a => String(a._id) !== String(fromAccount?._id)) || entities.accounts[1];
+    }
     if (!toAccount && entities.accounts.length >= 2) toAccount = entities.accounts[1];
 
     if (!fromAccount || !toAccount || String(fromAccount._id) === String(toAccount._id)) {
@@ -393,6 +511,7 @@ export async function resolveActionProposal(message, user) {
     return {
       isProposal: true,
       actionType: 'CREATE_TRANSFER',
+      confirmationPrompt: `Would you like me to transfer **PKR ${round2(amount).toLocaleString('en-PK', { minimumFractionDigits: 2 })}** from **${fromAccount.name}** to **${toAccount.name}**?`,
       summary: {
         type: 'Internal Funds Transfer',
         amount: round2(amount),
@@ -443,6 +562,9 @@ export async function resolveActionProposal(message, user) {
     return {
       isProposal: true,
       actionType: isDisburse ? 'CREATE_LOAN_DISBURSEMENT' : 'CREATE_LOAN_REPAYMENT',
+      confirmationPrompt: isDisburse
+        ? `Would you like me to record an advance loan of **PKR ${round2(amount).toLocaleString('en-PK', { minimumFractionDigits: 2 })}** to **${entities.employee.name}**?`
+        : `Would you like me to record a loan repayment of **PKR ${round2(amount).toLocaleString('en-PK', { minimumFractionDigits: 2 })}** from **${entities.employee.name}**?`,
       summary: {
         type: isDisburse ? 'Employee Loan / Advance Disbursement' : 'Employee Loan Repayment',
         employee: `${entities.employee.name} (${entities.employee.designation || 'Staff'})`,
@@ -494,6 +616,7 @@ export async function resolveActionProposal(message, user) {
     return {
       isProposal: true,
       actionType: 'PAY_SALARY',
+      confirmationPrompt: `Would you like me to record a salary payment of **PKR ${round2(payAmount).toLocaleString('en-PK', { minimumFractionDigits: 2 })}** to **${entities.employee.name}**?`,
       summary: {
         type: 'Staff Salary Payment',
         employee: `${entities.employee.name} (${entities.employee.designation || 'Staff'})`,
@@ -550,6 +673,7 @@ export async function resolveActionProposal(message, user) {
     return {
       isProposal: true,
       actionType: 'CREATE_RENT',
+      confirmationPrompt: `Would you like me to record rent collection of **PKR ${round2(amount).toLocaleString('en-PK', { minimumFractionDigits: 2 })}** for **${propName}${unitName ? ` (${unitName})` : ''}**?`,
       summary: {
         type: 'Rent Collection',
         property: `${propName}${unitName ? ` (${unitName})` : ''}`,
@@ -613,6 +737,7 @@ export async function resolveActionProposal(message, user) {
     return {
       isProposal: true,
       actionType: 'CREATE_EXPENSE',
+      confirmationPrompt: `Would you like me to record an expense of **PKR ${round2(amount).toLocaleString('en-PK', { minimumFractionDigits: 2 })}** under **${entities.category.name}**?`,
       summary: {
         type: 'Expense Voucher',
         categoryHead: entities.category.name,

@@ -87,39 +87,45 @@ export const handleFinanceChat = async (req, res) => {
       }
     }
 
-    // 4. Check for accounting transaction operation intent (Create rent, expense, transfer, loan, etc.)
-    const proposal = await resolveActionProposal(trimmedMsg, user);
-    if (proposal?.isProposal) {
-      if (!hasPermission(user, PERMISSIONS.ENTER_DATA)) {
-        return res.status(403).json({
-          success: false,
-          code: 'FORBIDDEN',
-          message: 'You do not have permission to create or edit financial transactions.',
+    // 4. Check for accounting transaction operation intent only when the
+    // wording is an explicit command. "Give me ... ledger" is a read request,
+    // not a disbursement, and must not trigger the resolver's extra model reads.
+    const readRequestPrefix = /^(?:please\s+)?(?:show|tell|give|provide|list|send)\s+me\b/i.test(lowerMsg);
+    const explicitOperationIntent = !readRequestPrefix && /\b(record|create|add|enter|transfer|send|give|delete|remove|reverse|cancel|settle|update|edit|change)\b/i.test(lowerMsg);
+    if (explicitOperationIntent) {
+      const proposal = await resolveActionProposal(trimmedMsg, user);
+      if (proposal?.isProposal) {
+        if (!hasPermission(user, PERMISSIONS.ENTER_DATA)) {
+          return res.status(403).json({
+            success: false,
+            code: 'FORBIDDEN',
+            message: 'You do not have permission to create or edit financial transactions.',
+          });
+        }
+
+        const staged = stageAction({
+          userId: user._id,
+          actionType: proposal.actionType,
+          summary: proposal.summary,
+          payload: proposal.payload,
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: proposal.confirmationPrompt,
+          pendingAction: staged,
+          timestamp: new Date().toISOString(),
         });
       }
 
-      const staged = stageAction({
-        userId: user._id,
-        actionType: proposal.actionType,
-        summary: proposal.summary,
-        payload: proposal.payload,
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: proposal.confirmationPrompt,
-        pendingAction: staged,
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    if (proposal?.isClarification) {
-      return res.status(200).json({
-        success: true,
-        message: proposal.message,
-        isClarification: true,
-        timestamp: new Date().toISOString(),
-      });
+      if (proposal?.isClarification) {
+        return res.status(200).json({
+          success: true,
+          message: proposal.message,
+          isClarification: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
 
     // 5. Fallback to normal financial query assistant
@@ -141,10 +147,10 @@ export const handleFinanceChat = async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[AI Finance Assistant Error]:', JSON.stringify({ status: error.status || 500, code: error.code || 'AI_REQUEST_FAILED', message: error.message }));
+    console.error('[AI Finance Assistant Error]:', error);
     return res.status(error.status || 500).json({
       success: false,
-      message: error.status ? error.message : 'Failed to process financial request. Please retry.',
+      message: error.status ? error.message : (error.message || 'Failed to process financial request. Please retry.'),
       code: error.code || 'AI_REQUEST_FAILED',
     });
   }
