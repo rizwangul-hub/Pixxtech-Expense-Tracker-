@@ -948,6 +948,286 @@ export function MonthlyReportPage({ currentUser }) {
           </div>
         </>
       )}
+
+      {/* ── Bank Statements Attachments Modal ── */}
+      {showStatementModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+              <div className="flex items-center gap-2.5">
+                <Paperclip size={18} className="text-indigo-400" />
+                <div>
+                  <h2 className="text-base font-bold text-slate-100">
+                    Bank Statements Attachments
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Monthly Report Period: <strong className="text-indigo-300">{selectedMonth}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowStatementModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-6 overflow-y-auto">
+              {/* Informational Banner */}
+              <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-700/40 text-xs text-indigo-200 leading-relaxed">
+                <strong className="text-indigo-300 font-semibold block mb-0.5">Automated Report Attachment:</strong>
+                Upload official bank statements (multi-page PDF documents or pictures/scans) for each bank account.
+                When you generate or download the Monthly Report PDF, the system will automatically attach these statements
+                right under each corresponding bank ledger in the final document.
+              </div>
+
+              {/* Status Alerts */}
+              {statementSuccess && (
+                <div className="p-3 rounded-lg bg-emerald-950/50 border border-emerald-700/60 text-xs text-emerald-300 flex items-center gap-2">
+                  <CheckCircle2 size={15} />
+                  {statementSuccess}
+                </div>
+              )}
+              {statementError && (
+                <div className="p-3 rounded-lg bg-rose-950/50 border border-rose-700/60 text-xs text-rose-300 flex items-center gap-2">
+                  <AlertTriangle size={15} />
+                  {statementError}
+                </div>
+              )}
+
+              {/* Upload Form */}
+              <form onSubmit={handleUploadStatement} className="space-y-4 bg-slate-950/40 border border-slate-800 p-4 rounded-xl">
+                <div className="font-semibold text-xs text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                  <Upload size={14} className="text-indigo-400" />
+                  Upload Statement Document(s)
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Account Selector */}
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">
+                      Select Bank / Cash Account <span className="text-rose-400">*</span>
+                    </label>
+                    <select
+                      value={statementAccount}
+                      onChange={(e) => setStatementAccount(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      required
+                    >
+                      <option value="">— Choose Bank Account —</option>
+                      {(statementData?.accounts || []).map((acc) => (
+                        <option key={acc._id} value={acc._id}>
+                          {acc.name} {acc.accountNumber ? `(${acc.accountNumber})` : ''} [{acc.type}]
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Notes / Tag */}
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">
+                      Description / Label (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. October 2026 E-Statement / Stamped Scan"
+                      value={statementNotes}
+                      onChange={(e) => setStatementNotes(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* File Dropzone */}
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1.5 font-medium">
+                    Statement Files (PDF or Pictures) <span className="text-rose-400">*</span>
+                  </label>
+                  <div className="border-2 border-dashed border-slate-700 hover:border-indigo-500/80 rounded-xl p-4 text-center cursor-pointer transition bg-slate-900/60 relative">
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,image/png,image/jpeg,image/jpg,image/webp"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setStatementFiles((prev) => [...prev, ...files]);
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <Upload size={24} className="mx-auto text-indigo-400 mb-2 opacity-80" />
+                    <p className="text-xs text-slate-300 font-medium">
+                      Click or drag & drop bank statements here
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Accepts multi-page PDF documents & image scans (PNG, JPG, WEBP). Multiple files supported.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Selected files preview */}
+                {statementFiles.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                      Selected Files to Upload ({statementFiles.length}):
+                    </div>
+                    <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+                      {statementFiles.map((f, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-xs bg-slate-800/80 border border-slate-700/60 px-3 py-1.5 rounded-lg"
+                        >
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            {f.type === 'application/pdf' ? (
+                              <FileText size={14} className="text-rose-400 shrink-0" />
+                            ) : (
+                              <ImageIcon size={14} className="text-blue-400 shrink-0" />
+                            )}
+                            <span className="truncate text-slate-200 font-medium">{f.name}</span>
+                            <span className="text-[10px] text-slate-500 shrink-0">
+                              ({(f.size / 1024).toFixed(1)} KB)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setStatementFiles((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                            className="p-1 text-slate-400 hover:text-rose-400 transition"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={uploadingStatement || statementFiles.length === 0 || !statementAccount}
+                    className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition disabled:opacity-50"
+                  >
+                    <Upload size={14} className={uploadingStatement ? 'animate-spin' : ''} />
+                    {uploadingStatement ? 'Uploading Statement…' : `Upload & Attach to Account`}
+                  </button>
+                </div>
+              </form>
+
+              {/* Existing Attached Statements List */}
+              <div className="space-y-3">
+                <div className="font-semibold text-xs text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                  <span>Attached Statements for {selectedMonth}</span>
+                  <span className="text-slate-500 text-[11px] font-normal">
+                    {statementData?.totalStatementsAttached || 0} document(s) total
+                  </span>
+                </div>
+
+                {(statementData?.accounts || []).filter((a) => a.fileCount > 0).length === 0 ? (
+                  <div className="text-center py-8 text-xs text-slate-500 bg-slate-950/20 border border-dashed border-slate-800 rounded-xl">
+                    No bank statements uploaded for {selectedMonth} yet. Use the form above to upload.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(statementData?.accounts || [])
+                      .filter((a) => a.fileCount > 0)
+                      .map((acc) => (
+                        <div
+                          key={acc._id}
+                          className="bg-slate-950/40 border border-slate-800 rounded-xl p-3.5 space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Landmark size={14} className="text-indigo-400" />
+                              <span className="text-xs font-bold text-slate-200">
+                                {acc.name}
+                              </span>
+                              {acc.accountNumber && (
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  ({acc.accountNumber})
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60">
+                              {acc.fileCount} {acc.fileCount === 1 ? 'file' : 'files'} attached
+                            </span>
+                          </div>
+
+                          <div className="divide-y divide-slate-800/60">
+                            {(acc.files || []).map((file) => (
+                              <div
+                                key={file._id}
+                                className="flex items-center justify-between py-2 text-xs"
+                              >
+                                <div className="flex items-center gap-2.5 overflow-hidden">
+                                  {file.fileType === 'PDF' ? (
+                                    <span className="px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 text-[9px] font-bold shrink-0">
+                                      PDF
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-800/60 text-[9px] font-bold shrink-0">
+                                      IMG
+                                    </span>
+                                  )}
+                                  <span className="text-slate-200 font-medium truncate max-w-xs">
+                                    {file.fileName || file.originalName}
+                                  </span>
+                                  {file.size > 0 && (
+                                    <span className="text-[10px] text-slate-500 shrink-0">
+                                      {(file.size / 1024).toFixed(0)} KB
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {acc.attachmentId && (
+                                    <a
+                                      href={bankStatementsAPI.getPreviewUrl(acc.attachmentId, file._id)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                                      title="Open / Preview document"
+                                    >
+                                      <Eye size={11} />
+                                      View
+                                    </a>
+                                  )}
+                                  <button
+                                    onClick={() =>
+                                      handleDeleteStatementFile(acc.attachmentId, file._id)
+                                    }
+                                    className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition"
+                                    title="Delete document"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-slate-800 bg-slate-950/60 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowStatementModal(false)}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
