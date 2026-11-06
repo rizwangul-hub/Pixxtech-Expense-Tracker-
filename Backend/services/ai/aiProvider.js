@@ -30,6 +30,7 @@ Carry forward context from priorUserQuestions and conversationalContext:
 
 TOOLS SELECTION:
 - For individual employee salary or payroll: use getSalarySummary with employeeName (e.g. "Rizwan", "Sabir").
+- For an employee ledger or salary statement: use getEmployeeLedger with employeeName (e.g. "Sabir Nawaz").
 - For employee advance/loan or cash given: use getEmployeeLoanSummary with employeeName.
 - For individual bank or cash custodian ledger: use getAccountLedger with accountName.
 - For bank or cash balances: use getAccountBalances (accountType: BANK or CASH).
@@ -56,6 +57,38 @@ const table = rows => {
     ...rows.slice(0, 30).map(row => '| ' + keys.map(key => scalar(row[key])).join(' | ') + ' |'),
     ...(rows.length > 30 ? ['Showing the first 30 rows; totals include all matching records.'] : [])
   ].join('\n');
+};
+
+const providerFailure = (provider, model, status, code, message, providerStatus = null) => {
+  // Keep diagnostics useful in server logs without ever including the prompt,
+  // response body, authorization header, or API key.
+  console.error('[AI Provider Failure]', JSON.stringify({ provider, model, status, code, providerStatus }));
+  const error = new AiError(message, status, code);
+  error.providerStatus = providerStatus;
+  return error;
+};
+
+const providerHttpError = async (provider, model, response) => {
+  const httpStatus = Number(response?.status) || 0;
+  let providerStatus = null;
+  try {
+    const body = await response.json();
+    const value = body?.error?.status || body?.error?.code;
+    if (typeof value === 'string' || Number.isInteger(value)) providerStatus = String(value).slice(0, 80);
+  } catch {
+    // A non-JSON error page is still represented by its HTTP status only.
+  }
+
+  if (httpStatus === 401 || httpStatus === 403) {
+    return providerFailure(provider, model, 503, 'AI_PROVIDER_AUTH', 'AI provider credentials were rejected. Check the backend API key.', httpStatus);
+  }
+  if (httpStatus === 429) {
+    return providerFailure(provider, model, 503, 'AI_PROVIDER_RATE_LIMIT', 'AI provider quota or rate limit reached. Please retry later.', httpStatus);
+  }
+  if (httpStatus >= 400 && httpStatus < 500) {
+    return providerFailure(provider, model, 502, 'AI_PROVIDER_REQUEST_REJECTED', 'AI provider rejected the request or model configuration.', httpStatus);
+  }
+  return providerFailure(provider, model, 502, 'AI_PROVIDER_HTTP_ERROR', 'AI provider is temporarily unavailable. Please retry.', httpStatus || null);
 };
 
 export const formatFinancialResult = result => {
@@ -146,12 +179,17 @@ async function runProvider(provider, userMessage, history = [], user, { fetchImp
       headers: { 'Content-Type': 'application/json', ...(gemini ? { 'x-goog-api-key': config.key } : { Authorization: `Bearer ${config.key}` }) },
       body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error('Provider failure');
+    if (!response?.ok) throw await providerHttpError(provider, config.model, response);
     const data = await response.json();
+    if (!data || typeof data !== 'object') throw providerFailure(provider, config.model, 502, 'AI_PROVIDER_INVALID_RESPONSE', 'AI provider returned an invalid response. Please retry.');
     calls = gemini ? (data.candidates?.[0]?.content?.parts || []).filter(p => p.functionCall).map(p => p.functionCall) : (data.choices?.[0]?.message?.tool_calls || []).map(c => ({ name: c.function.name, args: JSON.parse(c.function.arguments || '{}') }));
+    if (!Array.isArray(calls)) throw providerFailure(provider, config.model, 502, 'AI_PROVIDER_INVALID_RESPONSE', 'AI provider returned an invalid response. Please retry.');
     if (calls.length > 4) throw new Error('Too many tools');
-  } catch {
-    throw new AiError('AI provider is unavailable or returned an invalid response. Please retry.', 502);
+  } catch (error) {
+    if (error instanceof AiError) throw error;
+    const isTimeout = error?.name === 'AbortError' || error?.name === 'TimeoutError' || error?.code === 'ABORT_ERR';
+    if (isTimeout) throw providerFailure(provider, config.model, 504, 'AI_PROVIDER_TIMEOUT', 'AI provider timed out. Please retry.');
+    throw providerFailure(provider, config.model, 502, 'AI_PROVIDER_NETWORK', 'Could not reach the AI provider. Please retry.');
   }
 
   if (!calls.length) {

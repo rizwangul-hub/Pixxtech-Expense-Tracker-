@@ -580,7 +580,84 @@ export const getEmployeeLoanSummary = async ({ employeeName, employeeId }, user)
 };
 
 /**
- * Tool 11: getAccountLedger
+ * Tool 11: getEmployeeLedger
+ *
+ * Reuses the payroll controller's existing, audited employee-ledger reader.
+ * The adapter only changes the transport shape and deliberately exposes no
+ * mutation fields or internal database identifiers to the assistant.
+ */
+export const getEmployeeLedger = async ({ employeeName, employeeId }, user) => {
+  assertFinancialAccess(user);
+
+  let employee = null;
+  if (employeeId) {
+    employee = await Employee.findById(employeeId).lean();
+  } else if (employeeName) {
+    const escaped = employeeName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    employee = await Employee.findOne({ name: new RegExp(`^${escaped}$`, 'i') }).lean();
+    if (!employee) employee = await Employee.findOne({ name: new RegExp(escaped, 'i') }).lean();
+  }
+
+  if (!employee) {
+    const activeStaff = await Employee.find({ employmentStatus: 'ACTIVE' }).select('name designation').limit(10).lean();
+    return {
+      error: `Employee '${employeeName || employeeId}' was not found.`,
+      availableEmployees: activeStaff.map(s => `${s.name} (${s.designation || 'Staff'})`),
+    };
+  }
+
+  // This is the same production reader used by GET /staff/payroll/employee-ledger/:id.
+  // Calling it through a small response adapter keeps the AI path on the exact
+  // payroll accrual/installment/reversal rules instead of duplicating them.
+  const { getEmployeeLedger: readEmployeeLedger } = await import('../../controllers/payrollController.js');
+  let responseBody;
+  let responseStatus = 200;
+  const response = {
+    status(code) {
+      responseStatus = code;
+      return this;
+    },
+    json(body) {
+      responseBody = body;
+      return body;
+    },
+  };
+  await readEmployeeLedger({ params: { employeeId: String(employee._id) } }, response);
+
+  if (responseStatus >= 400 || !responseBody?.success || !responseBody.data) {
+    return { error: responseBody?.message || 'Employee ledger could not be read.' };
+  }
+
+  const data = responseBody.data;
+  return {
+    employee: {
+      name: data.employee?.name || employee.name,
+      designation: data.employee?.designation || employee.designation || 'Staff',
+      department: data.employee?.department || employee.department || 'Office',
+    },
+    summary: {
+      totalAccrued: round2(data.summary?.totalAccrued || 0),
+      totalPaid: round2(data.summary?.totalPaid || 0),
+      pendingBalance: round2(data.summary?.pendingBalance || 0),
+      paymentDatesRequiringCorrection: data.summary?.paymentDatesRequiringCorrection || 0,
+    },
+    ledger: (Array.isArray(data.ledger) ? data.ledger : []).slice(0, 100).map(entry => ({
+      date: entry.date ? new Date(entry.date).toISOString().slice(0, 10) : 'N/A',
+      month: entry.month || entry.salaryForMonth || 'N/A',
+      type: entry.type,
+      voucherNo: entry.voucherNo || 'N/A',
+      detail: entry.detail || '',
+      accruedAmount: round2(entry.accruedAmount || 0),
+      paidAmount: round2(entry.paidAmount || 0),
+      runningPendingBalance: round2(entry.runningPendingBalance || 0),
+      status: entry.status || 'N/A',
+    })),
+    basis: 'Production employee payroll ledger: monthly accruals, linked salary installments, legacy payment dates, and pending liability balance.',
+  };
+};
+
+/**
+ * Tool 12: getAccountLedger
  * Full running ledger statement of a specific bank or cash custodian account.
  */
 export const getAccountLedger = async ({ accountName = null, accountId = null, month, year, limit = 20 }, user) => {
@@ -610,7 +687,7 @@ export const getAccountLedger = async ({ accountName = null, accountId = null, m
     };
   }
 
-  const ledger = await getAccountRunningLedger(account._id, period.startDate, period.endDate);
+  const ledger = await getAccountRunningLedger(account._id, period.startDate, period.endDate, { preserveEndInstant: true });
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 25);
 
   return {
@@ -619,23 +696,26 @@ export const getAccountLedger = async ({ accountName = null, accountId = null, m
     period: period.periodString,
     openingBalance: round2(ledger.previousBalance),
     closingBalance: round2(ledger.closingBalance),
-    totalDebit: round2(ledger.totalDebit || 0),
-    totalCredit: round2(ledger.totalCredit || 0),
-    totalTransactions: ledger.transactions.length,
-    recentEntries: ledger.transactions.slice(0, safeLimit).map(t => ({
+    totalDebits: round2(ledger.totalDebits || 0),
+    totalCredits: round2(ledger.totalCredits || 0),
+    totalTransactions: ledger.entries.length,
+    recentEntries: ledger.entries.slice(0, safeLimit).map(t => ({
       date: t.date ? new Date(new Date(t.date).getTime() + 18000000).toISOString().slice(0, 10) : 'N/A',
       voucherNo: t.voucherNo || 'N/A',
-      head: t.categoryId?.name || t.reportCategory || 'General',
-      description: t.narration || '',
-      debit: round2(t.debit || 0),
-      credit: round2(t.credit || 0),
+      head: t.category || 'General',
+      description: t.detail || '',
+      counterpartyAccount: t.counterpartyAccount || '',
+      property: t.property || '',
+      debit: round2(t.drAmount || 0),
+      credit: round2(t.crAmount || 0),
       balance: round2(t.runningBalance || 0),
     })),
+    basis: 'Production account running ledger; reversed and voided transactions are excluded by the shared ledger reader.',
   };
 };
 
 /**
- * Tool 12: getTenantRentSummary
+ * Tool 13: getTenantRentSummary
  * Individual tenant lease details, rent history, and outstanding balance.
  */
 export const getTenantRentSummary = async ({ tenantName = null, propertyName = null, month, year }, user) => {
@@ -813,6 +893,55 @@ export const FINANCIAL_TOOL_DECLARATIONS = [
       },
     },
   },
+  {
+    name: 'getEmployeeLedger',
+    description: 'Get the verified chronological payroll ledger for one employee, including salary accruals, linked payments, and pending balance. Use this for an employee ledger or salary statement.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        employeeName: { type: 'STRING', description: 'Employee full or partial name (e.g. Sabir Nawaz).' },
+        employeeId: { type: 'STRING', description: 'Optional employee MongoDB ID.' },
+      },
+    },
+  },
+  {
+    name: 'getEmployeeLoanSummary',
+    description: 'Get verified staff advance/loan disbursements, repayments, and the current loan balance for one employee.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        employeeName: { type: 'STRING', description: 'Employee full or partial name.' },
+        employeeId: { type: 'STRING', description: 'Optional employee MongoDB ID.' },
+      },
+    },
+  },
+  {
+    name: 'getAccountLedger',
+    description: 'Get the verified running ledger for one active bank, cash, or suspense account for a Pakistan calendar month.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        accountName: { type: 'STRING', description: 'Account name such as Meezan Bank or Petty Cash.' },
+        accountId: { type: 'STRING', description: 'Optional account MongoDB ID.' },
+        month: { type: 'INTEGER', description: 'Month number (1-12).' },
+        year: { type: 'INTEGER', description: 'Four-digit year.' },
+        limit: { type: 'INTEGER', description: 'Maximum ledger rows to display (1-25).' },
+      },
+    },
+  },
+  {
+    name: 'getTenantRentSummary',
+    description: 'Get verified lease rent received and outstanding balance for a named tenant or property.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        tenantName: { type: 'STRING', description: 'Tenant full or partial name.' },
+        propertyName: { type: 'STRING', description: 'Optional property/plaza name.' },
+        month: { type: 'INTEGER', description: 'Month number (1-12).' },
+        year: { type: 'INTEGER', description: 'Four-digit year.' },
+      },
+    },
+  },
 ];
 
 /**
@@ -840,6 +969,8 @@ export const executeFinancialTool = async (name, args = {}, user) => {
       return await getMonthlyComparison(args, user);
     case 'getSalarySummary':
       return await getSalarySummary(args, user);
+    case 'getEmployeeLedger':
+      return await getEmployeeLedger(args, user);
     case 'getEmployeeLoanSummary':
       return await getEmployeeLoanSummary(args, user);
     case 'getAccountLedger':

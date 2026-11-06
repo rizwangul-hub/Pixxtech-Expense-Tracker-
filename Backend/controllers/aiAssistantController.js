@@ -20,10 +20,11 @@ export const handleFinanceChat = async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[AI Finance Assistant Error]:', error.message);
+    console.error('[AI Finance Assistant Error]:', JSON.stringify({ status: error.status || 500, code: error.code || 'AI_REQUEST_FAILED', message: error.message }));
     return res.status(error.status || 500).json({
       success: false,
       message: error.status ? error.message : 'Failed to retrieve financial records. Please retry.',
+      code: error.code || 'AI_REQUEST_FAILED',
     });
   }
 };

@@ -12,7 +12,7 @@ const ROMAN_URDU_LOAN_TERMS = ['loan', 'karza', 'qarz', 'advance', 'advance sala
 const ROMAN_URDU_BALANCE_TERMS = ['balance', 'balances', 'paisa', 'paise', 'bache hue', 'total balance'];
 const ROMAN_URDU_BANK_TERMS = ['bank', 'banks', 'bankon'];
 const ROMAN_URDU_CASH_TERMS = ['cash', 'cash in hand', 'hath mein cash', 'rokad', 'naqad', 'custodian', 'petty cash'];
-const ROMAN_URDU_LEDGER_TERMS = ['ledger', 'statement', 'hisab', 'hisaab', 'khata', 'tareekh'];
+const ROMAN_URDU_LEDGER_TERMS = ['ledger', 'ladger', 'ledgar', 'statement', 'hisab', 'hisaab', 'khata', 'tareekh'];
 const ROMAN_URDU_COMPARE_TERMS = ['compare', 'comparison', 'muazna', 'dono ka', 'dono ko compare', 'farq', 'difference', 'compare both'];
 
 const MONTH_NAMES_MAP = {
@@ -349,10 +349,17 @@ export function resolveIntentAndToolCall(userMessage, context = null) {
   // 2. Employee Specific Queries: Salary, Cash, Loan
   // "What is Rizwan's salary?", "Rizwan ki salary kitni hai?", "Sabir ko kitna cash diya?", "Sabir loan balance"
   const activeEmployee = ctx.currentEntities.employeeName || inherited.employeeName;
+  const isLedgerQuery = ROMAN_URDU_LEDGER_TERMS.some(t => clean.includes(t));
   const isLoanOrCashGiven = ROMAN_URDU_LOAN_TERMS.some(t => clean.includes(t)) || /\b(kitna\s*cash\s*diya|cash\s*diya|loan\s*balance|karza)\b/i.test(clean);
   const isSalaryQuery = ROMAN_URDU_SALARY_TERMS.some(t => clean.includes(t)) || inherited.topic === 'SALARY';
 
   if (activeEmployee) {
+    if (isLedgerQuery) {
+      return [{
+        name: 'getEmployeeLedger',
+        args: { employeeName: activeEmployee },
+      }];
+    }
     if (isLoanOrCashGiven || isSalaryQuery || /^(what\s*about|aur)\s+/i.test(clean) && inherited.topic === 'SALARY') {
       return [{
         name: 'getSalarySummary',
@@ -367,11 +374,10 @@ export function resolveIntentAndToolCall(userMessage, context = null) {
 
   // 3. Account-specific / Ledger queries: "Meezan bank ledger", "Sabir cash account ledger", "Bank statement"
   const activeAccount = ctx.currentEntities.accountName || inherited.accountName;
-  const isLedgerQuery = ROMAN_URDU_LEDGER_TERMS.some(t => clean.includes(t));
 
   if (activeAccount && (isLedgerQuery || clean.includes('ledger') || clean.includes('statement') || clean.includes('khata'))) {
     return [{
-      name: 'getRecentTransactions',
+      name: 'getAccountLedger',
       args: {
         accountName: activeAccount,
         month: period.month,

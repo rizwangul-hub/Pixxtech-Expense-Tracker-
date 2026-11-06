@@ -95,7 +95,8 @@ test('AI Natural Language - Tolerates common spelling mistakes and informal abbr
   const typoCases = [
     { query: 'octobar expens total', expectedTool: 'getExpenseSummary', expectedMonth: 10 },
     { query: 'Rizwan salry kitni hai', expectedTool: 'getSalarySummary', expectedEmp: 'Rizwan' },
-    { query: 'meezan ledger dikhao', expectedTool: 'getRecentTransactions' },
+    { query: 'meezan ledger dikhao', expectedTool: 'getAccountLedger' },
+    { query: 'give me ladger of Sabir Nawaz', expectedTool: 'getEmployeeLedger', expectedEmp: 'Sabir' },
     { query: 'novambar kharcha', expectedTool: 'getExpenseSummary', expectedMonth: 11 },
   ];
 
@@ -176,7 +177,7 @@ test('AI Natural Language - Account-specific searches resolve account filter', (
   const query = 'Meezan Bank ledger statement';
   const resolved = resolveIntentAndToolCall(query);
   assert.ok(resolved);
-  assert.equal(resolved[0].name, 'getRecentTransactions');
+  assert.equal(resolved[0].name, 'getAccountLedger');
   assert.equal(resolved[0].args.accountName, 'Meezan Bank');
 });
 

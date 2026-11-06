@@ -432,7 +432,7 @@ export const createTransaction = async (data, externalSession = null) => {
  * @param {Date|string} [endDate] - End date filter (inclusive)
  * @returns {Promise<Object>} - Account running ledger statement with opening & closing balances
  */
-export const getAccountRunningLedger = async (accountId, startDate = null, endDate = null) => {
+export const getAccountRunningLedger = async (accountId, startDate = null, endDate = null, options = {}) => {
   const account = await Account.findById(accountId).lean();
   if (!account) {
     throw new Error(`Account not found with ID: ${accountId}`);
@@ -440,7 +440,11 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
 
   const start = startDate ? new Date(startDate) : null;
   const end = endDate ? new Date(endDate) : null;
-  if (end) end.setHours(23, 59, 59, 999);
+  // Existing callers pass a calendar date and rely on the host-local end-of-day
+  // normalization. Read-only reports that already provide an exact instant
+  // (for example a Pakistan-time month boundary) can opt out so the next
+  // calendar day is not accidentally included on a UTC server.
+  if (end && !options.preserveEndInstant) end.setHours(23, 59, 59, 999);
 
   // 1. Calculate historical previous balance prior to startDate
   let previousBalance = round2(account.openingBalance);

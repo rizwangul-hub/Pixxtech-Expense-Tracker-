@@ -12,6 +12,7 @@ import Transaction from '../models/Transaction.js';
 import Property from '../models/Property.js';
 import RentalAgreement from '../models/RentalAgreement.js';
 import Payroll from '../models/Payroll.js';
+import Employee from '../models/Employee.js';
 import AssistantRateLimit from '../models/AssistantRateLimit.js';
 import aiRoutes from '../routes/aiRoutes.js';
 import { assertFinancialAccess, getAiConfiguration, validateQuestion } from '../services/ai/assistantSecurity.js';
@@ -72,6 +73,35 @@ test('live account balances include transfers once and omit account numbers', as
   assert.equal(result.totalAllAccounts, 150); assert.equal(result.totalBankBalance, 75); assert.equal(result.totalCashBalance, 75);
   assert.equal(result.bankAccounts[0].accountNumber, undefined);
 });
+test('account ledger adapter uses the shared running-ledger shape and exact Pakistan month end', async t => {
+  const accountId = '123456789012345678901234';
+  t.mock.method(Account, 'findOne', () => queryChain({ _id: accountId, name: 'Meezan Bank', type: 'BANK', isActive: true }));
+  t.mock.method(Account, 'findById', () => queryChain({ _id: accountId, name: 'Meezan Bank', type: 'BANK', openingBalance: 100, currentBalance: 125 }));
+  t.mock.method(Transaction, 'find', query => {
+    if (query.date?.$lt) return queryChain([]);
+    assert.equal(query.date.$lte.toISOString(), '2026-10-31T18:59:59.999Z');
+    return queryChain([{
+      _id: 'tx-1',
+      date: new Date('2026-10-15T10:00:00.000Z'),
+      voucherNo: 'V-1',
+      detail: 'Office supplies',
+      transactionType: 'EXPENSE',
+      reportCategory: 'Office Supplies',
+      categoryId: { name: 'Office Supplies' },
+      drAccountId: { _id: accountId, name: 'Meezan Bank' },
+      crAccountId: { _id: 'expense', name: 'Expense Clearing' },
+      amount: 25,
+      status: 'POSTED',
+    }]);
+  });
+
+  const result = await executeFinancialTool('getAccountLedger', { accountName: 'Meezan Bank', month: 10, year: 2026 }, viewer);
+  assert.equal(result.totalDebits, 25);
+  assert.equal(result.totalCredits, 0);
+  assert.equal(result.totalTransactions, 1);
+  assert.equal(result.recentEntries[0].debit, 25);
+  assert.equal(result.recentEntries[0].description, 'Office supplies');
+});
 test('salary uses actual payroll fields and existing salary expense classification', async t => {
   t.mock.method(Category, 'find', () => queryChain([{ _id: 'c1', name: 'Salary', type: 'EXPENSE' }]));
   t.mock.method(Transaction, 'find', () => queryChain([{ categoryId: { _id: 'c1', name: 'Salary' }, amount: 75 }]));
@@ -79,9 +109,40 @@ test('salary uses actual payroll fields and existing salary expense classificati
   const result = await executeFinancialTool('getSalarySummary', { month: 10, year: 2026 }, viewer);
   assert.equal(result.totalSalariesDisbursed, 75); assert.equal(result.totalPayrollCommitted, 100); assert.equal(result.paidEmployeesCount, 1);
 });
+test('employee ledger adapter reuses production accrual and payment ledger rules', async t => {
+  const employee = {
+    _id: '123456789012345678901235',
+    name: 'Sabir Nawaz',
+    designation: 'Office Admin',
+    department: 'Office',
+    basicSalary: 1000,
+    loanBalance: 0,
+  };
+  t.mock.method(Employee, 'findOne', () => queryChain(employee));
+  t.mock.method(Employee, 'findById', () => queryChain(employee));
+  t.mock.method(Payroll, 'find', () => queryChain([{
+    _id: 'payroll-1',
+    payrollMonth: '2026-10',
+    netPayable: 1000,
+    grossSalary: 1000,
+    paymentStatus: 'PAID',
+    totalInstallmentsPaid: 1000,
+  }]));
+
+  const result = await executeFinancialTool('getEmployeeLedger', { employeeName: 'Sabir Nawaz' }, viewer);
+  assert.equal(result.employee.name, 'Sabir Nawaz');
+  assert.equal(result.summary.totalAccrued, 1000);
+  assert.equal(result.summary.totalPaid, 1000);
+  assert.equal(result.summary.pendingBalance, 0);
+  assert.equal(result.ledger.length, 2);
+  assert.equal(result.ledger[0].type, 'SALARY_ACCRUAL');
+  assert.equal(result.ledger[1].type, 'SALARY_DISBURSAL');
+});
 test('provider suppresses ungrounded figures and sanitizes failures/timeouts', async t => {
   configure(t);
-  for (const fetchImpl of [async () => { throw new Error('secret'); }, async () => ({ ok: false }), async () => { throw new DOMException('timeout', 'TimeoutError'); }]) await assert.rejects(runGeminiAssistant('expenses', [], viewer, { fetchImpl }), e => e.status === 502 && !e.message.includes('secret'));
+  await assert.rejects(runGeminiAssistant('expenses', [], viewer, { fetchImpl: async () => { throw new Error('secret'); } }), e => e.status === 502 && e.code === 'AI_PROVIDER_NETWORK' && !e.message.includes('secret'));
+  await assert.rejects(runGeminiAssistant('expenses', [], viewer, { fetchImpl: async () => ({ ok: false }) }), e => e.status === 502 && e.code === 'AI_PROVIDER_HTTP_ERROR');
+  await assert.rejects(runGeminiAssistant('expenses', [], viewer, { fetchImpl: async () => { throw new DOMException('timeout', 'TimeoutError'); } }), e => e.status === 504 && e.code === 'AI_PROVIDER_TIMEOUT');
   const result = await runGeminiAssistant('expenses', [], viewer, { fetchImpl: async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'Invented expenses: 999999' }] } }] }) }) });
   assert.ok(!result.message.includes('999999')); assert.deepEqual(result.toolCalls, []);
 });
@@ -141,7 +202,7 @@ test('HTTP routes enforce JWT, roles, validation, disabled configuration and rea
 
 test('AI Assistant - Tool declarations integrity', () => {
   assert.ok(Array.isArray(FINANCIAL_TOOL_DECLARATIONS), 'Declarations must be an array');
-  assert.equal(FINANCIAL_TOOL_DECLARATIONS.length, 9, 'Must have 9 predefined financial tools');
+  assert.equal(FINANCIAL_TOOL_DECLARATIONS.length, 13, 'Must have 13 predefined financial tools');
 
   const names = FINANCIAL_TOOL_DECLARATIONS.map(t => t.name);
   assert.ok(names.includes('getExpenseSummary'), 'Must include getExpenseSummary');
@@ -153,6 +214,11 @@ test('AI Assistant - Tool declarations integrity', () => {
   assert.ok(names.includes('getPropertyFinancialSummary'), 'Must include getPropertyFinancialSummary');
   assert.ok(names.includes('getMonthlyComparison'), 'Must include getMonthlyComparison');
   assert.ok(names.includes('getSalarySummary'), 'Must include getSalarySummary');
+  assert.ok(names.includes('getEmployeeLedger'), 'Must include getEmployeeLedger');
+  assert.ok(names.includes('getEmployeeLoanSummary'), 'Must include getEmployeeLoanSummary');
+  assert.ok(names.includes('getAccountLedger'), 'Must include getAccountLedger');
+  assert.ok(names.includes('getTenantRentSummary'), 'Must include getTenantRentSummary');
+  assert.equal(new Set(names).size, names.length, 'Tool names must be unique');
 
   for (const tool of FINANCIAL_TOOL_DECLARATIONS) {
     assert.ok(tool.name, 'Tool must have name');

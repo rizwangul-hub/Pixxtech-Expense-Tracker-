@@ -1,6 +1,11 @@
 import { hasPermission, PERMISSIONS } from '../../middleware/auth.js';
 export class AiError extends Error {
-  constructor(message, status = 400) { super(message); this.status = status; }
+  constructor(message, status = 400, code = 'AI_ERROR') {
+    super(message);
+    this.name = 'AiError';
+    this.status = status;
+    this.code = code;
+  }
 }
 export function assertFinancialAccess(user) {
   if (!user?._id) throw new AiError('Authentication required.', 401);
