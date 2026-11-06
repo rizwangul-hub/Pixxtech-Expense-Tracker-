@@ -372,3 +372,108 @@ test('AI PDF HTTP - Complete flow: Request PDF in chat, obtain token, and downlo
     server.close();
   }
 });
+
+// 9. Monthly Funds Report 4-Page Financial Structure
+test('Monthly Funds Report - template renders Page 1 Rental Financial, Page 2 40-AB Financial, Page 3 Other Financial, Page 4 Opening & Closing Balance Detail', async () => {
+  const fs = await import('fs');
+  const path = await import('path');
+  const handlebars = (await import('handlebars')).default;
+
+  const templatePath = path.join(process.cwd(), 'templates', 'fundsReportTemplate.html');
+  const templateSource = fs.readFileSync(templatePath, 'utf8');
+
+  const compiled = handlebars.compile(templateSource);
+  const renderedHtml = compiled({
+    periodName: '2026-10',
+    asOfDate: '31-Oct-2026',
+    shortAsOfDate: '31-10-2026',
+    monthNameYear: 'October-2026',
+    dayDateString: 'Saturday, October 31, 2026',
+    reportStatus: 'PUBLISHED',
+    generatedDate: '06-Nov-26',
+    dataEnteredByName: 'Sarfraz Khan (Accountant - Data Entry)',
+    checkedByName: 'Khurshid Anwar',
+    preparedByName: 'Pixx Tech Expense Tracker System',
+    publishedByName: 'Rizwan Ullah',
+    rentalFinancial: {
+      income: 1500000,
+      expense: 350000,
+      net: 1150000,
+      isNetNeg: false,
+    },
+    financial40AB: {
+      income: 250000,
+      expense: 80000,
+      net: 170000,
+      isNetNeg: false,
+    },
+    otherFinancial: {
+      income: 90000,
+      expense: 40000,
+      net: 50000,
+      isNetNeg: false,
+    },
+    page2Matrix: {
+      rows: [
+        {
+          name: 'Bank Al Falah',
+          openingBalance: 5000000,
+          rentalIncome: 1500000,
+          input40AB: 250000,
+          otherInput: 90000,
+          totalInput: 1840000,
+          rentalExpenses: 350000,
+          expense40AB: 80000,
+          otherExpenses: 40000,
+          totalOutput: 470000,
+          closingBalance: 6370000,
+        },
+      ],
+      totals: {
+        openingBalance: 5000000,
+        rentalIncome: 1500000,
+        input40AB: 250000,
+        otherInput: 90000,
+        totalInput: 1840000,
+        rentalExpenses: 350000,
+        expense40AB: 80000,
+        otherExpenses: 40000,
+        totalOutput: 470000,
+        closingBalance: 6370000,
+      },
+    },
+    page3Tenancy: { plazas: [], totals: {} },
+    masterJournal: { sections: [] },
+    headWiseReport: { groups: [], grandTotal: 0 },
+    accountStatements: [],
+  });
+
+  // Verify headers and dedicated sections exist in the rendered HTML
+  assert.ok(renderedHtml.includes('Rental Financial'), 'Page 1 subtitle Rental Financial missing');
+  assert.ok(renderedHtml.includes('RENTAL INCOME'), 'Page 1 Rental Income table missing');
+  assert.ok(renderedHtml.includes('RENTAL EXPENSES'), 'Page 1 Rental Expenses table missing');
+  assert.ok(renderedHtml.includes('Net Rental Position'), 'Page 1 Net Rental Position missing');
+
+  assert.ok(renderedHtml.includes('40-AB Financial'), 'Page 2 subtitle 40-AB Financial missing');
+  assert.ok(renderedHtml.includes('40-AB INCOME'), 'Page 2 40-AB Income table missing');
+  assert.ok(renderedHtml.includes('40-AB EXPENSES'), 'Page 2 40-AB Expenses table missing');
+  assert.ok(renderedHtml.includes('Net 40-AB Position'), 'Page 2 Net 40-AB Position missing');
+
+  assert.ok(renderedHtml.includes('Other Financial'), 'Page 3 subtitle Other Financial missing');
+  assert.ok(renderedHtml.includes('OTHER INCOME'), 'Page 3 Other Income table missing');
+  assert.ok(renderedHtml.includes('OTHER EXPENSES'), 'Page 3 Other Expenses table missing');
+  assert.ok(renderedHtml.includes('Net Other Position'), 'Page 3 Net Other Position missing');
+
+  assert.ok(renderedHtml.includes('Opening & Closing Balance Detail'), 'Page 4 Opening & Closing Balance Detail missing');
+  assert.ok(renderedHtml.includes('Bank Al Falah'), 'Bank Al Falah matrix row missing');
+
+  // Verify order of appearance
+  const idxP1 = renderedHtml.indexOf('Rental Financial');
+  const idxP2 = renderedHtml.indexOf('40-AB Financial');
+  const idxP3 = renderedHtml.indexOf('Other Financial');
+  const idxP4 = renderedHtml.indexOf('Opening & Closing Balance Detail');
+
+  assert.ok(idxP1 < idxP2, 'Rental Financial must appear before 40-AB Financial');
+  assert.ok(idxP2 < idxP3, '40-AB Financial must appear before Other Financial');
+  assert.ok(idxP3 < idxP4, 'Other Financial must appear before Opening & Closing Balance Detail');
+});
