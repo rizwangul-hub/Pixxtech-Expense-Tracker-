@@ -951,6 +951,20 @@ export const getHeadWiseExpenseReport = async (year, month, filters = {}) => {
     sourceModule: { $nin: ['RENT_RECEIVED', 'TRANSFER', 'OTHER_INCOME', 'OPENING_BALANCE', 'OWNER_PERSONAL'] },
     $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   };
+  if (filters.categoryId) {
+    // Optional assistant filter: keep the existing expense exclusions and include a main head's children.
+    const belongsToHead = category => {
+      const seen = new Set();
+      let current = category;
+      while (current && !seen.has(String(current._id))) {
+        if (String(current._id) === String(filters.categoryId)) return true;
+        seen.add(String(current._id));
+        current = categoryById.get(String(current.parentCategoryId || ''));
+      }
+      return false;
+    };
+    transactionQuery.categoryId = { $in: expenseCategories.filter(belongsToHead).map(c => c._id) };
+  }
   if (filters.propertyId && filters.propertyId !== 'ALL') {
     transactionQuery.$or = [
       { propertyId: filters.propertyId },

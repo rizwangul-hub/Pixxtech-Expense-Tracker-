@@ -2,9 +2,12 @@ import Transaction from '../../models/Transaction.js';
 import Account from '../../models/Account.js';
 import Property from '../../models/Property.js';
 import Payroll from '../../models/Payroll.js';
+import Employee from '../../models/Employee.js';
+import StaffLoan from '../../models/StaffLoan.js';
+import Tenant from '../../models/Tenant.js';
 import { calculateLiveAccountBalances } from '../accountBalance.js';
 import { getRentalSummaryWithCarryForward } from '../rentalCarryForwardService.js';
-import { round2, getHeadWiseExpenseReport } from '../ledgerService.js';
+import { round2, getHeadWiseExpenseReport, getAccountRunningLedger } from '../ledgerService.js';
 import { getUtcMonthKey, getUtcMonthDateRange } from '../salaryReportingService.js';
 import { assertFinancialAccess, AiError } from './assistantSecurity.js';
 
@@ -16,7 +19,9 @@ export const resolveMonthDateRange = (month, year) => {
   const [currentYear, currentMonth] = current.split('-').map(Number);
   const y = year === undefined ? currentYear : year;
   const m = month === undefined ? currentMonth : month;
-  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12 || y < 2000 || `${y}-${String(m).padStart(2, '0')}` > current) throw new AiError('Choose a valid month through the current Pakistan calendar month.');
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12 || y < 2000 || `${y}-${String(m).padStart(2, '0')}` > current) {
+    throw new AiError('Choose a valid month through the current Pakistan calendar month.');
+  }
   const { startDate, endDate } = getUtcMonthDateRange(y, m);
 
   const monthNames = [
@@ -45,21 +50,50 @@ const comparisonPeriods = ({ month1, year1, month2, year2 }) => {
  * Tool 1: getExpenseSummary
  * Calculates total expenses and breakdown for a given period.
  */
-export const getExpenseSummary = async ({ month, year, propertyId = null, startDate, endDate }, user) => {
+export const getExpenseSummary = async ({ month, year, propertyId = null, propertyName = null, categoryName = null, startDate, endDate }, user) => {
   assertFinancialAccess(user);
   const period = resolveMonthDateRange(month, year);
-  const report = await getHeadWiseExpenseReport(period.year, period.month, { propertyId, ...(startDate ? { startDate: new Date(`${startDate}T00:00:00+05:00`), endDate: new Date(`${endDate}T23:59:59.999+05:00`) } : {}) });
-  const propertyTotals = new Map();
-  for (const head of report.mainHeads) for (const expense of head.expenses) for (const tx of expense.transactions) {
-    if (tx.property) propertyTotals.set(tx.property, round2((propertyTotals.get(tx.property) || 0) + tx.amount));
+
+  let targetPropertyId = propertyId;
+  if (!targetPropertyId && propertyName) {
+    const escaped = propertyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const prop = await Property.findOne({ plazaName: new RegExp(escaped, 'i') }).lean();
+    if (prop) targetPropertyId = String(prop._id);
   }
+
+  const report = await getHeadWiseExpenseReport(period.year, period.month, {
+    propertyId: targetPropertyId,
+    ...(startDate ? { startDate: new Date(`${startDate}T00:00:00+05:00`), endDate: new Date(`${endDate}T23:59:59.999+05:00`) } : {})
+  });
+
+  const propertyTotals = new Map();
+  for (const head of report.mainHeads) {
+    for (const expense of head.expenses) {
+      for (const tx of expense.transactions) {
+        if (tx.property) propertyTotals.set(tx.property, round2((propertyTotals.get(tx.property) || 0) + tx.amount));
+      }
+    }
+  }
+
+  let filteredHeads = report.mainHeads;
+  if (categoryName) {
+    const catLower = categoryName.toLowerCase();
+    filteredHeads = report.mainHeads.filter(h =>
+      h.mainHeadName.toLowerCase().includes(catLower) ||
+      h.expenses.some(e => e.expenseHeadName.toLowerCase().includes(catLower))
+    );
+  }
+
+  const totalFilteredExpenses = round2(filteredHeads.reduce((s, h) => s + h.totalSpent, 0));
+
   return {
     period: period.periodString,
     dateRange: `${startDate || period.periodString + '-01'} to ${endDate || new Date(period.endDate.getTime() + 18000000).toISOString().slice(0, 10)} (Pakistan time)`,
-    totalExpenses: report.totalExpensesOverall,
-    transactionCount: report.mainHeads.reduce((n, h) => n + h.transactionCount, 0),
+    totalExpenses: categoryName ? totalFilteredExpenses : report.totalExpensesOverall,
+    categoryFilter: categoryName || 'ALL_CATEGORIES',
+    transactionCount: filteredHeads.reduce((n, h) => n + h.transactionCount, 0),
     classification: report.classificationTotals,
-    topExpenseHeads: report.mainHeads.slice(0, 20).map(h => ({ head: h.mainHeadName, amount: h.totalSpent })),
+    topExpenseHeads: filteredHeads.slice(0, 20).map(h => ({ head: h.mainHeadName, amount: h.totalSpent })),
     expensesByProperty: [...propertyTotals].map(([property, amount]) => ({ property, amount })).sort((a, b) => b.amount - a.amount),
   };
 };
@@ -79,22 +113,36 @@ export const getIncomeSummary = async ({ month, year }, user) => {
   ]).option({ maxTimeMS: 10000 });
   const rentalIncome = round2(rental.grandTotals.totalReceivedAmount || 0);
   const otherIncome = round2(rows[0]?.amount || 0);
-  return { period: period.periodString, totalIncome: round2(rentalIncome + otherIncome), rentalIncome, otherIncome, basis: 'Rent allocation month and other income posting date, matching monthly report conventions. Internal transfers, opening balances and owner personal transactions are excluded.' };
+  return {
+    period: period.periodString,
+    totalIncome: round2(rentalIncome + otherIncome),
+    rentalIncome,
+    otherIncome,
+    basis: 'Rent allocation month and other income posting date, matching monthly report conventions. Internal transfers, opening balances and owner personal transactions are excluded.'
+  };
 };
 
 /**
  * Tool 3: getRentCollectionSummary
  * Detailed rent collection summary per plaza with collection rate.
  */
-export const getRentCollectionSummary = async ({ month, year, propertyId = null }, user) => {
+export const getRentCollectionSummary = async ({ month, year, propertyId = null, propertyName = null }, user) => {
   assertFinancialAccess(user);
   const { year: y, month: m, monthName, periodString } = resolveMonthDateRange(month, year);
+  if (periodString < '2026-09') throw new AiError('Rental reports are available from September 2026.');
+
+  let targetPropertyId = propertyId;
+  if (!targetPropertyId && propertyName) {
+    const escaped = propertyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const prop = await Property.findOne({ plazaName: new RegExp(escaped, 'i') }).lean();
+    if (prop) targetPropertyId = String(prop._id);
+  }
 
   const rentalSummary = await getRentalSummaryWithCarryForward(periodString, { rentOnly: true });
 
   let plazas = rentalSummary.plazas || [];
-  if (propertyId) {
-    plazas = plazas.filter(p => String(p.plazaId) === String(propertyId));
+  if (targetPropertyId) {
+    plazas = plazas.filter(p => String(p.plazaId) === String(targetPropertyId));
   }
 
   const plazaBreakdown = plazas.map(p => ({
@@ -120,15 +168,23 @@ export const getRentCollectionSummary = async ({ month, year, propertyId = null 
  * Tool 4: getOutstandingRent
  * Overdue and outstanding rental arrears across properties and tenants.
  */
-export const getOutstandingRent = async ({ month, year, propertyId = null }, user) => {
+export const getOutstandingRent = async ({ month, year, propertyId = null, propertyName = null }, user) => {
   assertFinancialAccess(user);
   const { year: y, month: m, monthName, periodString } = resolveMonthDateRange(month, year);
+  if (periodString < '2026-09') throw new AiError('Rental reports are available from September 2026.');
+
+  let targetPropertyId = propertyId;
+  if (!targetPropertyId && propertyName) {
+    const escaped = propertyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const prop = await Property.findOne({ plazaName: new RegExp(escaped, 'i') }).lean();
+    if (prop) targetPropertyId = String(prop._id);
+  }
 
   const rentalSummary = await getRentalSummaryWithCarryForward(periodString, { rentOnly: true });
   let unitsWithBalance = [];
 
   for (const plaza of rentalSummary.plazas || []) {
-    if (propertyId && String(plaza.plazaId) !== String(propertyId)) continue;
+    if (targetPropertyId && String(plaza.plazaId) !== String(targetPropertyId)) continue;
 
     for (const u of plaza.units || []) {
       const outstanding = Number(u.outstandingReceivable) || 0;
@@ -163,15 +219,20 @@ export const getOutstandingRent = async ({ month, year, propertyId = null }, use
  * Tool 5: getAccountBalances
  * Dynamic live balances of all active bank, cash, and suspense accounts.
  */
-export const getAccountBalances = async ({ accountType = null }, user) => {
+export const getAccountBalances = async ({ accountType = null, accountName = null }, user) => {
   assertFinancialAccess(user);
-  // If user is restricted DATA_ENTRY, check permissions
   const query = { isActive: true, isClearing: { $ne: true } };
   if (accountType) {
     query.type = accountType.toUpperCase();
   }
 
-  const accounts = await Account.find(query).select('_id name type openingBalance').sort({ type: 1, name: 1 }).maxTimeMS(10000).lean();
+  let accounts = await Account.find(query).select('_id name type openingBalance').sort({ type: 1, name: 1 }).maxTimeMS(10000).lean();
+
+  if (accountName) {
+    const nameRegex = new RegExp(accountName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    accounts = accounts.filter(a => nameRegex.test(a.name));
+  }
+
   const transactions = await Transaction.find({
     $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
   }).select('drAccountId crAccountId amount status').maxTimeMS(10000).lean();
@@ -227,7 +288,7 @@ export const getAccountBalances = async ({ accountType = null }, user) => {
  * Tool 6: getRecentTransactions
  * Retrieve latest transactions with voucher numbers, heads, accounts, and amounts.
  */
-export const getRecentTransactions = async ({ limit = 10, transactionType = null, propertyId = null, month, year }, user) => {
+export const getRecentTransactions = async ({ limit = 10, transactionType = null, propertyId = null, propertyName = null, accountName = null, month, year }, user) => {
   assertFinancialAccess(user);
   const period = resolveMonthDateRange(month, year);
   const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 25);
@@ -241,10 +302,19 @@ export const getRecentTransactions = async ({ limit = 10, transactionType = null
   }
   if (propertyId) {
     query.propertyId = propertyId;
+  } else if (propertyName) {
+    const prop = await Property.findOne({ plazaName: new RegExp(propertyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).lean();
+    if (prop) query.propertyId = prop._id;
+  }
+  if (accountName) {
+    const acc = await Account.findOne({ name: new RegExp(accountName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).lean();
+    if (acc) {
+      query.$or = [{ drAccountId: acc._id }, { crAccountId: acc._id }];
+    }
   }
 
   const txs = await Transaction.find(query)
-    .select('voucherNo date transactionType reportCategory categoryId propertyId drAccountId crAccountId amount')
+    .select('voucherNo date transactionType reportCategory categoryId propertyId drAccountId crAccountId amount narration')
     .sort({ date: -1, createdAt: -1 })
     .limit(safeLimit)
     .populate('categoryId', 'name')
@@ -263,6 +333,7 @@ export const getRecentTransactions = async ({ limit = 10, transactionType = null
     amount: round2(t.amount),
     fromAccount: t.crAccountId?.name || 'N/A',
     toAccount: t.drAccountId?.name || 'N/A',
+    narration: t.narration || '',
   }));
 
   return {
@@ -277,24 +348,34 @@ export const getRecentTransactions = async ({ limit = 10, transactionType = null
  * Tool 7: getPropertyFinancialSummary
  * Financial performance of a specific property (rent collected vs expenses).
  */
-export const getPropertyFinancialSummary = async ({ propertyId, propertyName = null, month, year }, user) => {
+export const getPropertyFinancialSummary = async ({ propertyId = null, propertyName = null, month, year }, user) => {
   assertFinancialAccess(user);
-  const { year: y, month: m, monthName, periodString, startDate, endDate } = resolveMonthDateRange(month, year);
+  const { year: y, month: m, monthName, periodString } = resolveMonthDateRange(month, year);
+  if (periodString < '2026-09') throw new AiError('Rental reports are available from September 2026.');
 
   let targetProperty = null;
   if (propertyId) {
     targetProperty = await Property.findById(propertyId).lean();
   } else if (propertyName) {
-    targetProperty = await Property.findOne({ plazaName: new RegExp('^' + propertyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') }).lean();
+    const escaped = propertyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    targetProperty = await Property.findOne({ plazaName: new RegExp('^' + escaped + '$', 'i') }).lean();
+    if (!targetProperty) {
+      targetProperty = await Property.findOne({ plazaName: new RegExp(escaped, 'i') }).lean();
+    }
+    if (!targetProperty) {
+      const firstToken = propertyName.trim().split(/\s+/)[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      targetProperty = await Property.findOne({ plazaName: new RegExp('^' + firstToken, 'i') }).lean();
+    }
   }
 
   if (!targetProperty) {
+    const allProps = await Property.find({}).select('plazaName').limit(10).lean();
     return {
-      error: 'Property not found. Please provide a valid property name (e.g. 2nd Floor Deal Land, Bahria Town, Executive Lodge) or ID.',
+      error: `Property '${propertyName || propertyId}' was not found.`,
+      availableProperties: allProps.map(p => p.plazaName),
     };
   }
 
-  // Get rental stats
   const rentalSummary = await getRentalSummaryWithCarryForward(periodString, { rentOnly: true });
   const plazaData = (rentalSummary.plazas || []).find(p => String(p.plazaId) === String(targetProperty._id));
 
@@ -381,11 +462,57 @@ export const getMonthlyComparison = async ({ month1, year1, month2, year2 }, use
 
 /**
  * Tool 9: getSalarySummary
- * Total salaries disbursed and pending staff payroll for a given month.
+ * Total salaries disbursed or specific employee salary details.
  */
-export const getSalarySummary = async ({ month, year, startDate, endDate }, user) => {
+export const getSalarySummary = async ({ month, year, employeeName = null, employeeId = null, startDate, endDate }, user) => {
   assertFinancialAccess(user);
   const period = resolveMonthDateRange(month, year);
+
+  if (employeeName || employeeId) {
+    let emp = null;
+    if (employeeId) {
+      emp = await Employee.findById(employeeId).lean();
+    } else if (employeeName) {
+      const escaped = employeeName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      emp = await Employee.findOne({ name: new RegExp('^' + escaped + '$', 'i') }).lean();
+      if (!emp) {
+        emp = await Employee.findOne({ name: new RegExp(escaped, 'i') }).lean();
+      }
+      if (!emp) {
+        const firstToken = employeeName.trim().split(/\s+/)[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        emp = await Employee.findOne({ name: new RegExp('^' + firstToken, 'i') }).lean();
+      }
+    }
+
+    if (!emp) {
+      const activeStaff = await Employee.find({ employmentStatus: 'ACTIVE' }).select('name designation').limit(10).lean();
+      return {
+        error: `Employee '${employeeName || employeeId}' was not found in the employee directory.`,
+        suggestion: 'Please verify the spelling or select from active staff.',
+        availableEmployees: activeStaff.map(s => `${s.name} (${s.designation || 'Staff'})`),
+      };
+    }
+
+    const payroll = await Payroll.findOne({ employeeId: emp._id, payrollMonth: period.periodString }).lean();
+    const latestLoan = await StaffLoan.findOne({ employeeId: emp._id }).sort({ date: -1, createdAt: -1 }).lean();
+
+    return {
+      period: period.periodString,
+      employeeName: emp.name,
+      designation: emp.designation || 'Staff',
+      department: emp.department || 'Office',
+      employmentStatus: emp.employmentStatus || 'ACTIVE',
+      basicSalary: round2(emp.basicSalary || 0),
+      allowance: round2(emp.allowance || 0),
+      grossSalary: round2(payroll?.grossSalary ?? ((emp.basicSalary || 0) + (emp.allowance || 0))),
+      netPayable: round2(payroll?.netPayable ?? ((emp.basicSalary || 0) + (emp.allowance || 0))),
+      payrollStatus: payroll ? (payroll.paymentStatus || payroll.status || 'UNPAID') : 'NO_PAYROLL_GENERATED',
+      totalDeductions: round2(payroll?.totalDeduction || 0),
+      currentLoanBalance: round2(latestLoan?.newBalance || 0),
+      basis: `Profile salary and monthly payroll record for ${period.periodString}. Base salary is configured in employee profile.`,
+    };
+  }
+
   const report = await getHeadWiseExpenseReport(period.year, period.month, startDate ? { startDate: new Date(`${startDate}T00:00:00+05:00`), endDate: new Date(`${endDate}T23:59:59.999+05:00`) } : {});
   const salary = report.mainHeads.filter(h => h.mainHeadId === 'salary');
   const payrolls = await Payroll.find({ payrollMonth: period.periodString }).select('netPayable paymentStatus status').maxTimeMS(10000).lean();
@@ -401,18 +528,183 @@ export const getSalarySummary = async ({ month, year, startDate, endDate }, user
 };
 
 /**
+ * Tool 10: getEmployeeLoanSummary
+ * Staff loan disbursements, repayments, and outstanding loan balances.
+ */
+export const getEmployeeLoanSummary = async ({ employeeName, employeeId }, user) => {
+  assertFinancialAccess(user);
+  let emp = null;
+  if (employeeId) {
+    emp = await Employee.findById(employeeId).lean();
+  } else if (employeeName) {
+    const escaped = employeeName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    emp = await Employee.findOne({ name: new RegExp('^' + escaped + '$', 'i') }).lean();
+    if (!emp) {
+      emp = await Employee.findOne({ name: new RegExp(escaped, 'i') }).lean();
+    }
+    if (!emp) {
+      const firstToken = employeeName.trim().split(/\s+/)[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      emp = await Employee.findOne({ name: new RegExp('^' + firstToken, 'i') }).lean();
+    }
+  }
+
+  if (!emp) {
+    const activeStaff = await Employee.find({ employmentStatus: 'ACTIVE' }).select('name designation').limit(10).lean();
+    return {
+      error: `Employee '${employeeName || employeeId}' was not found.`,
+      availableEmployees: activeStaff.map(s => `${s.name} (${s.designation || 'Staff'})`),
+    };
+  }
+
+  const loans = await StaffLoan.find({ employeeId: emp._id }).sort({ date: -1, createdAt: -1 }).limit(10).lean();
+  const currentLoanBalance = loans.length > 0 ? round2(loans[0].newBalance) : 0;
+  const totalDisbursed = round2(loans.filter(l => l.type === 'DISBURSEMENT').reduce((sum, l) => sum + (l.amount || 0), 0));
+  const totalRepaid = round2(loans.filter(l => l.type === 'REPAYMENT').reduce((sum, l) => sum + (l.amount || 0), 0));
+
+  return {
+    employeeName: emp.name,
+    designation: emp.designation || 'Staff',
+    currentLoanBalance,
+    totalDisbursed,
+    totalRepaid,
+    recordsCount: loans.length,
+    loanHistory: loans.map(l => ({
+      date: l.date ? new Date(l.date).toISOString().slice(0, 10) : 'N/A',
+      type: l.type === 'DISBURSEMENT' ? 'Advance/Disbursement (+)' : 'Repayment/Deduction (-)',
+      amount: round2(l.amount),
+      balanceAfter: round2(l.newBalance),
+      payrollMonth: l.payrollMonth || 'Manual',
+      description: l.description || '',
+    })),
+  };
+};
+
+/**
+ * Tool 11: getAccountLedger
+ * Full running ledger statement of a specific bank or cash custodian account.
+ */
+export const getAccountLedger = async ({ accountName = null, accountId = null, month, year, limit = 20 }, user) => {
+  assertFinancialAccess(user);
+  const period = resolveMonthDateRange(month, year);
+  let account = null;
+
+  if (accountId) {
+    account = await Account.findById(accountId).lean();
+  } else if (accountName) {
+    const escaped = accountName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    account = await Account.findOne({ name: new RegExp('^' + escaped + '$', 'i'), isActive: true }).lean();
+    if (!account) {
+      account = await Account.findOne({ name: new RegExp(escaped, 'i'), isActive: true }).lean();
+    }
+    if (!account) {
+      const firstToken = accountName.trim().split(/\s+/)[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      account = await Account.findOne({ name: new RegExp('^' + firstToken, 'i'), isActive: true }).lean();
+    }
+  }
+
+  if (!account) {
+    const accounts = await Account.find({ isActive: true }).select('name type').limit(15).lean();
+    return {
+      error: `Account '${accountName || accountId}' was not found.`,
+      availableAccounts: accounts.map(a => `${a.name} (${a.type})`),
+    };
+  }
+
+  const ledger = await getAccountRunningLedger(account._id, period.startDate, period.endDate);
+  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 25);
+
+  return {
+    accountName: account.name,
+    accountType: account.type,
+    period: period.periodString,
+    openingBalance: round2(ledger.previousBalance),
+    closingBalance: round2(ledger.closingBalance),
+    totalDebit: round2(ledger.totalDebit || 0),
+    totalCredit: round2(ledger.totalCredit || 0),
+    totalTransactions: ledger.transactions.length,
+    recentEntries: ledger.transactions.slice(0, safeLimit).map(t => ({
+      date: t.date ? new Date(new Date(t.date).getTime() + 18000000).toISOString().slice(0, 10) : 'N/A',
+      voucherNo: t.voucherNo || 'N/A',
+      head: t.categoryId?.name || t.reportCategory || 'General',
+      description: t.narration || '',
+      debit: round2(t.debit || 0),
+      credit: round2(t.credit || 0),
+      balance: round2(t.runningBalance || 0),
+    })),
+  };
+};
+
+/**
+ * Tool 12: getTenantRentSummary
+ * Individual tenant lease details, rent history, and outstanding balance.
+ */
+export const getTenantRentSummary = async ({ tenantName = null, propertyName = null, month, year }, user) => {
+  assertFinancialAccess(user);
+  const period = resolveMonthDateRange(month, year);
+  if (period.periodString < '2026-09') throw new AiError('Rental reports are available from September 2026.');
+
+  let tenant = null;
+  if (tenantName) {
+    const escaped = tenantName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    tenant = await Tenant.findOne({ fullName: new RegExp(escaped, 'i') }).lean();
+  }
+
+  const rentalSummary = await getRentalSummaryWithCarryForward(period.periodString, { rentOnly: true });
+  let matchingUnits = [];
+
+  for (const plaza of rentalSummary.plazas || []) {
+    if (propertyName && !plaza.plazaName.toLowerCase().includes(propertyName.toLowerCase())) continue;
+    for (const u of plaza.units || []) {
+      const matchByName = tenant && u.tenantName && u.tenantName.toLowerCase().includes(tenant.fullName.toLowerCase());
+      const matchByQuery = tenantName && u.tenantName && u.tenantName.toLowerCase().includes(tenantName.toLowerCase());
+      if (matchByName || matchByQuery || (!tenantName && propertyName)) {
+        matchingUnits.push({
+          plazaName: plaza.plazaName,
+          unitName: u.unitName,
+          tenantName: u.tenantName || 'N/A',
+          agreedRent: round2(u.agreedRent || 0),
+          receivedAmount: round2(u.receivedAmount || 0),
+          outstandingBalance: round2(u.outstandingReceivable || 0),
+          status: (Number(u.outstandingReceivable) || 0) <= 0 ? 'PAID' : 'PENDING_ARREARS',
+        });
+      }
+    }
+  }
+
+  if (tenantName && !matchingUnits.length) {
+    return {
+      error: `Tenant '${tenantName}' was not found or has no active lease in ${period.periodString}.`,
+      suggestion: 'Please verify the tenant full name or unit.',
+    };
+  }
+
+  return {
+    period: period.periodString,
+    tenantName: tenant?.fullName || tenantName || 'All Tenants',
+    totalAgreedRent: round2(matchingUnits.reduce((s, u) => s + u.agreedRent, 0)),
+    totalReceivedAmount: round2(matchingUnits.reduce((s, u) => s + u.receivedAmount, 0)),
+    totalOutstanding: round2(matchingUnits.reduce((s, u) => s + u.outstandingBalance, 0)),
+    units: matchingUnits,
+  };
+};
+
+/**
  * Master tools catalog metadata for LLM tool calling declarations
  */
 export const FINANCIAL_TOOL_DECLARATIONS = [
   {
     name: 'getExpenseSummary',
-    description: 'Get verified total expenses, category breakdown, and property expense classifications for a specific month and year.',
+    description: 'Get verified total expenses, category breakdown, and property expense classifications for a specific month, year, property, or expense category head.',
     parameters: {
       type: 'OBJECT',
       properties: {
         month: { type: 'INTEGER', description: 'Month number (1-12). Defaults to current month.' },
         year: { type: 'INTEGER', description: 'Four-digit year (e.g. 2026).' },
         propertyId: { type: 'STRING', description: 'Optional MongoDB ID of a specific property/plaza.' },
+        propertyName: { type: 'STRING', description: 'Optional name of a property/plaza.' },
+        categoryName: { type: 'STRING', description: 'Optional expense head or category name (e.g. Fuel, Utilities, Maintenance).' },
+        startDate: { type: 'STRING', description: 'Optional YYYY-MM-DD within month.' },
+        endDate: { type: 'STRING', description: 'Optional YYYY-MM-DD within month.' },
       },
     },
   },
@@ -436,6 +728,7 @@ export const FINANCIAL_TOOL_DECLARATIONS = [
         month: { type: 'INTEGER', description: 'Month number (1-12).' },
         year: { type: 'INTEGER', description: 'Four-digit year (e.g. 2026).' },
         propertyId: { type: 'STRING', description: 'Optional property ID to filter by single plaza.' },
+        propertyName: { type: 'STRING', description: 'Optional property name to filter by plaza.' },
       },
     },
   },
@@ -448,6 +741,7 @@ export const FINANCIAL_TOOL_DECLARATIONS = [
         month: { type: 'INTEGER', description: 'Month number (1-12).' },
         year: { type: 'INTEGER', description: 'Four-digit year (e.g. 2026).' },
         propertyId: { type: 'STRING', description: 'Optional property ID.' },
+        propertyName: { type: 'STRING', description: 'Optional property name.' },
       },
     },
   },
@@ -458,6 +752,7 @@ export const FINANCIAL_TOOL_DECLARATIONS = [
       type: 'OBJECT',
       properties: {
         accountType: { type: 'STRING', description: 'Optional filter: BANK, CASH, or SUSPENSE.' },
+        accountName: { type: 'STRING', description: 'Optional account name (e.g. Meezan Bank, Alfalah, Petty Cash).' },
       },
     },
   },
@@ -469,6 +764,11 @@ export const FINANCIAL_TOOL_DECLARATIONS = [
       properties: {
         limit: { type: 'INTEGER', description: 'Number of recent transactions to return (1-25, default 10).' },
         transactionType: { type: 'STRING', description: 'Optional filter: EXPENSE, INCOME, or TRANSFER.' },
+        propertyId: { type: 'STRING', description: 'Optional property ID.' },
+        propertyName: { type: 'STRING', description: 'Optional property name.' },
+        accountName: { type: 'STRING', description: 'Optional account name.' },
+        month: { type: 'INTEGER', description: 'Month 1-12; default current Pakistan month.' },
+        year: { type: 'INTEGER', description: 'Four-digit year.' },
       },
     },
   },
@@ -479,6 +779,7 @@ export const FINANCIAL_TOOL_DECLARATIONS = [
       type: 'OBJECT',
       properties: {
         propertyName: { type: 'STRING', description: 'Name of the property or plaza (e.g. 2nd Floor Deal Land, Bahria Town, Executive Lodge).' },
+        propertyId: { type: 'STRING', description: 'Optional MongoDB ID of the property.' },
         month: { type: 'INTEGER', description: 'Month number (1-12).' },
         year: { type: 'INTEGER', description: 'Four-digit year (e.g. 2026).' },
       },
@@ -499,26 +800,20 @@ export const FINANCIAL_TOOL_DECLARATIONS = [
   },
   {
     name: 'getSalarySummary',
-    description: 'Get salary disbursements and pending staff payroll for a given month and year.',
+    description: 'Get salary disbursements and pending staff payroll for a given month, or detailed individual employee salary, loan balance, and cash records.',
     parameters: {
       type: 'OBJECT',
       properties: {
         month: { type: 'INTEGER', description: 'Month number (1-12).' },
         year: { type: 'INTEGER', description: 'Four-digit year (e.g. 2026).' },
+        employeeName: { type: 'STRING', description: 'Optional employee name (e.g. Rizwan, Sabir, Khurshid).' },
+        employeeId: { type: 'STRING', description: 'Optional employee MongoDB ID.' },
+        startDate: { type: 'STRING', description: 'Optional YYYY-MM-DD within month.' },
+        endDate: { type: 'STRING', description: 'Optional YYYY-MM-DD within month.' },
       },
     },
   },
 ];
-
-for (const name of ['getExpenseSummary', 'getSalarySummary']) {
-  const properties = FINANCIAL_TOOL_DECLARATIONS.find(t => t.name === name).parameters.properties;
-  properties.startDate = { type: 'STRING', description: 'Optional YYYY-MM-DD, within selected month; requires endDate.' };
-  properties.endDate = { type: 'STRING', description: 'Optional YYYY-MM-DD, within selected month; requires startDate.' };
-}
-Object.assign(FINANCIAL_TOOL_DECLARATIONS.find(t => t.name === 'getRecentTransactions').parameters.properties, {
-  month: { type: 'INTEGER', description: 'Month 1-12; default current Pakistan month.' },
-  year: { type: 'INTEGER', description: 'Four-digit year.' },
-});
 
 /**
  * Execute tool by name with parameter validation
@@ -545,6 +840,12 @@ export const executeFinancialTool = async (name, args = {}, user) => {
       return await getMonthlyComparison(args, user);
     case 'getSalarySummary':
       return await getSalarySummary(args, user);
+    case 'getEmployeeLoanSummary':
+      return await getEmployeeLoanSummary(args, user);
+    case 'getAccountLedger':
+      return await getAccountLedger(args, user);
+    case 'getTenantRentSummary':
+      return await getTenantRentSummary(args, user);
     default:
       throw new Error(`Unknown financial tool: ${name}`);
   }
@@ -552,27 +853,43 @@ export const executeFinancialTool = async (name, args = {}, user) => {
 
 export function validateToolArguments(name, args) {
   const declaration = FINANCIAL_TOOL_DECLARATIONS.find(t => t.name === name);
-  if (!declaration || !args || typeof args !== 'object' || Array.isArray(args)) throw new AiError('Unsupported read-only financial tool.');
+  if (!declaration || !args || typeof args !== 'object' || Array.isArray(args)) {
+    throw new AiError('Unsupported read-only financial tool.');
+  }
   const allowed = new Set(Object.keys(declaration.parameters.properties));
-  if (name === 'getRecentTransactions') { allowed.add('month'); allowed.add('year'); }
-  if (name === 'getExpenseSummary' || name === 'getSalarySummary') { allowed.add('startDate'); allowed.add('endDate'); }
+
   for (const [key, value] of Object.entries(args)) {
     if (!allowed.has(key)) throw new AiError('Unsupported financial filter.');
-    if (/^(month|month1|month2|year|year1|year2|limit)$/.test(key) && !Number.isInteger(value)) throw new AiError('Month, year and limit must be integers.');
-    if (key === 'propertyId' && (typeof value !== 'string' || !/^[a-f0-9]{24}$/i.test(value))) throw new AiError('Invalid property identifier.');
-    if (key === 'propertyName' && (typeof value !== 'string' || !value.trim() || value.length > 100)) throw new AiError('Invalid property name.');
+    if (/^(month|month1|month2|year|year1|year2|limit)$/.test(key) && !Number.isInteger(value)) {
+      throw new AiError('Month, year and limit must be integers.');
+    }
+    if (/^(propertyId|employeeId|accountId)$/.test(key) && (typeof value !== 'string' || !/^[a-f0-9]{24}$/i.test(value))) {
+      throw new AiError('Invalid property identifier.');
+    }
+    if (/^(propertyName|employeeName|accountName|categoryName|tenantName|unitName)$/.test(key)) {
+      if (typeof value !== 'string' || !value.trim() || value.length > 100) {
+        throw new AiError('Invalid entity filter name.');
+      }
+    }
     if (key === 'accountType' && !['BANK', 'CASH', 'SUSPENSE'].includes(value)) throw new AiError('Invalid account type.');
     if (key === 'transactionType' && !['EXPENSE', 'INCOME', 'TRANSFER'].includes(value)) throw new AiError('Invalid transaction type.');
     if (key === 'limit' && (value < 1 || value > 25)) throw new AiError('Transaction limit must be 1–25.');
   }
+
   if (name === 'getMonthlyComparison') {
     const { first, second } = comparisonPeriods(args);
     if (first.periodString < '2026-09' || second.periodString < '2026-09') throw new AiError('Rental comparison is available from September 2026.');
-  } else if (name !== 'getAccountBalances') {
+  } else if (name !== 'getAccountBalances' && name !== 'getEmployeeLoanSummary') {
     const period = resolveMonthDateRange(args.month, args.year);
-    if (['getIncomeSummary', 'getRentCollectionSummary', 'getOutstandingRent', 'getPropertyFinancialSummary'].includes(name) && period.periodString < '2026-09') throw new AiError('Rental reports are available from September 2026.');
+    if (['getIncomeSummary', 'getRentCollectionSummary', 'getOutstandingRent', 'getPropertyFinancialSummary', 'getTenantRentSummary'].includes(name) && period.periodString < '2026-09') {
+      throw new AiError('Rental reports are available from September 2026.');
+    }
     if (Object.hasOwn(args, 'startDate') || Object.hasOwn(args, 'endDate')) {
-      for (const d of [args.startDate, args.endDate]) if (typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(Date.parse(d)) || new Date(d).toISOString().slice(0, 10) !== d || d.slice(0, 7) !== period.periodString) throw new AiError('Choose valid dates within the selected month.');
+      for (const d of [args.startDate, args.endDate]) {
+        if (typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(Date.parse(d)) || new Date(d).toISOString().slice(0, 10) !== d || d.slice(0, 7) !== period.periodString) {
+          throw new AiError('Choose valid dates within the selected month.');
+        }
+      }
       if (args.startDate > args.endDate) throw new AiError('Start date must precede end date.');
     }
   }
