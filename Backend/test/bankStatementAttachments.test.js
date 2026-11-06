@@ -176,3 +176,81 @@ test('pdfReportService - pdf-lib merges attached bank statement PDFs and images 
 
   assert.equal(verifyDoc.getPageCount(), 6, 'Merged PDF must contain exact 6 pages in sequence');
 });
+
+// 4. Verification that Bank Statement Picture Renders Directly Under System Ledger Transactions
+test('fundsReportTemplate - Renders attached bank statement picture directly under system transactions', async () => {
+  const fs = await import('fs');
+  const path = await import('path');
+  const handlebars = (await import('handlebars')).default;
+
+  const templatePath = path.join(process.cwd(), 'templates', 'fundsReportTemplate.html');
+  const templateSource = fs.readFileSync(templatePath, 'utf8');
+
+  // Register helpers needed by template
+  handlebars.registerHelper('formatPKR', (val) => (val ? `Rs. ${val}` : '-'));
+  handlebars.registerHelper('formatInt', (val) => (val ? `${val}` : '-'));
+  handlebars.registerHelper('formatReportDate', () => '31-10-2026');
+  handlebars.registerHelper('addOne', (val) => Number(val) + 1);
+  handlebars.registerHelper('gt', (a, b) => Number(a) > Number(b));
+  handlebars.registerHelper('gtZero', (val) => Number(val) > 0);
+  handlebars.registerHelper('eq', (a, b) => a === b);
+
+  const compiled = handlebars.compile(templateSource);
+
+  const sampleData = {
+    asOfDate: '31-October-2026',
+    singleAccountOnly: true,
+    dataEnteredByName: 'Sarfraz Khan',
+    checkedByName: 'Khurshid Anwar',
+    preparedByName: 'Pixx Tech Expense Tracker System',
+    accountStatements: [
+      {
+        accountId: 'acc123',
+        bankOrCashTitle: 'UBL',
+        accountSubtitle: 'Uraan Ventures',
+        accountNumber: '1957-325086338',
+        isCashCustodian: false,
+        priorDate: '30-09-26',
+        openingBalance: 150000,
+        entries: [
+          {
+            date: '15-10-2026',
+            detail: 'Rent Collection - Flat 4',
+            debit: null,
+            credit: 25000,
+            balance: 175000,
+          },
+        ],
+        totalDr: 0,
+        totalCr: 25000,
+        closingBalance: 175000,
+        attachedImages: [
+          {
+            fileName: 'ubl_statement_oct2026.png',
+            src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+          },
+        ],
+        attachedPdfs: [],
+      },
+    ],
+  };
+
+  const renderedHtml = compiled(sampleData);
+
+  // Validate that bank heading, system transactions, and attached statement picture are rendered in order
+  assert.ok(renderedHtml.includes('UBL'), 'Must render bank title');
+  assert.ok(renderedHtml.includes('Uraan Ventures'), 'Must render account subtitle');
+  assert.ok(renderedHtml.includes('Account Number # 1957-325086338'), 'Must render account number');
+  assert.ok(renderedHtml.includes('Rent Collection - Flat 4'), 'Must render system transactions');
+  assert.ok(renderedHtml.includes('ATTACHED BANK STATEMENT DOCUMENT'), 'Must render attached statement document header');
+  assert.ok(renderedHtml.includes('ubl_statement_oct2026.png'), 'Must render statement filename');
+  assert.ok(renderedHtml.includes('data:image/png;base64,'), 'Must render base64 statement image');
+
+  // Verify sequence: System transactions precede attached statement image
+  const txIndex = renderedHtml.indexOf('Rent Collection - Flat 4');
+  const docHeaderIndex = renderedHtml.indexOf('ATTACHED BANK STATEMENT DOCUMENT');
+  const imgIndex = renderedHtml.indexOf('data:image/png;base64,');
+
+  assert.ok(txIndex < docHeaderIndex, 'System transactions must appear BEFORE attached bank statement header');
+  assert.ok(docHeaderIndex < imgIndex, 'Attached bank statement header must appear BEFORE image');
+});

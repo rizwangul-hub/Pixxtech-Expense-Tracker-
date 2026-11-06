@@ -131,6 +131,7 @@ handlebars.registerHelper('isNegative', (val) => Number(val) < 0);
 handlebars.registerHelper('isEven', (index) => index % 2 === 0);
 handlebars.registerHelper('addOne', (val) => Number(val) + 1);
 handlebars.registerHelper('gtZero', (val) => Number(val) > 0);
+handlebars.registerHelper('gt', (a, b) => Number(a) > Number(b));
 handlebars.registerHelper('eq', (a, b) => a === b);
 handlebars.registerHelper('statusColor', (status) => {
   const map = { POSTED: '#047857', VERIFIED: '#1e40af', REVERSED: '#b91c1c', VOID: '#6b7280' };
@@ -486,8 +487,13 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     .sort({ type: 1, name: 1 })
     .lean();
 
-  const statementAttachments = await BankStatementAttachment.find({ month: periodName }).lean();
-  const statementMap = new Map(statementAttachments.map((s) => [s.accountId.toString(), s]));
+  const cleanPeriod = (periodName || '').trim();
+  const statementAttachments = await BankStatementAttachment.find({
+    $or: [
+      { month: cleanPeriod },
+      { month: new RegExp(`^${cleanPeriod}$`, 'i') },
+    ],
+  }).lean();
 
   const accountStatements = [];
   for (const acc of liquidityAccounts) {
@@ -515,40 +521,72 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     const priorDayDate = new Date(startDate.getTime() - 86400000);
     const priorDateStr = `${String(priorDayDate.getUTCDate()).padStart(2, '0')}-${String(priorDayDate.getUTCMonth() + 1).padStart(2, '0')}-${String(priorDayDate.getUTCFullYear()).slice(-2)}`;
 
-    // Resolve attached bank statements (images and PDFs)
-    const stmtRecord = statementMap.get(acc._id.toString());
+    // Resolve attached bank statements (images and PDFs) with robust ID, number, and normalized name matching
+    const matchingStmts = statementAttachments.filter((s) => {
+      if (s.accountId && s.accountId.toString() === acc._id.toString()) return true;
+      if (s.accountNumber && acc.accountNumber && s.accountNumber.trim().toLowerCase() === acc.accountNumber.trim().toLowerCase()) return true;
+      if (s.accountName && acc.name) {
+        const sNorm = s.accountName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const aNorm = acc.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (sNorm && aNorm && (sNorm === aNorm || sNorm.includes(aNorm) || aNorm.includes(sNorm))) return true;
+      }
+      return false;
+    });
+
     const attachedImages = [];
     const attachedPdfs = [];
 
-    if (stmtRecord?.files?.length) {
-      for (const f of stmtRecord.files) {
-        if (f.fileType === 'IMAGE') {
-          const src = f.dataBase64
-            ? `data:${f.mimeType};base64,${f.dataBase64}`
-            : f.url;
-          if (src) {
-            attachedImages.push({
-              fileName: f.fileName || f.originalName,
-              src,
-            });
-          }
-        } else if (f.fileType === 'PDF') {
-          let buffer = null;
-          if (f.dataBase64) {
-            buffer = Buffer.from(f.dataBase64, 'base64');
-          } else if (f.url) {
-            try {
-              const res = await fetch(f.url);
-              if (res.ok) buffer = Buffer.from(await res.arrayBuffer());
-            } catch (err) {
-              console.warn(`Could not load attached PDF ${f.fileName} from url:`, err.message);
+    for (const stmtRecord of matchingStmts) {
+      if (stmtRecord?.files?.length) {
+        for (const f of stmtRecord.files) {
+          const mime = (f.mimeType || '').toLowerCase();
+          const name = (f.fileName || f.originalName || '').toLowerCase();
+          const isImg =
+            f.fileType === 'IMAGE' ||
+            mime.startsWith('image/') ||
+            /\.(png|jpe?g|webp|gif|bmp)$/i.test(name);
+          const isPdf =
+            f.fileType === 'PDF' ||
+            mime === 'application/pdf' ||
+            /\.pdf$/i.test(name);
+
+          if (isImg) {
+            let src = '';
+            if (f.dataBase64) {
+              src = f.dataBase64.startsWith('data:')
+                ? f.dataBase64
+                : `data:${f.mimeType || 'image/jpeg'};base64,${f.dataBase64}`;
+            } else if (f.url) {
+              src = f.url;
             }
-          }
-          if (buffer) {
-            attachedPdfs.push({
-              fileName: f.fileName || f.originalName,
-              buffer,
-            });
+
+            if (src) {
+              attachedImages.push({
+                fileName: f.fileName || f.originalName || 'Bank Statement Image',
+                src,
+              });
+            }
+          } else if (isPdf) {
+            let buffer = null;
+            if (f.dataBase64) {
+              const rawBase64 = f.dataBase64.startsWith('data:')
+                ? f.dataBase64.split(',')[1]
+                : f.dataBase64;
+              buffer = Buffer.from(rawBase64, 'base64');
+            } else if (f.url) {
+              try {
+                const res = await fetch(f.url);
+                if (res.ok) buffer = Buffer.from(await res.arrayBuffer());
+              } catch (err) {
+                console.warn(`Could not load attached PDF ${f.fileName} from url:`, err.message);
+              }
+            }
+            if (buffer) {
+              attachedPdfs.push({
+                fileName: f.fileName || f.originalName || 'Bank Statement Document',
+                buffer,
+              });
+            }
           }
         }
       }
@@ -639,6 +677,27 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     `,
   };
 
+  const waitForImagesToDecode = async (targetPage) => {
+    try {
+      await targetPage.evaluate(async () => {
+        const imgs = Array.from(document.querySelectorAll('img'));
+        await Promise.all(
+          imgs.map((img) => {
+            if (img.complete) {
+              return img.decode ? img.decode().catch(() => {}) : Promise.resolve();
+            }
+            return new Promise((resolve) => {
+              img.onload = () => (img.decode ? img.decode().catch(() => {}).then(resolve) : resolve());
+              img.onerror = () => resolve();
+            });
+          })
+        );
+      });
+    } catch (err) {
+      console.warn('Image decode evaluation warning:', err.message);
+    }
+  };
+
   const browser = await puppeteer.launch(launchOptions);
   try {
     const hasAnyPdfAttachments = accountStatements.some((a) => a.attachedPdfs?.length > 0);
@@ -646,6 +705,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     if (!hasAnyPdfAttachments) {
       const page = await browser.newPage();
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      await waitForImagesToDecode(page);
       const pdfBuffer = await page.pdf(pdfOptions);
       return pdfBuffer;
     }
@@ -677,6 +737,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
       });
       const accPage = await browser.newPage();
       await accPage.setContent(accHtml, { waitUntil: 'networkidle0' });
+      await waitForImagesToDecode(accPage);
       const accPdfBuffer = await accPage.pdf(pdfOptions);
       await accPage.close();
 
