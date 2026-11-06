@@ -2,7 +2,9 @@
 
 ## Final combined-code audit — 6 November 2026
 
-**Verdict:** the existing assistant is ready for controlled staging/live API testing; Gemini has now passed live testing. This is not an unconditional clean bill of health for every legacy feature: the separate legacy Phase 3/4 test harness still fails because it does not register the production `formatPKRZero` Handlebars helper. No deployment was performed, no financial records were changed, and no second assistant was added.
+**Verdict (updated after legacy-test follow-up):** the remaining Phase 3/4 harness failure is resolved. The maintained backend suite passes 75/75, legacy Phase 1 passes 6/6, Phase 2 passes 4/4, Phase 3/4 passes 4/4, and the frontend production build passes. The code/test checks support production release readiness, subject to the production configuration and staging checks below. No deployment was performed, no financial records were changed, and no second assistant was added.
+
+The legacy failure was caused by copied/incomplete test registrations, not an application defect. The harness now imports `pdfReportService.js` to use the real production helpers, asserts both zero-display contracts (`formatPKR(0)` renders `-`, `formatPKRZero(0)` renders `0.00`), and uses the current `checkedByName` fixture field. Existing currency, reversal arithmetic, macro totals and rendered-report assertions remain. No production calculation, helper implementation or report template changed. The frontend build retains its existing non-fatal large-chunk warning.
 
 ### 1. Duplicate files and routes
 
@@ -40,7 +42,7 @@ OpenAI has contract tests for schema conversion, headers, configured model and t
 - `Backend: node --test test/aiAssistant.test.js test/aiAudit.test.js`: **25 passed, 0 failed**.
 - `Backend: npm run test:legacy:phase1`: **6/6 passed**.
 - `Backend: npm run test:legacy:phase2`: **4/4 passed**.
-- `Backend: npm run test:legacy:phase3-4`: **failed**, exit 1, at template compilation with `Missing helper: "formatPKRZero"`; its three preceding checks passed. Production registers this helper in `pdfReportService.js`, while this standalone legacy harness does not. It was left unchanged as unrelated to the assistant.
+- `Backend: npm run test:legacy:phase3-4`: **4/4 passed**, exit 0, after the follow-up harness fix described above. The original missing-helper failure was reproduced before fixing the test setup to load production registrations.
 - `Frontend: npm run build`: **passed**; the pre-existing large JavaScript chunk warning remains.
 - Local installed-Chrome smoke check at **390×844**, using mocked APIs: **passed** for assistant routing, the intended endpoint, bounded user-only history, clear chat, cross-login isolation, ignored old shared session storage, no horizontal document overflow and no browser exceptions.
 - Read-only live database checks: **passed** for expense-service consistency, rent/outstanding totals, salary classification, live account balances, property expenses, comparison arithmetic, user roles and rate-limit indexes. These compare the assistant with production calculation services; they are not an independent accounting audit of historical source data.
@@ -63,7 +65,7 @@ For OpenAI instead: `AI_PROVIDER=openai`, `AI_MODEL=<an-account-enabled-Chat-Com
 
 ### 7. Remaining deployment requirements
 
-Review the combined diff and commit it through the normal workflow; preserve the existing Pakistan Vercel projects and database. Configure the backend variables in each intended Vercel environment, retain the verified rate-limit indexes, and rebuild the frontend with the correct backend URL/CORS origin. Production environment values may differ from the local values checked here. Before production sign-off, resolve or formally accept the separate legacy template-test failure, reconcile any historical rental-report differences caused by old broad queries, and perform authenticated staging smoke checks for all three real roles. Historical rent still uses current active agreements and existing baseline exceptions rather than immutable historical snapshots. Cross-month custom date ranges and unsupported filters remain outside this phase. OpenAI needs its own live test if selected. No production deployment is part of this audit.
+Review the combined diff and commit it through the normal workflow; preserve the existing Pakistan Vercel projects and database. Configure the backend variables in each intended Vercel environment, retain the verified rate-limit indexes, and rebuild the frontend with the correct backend URL/CORS origin. Production environment values may differ from the local values checked here. Before production sign-off, reconcile any historical rental-report differences caused by old broad queries and perform authenticated staging smoke checks for all three real roles. The legacy template-test blocker has been resolved. Historical rent still uses current active agreements and existing baseline exceptions rather than immutable historical snapshots. Cross-month custom date ranges and unsupported filters remain outside this phase. OpenAI needs its own live test if selected. No production deployment is part of this audit.
 
 The sections below record the earlier implementation details; the final-audit results above supersede the earlier validation snapshot.
 
