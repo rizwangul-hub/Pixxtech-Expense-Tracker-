@@ -24,7 +24,7 @@ router.get(
   getAiStatus
 );
 
-// AI Finance Assistant Chat (Read queries and Operation Proposals)
+// AI Finance Assistant Chat (read queries and explicitly staged operations)
 router.post(
   '/chat',
   requirePermission(PERMISSIONS.VIEW_FINANCIALS),
@@ -37,7 +37,7 @@ router.post(
   handleFinanceChat
 );
 
-// Confirm Staged Operation (Requires ENTER_DATA permission)
+// Confirm staged operation (requires ENTER_DATA permission)
 router.post(
   '/confirm-action',
   requirePermission(PERMISSIONS.ENTER_DATA),
@@ -48,7 +48,7 @@ router.post(
   handleConfirmAction
 );
 
-// Cancel Staged Operation
+// Cancel staged operation
 router.post(
   '/cancel-action',
   (req, res, next) => {

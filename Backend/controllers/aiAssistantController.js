@@ -14,11 +14,13 @@ export const handleFinanceChat = async (req, res) => {
   try {
     const { message, history = [] } = req.body;
     const user = req.user;
-
     const trimmedMsg = (message || '').trim();
     const lowerMsg = trimmedMsg.toLowerCase();
 
-    // 1. Conversational confirmation check ("confirm", "yes", "save", "haan", etc.)
+    // Keep legacy staged operations available, but do not run their entity-wide
+    // database resolver for ordinary read-only questions. This is important on
+    // serverless deployments: a read request must reach the tested AI/tool path
+    // without extra model queries that can buffer or time out.
     const isConfirmIntent = /^(confirm|yes|proceed|save|haan|theek hai|yes please|do it|record it)\b/i.test(lowerMsg);
     if (isConfirmIntent) {
       const latestAction = getLatestUserAction(user._id);
@@ -43,7 +45,6 @@ export const handleFinanceChat = async (req, res) => {
       }
     }
 
-    // 2. Conversational cancellation check ("cancel", "no", "discard", "nahi", etc.)
     const isCancelIntent = /^(cancel|no|discard|stop|nahi|rehne do|cancel it)\b/i.test(lowerMsg);
     if (isCancelIntent) {
       const latestAction = getLatestUserAction(user._id);
@@ -58,42 +59,43 @@ export const handleFinanceChat = async (req, res) => {
       }
     }
 
-    // 3. Check for accounting transaction operation intent (Create rent, expense, transfer, loan, etc.)
-    const proposal = await resolveActionProposal(trimmedMsg, user);
-    if (proposal?.isProposal) {
-      if (!hasPermission(user, PERMISSIONS.ENTER_DATA)) {
-        return res.status(403).json({
-          success: false,
-          code: 'FORBIDDEN',
-          message: 'You do not have permission to create or edit financial transactions.',
+    const explicitOperationIntent = /\b(record|create|add|enter|transfer|send|give|delete|remove|reverse|cancel|settle|update|edit|change)\b/i.test(lowerMsg);
+    if (explicitOperationIntent) {
+      const proposal = await resolveActionProposal(trimmedMsg, user);
+      if (proposal?.isProposal) {
+        if (!hasPermission(user, PERMISSIONS.ENTER_DATA)) {
+          return res.status(403).json({
+            success: false,
+            code: 'FORBIDDEN',
+            message: 'You do not have permission to create or edit financial transactions.',
+          });
+        }
+
+        const staged = stageAction({
+          userId: user._id,
+          actionType: proposal.actionType,
+          summary: proposal.summary,
+          payload: proposal.payload,
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: proposal.confirmationPrompt,
+          pendingAction: staged,
+          timestamp: new Date().toISOString(),
         });
       }
 
-      const staged = stageAction({
-        userId: user._id,
-        actionType: proposal.actionType,
-        summary: proposal.summary,
-        payload: proposal.payload,
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: proposal.confirmationPrompt,
-        pendingAction: staged,
-        timestamp: new Date().toISOString(),
-      });
+      if (proposal?.isClarification) {
+        return res.status(200).json({
+          success: true,
+          message: proposal.message,
+          isClarification: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
 
-    if (proposal?.isClarification) {
-      return res.status(200).json({
-        success: true,
-        message: proposal.message,
-        isClarification: true,
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    // 4. Fallback to normal financial query assistant
     const conversation = readConversation(req.body, user);
     const result = await askFinanceAssistant(message, history, user, {
       conversationState: conversation,
@@ -133,7 +135,6 @@ export const handleConfirmAction = async (req, res) => {
     if (!actionId) {
       return res.status(400).json({ success: false, message: 'Action ID is required.' });
     }
-
     if (!hasPermission(user, PERMISSIONS.ENTER_DATA)) {
       return res.status(403).json({ success: false, message: 'You do not have permission to enter financial data.' });
     }
@@ -147,7 +148,6 @@ export const handleConfirmAction = async (req, res) => {
     }
 
     const result = await executeConfirmedAction(action, user);
-
     return res.status(200).json({
       success: true,
       actionType: action.actionType,
@@ -176,7 +176,6 @@ export const handleCancelAction = async (req, res) => {
   try {
     const { actionId } = req.body;
     const user = req.user;
-
     if (!actionId) {
       return res.status(400).json({ success: false, message: 'Action ID is required.' });
     }

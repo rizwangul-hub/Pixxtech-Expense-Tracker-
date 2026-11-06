@@ -1435,6 +1435,14 @@ export const aiAPI = {
     const res = await api.post('/ai/chat', { message, history, ...context }, { signal, timeout: 90000 });
     return res.data;
   },
+  confirmAction: async (actionId) => {
+    const res = await api.post('/ai/confirm-action', { actionId });
+    return res.data;
+  },
+  cancelAction: async (actionId) => {
+    const res = await api.post('/ai/cancel-action', { actionId });
+    return res.data;
+  },
   getStatus: async () => {
     const res = await api.get('/ai/status');
     return res.data;

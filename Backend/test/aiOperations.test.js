@@ -100,18 +100,13 @@ const queryChain = (rows) => {
   return chain;
 };
 
-test.beforeEach((t) => {
+test.beforeEach(() => {
   clearStagedActions();
   process.env.JWT_SECRET = 'test-jwt-secret-phase2';
   process.env.AI_ENABLED = 'true';
   process.env.AI_PROVIDER = 'gemini';
   process.env.AI_MODEL = 'gemini-flash-lite-latest';
   process.env.GEMINI_API_KEY = 'test-key';
-  if (t?.mock) {
-    t.mock.method(mongoose, 'startSession', async () => {
-      throw new Error('No replica set in mock test');
-    });
-  }
 });
 
 // 1. Amount Extraction
@@ -396,6 +391,10 @@ test('AI Operations - Rejects operations for guest users without ENTER_DATA perm
 
 // 11. Full HTTP Flow: Stage proposal via /api/ai/chat and confirm via /api/ai/confirm-action
 test('AI Operations - Full HTTP flow: Staged proposal returned, then confirmed via /confirm-action', async (t) => {
+  process.env.AI_ENABLED = 'true';
+  process.env.AI_PROVIDER = 'gemini';
+  process.env.AI_MODEL = 'gemini-flash-lite-latest';
+  process.env.GEMINI_API_KEY = 'test-key';
   const token = jwt.sign({ id: adminUser._id }, 'test-jwt-secret-phase2');
   const catElecId = '507f191e810c19729de86031';
   const accCashId = '507f191e810c19729de86032';
