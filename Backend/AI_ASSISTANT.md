@@ -1,5 +1,72 @@
 # Pixx AI Finance Assistant — implementation and review
 
+## Final combined-code audit — 6 November 2026
+
+**Verdict:** the existing assistant is ready for controlled staging/live API testing; Gemini has now passed live testing. This is not an unconditional clean bill of health for every legacy feature: the separate legacy Phase 3/4 test harness still fails because it does not register the production `formatPKRZero` Handlebars helper. No deployment was performed, no financial records were changed, and no second assistant was added.
+
+### 1. Duplicate files and routes
+
+There is one finance assistant page (`AiFinanceAssistantPage.jsx`), one finance controller, one financial tool catalog, and one provider abstraction. `server.js` registers only `/api/ai`. The intended endpoints are `/api/ai/chat` and `/api/ai/status`; the frontend calls exactly those through the existing `/api` Axios base. Neither `/api/finance-assistant` nor `/api/ai/finance-assistant` is registered. `services/aiService.js` and `/api/ai/enhance-narration` are the existing narration-polishing feature, not a duplicate financial assistant, and were preserved. Gemini and OpenAI adapters share the same validated tools. There was nothing further to consolidate.
+
+### 2. Confirmed problems and fixes in this final audit
+
+- **Rent allocation:** an explicitly October-allocated payment posted in September could enter both periods through the date fallback. In the assistant's opt-in `rentOnly` reader, explicit `rentMonth` now wins; date fallback applies only to legacy unallocated records and uses Pakistan month boundaries. Existing non-assistant readers retain their previous behavior. Regression fixtures verify one-month allocation, void/reversal exclusions and arrears carry-forward.
+- **Comparison parameters:** supplying `month2` without `year2` could validate one month and execute another. Validation and execution now share the same period resolver.
+- **Empty date filters:** explicitly empty dates could silently broaden a report to the whole month. They are now rejected.
+- **Malformed provider calls:** false/null tool arguments could be replaced with `{}` and broaden the request. Every complete batch is now validated before any database read; only omitted arguments default to an empty object.
+- **Transaction calendar:** recent transaction dates were rendered in UTC despite Pakistan-month filtering. Dates and timezone labels now agree, with bounded projections and a query timeout.
+- **Conversation ownership:** chat state is checked against its owner during rendering, in addition to being reset when identity changes, avoiding a transient prior-user display during an account transition.
+- **Combined frontend input:** restored the accessible question label and 1,500-character limit. Chromium smoke testing verified the final page after this correction.
+- **Concurrent-edit regressions:** later edits reintroduced automatic enablement/default model names and an in-memory fallback on production limiter failure. Explicit enablement/model configuration and fail-closed shared rate limits were restored; regression assertions now check the real default limiter model as well as injected test models.
+- Added `scripts/auditFinanceAssistant.mjs` for repeatable read-only provider/database checks and `test/aiAudit.test.js` for eight regression cases. The normal `npm test` command includes those cases.
+
+### 3. Security verification
+
+The existing JWT middleware checks the database user, active/deleted status and token versions; chat/status require `VIEW_FINANCIALS`. Live read-only user lookup confirmed **Fahad: ADMIN**, **Khurshid: ADMIN**, **Sarfraz: DATA_ENTRY**, all active and not deleted. Current role policy permits all three organization-wide financial reporting. The assistant adds no per-person exception and does not accept client identity or role fields. A stricter ownership policy is not present in the existing application and was not invented in this audit.
+
+The backend exposes only predefined read tools. Prompt injection cannot create a write tool, arbitrary query, shell, filesystem or unrelated network capability. Adversarial tool batches and invalid identities are tested. Provider replies without tools cannot invent financial answers. Financial results stay in the backend/browser; only question text and bounded prior user questions are sent to the configured provider. The frontend never sends prior assistant results back as model history.
+
+The shared limiter is atomic and per authenticated user, 10 requests per fixed minute; its duplicate-key retry and database-failure behavior are tested. The connected database has both the unique counter-key index and TTL index. No real counters were changed by the live audit. Backend API keys were absent from both frontend source and the final production bundle, and both local `.env` files are Git-ignored.
+
+### 4. Provider verification
+
+Local backend settings select `AI_PROVIDER=gemini`, `AI_MODEL=gemini-3.5-flash`, `AI_ENABLED=true`; a Gemini key is present but was never printed. Authenticated model metadata returned **HTTP 200** and listed `generateContent`. A synthetic request using the application's actual tool declarations returned **HTTP 200** with valid expense-tool arguments. A subsequent live assistant expense question used that model, selected `getExpenseSummary`, read the existing database, and matched the backend-formatted expense result. No financial records were sent to Gemini.
+
+OpenAI has contract tests for schema conversion, headers, configured model and timeouts; it was **not live-tested**, because no OpenAI key is configured. Both assistant providers use a 20-second timeout. Disabled/misconfigured providers return 503; failed/malformed provider responses return a sanitized 502. There is no silent fallback to a different provider or a guessed date. The separate narration enhancer retains its original fallback behavior.
+
+### 5. Actual test results
+
+- `Backend: npm test`: **75 passed, 0 failed**, including 25 assistant/audit tests and the maintained Chromium receipt-evidence export test.
+- `Backend: node --test test/aiAssistant.test.js test/aiAudit.test.js`: **25 passed, 0 failed**.
+- `Backend: npm run test:legacy:phase1`: **6/6 passed**.
+- `Backend: npm run test:legacy:phase2`: **4/4 passed**.
+- `Backend: npm run test:legacy:phase3-4`: **failed**, exit 1, at template compilation with `Missing helper: "formatPKRZero"`; its three preceding checks passed. Production registers this helper in `pdfReportService.js`, while this standalone legacy harness does not. It was left unchanged as unrelated to the assistant.
+- `Frontend: npm run build`: **passed**; the pre-existing large JavaScript chunk warning remains.
+- Local installed-Chrome smoke check at **390×844**, using mocked APIs: **passed** for assistant routing, the intended endpoint, bounded user-only history, clear chat, cross-login isolation, ignored old shared session storage, no horizontal document overflow and no browser exceptions.
+- Read-only live database checks: **passed** for expense-service consistency, rent/outstanding totals, salary classification, live account balances, property expenses, comparison arithmetic, user roles and rate-limit indexes. These compare the assistant with production calculation services; they are not an independent accounting audit of historical source data.
+- Live Gemini model/tool contract and assistant-to-database expense flow: **passed**. This is one verified question, not proof that every possible natural-language request will be interpreted correctly.
+
+Database audit connections disable `autoIndex` and `autoCreate`, avoid the existing connection helper's legacy index cleanup, do not invoke authentication activity writes and use no financial mutation. Existing integration scripts that create/pay/reverse records, provision users or invoke automatic index cleanup were inspected but not run against the live database.
+
+### 6. Exact environment variables
+
+For the verified Gemini configuration, backend only:
+
+```dotenv
+AI_ENABLED=true
+AI_PROVIDER=gemini
+AI_MODEL=gemini-3.5-flash
+GEMINI_API_KEY=<your-private-Gemini-key>
+```
+
+For OpenAI instead: `AI_PROVIDER=openai`, `AI_MODEL=<an-account-enabled-Chat-Completions-function-calling-model>` and `OPENAI_API_KEY=<your-private-OpenAI-key>`, with `AI_ENABLED=true`. The code provides no hardcoded model fallback. Keep the existing `MONGO_URI`, `JWT_SECRET`, `CORS_ORIGIN`, and all other application credentials. The frontend uses only the existing `VITE_API_URL` pointing to the backend (or blank locally for the Vite proxy). No AI key belongs in a `VITE_` variable. `AI_ENABLED=false` disables assistant chat; it does not remove the existing narration feature.
+
+### 7. Remaining deployment requirements
+
+Review the combined diff and commit it through the normal workflow; preserve the existing Pakistan Vercel projects and database. Configure the backend variables in each intended Vercel environment, retain the verified rate-limit indexes, and rebuild the frontend with the correct backend URL/CORS origin. Production environment values may differ from the local values checked here. Before production sign-off, resolve or formally accept the separate legacy template-test failure, reconcile any historical rental-report differences caused by old broad queries, and perform authenticated staging smoke checks for all three real roles. Historical rent still uses current active agreements and existing baseline exceptions rather than immutable historical snapshots. Cross-month custom date ranges and unsupported filters remain outside this phase. OpenAI needs its own live test if selected. No production deployment is part of this audit.
+
+The sections below record the earlier implementation details; the final-audit results above supersede the earlier validation snapshot.
+
 Reviewed and improved the existing `/api/ai/chat` implementation. The separate `/api/ai/finance-assistant` implementation was removed at the user's request. The Pakistan application, existing authentication, database, deployment configuration, and narration enhancement remain in use. The UK project was not edited.
 
 ## Architecture and implementation plan

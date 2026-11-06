@@ -6,7 +6,7 @@ dotenv.config({ quiet: true });
 mongoose.set('autoIndex', false);
 mongoose.set('autoCreate', false);
 const mode = process.argv[2];
-const output = value => console.log(JSON.stringify(value));
+const output = value => { console.log(JSON.stringify(value)); if (value.passed === false) process.exitCode = 1; };
 if (mode === 'provider') {
   const model = process.env.AI_MODEL;
   const key = process.env.GEMINI_API_KEY;
@@ -74,6 +74,13 @@ if (mode === 'provider') {
     }
     const indexes = await mongoose.connection.collection('assistantratelimits').indexes().catch(() => []);
     output({ check: 'rate-limit-indexes', uniqueKey: indexes.some(i => i.unique && i.key?.key === 1), ttl: indexes.some(i => i.key?.resetAt === 1 && i.expireAfterSeconds === 0) });
+    if (process.argv.includes('--live-chat')) {
+      const { askFinanceAssistant } = await import('../services/ai/aiProvider.js');
+      const result = await askFinanceAssistant('Total expenses this month', [], user);
+      const validTool = result.toolCalls.some(c => c.name === 'getExpenseSummary' && !c.args.propertyId && !c.args.startDate && (c.args.month === undefined || c.args.month === month) && (c.args.year === undefined || c.args.year === year));
+      const formatted = expenses.totalExpenses.toLocaleString('en-PK', { maximumFractionDigits: 2 });
+      output({ check: 'live-chat-provider-and-database', period, passed: validTool && result.message.includes(`**Total Expenses:** ${formatted}`), engine: result.engine, tools: result.toolCalls.map(c => c.name) });
+    }
   } catch (error) { output({ mode, failed: true, errorType: error.name, networkCode: error.cause?.code }); process.exitCode = 1; }
   finally { await mongoose.disconnect(); }
 } else { throw new Error('Use provider or database mode.'); }

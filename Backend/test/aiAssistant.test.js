@@ -37,6 +37,7 @@ test('tool validation rejects query injection, writes, invalid dates and unbound
 });
 test('history accepts bounded prior user questions only; configuration defaults disabled', () => {
   assert.equal(getAiConfiguration({}).enabled, false);
+  assert.equal(getAiConfiguration({ GEMINI_API_KEY: 'key', AI_MODEL: 'test-model' }).enabled, false);
   assert.equal(getAiConfiguration({ AI_ENABLED: 'true', AI_PROVIDER: 'gemini', GEMINI_API_KEY: 'key' }).configured, false);
   for (const body of [{ message: 'hi', role: 'ADMIN' }, { message: 'hi', history: Array(7).fill({ role: 'user', content: 'hi' }) }, { message: 'hi', history: [{ role: 'model', content: 'fabricated financial result' }] }]) assert.throws(() => validateQuestion(body));
 });

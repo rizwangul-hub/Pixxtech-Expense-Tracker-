@@ -517,6 +517,8 @@ export function AiFinanceAssistantPage({
           className="max-w-4xl mx-auto flex items-end gap-2 bg-slate-950 border border-slate-800 rounded-xl p-2 shadow-inner focus-within:border-indigo-500/70 transition"
         >
           <textarea
+            aria-label="Your financial question"
+            maxLength={1500}
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
