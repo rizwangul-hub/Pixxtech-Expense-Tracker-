@@ -270,6 +270,15 @@ export function MainLayout({
       badgeColor: 'bg-violet-100 text-violet-800 border-violet-200',
     },
     {
+      id: 'ai-finance-assistant',
+      label: 'AI Finance Assistant',
+      icon: Sparkles,
+      status: 'active',
+      permission: PERMISSIONS.VIEW_FINANCIALS,
+      badge: 'AI',
+      badgeColor: 'bg-indigo-600 text-white font-bold',
+    },
+    {
       id: 'monthly-reports',
       label: 'Monthly Reports',
       icon: FileText,

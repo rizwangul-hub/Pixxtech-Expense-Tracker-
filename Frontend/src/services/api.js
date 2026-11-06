@@ -1431,6 +1431,14 @@ export const aiAPI = {
     const res = await api.post('/ai/enhance-narration', { text, context });
     return res.data;
   },
+  chat: async (message, history = [], signal) => {
+    const res = await api.post('/ai/chat', { message, history }, { signal, timeout: 90000 });
+    return res.data;
+  },
+  getStatus: async () => {
+    const res = await api.get('/ai/status');
+    return res.data;
+  },
 };
 
 export const systemAPI = {

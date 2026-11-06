@@ -944,7 +944,7 @@ export const getHeadWiseExpenseReport = async (year, month, filters = {}) => {
   }
 
   const transactionQuery = {
-    date: { $gte: startOfMonth, $lte: endOfMonth },
+    date: { $gte: filters.startDate || startOfMonth, $lte: filters.endDate || endOfMonth },
     categoryId: { $in: expenseCatIds },
     transactionType: 'EXPENSE',
     reportCategory: { $nin: ['Rent', 'Other Income', 'Transfer', 'Opening Balance', 'Owner Personal'] },

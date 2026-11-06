@@ -178,7 +178,9 @@ export const computeMonthRentalSummary = (properties, agreementsByUnitId, rentTr
 /**
  * Loads rental summary for any month with automatic dynamic carry forward from 2026-09 onwards
  */
-export const getRentalSummaryWithCarryForward = async (targetMonthStr) => {
+export const getRentalSummaryWithCarryForward = async (targetMonthStr, { rentOnly = false } = {}) => {
+  // Optional strict scope for assistant reports; existing report behavior is preserved.
+  const rentScope = rentOnly ? { transactionType: 'INCOME', reportCategory: 'Rent' } : {};
   const properties = await Property.find({})
     .populate('units.defaultReceivingAccountId', 'name type currentBalance')
     .sort({ plazaName: 1 })
@@ -202,6 +204,7 @@ export const getRentalSummaryWithCarryForward = async (targetMonthStr) => {
     const endDate = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
 
     const rentTransactions = await Transaction.find({
+      ...rentScope,
       $or: [
         { rentMonth: targetMonthStr },
         { date: { $gte: startDate, $lte: endDate }, propertyId: { $ne: null } },
@@ -219,6 +222,7 @@ export const getRentalSummaryWithCarryForward = async (targetMonthStr) => {
   const sepStart = new Date(Date.UTC(2026, 8, 1, 0, 0, 0, 0));
   const sepEnd = new Date(Date.UTC(2026, 9, 0, 23, 59, 59, 999));
   const sepTxs = await Transaction.find({
+    ...rentScope,
     $or: [
       { rentMonth: '2026-09' },
       { date: { $gte: sepStart, $lte: sepEnd }, propertyId: { $ne: null } },
@@ -253,6 +257,7 @@ export const getRentalSummaryWithCarryForward = async (targetMonthStr) => {
     const nextEnd = new Date(Date.UTC(nextY, nextM, 0, 23, 59, 59, 999));
 
     const nextTxs = await Transaction.find({
+      ...rentScope,
       $or: [
         { rentMonth: nextMonthStr },
         { date: { $gte: nextStart, $lte: nextEnd }, propertyId: { $ne: null } },

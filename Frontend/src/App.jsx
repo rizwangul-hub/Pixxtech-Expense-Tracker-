@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AiFinanceAssistantPage } from './pages/AiFinanceAssistantPage.jsx';
 import { MainLayout } from './layouts/MainLayout.jsx';
 import { DashboardHome } from './pages/DashboardHome.jsx';
 import { UserManager } from './pages/UserManager.jsx';
@@ -41,6 +42,7 @@ const sectionFromPath = (pathname) => {
 const pathForSection = (section) => (section === 'dashboard' ? '/' : `/${section}`);
 
 const SECTION_PERMISSIONS = {
+  'ai-finance-assistant': PERMISSIONS.VIEW_FINANCIALS,
   ledgers: PERMISSIONS.ENTER_DATA,
   properties: PERMISSIONS.VIEW_FINANCIALS,
   tenants: PERMISSIONS.VIEW_FINANCIALS,
@@ -91,6 +93,8 @@ const getAccessibleSection = (section, user) => {
 
 function AppContent() {
   const [user, setUser] = useState(null);
+  const [assistantMessages, setAssistantMessages] = useState([]);
+  useEffect(() => { setAssistantMessages([]); }, [user?._id]);
   const [currentSection, setCurrentSection] = useState(() => sectionFromPath(window.location.pathname));
   const [selectedPropertyId, setSelectedPropertyId] = useState(null);
   const [selectedTenantId, setSelectedTenantId] = useState(null);
@@ -319,7 +323,9 @@ function AppContent() {
         window.history.pushState({}, '', '/operational');
       }}
     >
-      {currentSection === 'communications' && canUseCommunications(user) ? (
+      {currentSection === 'ai-finance-assistant' && hasPermission(user, PERMISSIONS.VIEW_FINANCIALS) ? (
+        <AiFinanceAssistantPage currentUser={user} />
+      ) : currentSection === 'communications' && canUseCommunications(user) ? (
         <MessagesCallsPage />
       ) : currentSection === 'verification' && (isVerifier(user) || isAdmin(user)) ? (
         <VerifierDashboard

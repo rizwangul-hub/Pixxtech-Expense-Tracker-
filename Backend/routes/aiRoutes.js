@@ -1,11 +1,20 @@
 import express from 'express';
-import { protect } from '../middleware/auth.js';
+import { protect, requirePermission, PERMISSIONS } from '../middleware/auth.js';
 import { enhanceNarrationWithGemini } from '../services/aiService.js';
+import { handleFinanceChat, getAiStatus } from '../controllers/aiAssistantController.js';
+import { aiRateLimiter, validateAiQuestion } from '../middleware/aiRateLimit.js';
 
 const router = express.Router();
 
 router.use(protect);
 
+// Status check endpoint
+router.get('/status', requirePermission(PERMISSIONS.VIEW_FINANCIALS), (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); }, getAiStatus);
+
+// AI Finance Assistant Chat
+router.post('/chat', requirePermission(PERMISSIONS.VIEW_FINANCIALS), (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); }, validateAiQuestion, aiRateLimiter(10, 60000), handleFinanceChat);
+
+// Existing AI Narration Enhancement
 router.post('/enhance-narration', async (req, res) => {
   try {
     const { text = '', context = {} } = req.body;
