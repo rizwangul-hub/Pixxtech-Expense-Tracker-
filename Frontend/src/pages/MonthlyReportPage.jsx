@@ -15,8 +15,15 @@ import {
   Circle,
   FileDown,
   RotateCcw,
+  Paperclip,
+  Upload,
+  Trash2,
+  Eye,
+  X,
+  FileText,
+  Image as ImageIcon,
 } from 'lucide-react';
-import { financialReportsAPI, monthlyReportsAPI, verificationAPI } from '../services/api.js';
+import { financialReportsAPI, monthlyReportsAPI, verificationAPI, bankStatementsAPI } from '../services/api.js';
 import { isAdmin } from '../utils/permissions.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -227,6 +234,27 @@ export function MonthlyReportPage({ currentUser }) {
   const [evidencePdfLoading, setEvidencePdfLoading] = useState(false);
   const [evidenceZipLoading, setEvidenceZipLoading] = useState(false);
 
+  // ── Bank Statements Attachments State ─────────────────────────────────────────
+  const [statementData, setStatementData] = useState({ accounts: [], totalStatementsAttached: 0 });
+  const [showStatementModal, setShowStatementModal] = useState(false);
+  const [statementAccount, setStatementAccount] = useState('');
+  const [statementFiles, setStatementFiles] = useState([]);
+  const [statementNotes, setStatementNotes] = useState('');
+  const [uploadingStatement, setUploadingStatement] = useState(false);
+  const [statementSuccess, setStatementSuccess] = useState('');
+  const [statementError, setStatementError] = useState('');
+
+  const fetchBankStatements = useCallback(async () => {
+    try {
+      const res = await bankStatementsAPI.getStatements(selectedMonth);
+      if (res?.success) {
+        setStatementData(res);
+      }
+    } catch (e) {
+      console.warn('Could not fetch bank statements:', e.message);
+    }
+  }, [selectedMonth]);
+
   const fetchSummary = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -254,7 +282,53 @@ export function MonthlyReportPage({ currentUser }) {
 
   useEffect(() => {
     fetchSummary();
-  }, [fetchSummary]);
+    fetchBankStatements();
+  }, [fetchSummary, fetchBankStatements]);
+
+  const handleUploadStatement = async (e) => {
+    e?.preventDefault();
+    if (!statementAccount) {
+      setStatementError('Please select a bank or cash account.');
+      return;
+    }
+    if (!statementFiles || statementFiles.length === 0) {
+      setStatementError('Please choose at least one PDF or image file to upload.');
+      return;
+    }
+
+    setUploadingStatement(true);
+    setStatementError('');
+    setStatementSuccess('');
+    try {
+      const formData = new FormData();
+      formData.append('accountId', statementAccount);
+      if (statementNotes) formData.append('notes', statementNotes);
+      for (const file of statementFiles) {
+        formData.append('statementFiles', file);
+      }
+      const res = await bankStatementsAPI.uploadStatements(selectedMonth, formData);
+      if (res.success) {
+        setStatementSuccess(res.message || 'Statement uploaded successfully.');
+        setStatementFiles([]);
+        setStatementNotes('');
+        await fetchBankStatements();
+      }
+    } catch (err) {
+      setStatementError(err?.response?.data?.message || err.message || 'Upload failed.');
+    } finally {
+      setUploadingStatement(false);
+    }
+  };
+
+  const handleDeleteStatementFile = async (attachmentId, fileId) => {
+    if (!window.confirm('Delete this uploaded bank statement document?')) return;
+    try {
+      await bankStatementsAPI.deleteStatement(attachmentId, fileId);
+      await fetchBankStatements();
+    } catch (err) {
+      alert('Delete failed: ' + (err?.response?.data?.message || err.message));
+    }
+  };
 
   const handleReset = async () => {
     if (!window.confirm(`Reset and refresh monthly ledger calculations for ${selectedMonth}? This will sync live bank balances and exclude any reversed transactions.`)) {
@@ -393,6 +467,25 @@ export function MonthlyReportPage({ currentUser }) {
                 <FileDown size={13} />
                 {evidenceZipLoading ? 'Packaging ZIP…' : 'Evidence ZIP'}
               </button>
+
+              {/* Bank Statement Attachments Button */}
+              <button
+                onClick={() => {
+                  setShowStatementModal(true);
+                  setStatementError('');
+                  setStatementSuccess('');
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white border border-indigo-700/50 transition"
+                title="Upload and manage bank statements attached to each bank ledger in the monthly report"
+              >
+                <Paperclip size={13} className="text-indigo-400" />
+                Bank Statements
+                {statementData?.totalStatementsAttached > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-indigo-900 border border-indigo-600 text-[10px] text-indigo-200 font-bold">
+                    {statementData.totalStatementsAttached}
+                  </span>
+                )}
+              </button>
             </>
           )}
         </div>
@@ -483,47 +576,87 @@ export function MonthlyReportPage({ currentUser }) {
                     <th className="px-3 py-2 text-right">Total Input</th>
                     <th className="px-3 py-2 text-right">Total Output</th>
                     <th className="px-3 py-2 text-right">Closing Balance</th>
+                    <th className="px-3 py-2 text-center">Bank Statement</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {am?.accounts?.map((acc) => (
-                    <tr
-                      key={acc.accountId}
-                      className="border-t border-slate-800/60 hover:bg-slate-800/30 transition"
-                    >
-                      <td className="px-3 py-2 text-slate-200 font-medium">
-                        {acc.accountName}
-                        {acc.accountNumber && (
-                          <span className="text-[9px] text-slate-500 ml-1">
-                            ({acc.accountNumber})
+                  {am?.accounts?.map((acc) => {
+                    const stmtInfo = statementData?.accounts?.find(
+                      (a) => a._id?.toString() === acc.accountId?.toString() || a.name === acc.accountName
+                    );
+                    const fileCount = stmtInfo?.fileCount || 0;
+
+                    return (
+                      <tr
+                        key={acc.accountId}
+                        className="border-t border-slate-800/60 hover:bg-slate-800/30 transition"
+                      >
+                        <td className="px-3 py-2 text-slate-200 font-medium">
+                          {acc.accountName}
+                          {acc.accountNumber && (
+                            <span className="text-[9px] text-slate-500 ml-1">
+                              ({acc.accountNumber})
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                              acc.accountType === 'BANK'
+                                ? 'bg-blue-950 text-blue-300 border-blue-700/60'
+                                : 'bg-emerald-950 text-emerald-300 border-emerald-700/60'
+                            }`}
+                          >
+                            {acc.accountType}
                           </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span
-                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                            acc.accountType === 'BANK'
-                              ? 'bg-blue-950 text-blue-300 border-blue-700/60'
-                              : 'bg-emerald-950 text-emerald-300 border-emerald-700/60'
-                          }`}
-                        >
-                          {acc.accountType}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right text-slate-300">
-                        {fmt(acc.openingBalance)}
-                      </td>
-                      <td className="px-3 py-2 text-right text-emerald-400">
-                        {acc.totalInput > 0 ? fmt(acc.totalInput) : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-right text-rose-400">
-                        {acc.totalOutput > 0 ? fmt(acc.totalOutput) : '—'}
-                      </td>
-                      <td className={`px-3 py-2 text-right font-bold ${colorNum(acc.closingBalance)}`}>
-                        {fmt(acc.closingBalance)}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-300">
+                          {fmt(acc.openingBalance)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-emerald-400">
+                          {acc.totalInput > 0 ? fmt(acc.totalInput) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right text-rose-400">
+                          {acc.totalOutput > 0 ? fmt(acc.totalOutput) : '—'}
+                        </td>
+                        <td className={`px-3 py-2 text-right font-bold ${colorNum(acc.closingBalance)}`}>
+                          {fmt(acc.closingBalance)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {fileCount > 0 ? (
+                            <button
+                              onClick={() => {
+                                setStatementAccount(acc.accountId);
+                                setShowStatementModal(true);
+                                setStatementError('');
+                                setStatementSuccess('');
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 hover:bg-emerald-900 transition"
+                              title="Click to view or upload additional statement documents"
+                            >
+                              <Paperclip size={10} />
+                              {fileCount} {fileCount === 1 ? 'Doc' : 'Docs'}
+                              {stmtInfo?.pdfCount > 0 ? ` (${stmtInfo.pdfCount} PDF)` : ''}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setStatementAccount(acc.accountId);
+                                setShowStatementModal(true);
+                                setStatementError('');
+                                setStatementSuccess('');
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-slate-400 hover:text-indigo-300 hover:bg-slate-800/80 border border-dashed border-slate-700 transition"
+                              title="Attach bank statement (PDF or pictures)"
+                            >
+                              <Upload size={10} />
+                              Attach
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-800/70 border-t border-slate-600 font-bold text-xs">
@@ -542,12 +675,13 @@ export function MonthlyReportPage({ currentUser }) {
                     <td className="px-3 py-2 text-right text-indigo-300">
                       {fmt(am?.grandTotal?.closingBalance)}
                     </td>
+                    <td></td>
                   </tr>
                   <tr className="bg-slate-900/50 text-[10px]">
                     <td colSpan={5} className="px-3 py-1.5 text-slate-400">
                       Total Bank Balance
                     </td>
-                    <td className="px-3 py-1.5 text-right font-semibold text-blue-300">
+                    <td colSpan={2} className="px-3 py-1.5 text-right font-semibold text-blue-300">
                       {fmt(am?.totalBankBalance)}
                     </td>
                   </tr>
@@ -555,7 +689,7 @@ export function MonthlyReportPage({ currentUser }) {
                     <td colSpan={5} className="px-3 py-1.5 text-slate-400">
                       Total Cash Balance
                     </td>
-                    <td className="px-3 py-1.5 text-right font-semibold text-emerald-300">
+                    <td colSpan={2} className="px-3 py-1.5 text-right font-semibold text-emerald-300">
                       {fmt(am?.totalCashBalance)}
                     </td>
                   </tr>
