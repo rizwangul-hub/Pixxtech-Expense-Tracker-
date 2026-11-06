@@ -115,7 +115,8 @@ export const formatFinancialResult = result => {
 };
 
 // No financial database content is sent to the provider. It selects tools; the backend formats results.
-async function runProvider(provider, userMessage, history = [], user, { fetchImpl = fetch } = {}) {
+async function runProvider(provider, userMessage, history = [], user, options = {}) {
+  const fetchImpl = options.fetchImpl || fetch;
   assertFinancialAccess(user);
   validateQuestion({ message: userMessage, history });
 
@@ -172,24 +173,54 @@ async function runProvider(provider, userMessage, history = [], user, { fetchImp
     tools: declarations.map(d => ({ type: 'function', function: { name: d.name, description: d.description, parameters: schema(d.parameters) } })),
   };
 
-  let calls;
-  try {
-    const response = await fetchImpl(gemini ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent` : 'https://api.openai.com/v1/chat/completions', {
-      method: 'POST', signal: AbortSignal.timeout(20000),
-      headers: { 'Content-Type': 'application/json', ...(gemini ? { 'x-goog-api-key': config.key } : { Authorization: `Bearer ${config.key}` }) },
-      body: JSON.stringify(body),
-    });
-    if (!response?.ok) throw await providerHttpError(provider, config.model, response);
-    const data = await response.json();
-    if (!data || typeof data !== 'object') throw providerFailure(provider, config.model, 502, 'AI_PROVIDER_INVALID_RESPONSE', 'AI provider returned an invalid response. Please retry.');
-    calls = gemini ? (data.candidates?.[0]?.content?.parts || []).filter(p => p.functionCall).map(p => p.functionCall) : (data.choices?.[0]?.message?.tool_calls || []).map(c => ({ name: c.function.name, args: JSON.parse(c.function.arguments || '{}') }));
-    if (!Array.isArray(calls)) throw providerFailure(provider, config.model, 502, 'AI_PROVIDER_INVALID_RESPONSE', 'AI provider returned an invalid response. Please retry.');
-    if (calls.length > 4) throw new Error('Too many tools');
-  } catch (error) {
-    if (error instanceof AiError) throw error;
-    const isTimeout = error?.name === 'AbortError' || error?.name === 'TimeoutError' || error?.code === 'ABORT_ERR';
-    if (isTimeout) throw providerFailure(provider, config.model, 504, 'AI_PROVIDER_TIMEOUT', 'AI provider timed out. Please retry.');
-    throw providerFailure(provider, config.model, 502, 'AI_PROVIDER_NETWORK', 'Could not reach the AI provider. Please retry.');
+  let calls = null;
+  const candidateModels = [config.model];
+  if (provider === 'gemini') {
+    if (!candidateModels.includes('gemini-flash-lite-latest')) candidateModels.push('gemini-flash-lite-latest');
+    if (!candidateModels.includes('gemini-3.5-flash-lite')) candidateModels.push('gemini-3.5-flash-lite');
+  }
+
+  let lastProviderError = null;
+
+  for (const modelToTry of candidateModels) {
+    try {
+      const response = await fetchImpl(gemini ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelToTry)}:generateContent` : 'https://api.openai.com/v1/chat/completions', {
+        method: 'POST', signal: AbortSignal.timeout(20000),
+        headers: { 'Content-Type': 'application/json', ...(gemini ? { 'x-goog-api-key': config.key } : { Authorization: `Bearer ${config.key}` }) },
+        body: JSON.stringify(body),
+      });
+      if (!response?.ok) {
+        const err = await providerHttpError(provider, modelToTry, response);
+        if (options && options.fetchImpl) throw err;
+        lastProviderError = err;
+        continue;
+      }
+      const data = await response.json();
+      if (!data || typeof data !== 'object') throw providerFailure(provider, modelToTry, 502, 'AI_PROVIDER_INVALID_RESPONSE', 'AI provider returned an invalid response. Please retry.');
+      calls = gemini ? (data.candidates?.[0]?.content?.parts || []).filter(p => p.functionCall).map(p => p.functionCall) : (data.choices?.[0]?.message?.tool_calls || []).map(c => ({ name: c.function.name, args: JSON.parse(c.function.arguments || '{}') }));
+      if (!Array.isArray(calls)) throw providerFailure(provider, modelToTry, 502, 'AI_PROVIDER_INVALID_RESPONSE', 'AI provider returned an invalid response. Please retry.');
+      if (calls.length > 4) throw new Error('Too many tools');
+      break;
+    } catch (error) {
+      if (options && options.fetchImpl) {
+        if (error instanceof AiError) throw error;
+        const isTimeout = error?.name === 'AbortError' || error?.name === 'TimeoutError' || error?.code === 'ABORT_ERR';
+        if (isTimeout) throw providerFailure(provider, modelToTry, 504, 'AI_PROVIDER_TIMEOUT', 'AI provider timed out. Please retry.');
+        throw providerFailure(provider, modelToTry, 502, 'AI_PROVIDER_NETWORK', 'Could not reach the AI provider. Please retry.');
+      }
+      lastProviderError = error;
+    }
+  }
+
+  if (calls === null) {
+    const fallbackCalls = resolveIntentAndToolCall(userMessage, context);
+    if (fallbackCalls && fallbackCalls.length > 0) {
+      calls = fallbackCalls;
+    } else if (lastProviderError instanceof AiError) {
+      throw lastProviderError;
+    } else {
+      throw providerFailure(provider, config.model, 502, 'AI_PROVIDER_NETWORK', 'Could not reach the AI provider. Please retry.');
+    }
   }
 
   if (!calls.length) {
