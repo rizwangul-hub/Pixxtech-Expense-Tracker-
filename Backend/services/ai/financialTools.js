@@ -10,6 +10,8 @@ import { getRentalSummaryWithCarryForward } from '../rentalCarryForwardService.j
 import { round2, getHeadWiseExpenseReport, getAccountRunningLedger } from '../ledgerService.js';
 import { getUtcMonthKey, getUtcMonthDateRange } from '../salaryReportingService.js';
 import { assertFinancialAccess, AiError } from './assistantSecurity.js';
+import { BUSINESS_TOOL_DECLARATIONS, LEGACY_EXTENSION, validateBusinessArguments } from './businessToolCatalog.js';
+import { BUSINESS_HANDLERS } from './businessToolExecutor.js';
 
 /**
  * Format Date to UTC Month Bounds
@@ -219,9 +221,10 @@ export const getOutstandingRent = async ({ month, year, propertyId = null, prope
  * Tool 5: getAccountBalances
  * Dynamic live balances of all active bank, cash, and suspense accounts.
  */
-export const getAccountBalances = async ({ accountType = null, accountName = null }, user) => {
+export const getAccountBalances = async ({ accountType = null, accountName = null, accountId = null }, user) => {
   assertFinancialAccess(user);
   const query = { isActive: true, isClearing: { $ne: true } };
+  if(accountId) query._id=accountId;
   if (accountType) {
     query.type = accountType.toUpperCase();
   }
@@ -288,7 +291,7 @@ export const getAccountBalances = async ({ accountType = null, accountName = nul
  * Tool 6: getRecentTransactions
  * Retrieve latest transactions with voucher numbers, heads, accounts, and amounts.
  */
-export const getRecentTransactions = async ({ limit = 10, transactionType = null, propertyId = null, propertyName = null, accountName = null, month, year }, user) => {
+export const getRecentTransactions = async ({ limit = 10, transactionType = null, propertyId = null, propertyName = null, accountName = null, accountId = null, month, year }, user) => {
   assertFinancialAccess(user);
   const period = resolveMonthDateRange(month, year);
   const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 25);
@@ -300,6 +303,7 @@ export const getRecentTransactions = async ({ limit = 10, transactionType = null
   if (transactionType) {
     query.transactionType = transactionType.toUpperCase();
   }
+  if(accountId) query.$or=[{drAccountId:accountId},{crAccountId:accountId}];
   if (propertyId) {
     query.propertyId = propertyId;
   } else if (propertyName) {
@@ -314,7 +318,7 @@ export const getRecentTransactions = async ({ limit = 10, transactionType = null
   }
 
   const txs = await Transaction.find(query)
-    .select('voucherNo date transactionType reportCategory categoryId propertyId drAccountId crAccountId amount narration')
+    .select('voucherNo date transactionType reportCategory categoryId propertyId drAccountId crAccountId amount detail')
     .sort({ date: -1, createdAt: -1 })
     .limit(safeLimit)
     .populate('categoryId', 'name')
@@ -333,7 +337,7 @@ export const getRecentTransactions = async ({ limit = 10, transactionType = null
     amount: round2(t.amount),
     fromAccount: t.crAccountId?.name || 'N/A',
     toAccount: t.drAccountId?.name || 'N/A',
-    narration: t.narration || '',
+    narration: t.detail || '',
   }));
 
   return {
@@ -718,13 +722,14 @@ export const getAccountLedger = async ({ accountName = null, accountId = null, m
  * Tool 13: getTenantRentSummary
  * Individual tenant lease details, rent history, and outstanding balance.
  */
-export const getTenantRentSummary = async ({ tenantName = null, propertyName = null, month, year }, user) => {
+export const getTenantRentSummary = async ({ tenantName = null, tenantId = null, propertyId = null, propertyName = null, month, year }, user) => {
   assertFinancialAccess(user);
   const period = resolveMonthDateRange(month, year);
   if (period.periodString < '2026-09') throw new AiError('Rental reports are available from September 2026.');
 
   let tenant = null;
-  if (tenantName) {
+  if(tenantId) tenant=await Tenant.findById(tenantId).maxTimeMS(10000).lean();
+  else if (tenantName) {
     const escaped = tenantName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     tenant = await Tenant.findOne({ fullName: new RegExp(escaped, 'i') }).lean();
   }
@@ -733,11 +738,12 @@ export const getTenantRentSummary = async ({ tenantName = null, propertyName = n
   let matchingUnits = [];
 
   for (const plaza of rentalSummary.plazas || []) {
+    if(propertyId&&String(plaza.plazaId)!==String(propertyId)) continue;
     if (propertyName && !plaza.plazaName.toLowerCase().includes(propertyName.toLowerCase())) continue;
     for (const u of plaza.units || []) {
-      const matchByName = tenant && u.tenantName && u.tenantName.toLowerCase().includes(tenant.fullName.toLowerCase());
+      const matchByName = tenant && u.tenantName && u.tenantName.toLowerCase()===tenant.fullName.toLowerCase();
       const matchByQuery = tenantName && u.tenantName && u.tenantName.toLowerCase().includes(tenantName.toLowerCase());
-      if (matchByName || matchByQuery || (!tenantName && propertyName)) {
+      if (matchByName || !tenantId&&matchByQuery || (!tenantName&&!tenantId&&(propertyName||propertyId))) {
         matchingUnits.push({
           plazaName: plaza.plazaName,
           unitName: u.unitName,
@@ -944,12 +950,23 @@ export const FINANCIAL_TOOL_DECLARATIONS = [
   },
 ];
 
+for(const declaration of FINANCIAL_TOOL_DECLARATIONS) Object.assign(declaration.parameters.properties,LEGACY_EXTENSION[declaration.name]??{});
+
+export const ALL_FINANCIAL_TOOL_DECLARATIONS = [
+  ...FINANCIAL_TOOL_DECLARATIONS,
+  ...BUSINESS_TOOL_DECLARATIONS,
+];
+
 /**
  * Execute tool by name with parameter validation
  */
 export const executeFinancialTool = async (name, args = {}, user) => {
   assertFinancialAccess(user);
   validateToolArguments(name, args);
+  if(!FINANCIAL_TOOL_DECLARATIONS.some(tool => tool.name === name) && BUSINESS_HANDLERS[name]){
+    const result=await BUSINESS_HANDLERS[name](args,user);
+    if(result!==undefined){if(result.error&&result.matches){if(/Employee|Salary/.test(name))result.availableEmployees=result.matches.map(row=>row.name);if(/Property/.test(name))result.availableProperties=result.matches.map(row=>row.name);}return result;}
+  }
   switch (name) {
     case 'getExpenseSummary':
       return await getExpenseSummary(args, user);
@@ -984,6 +1001,11 @@ export const executeFinancialTool = async (name, args = {}, user) => {
 
 export function validateToolArguments(name, args) {
   const declaration = FINANCIAL_TOOL_DECLARATIONS.find(t => t.name === name);
+  if (!declaration) {
+    const businessDeclaration = BUSINESS_TOOL_DECLARATIONS.find(t => t.name === name);
+    if (!businessDeclaration) throw new AiError('Unsupported read-only financial tool.');
+    return validateBusinessArguments(businessDeclaration, args);
+  }
   if (!declaration || !args || typeof args !== 'object' || Array.isArray(args)) {
     throw new AiError('Unsupported read-only financial tool.');
   }

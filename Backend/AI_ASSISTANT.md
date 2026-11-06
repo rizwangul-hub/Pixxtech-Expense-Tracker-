@@ -2,9 +2,13 @@
 
 ## Final combined-code audit — 6 November 2026
 
-**Verdict (updated after legacy-test follow-up):** the remaining Phase 3/4 harness failure is resolved. The maintained backend suite passes 75/75, legacy Phase 1 passes 6/6, Phase 2 passes 4/4, Phase 3/4 passes 4/4, and the frontend production build passes. The code/test checks support production release readiness, subject to the production configuration and staging checks below. No deployment was performed, no financial records were changed, and no second assistant was added.
+**Current verdict:** the legacy Phase 3/4 harness failure is resolved. The maintained backend suite passes 111/111, legacy Phase 1 passes 6/6, Phase 2 passes 4/4, Phase 3/4 passes 4/4, and the frontend production build passes. The code/test checks support controlled production deployment, subject to provider configuration and authenticated staging checks below. No deployment was performed, no financial records were changed, and no second assistant was added.
 
 The legacy failure was caused by copied/incomplete test registrations, not an application defect. The harness now imports `pdfReportService.js` to use the real production helpers, asserts both zero-display contracts (`formatPKR(0)` renders `-`, `formatPKRZero(0)` renders `0.00`), and uses the current `checkedByName` fixture field. Existing currency, reversal arithmetic, macro totals and rendered-report assertions remain. No production calculation, helper implementation or report template changed. The frontend build retains its existing non-fatal large-chunk warning.
+
+### Current business-intelligence extension
+
+The single `/api/ai/chat` path now exposes the existing 13 tools plus 14 validated, read-only business tools for directory search, employees, accounts, transactions, vouchers, payroll, loans, attendance, leave, properties, tenants, verification staging and duplicate candidates. Reports reuse production ledger/payroll/rent calculations, preserve Pakistan date boundaries, exclude reversed/void postings where appropriate, and page results without silently truncating totals. Conversation follow-up state is signed with the existing JWT secret, bound to the authenticated user and conversation, and stores plans/entity references only—not financial results. A complete synthetic fixture suite covers every major entity and ledger family.
 
 ### 1. Duplicate files and routes
 
@@ -110,13 +114,13 @@ No additional provider SDK or frontend dependency was added.
 
 ## Endpoints and security
 
-- `POST /api/ai/chat`: `{ "message": "Total expenses this month", "history": [] }`. History may contain up to six `{ "role": "user", "content": "..." }` items. Questions and each history item are limited to 1,500 characters. Identity and arbitrary extra request fields are rejected.
+- `POST /api/ai/chat`: `{ "message": "Total expenses this month", "history": [] }`. History may contain up to six `{ "role": "user", "content": "..." }` items. Questions and each history item are limited to 1,500 characters. Optional signed `conversationId`/`contextToken` and bounded page/filter/select actions support follow-ups; arbitrary extra fields are rejected.
 - `GET /api/ai/status`: reports enablement/provider/model/configuration status without keys.
 - Existing `POST /api/ai/enhance-narration` is preserved.
 
 Both new endpoints require the existing JWT and `VIEW_FINANCIALS` permission. Chat is limited to 10 requests per authenticated user per fixed minute using atomic counters and a TTL index in the existing MongoDB database. Rate-limit storage failure returns 503; excess requests return 429. The financial tools are strictly read-only; only operational rate counters and existing authentication activity tracking are written.
 
-Nine predefined tools cover expense, income, rent collection, outstanding rent, accounts, recent transactions, property summary, month comparison and salary summary. Tool names, argument keys, types, dates, identifiers, enums and limits are validated. Property name searches escape regular-expression metacharacters. No generated query, JavaScript, shell, filesystem operation or arbitrary URL is executed.
+The provider exposes 27 predefined read-only tools: the original 13 plus the business-intelligence catalog. Tool names, argument keys, types, dates, identifiers, enums and limits are validated. Property/name searches escape regular-expression metacharacters. No generated query, JavaScript, shell, filesystem operation or arbitrary URL is executed.
 
 The provider selects tools only. Financial results are calculated and formatted by the backend; results are never sent back to the provider. Direct model text containing unsupported or invented figures is discarded. Tool calls are capped at four per question. Both provider adapters have a 20-second request timeout, header-based keys and sanitized errors. A failed/disabled provider does not silently return a different report through a keyword fallback. User questions themselves can contain sensitive information, so users should avoid including secrets in questions.
 

@@ -224,6 +224,7 @@ export function AiFinanceAssistantPage({
   const [error, setError] = useState(null);
   const [aiStatus, setAiStatus] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [conversationContext, setConversationContext] = useState({ conversationId: null, contextToken: null });
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -279,8 +280,9 @@ export function AiFinanceAssistantPage({
 
       const controller = new AbortController();
       requestRef.current = controller;
-      const response = await aiAPI.chat(query, historyPayload, controller.signal);
+      const response = await aiAPI.chat(query, historyPayload, controller.signal, conversationContext.contextToken ? conversationContext : {});
       if (controller.signal.aborted) return;
+      if (response.conversationId && response.contextToken) setConversationContext({ conversationId: response.conversationId, contextToken: response.contextToken });
 
       const assistantMessage = {
         id: `ai-${Date.now()}`,
@@ -314,6 +316,7 @@ export function AiFinanceAssistantPage({
       },
     ];
     setMessages(initial);
+    setConversationContext({ conversationId: null, contextToken: null });
   };
 
   const handleCopy = (id, text) => {

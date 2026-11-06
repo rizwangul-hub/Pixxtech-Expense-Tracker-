@@ -450,11 +450,15 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
   let previousBalance = round2(account.openingBalance);
 
   if (start) {
-    const priorTransactions = await Transaction.find({
+    const priorQuery = Transaction.find({
       date: { $lt: start },
       $or: [{ drAccountId: accountId }, { crAccountId: accountId }],
       $nor: [{ status: /^REVERSED$/i }, { status: /^VOID$/i }],
-    }).lean();
+    });
+    if (options.maxRows) priorQuery.limit(options.maxRows + 1);
+    if (options.maxTimeMS) priorQuery.maxTimeMS(options.maxTimeMS);
+    const priorTransactions = await priorQuery.lean();
+    if (options.maxRows && priorTransactions.length > options.maxRows) throw new Error('Ledger history exceeds the bounded assistant report limit. Use the existing account export workflow.');
 
     for (const tx of priorTransactions) {
       const isDr = tx.drAccountId.toString() === accountId.toString();
@@ -480,7 +484,7 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
     query.date = { $lte: end };
   }
 
-  const transactions = await Transaction.find(query)
+  const transactionQuery = Transaction.find(query)
     .populate({
       path: 'categoryId',
       select: 'name type isRentalHead parentCategoryId isMainHead',
@@ -489,8 +493,11 @@ export const getAccountRunningLedger = async (accountId, startDate = null, endDa
     .populate('propertyId', 'plazaName propertyName units')
     .populate('drAccountId', 'name type')
     .populate('crAccountId', 'name type')
-    .sort({ date: 1, createdAt: 1 })
-    .lean();
+    .sort({ date: 1, createdAt: 1, _id: 1 });
+  if (options.maxRows) transactionQuery.limit(options.maxRows + 1);
+  if (options.maxTimeMS) transactionQuery.maxTimeMS(options.maxTimeMS);
+  const transactions = await transactionQuery.lean();
+  if (options.maxRows && transactions.length > options.maxRows) throw new Error('Ledger period exceeds the bounded assistant report limit. Narrow its dates or use the existing account export workflow.');
 
   // 3. Compute dynamic running balance row by row
   let currentRunning = previousBalance;

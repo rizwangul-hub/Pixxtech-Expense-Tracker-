@@ -354,6 +354,12 @@ export function resolveIntentAndToolCall(userMessage, context = null) {
   const isSalaryQuery = ROMAN_URDU_SALARY_TERMS.some(t => clean.includes(t)) || inherited.topic === 'SALARY';
 
   if (activeEmployee) {
+    if (isLedgerQuery && ROMAN_URDU_CASH_TERMS.some(t => clean.includes(t))) {
+      return [{
+        name: 'getFinancialLedger',
+        args: { kind: 'ACCOUNT', accountName: activeEmployee, month: period.month, year: period.year },
+      }];
+    }
     if (isLedgerQuery) {
       return [{
         name: 'getEmployeeLedger',

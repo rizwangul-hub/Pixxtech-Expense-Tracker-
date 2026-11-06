@@ -18,7 +18,7 @@ import { generateLedgerPDF, generateAllTransactionsPDF } from '../services/pdfRe
 /**
  * Utility to parse date presets (TODAY, THIS_WEEK, THIS_MONTH, PREVIOUS_MONTH, CUSTOM, AS_ON_DATE)
  */
-const parseDateRange = (datePreset, startDate, endDate, asOnDate) => {
+const parseDateRange = (datePreset, startDate, endDate, asOnDate, preserveEndInstant = false) => {
   const now = new Date();
   let periodStart = null;
   let periodEnd = null;
@@ -54,7 +54,7 @@ const parseDateRange = (datePreset, startDate, endDate, asOnDate) => {
     case 'AS_ON_DATE': {
       if (asOnDate) {
         periodEnd = new Date(asOnDate);
-        periodEnd.setHours(23, 59, 59, 999);
+        if (!preserveEndInstant) periodEnd.setHours(23, 59, 59, 999);
       }
       break;
     }
@@ -62,7 +62,7 @@ const parseDateRange = (datePreset, startDate, endDate, asOnDate) => {
       if (startDate) periodStart = new Date(startDate);
       if (endDate) {
         periodEnd = new Date(endDate);
-        periodEnd.setHours(23, 59, 59, 999);
+        if (!preserveEndInstant) periodEnd.setHours(23, 59, 59, 999);
       }
       break;
     }
@@ -241,9 +241,10 @@ export const getLedgerReportData = async (queryParams = {}) => {
     search,
     page = 1,
     limit = 100,
+    preserveEndInstant = false,
   } = queryParams;
 
-  const { periodStart, periodEnd } = parseDateRange(datePreset, startDate, endDate, asOnDate);
+  const { periodStart, periodEnd } = parseDateRange(datePreset, startDate, endDate, asOnDate, preserveEndInstant);
   const sRegex = search && search.trim() ? new RegExp(search.trim(), 'i') : null;
 
   let targetEntity = null;

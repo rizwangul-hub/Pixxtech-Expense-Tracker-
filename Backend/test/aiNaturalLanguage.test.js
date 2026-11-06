@@ -181,6 +181,14 @@ test('AI Natural Language - Account-specific searches resolve account filter', (
   assert.equal(resolved[0].args.accountName, 'Meezan Bank');
 });
 
+test('AI Natural Language - Employee cash-hand ledger resolves the registered cash account', () => {
+  const resolved = resolveIntentAndToolCall('Sabir cash hand ledger');
+  assert.ok(resolved);
+  assert.equal(resolved[0].name, 'getFinancialLedger');
+  assert.equal(resolved[0].args.kind, 'ACCOUNT');
+  assert.equal(resolved[0].args.accountName, 'Sabir');
+});
+
 // 8. Follow-up Questions Using Conversational Context Memory
 test('AI Natural Language - Multi-turn conversational context carries forward active entity and topic', () => {
   // Turn 1: "Show me expenses for November."
