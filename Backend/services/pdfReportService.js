@@ -317,7 +317,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     netPosition: closingAvailableBalance,
   };
 
-  // 2. Format Page 2: Cash & Bank Opening & Closing Balance Detail (Pure Dynamic from DB)
+  // 2. Format Page 4: Cash & Bank Opening & Closing Balance Detail (Pure Dynamic from DB)
   // Only display accounts that had active entries/transactions during this month
   const displayRowsSource = matrixData.activeRows || matrixRows.filter((r) => r.totalInput > 0 || r.totalOutput > 0);
   const displayTotalsSource = matrixData.activeGrandTotal || grandTotal;
@@ -351,6 +351,31 @@ export const generateMonthlyFundsReport = async (monthYear) => {
       closingBalance: displayTotalsSource.closingBalance,
     },
   };
+
+  const rentalFinancial = {
+    income: round2(displayTotalsSource.rentalIncome),
+    expense: round2(displayTotalsSource.rentalExpenses),
+    net: round2(displayTotalsSource.rentalIncome - displayTotalsSource.rentalExpenses),
+    isNetNeg: (displayTotalsSource.rentalIncome - displayTotalsSource.rentalExpenses) < 0,
+  };
+
+  const financial40AB = {
+    income: round2(displayTotalsSource.input40AB || 0),
+    expense: round2(displayTotalsSource.expense40AB || 0),
+    net: round2((displayTotalsSource.input40AB || 0) - (displayTotalsSource.expense40AB || 0)),
+    isNetNeg: ((displayTotalsSource.input40AB || 0) - (displayTotalsSource.expense40AB || 0)) < 0,
+  };
+
+  const otherFinancial = {
+    income: round2(displayTotalsSource.otherInput),
+    expense: round2(displayTotalsSource.otherExpenses),
+    net: round2(displayTotalsSource.otherInput - displayTotalsSource.otherExpenses),
+    isNetNeg: (displayTotalsSource.otherInput - displayTotalsSource.otherExpenses) < 0,
+  };
+
+  macro.rentalFinancial = rentalFinancial;
+  macro.financial40AB = financial40AB;
+  macro.otherFinancial = otherFinancial;
 
   // 3. Fetch Master Transactions for Journal (Pages 4 & 5)
   const rawTransactions = await Transaction.find({
@@ -513,6 +538,9 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     monthNameYear,
     dayDateString,
     macro,
+    rentalFinancial,
+    financial40AB,
+    otherFinancial,
     page2Matrix,
     page3Tenancy,
     masterJournal,

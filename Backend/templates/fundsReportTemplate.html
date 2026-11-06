@@ -151,14 +151,14 @@
 <body>
 
   <!-- ============================================================ -->
-  <!-- PAGE 1: FINANCIAL POSITION AT A GLANCE                       -->
+  <!-- PAGE 1: RENTAL FINANCIAL                                     -->
   <!-- ============================================================ -->
   <div class="page-container">
     <div class="brand-banner">
       <div class="purple-bar"></div>
       <div class="brand-title">Pixx Technologies</div>
     </div>
-    <div class="report-subtitle">Financial Position At a Glance</div>
+    <div class="report-subtitle">Rental Financial</div>
     <div class="report-date">{{asOfDate}}</div>
     <div style="text-align: center; margin-top: -8px; margin-bottom: 12px;">
       <span style="font-size: 8pt; font-weight: bold; padding: 2px 8px; border-radius: 3px; border: 1px solid #6b7280; text-transform: uppercase; background: #f3f4f6; color: #111827;">
@@ -171,7 +171,7 @@
       <thead>
         <tr>
           <th colspan="2" class="bg-income-hdr text-center" style="font-size: 10.5pt; text-transform: uppercase; padding: 6px;">
-            INCOME
+            RENTAL INCOME
           </th>
         </tr>
       </thead>
@@ -179,27 +179,18 @@
         <tr>
           <td style="width: 65%; font-size: 8.5pt;">
             <strong>Rent Received In {{monthNameYear}}</strong>
-            <div style="font-size: 7pt; color: #374151;">(Includes All Rent Received)</div>
+            <div style="font-size: 7pt; color: #374151;">(Includes All Rent Received From Properties &amp; Units)</div>
           </td>
           <td class="text-right font-mono font-bold" style="font-size: 9pt; width: 35%;">
-            {{formatPKRZero macro.totalRentalIncomeReceived}}
-          </td>
-        </tr>
-        <tr>
-          <td style="font-size: 8.5pt;">
-            <strong>Other Receipts/Returned Cash/Security Received</strong>
-            <div style="font-size: 7pt; color: #374151;">(Cash received for Re-payments / Cash returned by vendors / employees Or Sale of an Old Asset)</div>
-          </td>
-          <td class="text-right font-mono" style="font-size: 9pt;">
-            {{#if macro.totalOtherReceipts}}{{formatPKRZero macro.totalOtherReceipts}}{{else}}-{{/if}}
+            {{formatPKRZero rentalFinancial.income}}
           </td>
         </tr>
         <tr class="bg-income-hdr">
           <td class="text-center font-bold" style="font-size: 9pt;">
-            TOTAL INCOME
+            TOTAL RENTAL INCOME
           </td>
           <td class="text-right font-mono font-bold" style="font-size: 9.5pt;">
-            {{formatPKRZero macro.totalRentalIncomeReceived}}
+            {{formatPKRZero rentalFinancial.income}}
           </td>
         </tr>
         <tr>
@@ -207,7 +198,7 @@
             TOTAL AMOUNT AVAILABLE
           </td>
           <td class="text-right font-mono font-bold" style="font-size: 10pt; background: #f0fdf4;">
-            {{formatPKRZero macro.totalAmountAvailable}}
+            {{formatPKRZero rentalFinancial.income}}
           </td>
         </tr>
       </tbody>
@@ -220,26 +211,26 @@
       <thead>
         <tr>
           <th colspan="2" class="bg-expense-hdr text-center" style="font-size: 10.5pt; padding: 6px;">
-            Expenses
+            RENTAL EXPENSES
           </th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td style="width: 65%; font-size: 8.5pt;">
-            <strong>Net Expenses In {{monthNameYear}}</strong>
-            <div style="font-size: 7pt; color: #374151;">(All Payments Made During This month)</div>
+            <strong>Rental Expenses In {{monthNameYear}}</strong>
+            <div style="font-size: 7pt; color: #374151;">(All Property Maintenance, Plazas &amp; Unit Rental Payments)</div>
           </td>
           <td class="text-right font-mono font-bold" style="font-size: 9pt; width: 35%;">
-            {{formatInt macro.totalNetExpenses}}
+            {{formatInt rentalFinancial.expense}}
           </td>
         </tr>
         <tr class="bg-expense-hdr">
           <td class="text-center font-bold" style="font-size: 9pt;">
-            TOTAL EXPENSES
+            TOTAL RENTAL EXPENSES
           </td>
           <td class="text-right font-mono font-bold" style="font-size: 9.5pt;">
-            {{formatInt macro.totalNetExpenses}}
+            {{formatInt rentalFinancial.expense}}
           </td>
         </tr>
       </tbody>
@@ -247,16 +238,16 @@
 
     <div style="height: 14px;"></div>
 
-    <!-- CLOSING AVAILABLE BALANCE CALLOUT -->
+    <!-- CLOSING RENTAL BALANCE CALLOUT -->
     <table>
       <tbody>
         <tr style="border: 2px solid #000000;">
           <td class="text-center" style="width: 65%; padding: 10px;">
-            <div style="font-size: 11pt; font-weight: bold; color: #000000;">Closing Available Balance</div>
+            <div style="font-size: 11pt; font-weight: bold; color: #000000;">Net Rental Position</div>
             <div style="font-size: 8pt; color: #374151; margin-top: 2px;">{{dayDateString}}</div>
           </td>
-          <td class="text-right font-mono font-bold negative" style="width: 35%; font-size: 12pt; padding: 10px;">
-            {{formatPKRZero macro.netPosition}}
+          <td class="text-right font-mono font-bold {{#if rentalFinancial.isNetNeg}}negative{{/if}}" style="width: 35%; font-size: 12pt; padding: 10px;">
+            {{formatPKRZero rentalFinancial.net}}
           </td>
         </tr>
       </tbody>
@@ -292,7 +283,271 @@
   <div class="page-break"></div>
 
   <!-- ============================================================ -->
-  <!-- PAGE 2: OPENING & CLOSING BALANCE DETAIL                     -->
+  <!-- PAGE 2: 40-AB FINANCIAL                                      -->
+  <!-- ============================================================ -->
+  <div class="page-container">
+    <div class="brand-banner">
+      <div class="purple-bar"></div>
+      <div class="brand-title">Pixx Technologies</div>
+    </div>
+    <div class="report-subtitle">40-AB Financial</div>
+    <div class="report-date">{{asOfDate}}</div>
+    <div style="text-align: center; margin-top: -8px; margin-bottom: 12px;">
+      <span style="font-size: 8pt; font-weight: bold; padding: 2px 8px; border-radius: 3px; border: 1px solid #6b7280; text-transform: uppercase; background: #f3f4f6; color: #111827;">
+        Report Status: {{reportStatus}} &bull; Generated: {{generatedDate}}
+      </span>
+    </div>
+
+    <!-- INCOME TABLE -->
+    <table>
+      <thead>
+        <tr>
+          <th colspan="2" class="bg-income-hdr text-center" style="font-size: 10.5pt; text-transform: uppercase; padding: 6px;">
+            40-AB INCOME
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="width: 65%; font-size: 8.5pt;">
+            <strong>40-AB Income In {{monthNameYear}}</strong>
+            <div style="font-size: 7pt; color: #374151;">(Shops G1-G6, Security, Partner Receipts)</div>
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9pt; width: 35%;">
+            {{formatPKRZero financial40AB.income}}
+          </td>
+        </tr>
+        <tr class="bg-income-hdr">
+          <td class="text-center font-bold" style="font-size: 9pt;">
+            TOTAL 40-AB INCOME
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9.5pt;">
+            {{formatPKRZero financial40AB.income}}
+          </td>
+        </tr>
+        <tr>
+          <td class="text-center font-bold" style="color: #274e13; font-size: 9pt; background: #f0fdf4;">
+            TOTAL AMOUNT AVAILABLE
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 10pt; background: #f0fdf4;">
+            {{formatPKRZero financial40AB.income}}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="height: 14px;"></div>
+
+    <!-- EXPENSES TABLE -->
+    <table>
+      <thead>
+        <tr>
+          <th colspan="2" class="bg-expense-hdr text-center" style="font-size: 10.5pt; padding: 6px;">
+            40-AB EXPENSES
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="width: 65%; font-size: 8.5pt;">
+            <strong>40-AB Expenses In {{monthNameYear}}</strong>
+            <div style="font-size: 7pt; color: #374151;">(40-AB Site Operations, Maintenance &amp; Repairs)</div>
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9pt; width: 35%;">
+            {{formatInt financial40AB.expense}}
+          </td>
+        </tr>
+        <tr class="bg-expense-hdr">
+          <td class="text-center font-bold" style="font-size: 9pt;">
+            TOTAL 40-AB EXPENSES
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9.5pt;">
+            {{formatInt financial40AB.expense}}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="height: 14px;"></div>
+
+    <!-- CLOSING 40-AB BALANCE CALLOUT -->
+    <table>
+      <tbody>
+        <tr style="border: 2px solid #000000;">
+          <td class="text-center" style="width: 65%; padding: 10px;">
+            <div style="font-size: 11pt; font-weight: bold; color: #000000;">Net 40-AB Position</div>
+            <div style="font-size: 8pt; color: #374151; margin-top: 2px;">{{dayDateString}}</div>
+          </td>
+          <td class="text-right font-mono font-bold {{#if financial40AB.isNetNeg}}negative{{/if}}" style="width: 35%; font-size: 12pt; padding: 10px;">
+            {{formatPKRZero financial40AB.net}}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- SIGN-OFF BLOCKS -->
+    <div class="signoff-row" style="margin-top: 50px;">
+      <div class="signoff-box">
+        <div style="font-size: 8pt; font-weight: bold; color: #111827; margin-bottom: 4px;">{{dataEnteredByName}}</div>
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Data Entered By</div>
+      </div>
+      <div class="signoff-box">
+        <div style="font-size: 8pt; font-weight: bold; color: #111827; margin-bottom: 4px;">{{checkedByName}}</div>
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Checked By</div>
+      </div>
+      <div class="signoff-box">
+        <div style="font-size: 8pt; font-weight: bold; color: #111827; margin-bottom: 4px;">{{preparedByName}}</div>
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Prepared By</div>
+      </div>
+      {{#if publishedByName}}
+      <div class="signoff-box">
+        <div style="font-size: 8pt; font-weight: bold; color: #047857; margin-bottom: 4px;">{{publishedByName}}</div>
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Published By</div>
+      </div>
+      {{/if}}
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 3: OTHER FINANCIAL                                      -->
+  <!-- ============================================================ -->
+  <div class="page-container">
+    <div class="brand-banner">
+      <div class="purple-bar"></div>
+      <div class="brand-title">Pixx Technologies</div>
+    </div>
+    <div class="report-subtitle">Other Financial</div>
+    <div class="report-date">{{asOfDate}}</div>
+    <div style="text-align: center; margin-top: -8px; margin-bottom: 12px;">
+      <span style="font-size: 8pt; font-weight: bold; padding: 2px 8px; border-radius: 3px; border: 1px solid #6b7280; text-transform: uppercase; background: #f3f4f6; color: #111827;">
+        Report Status: {{reportStatus}} &bull; Generated: {{generatedDate}}
+      </span>
+    </div>
+
+    <!-- INCOME TABLE -->
+    <table>
+      <thead>
+        <tr>
+          <th colspan="2" class="bg-income-hdr text-center" style="font-size: 10.5pt; text-transform: uppercase; padding: 6px;">
+            OTHER INCOME
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="width: 65%; font-size: 8.5pt;">
+            <strong>Other Receipts / Inputs In {{monthNameYear}}</strong>
+            <div style="font-size: 7pt; color: #374151;">(Cash Returned, Re-payments, Vendor / Employee Refunds, Other Inflows)</div>
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9pt; width: 35%;">
+            {{formatPKRZero otherFinancial.income}}
+          </td>
+        </tr>
+        <tr class="bg-income-hdr">
+          <td class="text-center font-bold" style="font-size: 9pt;">
+            TOTAL OTHER INCOME
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9.5pt;">
+            {{formatPKRZero otherFinancial.income}}
+          </td>
+        </tr>
+        <tr>
+          <td class="text-center font-bold" style="color: #274e13; font-size: 9pt; background: #f0fdf4;">
+            TOTAL AMOUNT AVAILABLE
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 10pt; background: #f0fdf4;">
+            {{formatPKRZero otherFinancial.income}}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="height: 14px;"></div>
+
+    <!-- EXPENSES TABLE -->
+    <table>
+      <thead>
+        <tr>
+          <th colspan="2" class="bg-expense-hdr text-center" style="font-size: 10.5pt; padding: 6px;">
+            OTHER EXPENSES
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="width: 65%; font-size: 8.5pt;">
+            <strong>Other Expenses In {{monthNameYear}}</strong>
+            <div style="font-size: 7pt; color: #374151;">(General, Administrative, Office &amp; Non-Rental Payments)</div>
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9pt; width: 35%;">
+            {{formatInt otherFinancial.expense}}
+          </td>
+        </tr>
+        <tr class="bg-expense-hdr">
+          <td class="text-center font-bold" style="font-size: 9pt;">
+            TOTAL OTHER EXPENSES
+          </td>
+          <td class="text-right font-mono font-bold" style="font-size: 9.5pt;">
+            {{formatInt otherFinancial.expense}}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="height: 14px;"></div>
+
+    <!-- CLOSING OTHER BALANCE CALLOUT -->
+    <table>
+      <tbody>
+        <tr style="border: 2px solid #000000;">
+          <td class="text-center" style="width: 65%; padding: 10px;">
+            <div style="font-size: 11pt; font-weight: bold; color: #000000;">Net Other Position</div>
+            <div style="font-size: 8pt; color: #374151; margin-top: 2px;">{{dayDateString}}</div>
+          </td>
+          <td class="text-right font-mono font-bold {{#if otherFinancial.isNetNeg}}negative{{/if}}" style="width: 35%; font-size: 12pt; padding: 10px;">
+            {{formatPKRZero otherFinancial.net}}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- SIGN-OFF BLOCKS -->
+    <div class="signoff-row" style="margin-top: 50px;">
+      <div class="signoff-box">
+        <div style="font-size: 8pt; font-weight: bold; color: #111827; margin-bottom: 4px;">{{dataEnteredByName}}</div>
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Data Entered By</div>
+      </div>
+      <div class="signoff-box">
+        <div style="font-size: 8pt; font-weight: bold; color: #111827; margin-bottom: 4px;">{{checkedByName}}</div>
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Checked By</div>
+      </div>
+      <div class="signoff-box">
+        <div style="font-size: 8pt; font-weight: bold; color: #111827; margin-bottom: 4px;">{{preparedByName}}</div>
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Prepared By</div>
+      </div>
+      {{#if publishedByName}}
+      <div class="signoff-box">
+        <div style="font-size: 8pt; font-weight: bold; color: #047857; margin-bottom: 4px;">{{publishedByName}}</div>
+        <div class="signoff-line"></div>
+        <div class="signoff-label">Published By</div>
+      </div>
+      {{/if}}
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 4: OPENING & CLOSING BALANCE DETAIL                     -->
   <!-- ============================================================ -->
   <div class="page-container">
     <div class="brand-banner">
