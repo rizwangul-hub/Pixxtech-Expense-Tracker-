@@ -840,7 +840,9 @@
       </tfoot>
     </table>
   </div>
+{{/unless}}
 
+{{#unless skipAccountStatements}}
   <!-- ============================================================ -->
   <!-- PAGES 9+: INDIVIDUAL ACCOUNT LEDGER STATEMENTS               -->
   <!-- ============================================================ -->
@@ -962,7 +964,32 @@
       </div>
     </div>
   </div>
+
+  {{#if this.attachedImages.length}}
+    {{#each this.attachedImages}}
+    <div class="page-break"></div>
+    <div class="page-container attachment-page" style="text-align: center; padding: 4mm;">
+      <div class="brand-banner" style="margin-bottom: 6px;">
+        <div class="purple-bar"></div>
+        <div class="brand-title" style="font-size: 16pt;">Pixx Technologies</div>
+      </div>
+      <div style="font-size: 11pt; font-weight: bold; color: #002060; margin-bottom: 2px;">
+        Official Bank Statement Attachment
+      </div>
+      <div style="font-size: 9.5pt; font-weight: bold; color: #1e40af; margin-bottom: 2px;">
+        {{../bankOrCashTitle}} &bull; {{../accountSubtitle}}
+      </div>
+      <div style="font-size: 7.5pt; color: #4b5563; margin-bottom: 8px;">
+        Attachment: {{this.fileName}} &bull; Document Image {{addOne @index}} of {{../attachedImages.length}}
+      </div>
+      <div style="text-align: center; max-height: 235mm; display: flex; justify-content: center; align-items: center;">
+        <img src="{{this.src}}" style="max-width: 100%; max-height: 230mm; object-fit: contain; border: 1px solid #9ca3af; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 4px;" />
+      </div>
+    </div>
+    {{/each}}
+  {{/if}}
   {{/each}}
+{{/unless}}
 
 </body>
 </html>

@@ -867,6 +867,28 @@ export const monthlyReportsAPI = {
   },
 };
 
+// Bank Statement Attachments API
+export const bankStatementsAPI = {
+  getStatements: async (month) => {
+    const res = await api.get(`/bank-statements/${month}`);
+    return res.data;
+  },
+  uploadStatements: async (month, formData) => {
+    const res = await api.post(`/bank-statements/${month}/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+  deleteStatement: async (id, fileId) => {
+    const params = fileId ? { fileId } : {};
+    const res = await api.delete(`/bank-statements/${id}`, { params });
+    return res.data;
+  },
+  getPreviewUrl: (id, fileId) => {
+    return `/api/bank-statements/${id}/files/${fileId}`;
+  },
+};
+
 // Verification & Temporary Pending Entries API (Sarfraz -> Khurshid Anwar -> Central Ledger)
 export const verificationAPI = {
   getPending: async (params = {}) => {

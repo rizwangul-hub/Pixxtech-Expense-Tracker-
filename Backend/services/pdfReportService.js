@@ -10,6 +10,7 @@ import Account from '../models/Account.js';
 import Category from '../models/Category.js';
 import MonthlyReport from '../models/MonthlyReport.js';
 import RentalAgreement from '../models/RentalAgreement.js';
+import BankStatementAttachment from '../models/BankStatementAttachment.js';
 import {
   getMonthlyOpeningClosingMatrix,
   getHeadWiseExpenseReport,
@@ -480,10 +481,13 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     },
   };
 
-  // 6. Fetch Individual Account Statements (Pages 9+)
+  // 6. Fetch Individual Account Statements (Pages 9+) & Uploaded Bank Statements
   const liquidityAccounts = await Account.find({ isActive: true, isClearing: { $ne: true } })
     .sort({ type: 1, name: 1 })
     .lean();
+
+  const statementAttachments = await BankStatementAttachment.find({ month: periodName }).lean();
+  const statementMap = new Map(statementAttachments.map((s) => [s.accountId.toString(), s]));
 
   const accountStatements = [];
   for (const acc of liquidityAccounts) {
@@ -511,7 +515,47 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     const priorDayDate = new Date(startDate.getTime() - 86400000);
     const priorDateStr = `${String(priorDayDate.getUTCDate()).padStart(2, '0')}-${String(priorDayDate.getUTCMonth() + 1).padStart(2, '0')}-${String(priorDayDate.getUTCFullYear()).slice(-2)}`;
 
+    // Resolve attached bank statements (images and PDFs)
+    const stmtRecord = statementMap.get(acc._id.toString());
+    const attachedImages = [];
+    const attachedPdfs = [];
+
+    if (stmtRecord?.files?.length) {
+      for (const f of stmtRecord.files) {
+        if (f.fileType === 'IMAGE') {
+          const src = f.dataBase64
+            ? `data:${f.mimeType};base64,${f.dataBase64}`
+            : f.url;
+          if (src) {
+            attachedImages.push({
+              fileName: f.fileName || f.originalName,
+              src,
+            });
+          }
+        } else if (f.fileType === 'PDF') {
+          let buffer = null;
+          if (f.dataBase64) {
+            buffer = Buffer.from(f.dataBase64, 'base64');
+          } else if (f.url) {
+            try {
+              const res = await fetch(f.url);
+              if (res.ok) buffer = Buffer.from(await res.arrayBuffer());
+            } catch (err) {
+              console.warn(`Could not load attached PDF ${f.fileName} from url:`, err.message);
+            }
+          }
+          if (buffer) {
+            attachedPdfs.push({
+              fileName: f.fileName || f.originalName,
+              buffer,
+            });
+          }
+        }
+      }
+    }
+
     accountStatements.push({
+      accountId: acc._id.toString(),
       bankOrCashTitle,
       accountSubtitle,
       accountNumber: acc.accountNumber,
@@ -523,6 +567,8 @@ export const generateMonthlyFundsReport = async (monthYear) => {
       totalCr: statement.totalDebits,
       closingBalance: statement.closingBalance,
       isClosingNeg: statement.closingBalance < 0,
+      attachedImages,
+      attachedPdfs,
     });
   }
 
@@ -531,7 +577,7 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   const templateSource = fs.readFileSync(templatePath, 'utf8');
   const compiledTemplate = handlebars.compile(templateSource);
 
-  const htmlContent = compiledTemplate({
+  const templateData = {
     periodName,
     asOfDate,
     shortAsOfDate,
@@ -553,7 +599,9 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     preparedByName: 'Pixx Tech Expense Tracker System',
     publishedByName: monthlyReport?.publishedByName || '',
     generatedDate: formatReportDate(new Date()),
-  });
+  };
+
+  const htmlContent = compiledTemplate(templateData);
 
   // 8. Launch Puppeteer with fallback
   const chromium = (await import('@sparticuz/chromium')).default;
@@ -572,31 +620,86 @@ export const generateMonthlyFundsReport = async (monthYear) => {
     executablePath,
   };
 
+  const pdfOptions = {
+    format: 'A4',
+    printBackground: true,
+    margin: {
+      top: '10mm',
+      right: '10mm',
+      bottom: '12mm',
+      left: '10mm',
+    },
+    displayHeaderFooter: true,
+    headerTemplate: '<div></div>',
+    footerTemplate: `
+      <div style="font-family: Arial, sans-serif; font-size: 7pt; width: 100%; display: flex; justify-content: space-between; padding: 0 10mm; color: #4b5563;">
+        <span>Pixx Technologies &bull; Monthly Funds Management Report (${periodName})</span>
+        <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+      </div>
+    `,
+  };
+
   const browser = await puppeteer.launch(launchOptions);
   try {
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    const hasAnyPdfAttachments = accountStatements.some((a) => a.attachedPdfs?.length > 0);
 
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: {
-        top: '10mm',
-        right: '10mm',
-        bottom: '12mm',
-        left: '10mm',
-      },
-      displayHeaderFooter: true,
-      headerTemplate: '<div></div>',
-      footerTemplate: `
-        <div style="font-family: Arial, sans-serif; font-size: 7pt; width: 100%; display: flex; justify-content: space-between; padding: 0 10mm; color: #4b5563;">
-          <span>Pixx Technologies &bull; Monthly Funds Management Report (${periodName})</span>
-          <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
-        </div>
-      `,
+    if (!hasAnyPdfAttachments) {
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      const pdfBuffer = await page.pdf(pdfOptions);
+      return pdfBuffer;
+    }
+
+    // PDF attachment merging mode via pdf-lib
+    const { PDFDocument } = await import('pdf-lib');
+    const mergedDoc = await PDFDocument.create();
+
+    // 1. Render Base Report (Pages 1 to 8: Overview, Matrix, Tenancy, Journal, Head-Wise)
+    const baseHtml = compiledTemplate({
+      ...templateData,
+      skipAccountStatements: true,
     });
+    const basePage = await browser.newPage();
+    await basePage.setContent(baseHtml, { waitUntil: 'networkidle0' });
+    const basePdfBuffer = await basePage.pdf(pdfOptions);
+    await basePage.close();
 
-    return pdfBuffer;
+    const baseDoc = await PDFDocument.load(basePdfBuffer);
+    const copiedBasePages = await mergedDoc.copyPages(baseDoc, baseDoc.getPageIndices());
+    for (const p of copiedBasePages) mergedDoc.addPage(p);
+
+    // 2. Render each account statement + attach its PDFs/images right after its ledger
+    for (const acc of accountStatements) {
+      const accHtml = compiledTemplate({
+        ...templateData,
+        singleAccountOnly: true,
+        accountStatements: [acc],
+      });
+      const accPage = await browser.newPage();
+      await accPage.setContent(accHtml, { waitUntil: 'networkidle0' });
+      const accPdfBuffer = await accPage.pdf(pdfOptions);
+      await accPage.close();
+
+      const accDoc = await PDFDocument.load(accPdfBuffer);
+      const copiedAccPages = await mergedDoc.copyPages(accDoc, accDoc.getPageIndices());
+      for (const p of copiedAccPages) mergedDoc.addPage(p);
+
+      // Spliced right under this bank ledger: merge any attached PDF files
+      if (acc.attachedPdfs?.length > 0) {
+        for (const pdfItem of acc.attachedPdfs) {
+          try {
+            const attachedDoc = await PDFDocument.load(pdfItem.buffer);
+            const copiedPages = await mergedDoc.copyPages(attachedDoc, attachedDoc.getPageIndices());
+            for (const p of copiedPages) mergedDoc.addPage(p);
+          } catch (pdfErr) {
+            console.error(`Failed to merge attached PDF "${pdfItem.fileName}":`, pdfErr.message);
+          }
+        }
+      }
+    }
+
+    const mergedBytes = await mergedDoc.save();
+    return Buffer.from(mergedBytes);
   } finally {
     await browser.close();
   }
