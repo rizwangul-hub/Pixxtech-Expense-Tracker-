@@ -120,6 +120,8 @@ app.use('/api/staff/attendance', attendanceRoutes);
 app.use('/api/staff/payroll', payrollRoutes);
 app.use('/api/communications', communicationRoutes);
 app.use('/api/ai', aiRoutes);
+// Defensive alias for clients or proxies with duplicate /api prefixes
+app.use('/api/api/ai', aiRoutes);
 app.use('/api/system', systemRoutes);
 
 // 404 Not Found Handler

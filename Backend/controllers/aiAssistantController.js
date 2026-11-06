@@ -194,7 +194,7 @@ export const handleDownloadPdfReport = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Report download token is required.' });
     }
 
-    let report = getPdfReport(token);
+    let report = await getPdfReport(token);
     if (report?.userId && String(report.userId) !== String(req.user?._id)) {
       report = null;
     }

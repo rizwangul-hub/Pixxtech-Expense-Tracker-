@@ -1444,7 +1444,15 @@ export const aiAPI = {
     return res.data;
   },
   downloadReport: async (downloadUrl) => {
-    const res = await api.get(downloadUrl, { responseType: 'blob' });
+    if (!downloadUrl) throw new Error('Download URL is required.');
+    // Handle absolute URLs directly
+    if (/^https?:\/\//i.test(downloadUrl)) {
+      const res = await api.get(downloadUrl, { responseType: 'blob' });
+      return res.data;
+    }
+    // Strip leading /api/ so axios doesn't duplicate into /api/api/...
+    const cleanPath = downloadUrl.replace(/^\/?api\/?/i, '');
+    const res = await api.get(cleanPath, { responseType: 'blob' });
     return res.data;
   },
   getStatus: async () => {

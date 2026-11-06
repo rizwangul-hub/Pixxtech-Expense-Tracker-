@@ -7,6 +7,7 @@ import Category from '../../models/Category.js';
 import StaffLoan from '../../models/StaffLoan.js';
 import Transaction from '../../models/Transaction.js';
 import { Attendance } from '../../models/Attendance.js';
+import AiPdfReport from '../../models/AiPdfReport.js';
 import { resolveEntities } from './transactionIntentResolver.js';
 import { resolvePeriodFromText } from './naturalLanguageResolver.js';
 import { getLedgerReportData } from '../../controllers/ledgerController.js';
@@ -96,7 +97,7 @@ const cleanupInterval = setInterval(() => {
 }, 5 * 60 * 1000);
 cleanupInterval.unref();
 
-export function storePdfReport({ buffer, fileName, title, user, mimeType = 'application/pdf', sourceMessage = '' }) {
+export async function storePdfReport({ buffer, fileName, title, user, mimeType = 'application/pdf', sourceMessage = '' }) {
   const now = Date.now();
   const descriptor = {
     sourceMessage: typeof sourceMessage === 'string' ? sourceMessage.slice(0, 1500) : '',
@@ -126,17 +127,63 @@ export function storePdfReport({ buffer, fileName, title, user, mimeType = 'appl
     sourceMessage: descriptor.sourceMessage,
     tokenVersion: descriptor.tokenVersion,
   });
+
+  // L2 Persistence in MongoDB (Survives serverless instance restarts across all Vercel instances)
+  try {
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      await AiPdfReport.create({
+        token,
+        fileName,
+        title,
+        mimeType,
+        buffer,
+        sizeBytes: buffer?.length || 0,
+        userId: descriptor.userId,
+        expiresAt: new Date(now + PDF_TTL_MS),
+      });
+    }
+  } catch (err) {
+    console.warn('[AI PDF Store] MongoDB persistence warning:', err.message);
+  }
+
   return token;
 }
 
-export function getPdfReport(token) {
-  if (!token || !pdfReportStore.has(token)) return null;
-  const item = pdfReportStore.get(token);
-  if (item.expiresAt < Date.now()) {
+export async function getPdfReport(token) {
+  if (!token) return null;
+
+  // 1. Check L1 In-Memory Cache
+  if (pdfReportStore.has(token)) {
+    const item = pdfReportStore.get(token);
+    if (item.expiresAt > Date.now()) {
+      return item;
+    }
     pdfReportStore.delete(token);
-    return null;
   }
-  return item;
+
+  // 2. Check L2 Persistent MongoDB Store
+  try {
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      const doc = await AiPdfReport.findOne({ token }).lean();
+      if (doc && doc.buffer) {
+        pdfReportStore.set(token, {
+          token: doc.token,
+          buffer: doc.buffer,
+          fileName: doc.fileName,
+          title: doc.title,
+          mimeType: doc.mimeType || 'application/pdf',
+          sizeBytes: doc.sizeBytes || doc.buffer.length,
+          userId: doc.userId,
+          expiresAt: doc.expiresAt ? new Date(doc.expiresAt).getTime() : Date.now() + PDF_TTL_MS,
+        });
+        return doc;
+      }
+    }
+  } catch (err) {
+    console.warn('[AI PDF Get] MongoDB lookup warning:', err.message);
+  }
+
+  return null;
 }
 
 export function getPdfReportDescriptor(token, user) {
@@ -154,7 +201,7 @@ export async function regeneratePdfReport(token, user) {
   const result = await generateAiPdfReport(descriptor.sourceMessage, user);
   const regeneratedToken = result?.pdfReport?.downloadUrl?.split('/').pop();
   if (!regeneratedToken) return null;
-  return getPdfReport(regeneratedToken);
+  return await getPdfReport(regeneratedToken);
 }
 
 export function clearStoredPdfReports() {
@@ -339,7 +386,7 @@ async function handleAccountLedgerPdf({ account, monthYearStr, monthLabel, user,
   const fileName = `${safeName}_Account_Ledger.pdf`;
   const title = `${account.name} – Account Ledger`;
 
-  const downloadToken = storePdfReport({
+  const downloadToken = await storePdfReport({
     buffer: pdfBuffer,
     fileName,
     title,
@@ -440,7 +487,7 @@ async function handleSalaryLedgerPdf({ employee, user, sourceMessage }) {
   const fileName = `Salary_Ledger_${safeName}.pdf`;
   const title = `${employee.name} – Complete Salary Ledger`;
 
-  const downloadToken = storePdfReport({
+  const downloadToken = await storePdfReport({
     buffer: pdfBuffer,
     fileName,
     title,
@@ -531,7 +578,7 @@ async function handleLoanLedgerPdf({ employee, user, sourceMessage }) {
   const fileName = `Loan_Ledger_${safeName}.pdf`;
   const title = `${employee.name} – Loan Ledger`;
 
-  const downloadToken = storePdfReport({
+  const downloadToken = await storePdfReport({
     buffer: pdfBuffer,
     fileName,
     title,
@@ -582,7 +629,7 @@ async function handlePropertyLedgerPdf({ property, unit, user, sourceMessage }) 
   const fileName = `${safeName}_Expenses_Ledger.pdf`;
   const title = `${propName} – Property Expenses & Financial Ledger`;
 
-  const downloadToken = storePdfReport({
+  const downloadToken = await storePdfReport({
     buffer: pdfBuffer,
     fileName,
     title,
@@ -632,7 +679,7 @@ async function handleExpenseLedgerPdf({ category, allCategories, user, sourceMes
   const fileName = `${safeName}_Expense_Report.pdf`;
   const title = category ? `${category.name} – Expense Ledger` : 'Consolidated Business Expenses Ledger';
 
-  const downloadToken = storePdfReport({
+  const downloadToken = await storePdfReport({
     buffer: pdfBuffer,
     fileName,
     title,
@@ -671,7 +718,7 @@ async function handleProfitLossPdf({ monthYearStr, monthLabel, user, sourceMessa
   const fileName = `Monthly_Funds_Report_${monthYearStr}.pdf`;
   const title = `PIXX Technologies – Profit & Loss and Funds Management (${monthLabel})`;
 
-  const downloadToken = storePdfReport({
+  const downloadToken = await storePdfReport({
     buffer: pdfBuffer,
     fileName,
     title,
@@ -733,7 +780,7 @@ async function handleAllTransactionsPdf({ period, monthYearStr, monthLabel, user
   const fileName = `All_Transactions_${monthYearStr}.pdf`;
   const title = `Central Transactions Ledger – ${monthLabel}`;
 
-  const downloadToken = storePdfReport({
+  const downloadToken = await storePdfReport({
     buffer: pdfBuffer,
     fileName,
     title,
@@ -827,7 +874,7 @@ async function handleAttendancePdf({ entities, period, monthYearStr, monthLabel,
   const fileName = `Attendance_Report_${safeName}_${monthYearStr}.pdf`;
   const title = `Staff Attendance Report – ${empTitle} (${monthLabel})`;
 
-  const downloadToken = storePdfReport({
+  const downloadToken = await storePdfReport({
     buffer: pdfBuffer,
     fileName,
     title,

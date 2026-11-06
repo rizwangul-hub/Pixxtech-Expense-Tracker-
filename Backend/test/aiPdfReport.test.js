@@ -116,18 +116,18 @@ test('AI PDF - Natural language intent detection across English and Roman Urdu',
 });
 
 // 2. In-Memory Ephemeral Storage and Retrieval
-test('AI PDF - Ephemeral token store, TTL check, and clearing', () => {
+test('AI PDF - Ephemeral token store, TTL check, and clearing', async () => {
   const dummyBuffer = Buffer.from('%PDF-1.4 test pdf content');
-  const token = storePdfReport({
+  const token = await storePdfReport({
     buffer: dummyBuffer,
     fileName: 'Test_Report.pdf',
     title: 'Test Report',
     user: adminUser,
   });
 
-  assert.ok(token.startsWith('pdf_'));
+  assert.ok(typeof token === 'string' && (token.startsWith('pdf_') || token.startsWith('pdfv1.')));
 
-  const item = getPdfReport(token);
+  const item = await getPdfReport(token);
   assert.ok(item);
   assert.equal(item.fileName, 'Test_Report.pdf');
   assert.equal(item.title, 'Test Report');
@@ -135,11 +135,11 @@ test('AI PDF - Ephemeral token store, TTL check, and clearing', () => {
   assert.deepEqual(item.buffer, dummyBuffer);
 
   // Invalid token check
-  assert.equal(getPdfReport('non_existent_token'), null);
+  assert.equal(await getPdfReport('non_existent_token'), null);
 
   // Clear store check
   clearStoredPdfReports();
-  assert.equal(getPdfReport(token), null);
+  assert.equal(await getPdfReport(token), null);
 });
 
 // 3. Bank / Cash Account Ledger PDF Generation
