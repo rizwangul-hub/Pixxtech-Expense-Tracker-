@@ -109,6 +109,13 @@ test('AI Natural Language - Tolerates common spelling mistakes and informal abbr
   }
 });
 
+test('AI Natural Language - Loan ledger PDF phrasing stays read-only', () => {
+  const resolved = resolveIntentAndToolCall('give me loan ladger of Sabir Nawaz in pdf');
+  assert.ok(resolved);
+  assert.equal(resolved[0].name, 'getEmployeeLoanSummary');
+  assert.equal(resolved[0].args.employeeName, 'Sabir');
+});
+
 // 4. Employee-Specific Salary Searches
 test('AI Natural Language - Individual employee salary search retrieves profile and payroll', async t => {
   t.mock.method(Employee, 'findOne', () => queryChain({

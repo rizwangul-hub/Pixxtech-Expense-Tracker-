@@ -354,6 +354,16 @@ export function resolveIntentAndToolCall(userMessage, context = null) {
   const isSalaryQuery = ROMAN_URDU_SALARY_TERMS.some(t => clean.includes(t)) || inherited.topic === 'SALARY';
 
   if (activeEmployee) {
+    // A loan ledger is a read-only loan history, not the salary accrual ledger
+    // and not a loan-disbursement instruction (for example: "give me loan
+    // ledger of Sabir Nawaz"). Keep this deterministic fallback aligned with
+    // the dedicated loan tool when the provider is unavailable.
+    if (isLedgerQuery && ROMAN_URDU_LOAN_TERMS.some(t => clean.includes(t))) {
+      return [{
+        name: 'getEmployeeLoanSummary',
+        args: { employeeName: activeEmployee },
+      }];
+    }
     if (isLedgerQuery && ROMAN_URDU_CASH_TERMS.some(t => clean.includes(t))) {
       return [{
         name: 'getFinancialLedger',

@@ -55,11 +55,12 @@ export async function resolveEntities(text) {
 
   // Match Accounts (Bank & Cash)
   let matchedAccounts = [];
+  const ACCOUNT_STOP_WORDS = new Set(['bank', 'account', 'cash', 'hand', 'the', 'and', 'for', 'ltd', 'pvt']);
   for (const acc of accounts) {
     const accName = acc.name.toLowerCase();
-    const tokens = accName.split(/[\s-]+/).filter(t => t.length > 2);
+    const tokens = accName.split(/[\s-]+/).filter(t => t.length > 2 && !ACCOUNT_STOP_WORDS.has(t));
     const hasFullMatch = clean.includes(accName);
-    const hasTokenMatch = tokens.some(t => new RegExp(`\\b${t}\\b`, 'i').test(clean));
+    const hasTokenMatch = tokens.length > 0 && tokens.some(t => new RegExp(`\\b${t}\\b`, 'i').test(clean));
 
     if (hasFullMatch || hasTokenMatch) {
       matchedAccounts.push(acc);

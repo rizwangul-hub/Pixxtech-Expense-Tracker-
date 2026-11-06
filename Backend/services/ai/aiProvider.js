@@ -43,6 +43,7 @@ TOOLS SELECTION:
 - For property expenses or performance: use getPropertyFinancialSummary with propertyName, or getExpenseSummary with propertyName/propertyId.
 - For category expenses (e.g. fuel, utilities, maintenance): use getExpenseSummary with categoryName.
 - For tenant rent status or arrears: use getTenantRentSummary with tenantName, or getOutstandingRent.
+- If the user asks for a PDF or another export, still select the underlying read-only report tool without adding a format/file argument; this chat endpoint returns grounded markdown, while PDF downloads use the existing report workflows.
 - Default to the current Pakistan month.
 - Rent reports use allocation month and current active-agreement carry-forward rules.
 - Account balances are live. Never silently drop a requested filter. No financial results are present in conversation history.`;
@@ -322,4 +323,6 @@ async function runProvider(provider, userMessage, history = [], user, options = 
 export const runGeminiAssistant = (message, history = [], user, options) => runProvider('gemini', message, history, user, options);
 export const runOpenAIAssistant = (message, history = [], user, options) => runProvider('openai', message, history, user, options);
 export const executeRuleBasedFallback = async () => { throw new AiError('AI is unavailable. Please use the existing financial reports.', 503); };
-export const askFinanceAssistant = (message, history = [], user) => getAiConfiguration().provider === 'openai' ? runOpenAIAssistant(message, history, user) : runGeminiAssistant(message, history, user);
+export const askFinanceAssistant = (message, history = [], user, options = {}) => getAiConfiguration().provider === 'openai'
+  ? runOpenAIAssistant(message, history, user, options)
+  : runGeminiAssistant(message, history, user, options);

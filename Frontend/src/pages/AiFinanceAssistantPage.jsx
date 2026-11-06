@@ -21,19 +21,22 @@ import {
   Wallet,
   CheckCircle2,
   XCircle,
+  Download,
+  FileText,
 } from 'lucide-react';
 import { aiAPI } from '../services/api.js';
 
 const SUGGESTED_QUESTIONS = [
+  { text: 'Give me Bank Al Falah ledger in PDF', icon: Landmark, tag: 'PDF' },
+  { text: 'Rizwan Ullah complete salary ledger in PDF', icon: User, tag: 'PDF' },
+  { text: 'Generate October 2026 Profit & Loss report in PDF', icon: TrendingUp, tag: 'PDF' },
+  { text: 'Attendance report for all employees in PDF', icon: Clock, tag: 'PDF' },
   { text: 'Total expenses this month', icon: Receipt, tag: 'Expenses' },
   { text: 'Rent collected this month', icon: TrendingUp, tag: 'Rental' },
-  { text: 'Show me the outstanding rent', icon: AlertTriangle, tag: 'Arrears' },
   { text: 'What is the total balance of our accounts?', icon: Landmark, tag: 'Liquidity' },
   { text: 'Collect Rs. 25,000 rent from Flat 4 in UBL', icon: Wallet, tag: 'Operations' },
   { text: 'Record Rs. 5,000 electricity expense under Electricity', icon: Receipt, tag: 'Operations' },
   { text: 'Show me the latest transactions', icon: Clock, tag: 'Ledger' },
-  { text: 'Monthly financial summary', icon: Building2, tag: 'Overview' },
-  { text: 'How much did we pay in staff salaries?', icon: User, tag: 'Payroll' },
 ];
 
 /**
@@ -43,7 +46,6 @@ const SUGGESTED_QUESTIONS = [
 function MarkdownRenderer({ content }) {
   if (!content || typeof content !== 'string') return null;
 
-  // Split lines and parse blocks
   const lines = content.split('\n');
   const elements = [];
   let currentTable = null;
@@ -118,7 +120,6 @@ function MarkdownRenderer({ content }) {
         .split('|')
         .map((c) => c.trim());
 
-      // Check if delimiter row (| :--- | :---: |)
       if (cells.every((c) => /^:?-+:?$/.test(c))) {
         continue;
       }
@@ -196,7 +197,6 @@ function formatInlineMarkdown(text = '') {
   return parts.map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       const inner = part.slice(2, -2);
-      // Give currency totals or numbers an attractive colored emphasis
       const isAmount = /PKR|Rs\.?|\d+/i.test(inner);
       return (
         <strong key={index} className={`font-bold ${isAmount ? 'text-emerald-400' : 'text-white'}`}>
@@ -213,6 +213,57 @@ function formatInlineMarkdown(text = '') {
     }
     return part;
   });
+}
+
+/**
+ * Downloadable PDF Report Card Component
+ */
+function PdfDownloadCard({ report, onDownload, downloading }) {
+  if (!report) return null;
+  const { title, fileName, fileSize, period } = report;
+
+  return (
+    <div className="mt-3.5 rounded-xl border border-rose-500/30 bg-gradient-to-r from-slate-900 via-rose-950/20 to-slate-900 p-4 shadow-xl transition-all hover:border-rose-500/50">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 to-red-500 flex items-center justify-center text-white shadow-lg shadow-rose-900/30 flex-shrink-0 mt-0.5">
+            <FileText className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-white tracking-wide">
+                {title || 'Financial Report Statement'}
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase font-mono">
+                PDF
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+              {fileName || 'Report.pdf'}{fileSize ? ` • ${fileSize}` : ''}{period ? ` • ${period}` : ''}
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onDownload(report)}
+          disabled={downloading}
+          className="px-4 py-2 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-rose-950/40 flex items-center justify-center gap-2 transition disabled:opacity-50 flex-shrink-0"
+        >
+          {downloading ? (
+            <>
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <span>Downloading...</span>
+            </>
+          ) : (
+            <>
+              <Download className="w-3.5 h-3.5" />
+              <span>Download PDF</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -438,6 +489,7 @@ export function AiFinanceAssistantPage({
   const [conversationContext, setConversationContext] = useState({ conversationId: null, contextToken: null });
   const [actionStates, setActionStates] = useState({});
   const [actionLoadingStates, setActionLoadingStates] = useState({});
+  const [downloadingReports, setDownloadingReports] = useState({});
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -450,14 +502,13 @@ export function AiFinanceAssistantPage({
     } catch {}
   }, []);
 
-  // Scroll to bottom on new messages
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, loading, actionStates]);
+  }, [messages, loading, actionStates, downloadingReports]);
 
   // Fetch AI status on mount
   useEffect(() => {
@@ -466,6 +517,27 @@ export function AiFinanceAssistantPage({
       .then((res) => setAiStatus(res))
       .catch(() => {});
   }, []);
+
+  const handleDownloadPdf = async (report) => {
+    if (!report?.downloadUrl || downloadingReports[report.downloadUrl]) return;
+    setDownloadingReports((prev) => ({ ...prev, [report.downloadUrl]: true }));
+    try {
+      const blob = await aiAPI.downloadReport(report.downloadUrl);
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', report.fileName || 'Report.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[Download PDF Error]:', err);
+      setError('Failed to download PDF report. Please try again.');
+    } finally {
+      setDownloadingReports((prev) => ({ ...prev, [report.downloadUrl]: false }));
+    }
+  };
 
   const handleConfirmPendingAction = async (actionId) => {
     if (!actionId || loading) return;
@@ -480,7 +552,6 @@ export function AiFinanceAssistantPage({
         },
       }));
 
-      // Add celebratory notification in chat stream
       const celebrationMsg = {
         id: `ai-confirm-${Date.now()}`,
         role: 'assistant',
@@ -545,7 +616,6 @@ export function AiFinanceAssistantPage({
     setLoading(true);
 
     try {
-      // Build history for backend LLM
       const historyPayload = (Array.isArray(messages) ? messages : [])
         .filter((m) => m && m.role === 'user')
         .slice(-6)
@@ -572,6 +642,7 @@ export function AiFinanceAssistantPage({
         role: 'assistant',
         content: response.message || 'No response returned.',
         pendingAction: response.pendingAction || null,
+        pdfReport: response.pdfReport || null,
         confirmed: response.confirmed || false,
         voucherNo: response.voucherNo || null,
         isPending: response.isPending || false,
@@ -597,7 +668,7 @@ export function AiFinanceAssistantPage({
       {
         id: 'welcome',
         role: 'assistant',
-        content: `Conversation cleared. How can I help you analyze your financial data or record transactions?`,
+        content: `Conversation cleared. How can I help you analyze your financial records, generate PDF reports, or enter transactions?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         engine: 'central-ledger',
       },
@@ -635,11 +706,11 @@ export function AiFinanceAssistantPage({
               <h1 className="text-base font-bold text-white tracking-wide">Pixx AI Finance Assistant</h1>
               <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                {aiStatus?.enabled && aiStatus?.hasApiKey ? 'Ready for queries & entries' : 'Setup required'}
+                {aiStatus?.enabled && aiStatus?.hasApiKey ? 'Ready for queries, PDFs & entries' : 'Setup required'}
               </span>
             </div>
             <p className="text-xs text-slate-400 hidden sm:block">
-              Intelligent accounting assistant querying live records and recording confirmed transactions
+              Intelligent accounting assistant querying live records, generating official PDF reports & recording confirmed transactions
             </p>
           </div>
         </div>
@@ -661,7 +732,7 @@ export function AiFinanceAssistantPage({
         </div>
       </header>
 
-      {/* Suggested Quick Question & Entry Chips */}
+      {/* Suggested Quick Question & PDF Chips */}
       <div className="flex-shrink-0 bg-slate-900/50 border-b border-slate-800/60 px-4 py-2 overflow-x-auto scrollbar-none">
         <div className="flex items-center gap-2 min-w-max">
           <span className="text-xs font-semibold text-slate-400 flex items-center gap-1 mr-1">
@@ -694,7 +765,7 @@ export function AiFinanceAssistantPage({
       >
         {safeMessageList.length === 0 && (
           <p className="text-sm text-slate-400">
-            Ask about financial reports, rent, expenses, or instruct the assistant to record entries (e.g. &ldquo;Collect Rs. 25,000 rent from Flat 4 in UBL&rdquo;). Transactions will always show a preview and require your explicit confirmation before saving.
+            Ask for instant financial figures or download official PDF reports (e.g. &ldquo;Give me Bank Al Falah ledger in PDF&rdquo; or &ldquo;October 2026 Profit &amp; Loss in PDF&rdquo;). All PDF documents feature PIXX Technologies branding, verified figures, and one-click downloads.
           </p>
         )}
         {safeMessageList.map((m) => {
@@ -726,6 +797,15 @@ export function AiFinanceAssistantPage({
                   ) : (
                     <div>
                       <MarkdownRenderer content={m.content} />
+
+                      {/* Downloadable PDF Card if PDF was generated */}
+                      {m.pdfReport && (
+                        <PdfDownloadCard
+                          report={m.pdfReport}
+                          onDownload={handleDownloadPdf}
+                          downloading={Boolean(downloadingReports[m.pdfReport.downloadUrl])}
+                        />
+                      )}
 
                       {/* Interactive Confirmation Card if proposal is pending */}
                       {m.pendingAction && (
@@ -793,7 +873,7 @@ export function AiFinanceAssistantPage({
             <div className="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-none px-4 py-3 flex items-center gap-3 shadow-lg">
               <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
               <span className="text-xs text-slate-300 font-medium">
-                Processing instruction & checking accounting ledger rules...
+                Retrieving verified records & rendering PDF document...
               </span>
             </div>
           </div>
@@ -828,13 +908,13 @@ export function AiFinanceAssistantPage({
           className="max-w-4xl mx-auto flex items-end gap-2 bg-slate-950 border border-slate-800 rounded-xl p-2 shadow-inner focus-within:border-indigo-500/70 transition"
         >
           <textarea
-            aria-label="Your financial question or transaction instruction"
+            aria-label="Your financial question, PDF request, or transaction instruction"
             maxLength={1500}
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask a question or enter transaction (e.g. 'Collect Rs. 25,000 rent from Flat 4 in UBL' or 'Record 5000 electricity expense')..."
+            placeholder="Ask a question, request a PDF (e.g. 'Give me Bank Al Falah ledger in PDF'), or record a transaction..."
             rows={1}
             disabled={loading}
             className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 resize-none px-2 py-1.5 focus:outline-none min-h-[40px] max-h-32"
@@ -855,7 +935,7 @@ export function AiFinanceAssistantPage({
           </button>
         </form>
         <p className="text-[11px] text-center text-slate-500 mt-2">
-          Two-step verification active: All transaction instructions require confirmation before saving. Press <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-400 font-mono">Enter</kbd> to send, <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-400 font-mono">Shift+Enter</kbd> for a new line.
+          Ask for any report in PDF format for instant, branded downloads. Press <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-400 font-mono">Enter</kbd> to send, <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-400 font-mono">Shift+Enter</kbd> for a new line.
         </p>
       </div>
     </div>

@@ -1443,6 +1443,10 @@ export const aiAPI = {
     const res = await api.post('/ai/cancel-action', { actionId });
     return res.data;
   },
+  downloadReport: async (downloadUrl) => {
+    const res = await api.get(downloadUrl, { responseType: 'blob' });
+    return res.data;
+  },
   getStatus: async () => {
     const res = await api.get('/ai/status');
     return res.data;

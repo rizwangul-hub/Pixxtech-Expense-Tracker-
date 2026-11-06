@@ -6,6 +6,7 @@ import {
   getAiStatus,
   handleConfirmAction,
   handleCancelAction,
+  handleDownloadPdfReport,
 } from '../controllers/aiAssistantController.js';
 import { aiRateLimiter, validateAiQuestion } from '../middleware/aiRateLimit.js';
 
@@ -24,7 +25,7 @@ router.get(
   getAiStatus
 );
 
-// AI Finance Assistant Chat (read queries and explicitly staged operations)
+// AI Finance Assistant Chat (Read queries, PDF report requests, and Operation Proposals)
 router.post(
   '/chat',
   requirePermission(PERMISSIONS.VIEW_FINANCIALS),
@@ -37,7 +38,18 @@ router.post(
   handleFinanceChat
 );
 
-// Confirm staged operation (requires ENTER_DATA permission)
+// Download Generated AI PDF Report
+router.get(
+  '/download-report/:token',
+  requirePermission(PERMISSIONS.VIEW_FINANCIALS),
+  (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  },
+  handleDownloadPdfReport
+);
+
+// Confirm Staged Operation (Requires ENTER_DATA permission)
 router.post(
   '/confirm-action',
   requirePermission(PERMISSIONS.ENTER_DATA),
@@ -48,7 +60,7 @@ router.post(
   handleConfirmAction
 );
 
-// Cancel staged operation
+// Cancel Staged Operation
 router.post(
   '/cancel-action',
   (req, res, next) => {
