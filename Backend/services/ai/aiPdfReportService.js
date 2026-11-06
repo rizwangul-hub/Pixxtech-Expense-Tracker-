@@ -18,6 +18,7 @@ import {
 import { round2 } from '../ledgerService.js';
 import { getUtcMonthDateRange } from '../salaryReportingService.js';
 import { getEmployeeLedger as readPayrollEmployeeLedger } from '../../controllers/payrollController.js';
+import { getJwtSecret } from '../../config/jwt.js';
 
 // Exported generator registry allowing deterministic testing and mocking
 export const reportGenerators = {
@@ -28,9 +29,62 @@ export const reportGenerators = {
   readPayrollEmployeeLedger,
 };
 
-// Ephemeral in-memory store for generated PDF buffers (60 min TTL)
+// Fast-path in-memory store for generated PDF buffers (60 min TTL). Vercel
+// functions are stateless between invocations, so download tokens also carry
+// an encrypted, authenticated report request for safe regeneration elsewhere.
 const pdfReportStore = new Map();
 const PDF_TTL_MS = 60 * 60 * 1000; // 1 hour
+const PDF_TOKEN_PREFIX = 'pdfv1';
+
+const base64UrlEncode = (value) => Buffer.from(value).toString('base64url');
+const base64UrlDecode = (value) => Buffer.from(value, 'base64url');
+
+const pdfTokenKey = () => {
+  const secret = getJwtSecret();
+  if (!secret) return null;
+  return crypto.createHash('sha256').update(`pixx-ai-pdf:${secret}`).digest();
+};
+
+const encryptPdfDescriptor = (descriptor) => {
+  const key = pdfTokenKey();
+  if (!key) return null;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ciphertext = Buffer.concat([
+    cipher.update(JSON.stringify(descriptor), 'utf8'),
+    cipher.final(),
+  ]);
+  return [
+    PDF_TOKEN_PREFIX,
+    base64UrlEncode(iv),
+    base64UrlEncode(cipher.getAuthTag()),
+    base64UrlEncode(ciphertext),
+  ].join('.');
+};
+
+const decryptPdfDescriptor = (token) => {
+  if (typeof token !== 'string' || token.length > 10000) return null;
+  const [prefix, ivPart, tagPart, ciphertextPart] = token.split('.');
+  if (prefix !== PDF_TOKEN_PREFIX || !ivPart || !tagPart || !ciphertextPart) return null;
+
+  const key = pdfTokenKey();
+  if (!key) return null;
+
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, base64UrlDecode(ivPart));
+    decipher.setAuthTag(base64UrlDecode(tagPart));
+    const plaintext = Buffer.concat([
+      decipher.update(base64UrlDecode(ciphertextPart)),
+      decipher.final(),
+    ]).toString('utf8');
+    const descriptor = JSON.parse(plaintext);
+    if (!descriptor || typeof descriptor !== 'object' || typeof descriptor.expiresAt !== 'number') return null;
+    if (descriptor.expiresAt < Date.now()) return null;
+    return descriptor;
+  } catch {
+    return null;
+  }
+};
 
 const cleanupInterval = setInterval(() => {
   const now = Date.now();
@@ -42,20 +96,35 @@ const cleanupInterval = setInterval(() => {
 }, 5 * 60 * 1000);
 cleanupInterval.unref();
 
-export function storePdfReport({ buffer, fileName, title, user, mimeType = 'application/pdf' }) {
-  const token = `pdf_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+export function storePdfReport({ buffer, fileName, title, user, mimeType = 'application/pdf', sourceMessage = '' }) {
   const now = Date.now();
+  const descriptor = {
+    sourceMessage: typeof sourceMessage === 'string' ? sourceMessage.slice(0, 1500) : '',
+    userId: user?._id ? String(user._id) : null,
+    tokenVersion: user?.tokenVersion ?? 0,
+    fileName,
+    title,
+    mimeType,
+    sizeBytes: buffer?.length || 0,
+    createdAt: now,
+    expiresAt: now + PDF_TTL_MS,
+  };
+  const token = descriptor.sourceMessage && descriptor.userId
+    ? encryptPdfDescriptor(descriptor) || `pdf_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`
+    : `pdf_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
   pdfReportStore.set(token, {
     token,
     buffer,
     fileName,
     title,
-    userId: user?._id ? String(user._id) : null,
+    userId: descriptor.userId,
     userRole: user?.role || 'VIEWER',
     mimeType,
     sizeBytes: buffer?.length || 0,
     createdAt: now,
     expiresAt: now + PDF_TTL_MS,
+    sourceMessage: descriptor.sourceMessage,
+    tokenVersion: descriptor.tokenVersion,
   });
   return token;
 }
@@ -68,6 +137,24 @@ export function getPdfReport(token) {
     return null;
   }
   return item;
+}
+
+export function getPdfReportDescriptor(token, user) {
+  const descriptor = decryptPdfDescriptor(token);
+  if (!descriptor || !descriptor.sourceMessage || !descriptor.userId) return null;
+  if (String(descriptor.userId) !== String(user?._id)) return null;
+  if ((descriptor.tokenVersion ?? 0) !== (user?.tokenVersion ?? 0)) return null;
+  return descriptor;
+}
+
+export async function regeneratePdfReport(token, user) {
+  const descriptor = getPdfReportDescriptor(token, user);
+  if (!descriptor) return null;
+
+  const result = await generateAiPdfReport(descriptor.sourceMessage, user);
+  const regeneratedToken = result?.pdfReport?.downloadUrl?.split('/').pop();
+  if (!regeneratedToken) return null;
+  return getPdfReport(regeneratedToken);
 }
 
 export function clearStoredPdfReports() {
@@ -125,27 +212,27 @@ export async function generateAiPdfReport(message, user) {
   // 1. PROFIT & LOSS / MONTHLY FUNDS REPORT
   const isProfitLoss = /\b(profit\s*(?:&|and)\s*loss|p&l|funds?\s*report|monthly\s*(?:financial\s*)?report|macro\s*report)\b/i.test(clean);
   if (isProfitLoss) {
-    return await handleProfitLossPdf({ monthYearStr, monthLabel, user });
+    return await handleProfitLossPdf({ monthYearStr, monthLabel, user, sourceMessage: message });
   }
 
   // 2. ATTENDANCE REPORT
   const isAttendance = /\b(attendance|hazri|present|absent|leave)\b/i.test(clean);
   if (isAttendance) {
-    return await handleAttendancePdf({ entities, period, monthYearStr, monthLabel, user });
+    return await handleAttendancePdf({ entities, period, monthYearStr, monthLabel, user, sourceMessage: message });
   }
 
   // 3. EMPLOYEE LOAN LEDGER
   const isLoan = /\b(loan|karz|qarz|borrowing|advance\s*ledger)\b/i.test(clean);
   if (isLoan && (entities.employee || entities.employees?.length > 0)) {
     const emp = entities.employee || entities.employees[0];
-    return await handleLoanLedgerPdf({ employee: emp, user });
+    return await handleLoanLedgerPdf({ employee: emp, user, sourceMessage: message });
   }
 
   // 4. SALARY LEDGER / PAYSLIP
   const isSalary = /\b(salary|tankhwah|tanha|payroll|payslip|pay\s*slip)\b/i.test(clean);
   if (isSalary && (entities.employee || entities.employees?.length > 0)) {
     const emp = entities.employee || entities.employees[0];
-    return await handleSalaryLedgerPdf({ employee: emp, user });
+    return await handleSalaryLedgerPdf({ employee: emp, user, sourceMessage: message });
   }
 
   // 5. BANK OR CASH ACCOUNT LEDGER / STATEMENT
@@ -158,6 +245,7 @@ export async function generateAiPdfReport(message, user) {
       monthYearStr: isMonthlySpecific ? monthYearStr : null,
       monthLabel: isMonthlySpecific ? monthLabel : 'All Time',
       user,
+      sourceMessage: message,
     });
   }
 
@@ -169,6 +257,7 @@ export async function generateAiPdfReport(message, user) {
       property: prop,
       unit: entities.unit,
       user,
+      sourceMessage: message,
     });
   }
 
@@ -179,13 +268,14 @@ export async function generateAiPdfReport(message, user) {
       category: entities.category,
       allCategories: entities.allCategories,
       user,
+      sourceMessage: message,
     });
   }
 
   // 8. ALL TRANSACTIONS / VOUCHER REPORT
   const isTransactions = /\b(all\s*transactions?|transaction\s*report|vouchers?\s*report|all\s*vouchers?|journal)\b/i.test(clean);
   if (isTransactions) {
-    return await handleAllTransactionsPdf({ period, monthYearStr, monthLabel, user });
+    return await handleAllTransactionsPdf({ period, monthYearStr, monthLabel, user, sourceMessage: message });
   }
 
   // 9. If account keyword mentioned but no specific account was matched
@@ -228,7 +318,7 @@ export async function generateAiPdfReport(message, user) {
 /**
  * Handle Bank & Cash Account Ledger PDF
  */
-async function handleAccountLedgerPdf({ account, monthYearStr, monthLabel, user }) {
+async function handleAccountLedgerPdf({ account, monthYearStr, monthLabel, user, sourceMessage }) {
   const queryParams = {
     type: account.type === 'CASH' ? 'CASH' : 'BANK',
     entityId: String(account._id),
@@ -254,6 +344,7 @@ async function handleAccountLedgerPdf({ account, monthYearStr, monthLabel, user 
     fileName,
     title,
     user,
+    sourceMessage,
   });
 
   const { openingBalance, totalDebit, totalCredit, closingBalance, entryCount } = payload.summary;
@@ -285,7 +376,7 @@ async function handleAccountLedgerPdf({ account, monthYearStr, monthLabel, user 
 /**
  * Handle Employee Salary Ledger PDF
  */
-async function handleSalaryLedgerPdf({ employee, user }) {
+async function handleSalaryLedgerPdf({ employee, user, sourceMessage }) {
   let responseBody = null;
   const mockRes = {
     status() { return this; },
@@ -354,6 +445,7 @@ async function handleSalaryLedgerPdf({ employee, user }) {
     fileName,
     title,
     user,
+    sourceMessage,
   });
 
   const textSummary = `### 📄 ${employee.name} — Complete Salary Ledger\n\n` +
@@ -381,7 +473,7 @@ async function handleSalaryLedgerPdf({ employee, user }) {
 /**
  * Handle Employee Loan Ledger PDF
  */
-async function handleLoanLedgerPdf({ employee, user }) {
+async function handleLoanLedgerPdf({ employee, user, sourceMessage }) {
   const loans = await StaffLoan.find({ employeeId: employee._id })
     .sort({ date: 1, createdAt: 1, _id: 1 })
     .lean();
@@ -444,6 +536,7 @@ async function handleLoanLedgerPdf({ employee, user }) {
     fileName,
     title,
     user,
+    sourceMessage,
   });
 
   const textSummary = `### 📄 ${employee.name} — Staff Loan Ledger\n\n` +
@@ -471,7 +564,7 @@ async function handleLoanLedgerPdf({ employee, user }) {
 /**
  * Handle Property & Unit Expense / Cash Flow PDF
  */
-async function handlePropertyLedgerPdf({ property, unit, user }) {
+async function handlePropertyLedgerPdf({ property, unit, user, sourceMessage }) {
   const queryParams = {
     type: 'PROPERTY',
     entityId: String(property._id),
@@ -494,6 +587,7 @@ async function handlePropertyLedgerPdf({ property, unit, user }) {
     fileName,
     title,
     user,
+    sourceMessage,
   });
 
   const { totalDebit, totalCredit, closingBalance, entryCount } = payload.summary;
@@ -523,7 +617,7 @@ async function handlePropertyLedgerPdf({ property, unit, user }) {
 /**
  * Handle Head-wise or Consolidated Expenses PDF
  */
-async function handleExpenseLedgerPdf({ category, allCategories, user }) {
+async function handleExpenseLedgerPdf({ category, allCategories, user, sourceMessage }) {
   const queryParams = {
     type: 'EXPENSE',
     entityId: category ? String(category._id) : 'ALL_EXPENSES',
@@ -543,6 +637,7 @@ async function handleExpenseLedgerPdf({ category, allCategories, user }) {
     fileName,
     title,
     user,
+    sourceMessage,
   });
 
   const { totalDebit, entryCount } = payload.summary;
@@ -570,7 +665,7 @@ async function handleExpenseLedgerPdf({ category, allCategories, user }) {
 /**
  * Handle Profit & Loss / Monthly Funds PDF
  */
-async function handleProfitLossPdf({ monthYearStr, monthLabel, user }) {
+async function handleProfitLossPdf({ monthYearStr, monthLabel, user, sourceMessage }) {
   const pdfBuffer = await reportGenerators.generateMonthlyFundsReport(monthYearStr);
 
   const fileName = `Monthly_Funds_Report_${monthYearStr}.pdf`;
@@ -581,6 +676,7 @@ async function handleProfitLossPdf({ monthYearStr, monthLabel, user }) {
     fileName,
     title,
     user,
+    sourceMessage,
   });
 
   const textSummary = `### 📄 Profit & Loss & Monthly Funds Management Report (${monthLabel})\n\n` +
@@ -608,7 +704,7 @@ async function handleProfitLossPdf({ monthYearStr, monthLabel, user }) {
 /**
  * Handle All Transactions & Vouchers Report PDF
  */
-async function handleAllTransactionsPdf({ period, monthYearStr, monthLabel, user }) {
+async function handleAllTransactionsPdf({ period, monthYearStr, monthLabel, user, sourceMessage }) {
   const { startDate, endDate } = getUtcMonthDateRange(period.year, period.month);
 
   const transactions = await Transaction.find({
@@ -642,6 +738,7 @@ async function handleAllTransactionsPdf({ period, monthYearStr, monthLabel, user
     fileName,
     title,
     user,
+    sourceMessage,
   });
 
   const textSummary = `### 📄 Central Transactions & Voucher Ledger (${monthLabel})\n\n` +
@@ -667,7 +764,7 @@ async function handleAllTransactionsPdf({ period, monthYearStr, monthLabel, user
 /**
  * Handle Attendance Report PDF
  */
-async function handleAttendancePdf({ entities, period, monthYearStr, monthLabel, user }) {
+async function handleAttendancePdf({ entities, period, monthYearStr, monthLabel, user, sourceMessage }) {
   const { startDate, endDate } = getUtcMonthDateRange(period.year, period.month);
 
   const filter = {
@@ -735,6 +832,7 @@ async function handleAttendancePdf({ entities, period, monthYearStr, monthLabel,
     fileName,
     title,
     user,
+    sourceMessage,
   });
 
   const textSummary = `### 📄 Staff Attendance Report (${empTitle} – ${monthLabel})\n\n` +

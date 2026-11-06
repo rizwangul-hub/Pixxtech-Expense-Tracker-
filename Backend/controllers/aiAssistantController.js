@@ -4,7 +4,12 @@ import { readConversation, signConversation } from '../services/ai/conversationC
 import { resolveActionProposal } from '../services/ai/transactionIntentResolver.js';
 import { stageAction, consumeAction, cancelAction, getLatestUserAction } from '../services/ai/actionStagingService.js';
 import { executeConfirmedAction } from '../services/ai/financialOperationsExecutor.js';
-import { isPdfReportRequest, generateAiPdfReport, getPdfReport } from '../services/ai/aiPdfReportService.js';
+import {
+  isPdfReportRequest,
+  generateAiPdfReport,
+  getPdfReport,
+  regeneratePdfReport,
+} from '../services/ai/aiPdfReportService.js';
 import { hasPermission, PERMISSIONS } from '../middleware/auth.js';
 
 /**
@@ -189,7 +194,15 @@ export const handleDownloadPdfReport = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Report download token is required.' });
     }
 
-    const report = getPdfReport(token);
+    let report = getPdfReport(token);
+    if (report?.userId && String(report.userId) !== String(req.user?._id)) {
+      report = null;
+    }
+    if (!report?.buffer) {
+      // Vercel may route the download to a different function instance than
+      // the chat request. Regenerate from the encrypted, user-bound token.
+      report = await regeneratePdfReport(token, req.user);
+    }
     if (!report || !report.buffer) {
       return res.status(404).json({
         success: false,

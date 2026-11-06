@@ -8,6 +8,7 @@ import {
   getPdfReport,
   clearStoredPdfReports,
   generateAiPdfReport,
+  regeneratePdfReport,
   reportGenerators,
 } from '../services/ai/aiPdfReportService.js';
 import aiRoutes from '../routes/aiRoutes.js';
@@ -178,6 +179,33 @@ test('AI PDF - Generate Bank Account Ledger PDF via ledgerController & pdfReport
   assert.match(result.message, /Closing Balance.*PKR 300,000/);
 });
 
+test('AI PDF - Encrypted download token regenerates after in-memory instance loss', async (t) => {
+  const accountId = '507f191e810c19729de86001';
+  mockEntities(t, {
+    accounts: [{ _id: accountId, name: 'Bank Al Falah', type: 'BANK', isActive: true }],
+  });
+
+  t.mock.method(reportGenerators, 'getLedgerReportData', async () => ({
+    type: 'BANK',
+    ledgerTitle: 'Bank Al Falah',
+    datePreset: 'CUSTOM',
+    summary: { openingBalance: 0, totalDebit: 0, totalCredit: 1000, closingBalance: 1000, entryCount: 1 },
+    entries: [],
+  }));
+
+  const expectedBuffer = Buffer.from('%PDF-1.4 regenerated report');
+  t.mock.method(reportGenerators, 'generateLedgerPDF', async () => expectedBuffer);
+
+  const generated = await generateAiPdfReport('Give me Bank Al Falah ledger in PDF', adminUser);
+  const token = generated.pdfReport.downloadUrl.split('/').pop();
+  clearStoredPdfReports();
+
+  const regenerated = await regeneratePdfReport(token, adminUser);
+  assert.ok(regenerated);
+  assert.deepEqual(regenerated.buffer, expectedBuffer);
+  assert.equal(regenerated.fileName, 'Bank_Al_Falah_Account_Ledger.pdf');
+});
+
 // 4. Employee Salary Ledger PDF Generation
 test('AI PDF - Generate Employee Salary Ledger PDF via payrollController', async (t) => {
   const employeeId = '507f191e810c19729de86003';
@@ -314,6 +342,8 @@ test('AI PDF HTTP - Complete flow: Request PDF in chat, obtain token, and downlo
     assert.ok(chatData.pdfReport.downloadUrl);
 
     const downloadPath = chatData.pdfReport.downloadUrl;
+    // Simulate Vercel routing the download to a fresh function instance.
+    clearStoredPdfReports();
 
     // 2. Download the Generated PDF
     const downloadRes = await fetch(`http://127.0.0.1:${port}${downloadPath}`, {
