@@ -66,7 +66,21 @@ export const handleFinanceChat = async (req, res) => {
 
     // 3. Natural Language PDF Report Requests (e.g. "Give me Bank Al Falah ledger in PDF")
     if (isPdfReportRequest(trimmedMsg)) {
-      const pdfResult = await generateAiPdfReport(trimmedMsg, user);
+      let pdfResult;
+      try {
+        pdfResult = await generateAiPdfReport(trimmedMsg, user);
+      } catch (error) {
+        console.error('[AI PDF Report Error]:', {
+          name: error?.name,
+          message: error?.message,
+          stack: error?.stack,
+        });
+        throw new AiError(
+          'PDF report generation is temporarily unavailable. Please retry.',
+          503,
+          'AI_PDF_GENERATION_FAILED'
+        );
+      }
       if (pdfResult?.isClarification) {
         return res.status(200).json({
           success: true,
@@ -147,11 +161,19 @@ export const handleFinanceChat = async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[AI Finance Assistant Error]:', error);
-    return res.status(error.status || 500).json({
+    const status = Number.isInteger(error?.status) ? error.status : 500;
+    const code = error?.code || 'AI_REQUEST_FAILED';
+    console.error('[AI Finance Assistant Error]:', {
+      name: error?.name,
+      status,
+      code,
+      message: error?.message,
+      stack: error?.stack,
+    });
+    return res.status(status).json({
       success: false,
-      message: error.status ? error.message : (error.message || 'Failed to process financial request. Please retry.'),
-      code: error.code || 'AI_REQUEST_FAILED',
+      message: error?.status ? error.message : 'Failed to process financial request. Please retry.',
+      code,
     });
   }
 };
@@ -185,11 +207,15 @@ export const handleDownloadPdfReport = async (req, res) => {
     res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     return res.status(200).send(report.buffer);
   } catch (error) {
-    console.error('[Download PDF Report Error]:', error);
+    console.error('[Download PDF Report Error]:', {
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack,
+    });
     return res.status(500).json({
       success: false,
       message: 'Failed to download PDF report.',
-      error: error.message,
+      code: 'AI_PDF_DOWNLOAD_FAILED',
     });
   }
 };
