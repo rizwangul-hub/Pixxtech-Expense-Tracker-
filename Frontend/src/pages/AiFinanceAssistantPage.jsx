@@ -221,6 +221,7 @@ export function AiFinanceAssistantPage({ currentUser, messages, setMessages }) {
   const inputRef = useRef(null);
   const requestRef = useRef(null);
   useEffect(() => () => requestRef.current?.abort(), []);
+  useEffect(() => { try { sessionStorage.removeItem('pixx_ai_finance_chat'); } catch {} }, []);
 
   // Scroll to bottom on new messages
   const scrollToBottom = () => {
@@ -325,11 +326,11 @@ export function AiFinanceAssistantPage({ currentUser, messages, setMessages }) {
               <h1 className="text-base font-bold text-white tracking-wide">Pixx AI Finance Assistant</h1>
               <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Live Ledger Connected
+                {aiStatus?.enabled && aiStatus?.hasApiKey ? 'Read-only reports' : 'Setup required'}
               </span>
             </div>
             <p className="text-xs text-slate-400 hidden sm:block">
-              Intelligent chartered accounting assistant querying real database transactions
+              Financial questions answered from your existing records
             </p>
           </div>
         </div>
@@ -375,7 +376,8 @@ export function AiFinanceAssistantPage({ currentUser, messages, setMessages }) {
       </div>
 
       {/* Main Conversation Stream */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+      <div role="log" aria-live="polite" aria-label="Finance conversation" aria-busy={loading} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        {!messages.length && <p className="text-sm text-slate-400">Choose a suggested question or ask in English, Urdu, or Hinglish. Reports default to the current Pakistan month. Balances are live. This assistant cannot change records.</p>}
         {messages.map((m) => {
           const isUser = m.role === 'user';
           return (
@@ -492,6 +494,8 @@ export function AiFinanceAssistantPage({ currentUser, messages, setMessages }) {
           className="max-w-4xl mx-auto flex items-end gap-2 bg-slate-950 border border-slate-800 rounded-xl p-2 shadow-inner focus-within:border-indigo-500/70 transition"
         >
           <textarea
+            aria-label="Your financial question"
+            maxLength={1500}
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -517,7 +521,7 @@ export function AiFinanceAssistantPage({ currentUser, messages, setMessages }) {
           </button>
         </form>
         <p className="text-[11px] text-center text-slate-500 mt-2">
-          Pixx AI uses verified database calculations. Press <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-400 font-mono">Enter</kbd> to send, <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-400 font-mono">Shift+Enter</kbd> for a new line.
+          Questions go to the configured AI provider; report results stay in the app. History lasts for this login session. Press Enter to send, Shift+Enter for a new line.
         </p>
       </div>
     </div>

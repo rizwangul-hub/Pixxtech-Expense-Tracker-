@@ -50,7 +50,8 @@ export const getExpenseSummary = async ({ month, year, propertyId = null, startD
     if (tx.property) propertyTotals.set(tx.property, round2((propertyTotals.get(tx.property) || 0) + tx.amount));
   }
   return {
-    period: `${startDate || period.startDate.toISOString()} to ${endDate || period.endDate.toISOString()} (Pakistan business calendar)`,
+    period: period.periodString,
+    dateRange: `${startDate || period.periodString + '-01'} to ${endDate || new Date(period.endDate.getTime() + 18000000).toISOString().slice(0, 10)} (Pakistan time)`,
     totalExpenses: report.totalExpensesOverall,
     transactionCount: report.mainHeads.reduce((n, h) => n + h.transactionCount, 0),
     classification: report.classificationTotals,
@@ -86,7 +87,6 @@ export const getRentCollectionSummary = async ({ month, year, propertyId = null 
   const { year: y, month: m, monthName, periodString } = resolveMonthDateRange(month, year);
 
   const rentalSummary = await getRentalSummaryWithCarryForward(periodString, { rentOnly: true });
-  const grand = rentalSummary.grandTotals || {};
 
   let plazas = rentalSummary.plazas || [];
   if (propertyId) {
@@ -148,7 +148,7 @@ export const getOutstandingRent = async ({ month, year, propertyId = null }, use
   return {
     period: `${monthName} ${y} (${periodString})`,
     totalOutstandingAmount: round2(totalOutstanding),
-    overdueUnitsCount: unitsWithBalance.length,
+    outstandingUnitsCount: unitsWithBalance.length,
     overdueUnits: unitsWithBalance.slice(0, 30),
     truncated: unitsWithBalance.length > 30,
   };
@@ -363,14 +363,14 @@ export const getMonthlyComparison = async ({ month1, year1, month2, year2 }, use
       rentalIncome: inc1.rentalIncome,
       totalExpenses: exp1.totalExpenses,
       netCashFlow: net1,
-      rentCollectionRate: rent1.overallCollectionRate,
+      rentCollected: rent1.totalReceivedAmount,
     },
     period2Data: {
       totalIncome: inc2.totalIncome,
       rentalIncome: inc2.rentalIncome,
       totalExpenses: exp2.totalExpenses,
       netCashFlow: net2,
-      rentCollectionRate: rent2.overallCollectionRate,
+      rentCollected: rent2.totalReceivedAmount,
     },
     variance: {
       incomeChange: round2(inc1.totalIncome - inc2.totalIncome),
@@ -563,7 +563,7 @@ export function validateToolArguments(name, args) {
     if (key === 'propertyName' && (typeof value !== 'string' || !value.trim() || value.length > 100)) throw new AiError('Invalid property name.');
     if (key === 'accountType' && !['BANK', 'CASH', 'SUSPENSE'].includes(value)) throw new AiError('Invalid account type.');
     if (key === 'transactionType' && !['EXPENSE', 'INCOME', 'TRANSFER'].includes(value)) throw new AiError('Invalid transaction type.');
-    if (key === 'limit' && (value < 1 || value > 25)) throw new AiError('Transaction limit must be 1–25.');
+    if (key === 'limit' && (value < 1 || value > 25)) throw new AiError('Transaction limit must be 1â€“25.');
   }
   if (name === 'getMonthlyComparison') {
     const first = resolveMonthDateRange(args.month1, args.year1);
