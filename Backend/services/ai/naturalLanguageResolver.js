@@ -3,17 +3,17 @@ import { getUtcMonthKey } from '../salaryReportingService.js';
 /**
  * Roman Urdu & English Financial Synonyms Dictionary
  */
-const ROMAN_URDU_EXPENSE_TERMS = ['kharcha', 'kharchay', 'kharchy', 'kharch', 'akhrajat', 'expense', 'expenses', 'spent', 'cost'];
+const ROMAN_URDU_EXPENSE_TERMS = ['kharcha', 'kharchay', 'kharchy', 'kharch', 'akhrajat', 'expense', 'expenses', 'expens', 'exps', 'spent', 'cost'];
 const ROMAN_URDU_INCOME_TERMS = ['income', 'kamai', 'amadani', 'aamdani', 'wasooli', 'collection'];
 const ROMAN_URDU_RENT_TERMS = ['kiraya', 'kiraye', 'kirayaat', 'rent', 'rental'];
 const ROMAN_URDU_OUTSTANDING_TERMS = ['baqi', 'baki', 'outstanding', 'arrears', 'overdue', 'lena hai', 'pending rent', 'unpaid'];
 const ROMAN_URDU_SALARY_TERMS = ['salary', 'salaries', 'salry', 'tankhwah', 'tankhwa', 'tanha', 'pay', 'payroll', 'muavza', 'earn'];
 const ROMAN_URDU_LOAN_TERMS = ['loan', 'karza', 'qarz', 'advance', 'advance salary', 'peshgi'];
-const ROMAN_URDU_BALANCE_TERMS = ['balance', 'balances', 'paisa', 'paise', 'amount', 'kitna hai', 'kitnay hain'];
+const ROMAN_URDU_BALANCE_TERMS = ['balance', 'balances', 'paisa', 'paise', 'bache hue', 'total balance'];
 const ROMAN_URDU_BANK_TERMS = ['bank', 'banks', 'bankon'];
 const ROMAN_URDU_CASH_TERMS = ['cash', 'cash in hand', 'hath mein cash', 'rokad', 'naqad', 'custodian', 'petty cash'];
 const ROMAN_URDU_LEDGER_TERMS = ['ledger', 'statement', 'hisab', 'hisaab', 'khata', 'tareekh'];
-const ROMAN_URDU_COMPARE_TERMS = ['compare', 'comparison', 'muazna', 'dono ka', 'dono ko compare', 'farq', 'difference'];
+const ROMAN_URDU_COMPARE_TERMS = ['compare', 'comparison', 'muazna', 'dono ka', 'dono ko compare', 'farq', 'difference', 'compare both'];
 
 const MONTH_NAMES_MAP = {
   january: 1, jan: 1, janwari: 1,
@@ -113,7 +113,7 @@ export function resolvePeriodFromText(text, currentRefDate = new Date()) {
   const detectedYear = yearMatch ? parseInt(yearMatch[1], 10) : currYear;
 
   // "Last month" / "Previous month" / "Pichlay month"
-  if (/\b(last\s*month|previous\s*month|pichlay?\s*mahine?|pichla\s*mahina|pichle\s*month|guzashta\s*mahina)\b/i.test(clean)) {
+  if (/\b(last\s*month|previous\s*month|pichl[a-z]*\s*(month|mahina|mahine)|guzashta\s*mahina)\b/i.test(clean)) {
     const prior = new Date(Date.UTC(currYear, currMonth - 2, 1));
     return {
       month: prior.getUTCMonth() + 1,
@@ -241,13 +241,13 @@ export function extractConversationalContext(userMessage, history = []) {
   const currentPeriod = resolvePeriodFromText(userMessage);
 
   // Analyze prior turns (newest to oldest)
-  let lastTopic = null;
-  let lastEmployee = null;
-  let lastProperty = null;
-  let lastAccount = null;
-  let lastCategory = null;
-  let lastPeriod = null;
-  let priorPeriod = null;
+  let lastTopic = undefined;
+  let lastEmployee = undefined;
+  let lastProperty = undefined;
+  let lastAccount = undefined;
+  let lastCategory = undefined;
+  let lastPeriod = undefined;
+  let priorPeriod = undefined;
 
   const validHistory = Array.isArray(history) ? history.filter(h => h && h.role === 'user' && typeof h.content === 'string') : [];
 
@@ -328,6 +328,11 @@ export function resolveIntentAndToolCall(userMessage, context = null) {
     if (monthMatches.length >= 2) {
       m1 = monthMatches[0];
       m2 = monthMatches[1];
+    } else if (inherited.lastPeriod && inherited.priorPeriod) {
+      m1 = inherited.lastPeriod.month;
+      y1 = inherited.lastPeriod.year;
+      m2 = inherited.priorPeriod.month;
+      y2 = inherited.priorPeriod.year;
     } else if (!m2) {
       // Default to current vs last month
       const prior = new Date(Date.UTC(y1, m1 - 2, 1));
