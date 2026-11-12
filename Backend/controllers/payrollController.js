@@ -3165,25 +3165,25 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
       <meta charset="UTF-8">
       <title>Pending Salary Payout Details - ${formattedTitleDate}</title>
       <style>
-        @page { size: A4 portrait; margin: 8mm 8mm 8mm 8mm; }
+        @page { size: A4 portrait; margin: 5mm 6mm 4mm 6mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
           font-family: 'Segoe UI', Arial, sans-serif;
           color: #0f172a;
           background: #fff;
-          font-size: 15px;
-          line-height: 1.35;
+          font-size: 13.5px;
+          line-height: 1.25;
         }
         .header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-bottom: 2.5px solid #0f172a;
-          padding-bottom: 8px;
-          margin-bottom: 12px;
+          border-bottom: 2px solid #0f172a;
+          padding-bottom: 4px;
+          margin-bottom: 6px;
         }
         .header-logo img {
-          height: 48px;
+          height: 36px;
           width: auto;
           object-fit: contain;
         }
@@ -3191,47 +3191,49 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           text-align: right;
         }
         .header-company h1 {
-          font-size: 20px;
+          font-size: 18px;
           font-weight: 900;
           color: #0f172a;
           letter-spacing: 0.5px;
+          line-height: 1.1;
         }
         .header-company p {
-          font-size: 12px;
+          font-size: 11px;
           color: #64748b;
-          margin-top: 2px;
+          margin-top: 1px;
         }
         .title-banner {
           background: #0f172a;
           color: #fff;
-          padding: 10px 14px;
-          border-radius: 6px;
+          padding: 6px 10px;
+          border-radius: 5px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 12px;
+          margin-bottom: 6px;
         }
         .title-banner h2 {
-          font-size: 17px;
+          font-size: 15px;
           font-weight: 800;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.4px;
           text-transform: uppercase;
+          line-height: 1.15;
         }
         .title-banner .meta {
-          font-size: 12px;
+          font-size: 11px;
           color: #cbd5e1;
           font-weight: 600;
         }
         .summary-cards {
           display: flex;
-          gap: 10px;
-          margin-bottom: 14px;
+          gap: 8px;
+          margin-bottom: 6px;
         }
         .summary-card {
           flex: 1;
-          border: 1.5px solid #cbd5e1;
-          border-radius: 6px;
-          padding: 8px 10px;
+          border: 1px solid #cbd5e1;
+          border-radius: 5px;
+          padding: 4px 8px;
           background: #f8fafc;
           text-align: center;
         }
@@ -3240,24 +3242,25 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           border-color: #fdba74;
         }
         .summary-card .lbl {
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 700;
           color: #64748b;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.4px;
         }
         .summary-card .val {
-          font-size: 20px;
+          font-size: 17px;
           font-weight: 900;
           color: #0f172a;
-          margin-top: 2px;
+          line-height: 1.15;
+          margin-top: 1px;
           font-family: 'Courier New', monospace;
         }
         .summary-card.highlight .val {
           color: #c2410c;
         }
         .section-block {
-          margin-bottom: 14px;
+          margin-bottom: 6px;
           page-break-inside: avoid;
         }
         .section-header {
@@ -3265,31 +3268,31 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           align-items: center;
           justify-content: space-between;
           background: #f1f5f9;
-          border-left: 5px solid #4f46e5;
-          padding: 6px 12px;
+          border-left: 4px solid #4f46e5;
+          padding: 3px 8px;
           border-radius: 4px;
-          margin-bottom: 5px;
+          margin-bottom: 3px;
         }
         .section-header h3 {
-          font-size: 14px;
+          font-size: 12.5px;
           font-weight: 800;
           color: #1e1b4b;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.4px;
         }
         .section-header .badge {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
           background: #e0e7ff;
           color: #3730a3;
-          padding: 3px 9px;
-          border-radius: 12px;
+          padding: 1px 7px;
+          border-radius: 10px;
         }
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 5px;
-          font-size: 13px;
+          margin-bottom: 2px;
+          font-size: 12.5px;
         }
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
@@ -3297,21 +3300,22 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           background: #1e293b;
           color: #fff;
           font-weight: 700;
-          padding: 7px 6px;
+          padding: 3.5px 5px;
           text-align: left;
-          font-size: 11px;
+          font-size: 10.5px;
           text-transform: uppercase;
-          letter-spacing: 0.4px;
+          letter-spacing: 0.3px;
           border: 1px solid #334155;
         }
         th.center, td.center { text-align: center; }
         th.right, td.right { text-align: right; }
         td {
-          padding: 6px 6px;
+          padding: 2.5px 5px;
           border: 1px solid #cbd5e1;
           color: #1e293b;
           vertical-align: middle;
-          font-size: 13px;
+          font-size: 12.5px;
+          line-height: 1.2;
         }
         tbody tr:nth-child(even) td { background: #f8fafc; }
         .dept-total-row td {
@@ -3319,39 +3323,40 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           font-weight: 800 !important;
           border-top: 1.5px solid #94a3b8;
           color: #0f172a;
-          font-size: 13px;
+          padding: 2.5px 5px;
+          font-size: 12px;
         }
         .grand-total-box {
-          margin-top: 14px;
-          padding: 10px 14px;
+          margin-top: 6px;
+          padding: 5px 12px;
           background: #0f172a;
           color: #fff;
-          border-radius: 6px;
+          border-radius: 5px;
           display: flex;
           align-items: center;
           justify-content: space-between;
           page-break-inside: avoid;
         }
         .grand-total-box .title {
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 800;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.4px;
         }
         .grand-total-box .amount {
-          font-size: 22px;
+          font-size: 19px;
           font-weight: 900;
           font-family: 'Courier New', monospace;
           color: #38bdf8;
         }
         .footer-note {
-          margin-top: 12px;
-          font-size: 11px;
+          margin-top: 5px;
+          font-size: 9.5px;
           color: #64748b;
           text-align: center;
           border-top: 1px dashed #cbd5e1;
-          padding-top: 6px;
-          line-height: 1.5;
+          padding-top: 3px;
+          line-height: 1.3;
         }
         .nowrap { white-space: nowrap; }
         .mono { font-family: 'Courier New', monospace; font-weight: 700; }
@@ -3359,7 +3364,7 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           font-family: 'Courier New', monospace;
           font-weight: 700;
           font-size: 11.5px;
-          letter-spacing: -0.3px;
+          letter-spacing: -0.2px;
           white-space: nowrap;
         }
       </style>
@@ -3370,7 +3375,7 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
         <div class="header-logo">
           ${logoBase64
             ? `<img src="${logoBase64}" alt="Pixx Technologies" />`
-            : `<div style="font-size:20px;font-weight:900;color:#0f172a;">PIXX TECHNOLOGIES</div>`
+            : `<div style="font-size:18px;font-weight:900;color:#0f172a;">PIXX TECHNOLOGIES</div>`
           }
         </div>
         <div class="header-company">
@@ -3442,7 +3447,7 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
                 `).join('')}
                 <tr class="dept-total-row">
                   <td colspan="3" class="right" style="text-transform:uppercase;letter-spacing:0.5px;">Subtotal for ${deptName}:</td>
-                  <td class="right mono nowrap" style="color:#1e1b4b;font-size:14px;">Rs. ${formatPKR(subtotal)}</td>
+                  <td class="right mono nowrap" style="color:#1e1b4b;font-size:13px;">Rs. ${formatPKR(subtotal)}</td>
                   <td colspan="3"></td>
                 </tr>
               </tbody>
@@ -3476,7 +3481,7 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
       const pdfBuffer = await page.pdf({
         format: 'A4',
         landscape: false,
-        margin: { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' },
+        margin: { top: '5mm', right: '6mm', bottom: '4mm', left: '6mm' },
         printBackground: true,
       });
 
