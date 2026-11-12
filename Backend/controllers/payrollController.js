@@ -3169,8 +3169,8 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
           font-family: 'Segoe UI', Arial, sans-serif;
-          color: #0f172a;
-          background: #fff;
+          color: #000000;
+          background: #ffffff;
           font-size: 13.5px;
           line-height: 1.25;
         }
@@ -3178,7 +3178,7 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-bottom: 2px solid #0f172a;
+          border-bottom: 2.5px solid #000000;
           padding-bottom: 4px;
           margin-bottom: 6px;
         }
@@ -3193,18 +3193,19 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
         .header-company h1 {
           font-size: 18px;
           font-weight: 900;
-          color: #0f172a;
+          color: #000000;
           letter-spacing: 0.5px;
           line-height: 1.1;
         }
         .header-company p {
           font-size: 11px;
-          color: #64748b;
+          color: #000000;
+          font-weight: 600;
           margin-top: 1px;
         }
         .title-banner {
-          background: #0f172a;
-          color: #fff;
+          background: #000000;
+          color: #ffffff;
           padding: 6px 10px;
           border-radius: 5px;
           display: flex;
@@ -3214,15 +3215,16 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
         }
         .title-banner h2 {
           font-size: 15px;
-          font-weight: 800;
+          font-weight: 900;
           letter-spacing: 0.4px;
           text-transform: uppercase;
           line-height: 1.15;
+          color: #ffffff;
         }
         .title-banner .meta {
           font-size: 11px;
-          color: #cbd5e1;
-          font-weight: 600;
+          color: #ffffff;
+          font-weight: 700;
         }
         .summary-cards {
           display: flex;
@@ -3231,33 +3233,33 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
         }
         .summary-card {
           flex: 1;
-          border: 1px solid #cbd5e1;
+          border: 1.5px solid #000000;
           border-radius: 5px;
           padding: 4px 8px;
-          background: #f8fafc;
+          background: #ffffff;
           text-align: center;
         }
         .summary-card.highlight {
-          background: #fff7ed;
-          border-color: #fdba74;
+          background: #ffffff;
+          border: 2px solid #000000;
         }
         .summary-card .lbl {
           font-size: 10px;
-          font-weight: 700;
-          color: #64748b;
+          font-weight: 800;
+          color: #000000;
           text-transform: uppercase;
           letter-spacing: 0.4px;
         }
         .summary-card .val {
           font-size: 17px;
           font-weight: 900;
-          color: #0f172a;
+          color: #000000;
           line-height: 1.15;
           margin-top: 1px;
           font-family: 'Courier New', monospace;
         }
         .summary-card.highlight .val {
-          color: #c2410c;
+          color: #000000;
         }
         .section-block {
           margin-bottom: 6px;
@@ -3267,25 +3269,26 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          background: #f1f5f9;
-          border-left: 4px solid #4f46e5;
+          background: #ffffff;
+          border: 1px solid #000000;
+          border-left: 5px solid #000000;
           padding: 3px 8px;
           border-radius: 4px;
           margin-bottom: 3px;
         }
         .section-header h3 {
           font-size: 12.5px;
-          font-weight: 800;
-          color: #1e1b4b;
+          font-weight: 900;
+          color: #000000;
           text-transform: uppercase;
           letter-spacing: 0.4px;
         }
         .section-header .badge {
           font-size: 11px;
-          font-weight: 700;
-          background: #e0e7ff;
-          color: #3730a3;
-          padding: 1px 7px;
+          font-weight: 800;
+          background: #000000;
+          color: #ffffff;
+          padding: 1px 8px;
           border-radius: 10px;
         }
         table {
@@ -3297,40 +3300,41 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
         th {
-          background: #1e293b;
-          color: #fff;
-          font-weight: 700;
+          background: #000000;
+          color: #ffffff;
+          font-weight: 800;
           padding: 3.5px 5px;
           text-align: left;
           font-size: 10.5px;
           text-transform: uppercase;
           letter-spacing: 0.3px;
-          border: 1px solid #334155;
+          border: 1px solid #000000;
         }
         th.center, td.center { text-align: center; }
         th.right, td.right { text-align: right; }
         td {
           padding: 2.5px 5px;
-          border: 1px solid #cbd5e1;
-          color: #1e293b;
+          border: 1px solid #000000;
+          color: #000000;
           vertical-align: middle;
           font-size: 12.5px;
           line-height: 1.2;
         }
-        tbody tr:nth-child(even) td { background: #f8fafc; }
+        tbody tr:nth-child(even) td { background: #fdfdfd; }
         .dept-total-row td {
-          background: #f1f5f9 !important;
-          font-weight: 800 !important;
-          border-top: 1.5px solid #94a3b8;
-          color: #0f172a;
+          background: #f4f4f4 !important;
+          font-weight: 900 !important;
+          border-top: 2px solid #000000;
+          border-bottom: 1.5px solid #000000;
+          color: #000000;
           padding: 2.5px 5px;
           font-size: 12px;
         }
         .grand-total-box {
           margin-top: 6px;
           padding: 5px 12px;
-          background: #0f172a;
-          color: #fff;
+          background: #000000;
+          color: #ffffff;
           border-radius: 5px;
           display: flex;
           align-items: center;
@@ -3339,33 +3343,36 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
         }
         .grand-total-box .title {
           font-size: 13px;
-          font-weight: 800;
+          font-weight: 900;
           text-transform: uppercase;
           letter-spacing: 0.4px;
+          color: #ffffff;
         }
         .grand-total-box .amount {
           font-size: 19px;
           font-weight: 900;
           font-family: 'Courier New', monospace;
-          color: #38bdf8;
+          color: #ffffff;
         }
         .footer-note {
           margin-top: 5px;
           font-size: 9.5px;
-          color: #64748b;
+          color: #000000;
+          font-weight: 600;
           text-align: center;
-          border-top: 1px dashed #cbd5e1;
+          border-top: 1px solid #000000;
           padding-top: 3px;
           line-height: 1.3;
         }
         .nowrap { white-space: nowrap; }
-        .mono { font-family: 'Courier New', monospace; font-weight: 700; }
+        .mono { font-family: 'Courier New', monospace; font-weight: 800; }
         .iban-text {
           font-family: 'Courier New', monospace;
-          font-weight: 700;
+          font-weight: 800;
           font-size: 11.5px;
           letter-spacing: -0.2px;
           white-space: nowrap;
+          color: #000000;
         }
       </style>
     </head>
@@ -3375,7 +3382,7 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
         <div class="header-logo">
           ${logoBase64
             ? `<img src="${logoBase64}" alt="Pixx Technologies" />`
-            : `<div style="font-size:18px;font-weight:900;color:#0f172a;">PIXX TECHNOLOGIES</div>`
+            : `<div style="font-size:18px;font-weight:900;color:#000000;">PIXX TECHNOLOGIES</div>`
           }
         </div>
         <div class="header-company">
@@ -3438,16 +3445,16 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
                   <tr>
                     <td class="center font-bold">${idx + 1}</td>
                     <td><strong>${emp.name}</strong></td>
-                    <td style="color:#475569;">${emp.designation}</td>
-                    <td class="right mono nowrap" style="color:#0f172a;font-weight:800;">Rs. ${formatPKR(emp.remainingSalary)}</td>
-                    <td>${emp.accountTitle || emp.name}</td>
+                    <td style="color:#000000;font-weight:600;">${emp.designation}</td>
+                    <td class="right mono nowrap" style="color:#000000;font-weight:900;">Rs. ${formatPKR(emp.remainingSalary)}</td>
+                    <td style="color:#000000;">${emp.accountTitle || emp.name}</td>
                     <td class="iban-text">${emp.ibanNumber || '—'}</td>
-                    <td>${emp.bankName || 'Cash'}</td>
+                    <td style="color:#000000;">${emp.bankName || 'Cash'}</td>
                   </tr>
                 `).join('')}
                 <tr class="dept-total-row">
-                  <td colspan="3" class="right" style="text-transform:uppercase;letter-spacing:0.5px;">Subtotal for ${deptName}:</td>
-                  <td class="right mono nowrap" style="color:#1e1b4b;font-size:13px;">Rs. ${formatPKR(subtotal)}</td>
+                  <td colspan="3" class="right" style="text-transform:uppercase;letter-spacing:0.5px;color:#000000;">Subtotal for ${deptName}:</td>
+                  <td class="right mono nowrap" style="color:#000000;font-size:13px;font-weight:900;">Rs. ${formatPKR(subtotal)}</td>
                   <td colspan="3"></td>
                 </tr>
               </tbody>
