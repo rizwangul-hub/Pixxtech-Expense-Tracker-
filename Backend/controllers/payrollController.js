@@ -3165,25 +3165,25 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
       <meta charset="UTF-8">
       <title>Pending Salary Payout Details - ${formattedTitleDate}</title>
       <style>
-        @page { size: A4 portrait; margin: 10mm 10mm 10mm 10mm; }
+        @page { size: A4 portrait; margin: 8mm 8mm 8mm 8mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
           font-family: 'Segoe UI', Arial, sans-serif;
           color: #0f172a;
           background: #fff;
-          font-size: 10px;
-          line-height: 1.4;
+          font-size: 15px;
+          line-height: 1.35;
         }
         .header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-bottom: 2px solid #0f172a;
+          border-bottom: 2.5px solid #0f172a;
           padding-bottom: 8px;
           margin-bottom: 12px;
         }
         .header-logo img {
-          height: 38px;
+          height: 48px;
           width: auto;
           object-fit: contain;
         }
@@ -3191,45 +3191,45 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           text-align: right;
         }
         .header-company h1 {
-          font-size: 15px;
+          font-size: 20px;
           font-weight: 900;
           color: #0f172a;
           letter-spacing: 0.5px;
         }
         .header-company p {
-          font-size: 8.5px;
+          font-size: 12px;
           color: #64748b;
           margin-top: 2px;
         }
         .title-banner {
           background: #0f172a;
           color: #fff;
-          padding: 8px 12px;
+          padding: 10px 14px;
           border-radius: 6px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 14px;
+          margin-bottom: 12px;
         }
         .title-banner h2 {
-          font-size: 12px;
+          font-size: 17px;
           font-weight: 800;
           letter-spacing: 0.5px;
           text-transform: uppercase;
         }
         .title-banner .meta {
-          font-size: 9px;
+          font-size: 12px;
           color: #cbd5e1;
           font-weight: 600;
         }
         .summary-cards {
           display: flex;
           gap: 10px;
-          margin-bottom: 16px;
+          margin-bottom: 14px;
         }
         .summary-card {
           flex: 1;
-          border: 1px solid #cbd5e1;
+          border: 1.5px solid #cbd5e1;
           border-radius: 6px;
           padding: 8px 10px;
           background: #f8fafc;
@@ -3240,14 +3240,14 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           border-color: #fdba74;
         }
         .summary-card .lbl {
-          font-size: 8px;
+          font-size: 11px;
           font-weight: 700;
           color: #64748b;
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
         .summary-card .val {
-          font-size: 14px;
+          font-size: 20px;
           font-weight: 900;
           color: #0f172a;
           margin-top: 2px;
@@ -3257,7 +3257,7 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           color: #c2410c;
         }
         .section-block {
-          margin-bottom: 18px;
+          margin-bottom: 14px;
           page-break-inside: avoid;
         }
         .section-header {
@@ -3265,39 +3265,41 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           align-items: center;
           justify-content: space-between;
           background: #f1f5f9;
-          border-left: 4px solid #4f46e5;
-          padding: 6px 10px;
+          border-left: 5px solid #4f46e5;
+          padding: 6px 12px;
           border-radius: 4px;
-          margin-bottom: 6px;
+          margin-bottom: 5px;
         }
         .section-header h3 {
-          font-size: 11px;
+          font-size: 14px;
           font-weight: 800;
           color: #1e1b4b;
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
         .section-header .badge {
-          font-size: 8.5px;
+          font-size: 12px;
           font-weight: 700;
           background: #e0e7ff;
           color: #3730a3;
-          padding: 2px 7px;
-          border-radius: 10px;
+          padding: 3px 9px;
+          border-radius: 12px;
         }
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 6px;
-          font-size: 9px;
+          margin-bottom: 5px;
+          font-size: 13px;
         }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
         th {
           background: #1e293b;
           color: #fff;
           font-weight: 700;
-          padding: 6px 6px;
+          padding: 7px 6px;
           text-align: left;
-          font-size: 8px;
+          font-size: 11px;
           text-transform: uppercase;
           letter-spacing: 0.4px;
           border: 1px solid #334155;
@@ -3305,10 +3307,11 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
         th.center, td.center { text-align: center; }
         th.right, td.right { text-align: right; }
         td {
-          padding: 5px 6px;
-          border: 1px solid #e2e8f0;
+          padding: 6px 6px;
+          border: 1px solid #cbd5e1;
           color: #1e293b;
           vertical-align: middle;
+          font-size: 13px;
         }
         tbody tr:nth-child(even) td { background: #f8fafc; }
         .dept-total-row td {
@@ -3316,9 +3319,10 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           font-weight: 800 !important;
           border-top: 1.5px solid #94a3b8;
           color: #0f172a;
+          font-size: 13px;
         }
         .grand-total-box {
-          margin-top: 16px;
+          margin-top: 14px;
           padding: 10px 14px;
           background: #0f172a;
           color: #fff;
@@ -3326,28 +3330,38 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
           display: flex;
           align-items: center;
           justify-content: space-between;
+          page-break-inside: avoid;
         }
         .grand-total-box .title {
-          font-size: 11px;
+          font-size: 14px;
           font-weight: 800;
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
         .grand-total-box .amount {
-          font-size: 15px;
+          font-size: 22px;
           font-weight: 900;
           font-family: 'Courier New', monospace;
           color: #38bdf8;
         }
         .footer-note {
-          margin-top: 14px;
-          font-size: 8px;
+          margin-top: 12px;
+          font-size: 11px;
           color: #64748b;
           text-align: center;
           border-top: 1px dashed #cbd5e1;
           padding-top: 6px;
+          line-height: 1.5;
         }
+        .nowrap { white-space: nowrap; }
         .mono { font-family: 'Courier New', monospace; font-weight: 700; }
+        .iban-text {
+          font-family: 'Courier New', monospace;
+          font-weight: 700;
+          font-size: 11.5px;
+          letter-spacing: -0.3px;
+          white-space: nowrap;
+        }
       </style>
     </head>
     <body>
@@ -3356,7 +3370,7 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
         <div class="header-logo">
           ${logoBase64
             ? `<img src="${logoBase64}" alt="Pixx Technologies" />`
-            : `<div style="font-size:16px;font-weight:900;color:#0f172a;">PIXX TECHNOLOGIES</div>`
+            : `<div style="font-size:20px;font-weight:900;color:#0f172a;">PIXX TECHNOLOGIES</div>`
           }
         </div>
         <div class="header-company">
@@ -3405,12 +3419,12 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
             <table>
               <thead>
                 <tr>
-                  <th class="center" style="width: 5%;">#</th>
-                  <th style="width: 20%;">Employee Name</th>
-                  <th style="width: 17%;">Designation</th>
-                  <th class="right" style="width: 13%;">Final Salary</th>
-                  <th style="width: 17%;">Account Title</th>
-                  <th style="width: 18%;">IBAN / Account No</th>
+                  <th class="center" style="width: 4%;">#</th>
+                  <th style="width: 19%;">Employee Name</th>
+                  <th style="width: 15%;">Designation</th>
+                  <th class="right" style="width: 14%;">Final Salary</th>
+                  <th style="width: 16%;">Account Title</th>
+                  <th style="width: 22%;">IBAN / Account No</th>
                   <th style="width: 10%;">Bank Name</th>
                 </tr>
               </thead>
@@ -3420,15 +3434,15 @@ export const generatePendingSalaryBossReportPDF = async (req, res) => {
                     <td class="center font-bold">${idx + 1}</td>
                     <td><strong>${emp.name}</strong></td>
                     <td style="color:#475569;">${emp.designation}</td>
-                    <td class="right mono" style="color:#0f172a;font-weight:800;">Rs. ${formatPKR(emp.remainingSalary)}</td>
+                    <td class="right mono nowrap" style="color:#0f172a;font-weight:800;">Rs. ${formatPKR(emp.remainingSalary)}</td>
                     <td>${emp.accountTitle || emp.name}</td>
-                    <td class="mono" style="font-size:8.5px;">${emp.ibanNumber || '—'}</td>
+                    <td class="iban-text">${emp.ibanNumber || '—'}</td>
                     <td>${emp.bankName || 'Cash'}</td>
                   </tr>
                 `).join('')}
                 <tr class="dept-total-row">
                   <td colspan="3" class="right" style="text-transform:uppercase;letter-spacing:0.5px;">Subtotal for ${deptName}:</td>
-                  <td class="right mono" style="color:#1e1b4b;font-size:10px;">Rs. ${formatPKR(subtotal)}</td>
+                  <td class="right mono nowrap" style="color:#1e1b4b;font-size:14px;">Rs. ${formatPKR(subtotal)}</td>
                   <td colspan="3"></td>
                 </tr>
               </tbody>
