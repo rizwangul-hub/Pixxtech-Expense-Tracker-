@@ -183,8 +183,10 @@ export const getPendingEntries = async (req, res) => {
       andConditions.push({
         $or: [
           { date: { $gte: mStart, $lte: mEnd } },
-          { rentMonth: cleanMonth },
+          { date: null, submittedAt: { $gte: mStart, $lte: mEnd } },
           { date: { $exists: false }, submittedAt: { $gte: mStart, $lte: mEnd } },
+          { date: null, submittedAt: null, rentMonth: cleanMonth },
+          { date: { $exists: false }, submittedAt: { $exists: false }, rentMonth: cleanMonth },
         ],
       });
     } else if (startDate || endDate) {
@@ -2044,8 +2046,10 @@ export const getFilteredVouchersForEvidence = async (query = {}) => {
       andConditions.push({
         $or: [
           { date: { $gte: mStart, $lte: mEnd } },
-          { rentMonth: cleanMonth },
+          { date: null, submittedAt: { $gte: mStart, $lte: mEnd } },
           { date: { $exists: false }, submittedAt: { $gte: mStart, $lte: mEnd } },
+          { date: null, submittedAt: null, rentMonth: cleanMonth },
+          { date: { $exists: false }, submittedAt: { $exists: false }, rentMonth: cleanMonth },
         ],
       });
     } else if (startDate || endDate) {

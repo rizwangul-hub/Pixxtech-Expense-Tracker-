@@ -40,6 +40,7 @@ const getItemMonth = (item) => {
     item.receiptDate ||
     item.transferDate ||
     item.entryData?.date ||
+    item.entryData?.paymentDate ||
     item.submittedAt ||
     item.createdAt;
   if (!rawDate) return '';

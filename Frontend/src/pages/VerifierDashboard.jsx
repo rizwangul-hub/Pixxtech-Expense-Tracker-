@@ -47,32 +47,34 @@ import { isAdmin as checkAdmin, isVerifier } from '../utils/permissions.js';
 
 const getItemMonth = (item) => {
   if (!item) return '';
-  if (item.rentMonth && /^\d{4}-\d{2}$/.test(item.rentMonth)) {
-    return item.rentMonth;
-  }
   const rawDate =
     item.date ||
     item.receiptDate ||
     item.transferDate ||
     item.entryData?.date ||
+    item.entryData?.paymentDate ||
     item.submittedAt ||
     item.createdAt;
-  if (!rawDate) return '';
-  if (typeof rawDate === 'string') {
-    const trimmed = rawDate.trim();
-    if (/^\d{4}-\d{2}/.test(trimmed)) {
-      return trimmed.slice(0, 7);
+  if (rawDate) {
+    if (typeof rawDate === 'string') {
+      const trimmed = rawDate.trim();
+      if (/^\d{4}-\d{2}/.test(trimmed)) {
+        return trimmed.slice(0, 7);
+      }
+    }
+    try {
+      const d = new Date(rawDate);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        return `${y}-${m}`;
+      }
+    } catch {
+      // Fall through to rentMonth
     }
   }
-  try {
-    const d = new Date(rawDate);
-    if (!isNaN(d.getTime())) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      return `${y}-${m}`;
-    }
-  } catch {
-    return '';
+  if (item.rentMonth && /^\d{4}-\d{2}$/.test(item.rentMonth)) {
+    return item.rentMonth;
   }
   return '';
 };
