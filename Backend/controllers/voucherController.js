@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 import Voucher from '../models/Voucher.js';
 import Transaction from '../models/Transaction.js';
 import Account from '../models/Account.js';
+import OtherIncome from '../models/OtherIncome.js';
+import OtherIncomeHead from '../models/OtherIncomeHead.js';
+import RentReceived from '../models/RentReceived.js';
+import PendingEntry from '../models/PendingEntry.js';
 import {
   createVoucherWithLines,
   suggestNextVoucherNumber,
@@ -262,15 +266,29 @@ export const reverseVoucher = async (req, res) => {
  * @route   GET /api/vouchers/print-detail/:id
  * @access  Private (Authenticated)
  */
-export const getVoucherPrintDetail = async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return apiError(res, 'Invalid transaction or voucher ID.', 400);
-    }
+/**
+ * Helper: Resolve transaction or voucher from Transaction, Voucher, OtherIncome, RentReceived, or PendingEntry
+ */
+const resolveTransactionForVoucher = async (id) => {
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
 
-    // 1. Try finding in Transaction model
-    let tx = await Transaction.findById(id)
+  // 1. Transaction by ID
+  let tx = await Transaction.findById(id)
+    .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
+    .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
+    .populate('categoryId', 'name type isRentalHead')
+    .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+    .populate('tenantId', 'tenantName name cnic phone')
+    .populate('createdBy', 'name email role')
+    .lean();
+  if (tx) return tx;
+
+  // 2. Voucher by ID
+  const vHeader = await Voucher.findById(id).lean();
+  if (vHeader) {
+    tx = await Transaction.findOne({
+      $or: [{ voucherId: vHeader._id }, { voucherNo: vHeader.voucherNumber }],
+    })
       .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
       .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
       .populate('categoryId', 'name type isRentalHead')
@@ -278,157 +296,316 @@ export const getVoucherPrintDetail = async (req, res) => {
       .populate('tenantId', 'tenantName name cnic phone')
       .populate('createdBy', 'name email role')
       .lean();
+    if (tx) return tx;
+  }
 
-    // 2. If not found in Transaction, try finding in Voucher model
-    if (!tx) {
-      const vHeader = await Voucher.findById(id).lean();
-      if (vHeader) {
-        tx = await Transaction.findOne({
-          $or: [{ voucherId: vHeader._id }, { voucherNo: vHeader.voucherNumber }],
-        })
-          .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
-          .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
-          .populate('categoryId', 'name type isRentalHead')
-          .populate('propertyId', 'propertyName plazaName propertyCode city address units')
-          .populate('tenantId', 'tenantName name cnic phone')
-          .populate('createdBy', 'name email role')
-          .lean();
-      }
+  // 3. OtherIncome by ID
+  const inc = await OtherIncome.findById(id)
+    .populate('incomeHeadId', 'name type isRentalHead')
+    .populate('receivingAccountId', 'name type bankName accountNumber cashHolder ownerName')
+    .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+    .populate('createdBy', 'name email role')
+    .lean();
+  if (inc) {
+    if (inc.transactionId) {
+      tx = await Transaction.findById(inc.transactionId)
+        .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
+        .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
+        .populate('categoryId', 'name type isRentalHead')
+        .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+        .populate('tenantId', 'tenantName name cnic phone')
+        .populate('createdBy', 'name email role')
+        .lean();
+      if (tx) return tx;
     }
-
-    if (!tx) {
-      return apiError(res, 'Transaction/Voucher record not found.', 404);
+    const incConditions = [];
+    if (inc.voucherNo && inc.voucherNo.trim()) incConditions.push({ voucherNo: inc.voucherNo.trim() });
+    if (inc.receiptNumber && inc.receiptNumber.trim()) {
+      incConditions.push({ voucherNo: inc.receiptNumber.trim() });
+      incConditions.push({ reference: inc.receiptNumber.trim() });
     }
-
-    // Resolve property and unit details
-    let propertyName = tx.propertyId?.propertyName || tx.propertyId?.plazaName || '';
-    let propertyCode = tx.propertyId?.propertyCode || '';
-    let unitName = '';
-    let unitNumber = '';
-
-    if (tx.propertyId?.units && tx.unitId) {
-      const foundUnit = tx.propertyId.units.find(
-        (u) => u._id?.toString() === tx.unitId.toString()
-      );
-      if (foundUnit) {
-        unitName = foundUnit.unitName || '';
-        unitNumber = foundUnit.unitNumber || foundUnit.unitName || '';
-      }
+    if (inc.referenceNumber && inc.referenceNumber.trim()) {
+      incConditions.push({ reference: inc.referenceNumber.trim() });
     }
-
-    // Derive Expense Classification (GENERAL_EXPENSE, PROPERTY_OWN_EXPENSE, UNIT_EXPENSE)
-    let expenseClassification = 'GENERAL_EXPENSE';
-    if (unitName) {
-      expenseClassification = 'UNIT_EXPENSE';
-    } else if (propertyName) {
-      expenseClassification = 'PROPERTY_OWN_EXPENSE';
+    if (incConditions.length > 0) {
+      tx = await Transaction.findOne({ $or: incConditions })
+        .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
+        .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
+        .populate('categoryId', 'name type isRentalHead')
+        .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+        .populate('tenantId', 'tenantName name cnic phone')
+        .populate('createdBy', 'name email role')
+        .lean();
+      if (tx) return tx;
     }
+    // Synthetic transaction from OtherIncome
+    return {
+      _id: inc._id,
+      voucherNo: inc.voucherNo || inc.receiptNumber || `OI-${inc._id.toString().slice(-6)}`,
+      date: inc.receiptDate || inc.createdAt,
+      documentTitle: 'OTHER INCOME RECEIPT / VOUCHER',
+      transactionType: 'INCOME',
+      sourceModule: 'OTHER_INCOME',
+      reportCategory: 'Other Income',
+      status: inc.status || 'POSTED',
+      detail: inc.transactionDetail || inc.description || 'Other Income Receipt',
+      amount: inc.amount,
+      reference: inc.referenceNumber || inc.receiptNumber || '',
+      attachments: inc.attachments || [],
+      drAccountId: inc.receivingAccountId,
+      crAccountId: null,
+      categoryId: inc.incomeHeadId || { name: inc.headName || 'Other Income' },
+      propertyId: inc.propertyId,
+      createdBy: inc.createdBy,
+      checkedBy: inc.checkedBy || (inc.status === 'VOID' ? 'VOIDED' : 'Khurshid Anwar'),
+    };
+  }
 
-    // Derive Document Title & Accounts
-    const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
-    const isOtherIncome = tx.reportCategory === 'Other Income' || tx.sourceModule === 'OTHER_INCOME';
-    const isTransfer = tx.transactionType === 'TRANSFER';
-    const documentTitle = isRent
+  // 4. RentReceived by ID
+  const rentRec = await RentReceived.findById(id)
+    .populate('receivingAccountId', 'name type bankName accountNumber cashHolder ownerName')
+    .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+    .populate('tenantId', 'tenantName name cnic phone')
+    .populate('createdBy', 'name email role')
+    .lean();
+  if (rentRec) {
+    if (rentRec.transactionId) {
+      tx = await Transaction.findById(rentRec.transactionId)
+        .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
+        .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
+        .populate('categoryId', 'name type isRentalHead')
+        .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+        .populate('tenantId', 'tenantName name cnic phone')
+        .populate('createdBy', 'name email role')
+        .lean();
+      if (tx) return tx;
+    }
+    const rentConditions = [];
+    if (rentRec.voucherNo && rentRec.voucherNo.trim()) rentConditions.push({ voucherNo: rentRec.voucherNo.trim() });
+    if (rentRec.receiptNumber && rentRec.receiptNumber.trim()) {
+      rentConditions.push({ voucherNo: rentRec.receiptNumber.trim() });
+      rentConditions.push({ reference: rentRec.receiptNumber.trim() });
+    }
+    if (rentConditions.length > 0) {
+      tx = await Transaction.findOne({ $or: rentConditions })
+        .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
+        .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
+        .populate('categoryId', 'name type isRentalHead')
+        .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+        .populate('tenantId', 'tenantName name cnic phone')
+        .populate('createdBy', 'name email role')
+        .lean();
+      if (tx) return tx;
+    }
+    return {
+      _id: rentRec._id,
+      voucherNo: rentRec.receiptNumber || rentRec.voucherNo || `RCV-${rentRec._id.toString().slice(-6)}`,
+      date: rentRec.receiptDate || rentRec.createdAt,
+      documentTitle: 'RENT RECEIPT / VOUCHER',
+      transactionType: 'INCOME',
+      sourceModule: 'RENT_RECEIVED',
+      reportCategory: 'Rent',
+      status: rentRec.status || 'RECEIVED',
+      detail: rentRec.description || `Rent Collected — ${rentRec.rentMonth || ''}`,
+      amount: rentRec.amount,
+      rentMonth: rentRec.rentMonth,
+      attachments: rentRec.attachments || [],
+      drAccountId: rentRec.receivingAccountId,
+      crAccountId: null,
+      propertyId: rentRec.propertyId,
+      unitId: rentRec.unitId,
+      tenantId: rentRec.tenantId,
+      createdBy: rentRec.createdBy,
+      checkedBy: rentRec.checkedBy || 'Khurshid Anwar',
+    };
+  }
+
+  // 5. PendingEntry by ID
+  const pending = await PendingEntry.findById(id)
+    .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
+    .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
+    .populate('categoryId', 'name type isRentalHead')
+    .populate('propertyId', 'propertyName plazaName propertyCode city address units')
+    .populate('tenantId', 'tenantName name cnic phone')
+    .populate('submittedBy', 'name email role')
+    .lean();
+  if (pending) {
+    return {
+      _id: pending._id,
+      voucherNo: pending.voucherNo || 'PENDING',
+      date: pending.date || pending.submittedAt,
+      documentTitle: 'PENDING ENTRY VOUCHER',
+      transactionType: pending.entryType === 'RENT' || pending.entryType === 'OTHER_INCOME' ? 'INCOME' : pending.entryType,
+      sourceModule: pending.entryType,
+      reportCategory: pending.entryType,
+      status: pending.status || 'PENDING_VERIFICATION',
+      detail: pending.detail || '',
+      amount: pending.amount,
+      rentMonth: pending.rentMonth,
+      attachments: pending.attachments || [],
+      drAccountId: pending.drAccountId,
+      crAccountId: pending.crAccountId,
+      categoryId: pending.categoryId,
+      propertyId: pending.propertyId,
+      unitId: pending.unitId,
+      tenantId: pending.tenantId,
+      createdBy: pending.submittedBy,
+      checkedBy: 'Awaiting Verification',
+    };
+  }
+
+  return null;
+};
+
+/**
+ * Helper: Format transaction / voucher into printable detail structure
+ */
+const formatPrintDetail = (tx) => {
+  // Resolve property and unit details
+  let propertyName = tx.propertyId?.propertyName || tx.propertyId?.plazaName || '';
+  let propertyCode = tx.propertyId?.propertyCode || '';
+  let unitName = '';
+  let unitNumber = '';
+
+  if (tx.propertyId?.units && tx.unitId) {
+    const foundUnit = tx.propertyId.units.find(
+      (u) => u._id?.toString() === tx.unitId.toString()
+    );
+    if (foundUnit) {
+      unitName = foundUnit.unitName || '';
+      unitNumber = foundUnit.unitNumber || foundUnit.unitName || '';
+    }
+  }
+
+  // Derive Expense Classification
+  let expenseClassification = 'GENERAL_EXPENSE';
+  if (unitName) {
+    expenseClassification = 'UNIT_EXPENSE';
+  } else if (propertyName) {
+    expenseClassification = 'PROPERTY_OWN_EXPENSE';
+  }
+
+  // Derive Document Title & Accounts
+  const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
+  const isOtherIncome = tx.reportCategory === 'Other Income' || tx.sourceModule === 'OTHER_INCOME';
+  const isTransfer = tx.transactionType === 'TRANSFER';
+  const documentTitle = tx.documentTitle || (
+    isRent
       ? 'RENT RECEIPT / VOUCHER'
       : isOtherIncome
       ? 'OTHER INCOME RECEIPT / VOUCHER'
       : isTransfer
       ? 'TRANSFER VOUCHER'
-      : 'EXPENSE VOUCHER';
-    const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
-    const categoryTitle = tx.categoryId?.name || (isRent ? 'Rental Income' : (isTransfer ? 'Internal Transfer' : 'General'));
+      : 'EXPENSE VOUCHER'
+  );
+  const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
+  const categoryTitle = tx.categoryId?.name || (isRent ? 'Rental Income' : (isTransfer ? 'Internal Transfer' : 'General'));
 
-    let resolvedDrName = tx.drAccountId?.name || '';
-    let resolvedCrName = tx.crAccountId?.name || '';
+  let resolvedDrName = tx.drAccountId?.name || '';
+  let resolvedCrName = tx.crAccountId?.name || '';
 
-    if (isRent) {
-      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
-        resolvedDrName = 'Cash Custodian / Bank';
-      }
-      resolvedCrName = locationName || 'Rental Income';
-    } else if (isOtherIncome) {
-      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
-        resolvedDrName = 'Receiving Account (Bank/Cash)';
-      }
-      resolvedCrName = categoryTitle || 'Other Income';
-    } else if (isTransfer) {
-      resolvedDrName = resolvedDrName || 'Destination Account';
-      resolvedCrName = resolvedCrName || 'Source Account';
-    } else {
-      const isPropertyExpense =
-        tx.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
-        tx.expenseClassification === 'UNIT_EXPENSE' ||
-        Boolean(tx.propertyId) ||
-        Boolean(tx.unitId);
-      if (isPropertyExpense && locationName) {
-        resolvedDrName = locationName;
-      } else if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
-        resolvedDrName = categoryTitle;
-      }
-      if (!resolvedCrName || /Clearing|External Parties/i.test(resolvedCrName)) {
-        resolvedCrName = 'Payment Account (Bank/Cash)';
-      }
+  if (isRent) {
+    if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
+      resolvedDrName = 'Cash Custodian / Bank';
+    }
+    resolvedCrName = locationName || 'Rental Income';
+  } else if (isOtherIncome) {
+    if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
+      resolvedDrName = 'Receiving Account (Bank/Cash)';
+    }
+    resolvedCrName = categoryTitle || 'Other Income';
+  } else if (isTransfer) {
+    resolvedDrName = resolvedDrName || 'Destination Account';
+    resolvedCrName = resolvedCrName || 'Source Account';
+  } else {
+    const isPropertyExpense =
+      tx.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
+      tx.expenseClassification === 'UNIT_EXPENSE' ||
+      Boolean(tx.propertyId) ||
+      Boolean(tx.unitId);
+    if (isPropertyExpense && locationName) {
+      resolvedDrName = locationName;
+    } else if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
+      resolvedDrName = categoryTitle;
+    }
+    if (!resolvedCrName || /Clearing|External Parties/i.test(resolvedCrName)) {
+      resolvedCrName = 'Payment Account (Bank/Cash)';
+    }
+  }
+
+  return {
+    _id: tx._id,
+    voucherNo: tx.voucherNo,
+    date: tx.date,
+    documentTitle,
+    transactionType: tx.transactionType,
+    sourceModule: tx.sourceModule,
+    reportCategory: tx.reportCategory,
+    status: tx.status || 'POSTED',
+    detail: tx.detail,
+    amount: round2(tx.amount),
+    reference: tx.reference || '',
+    rentMonth: tx.rentMonth || null,
+    expenseClassification,
+    property: {
+      id: tx.propertyId?._id || null,
+      name: propertyName,
+      code: propertyCode,
+      city: tx.propertyId?.city || 'Lahore',
+      address: tx.propertyId?.address || '',
+    },
+    unit: {
+      id: tx.unitId || null,
+      name: unitName,
+      number: unitNumber,
+    },
+    tenant: {
+      id: tx.tenantId?._id || null,
+      name: tx.tenantId?.tenantName || tx.tenantId?.name || '',
+      cnic: tx.tenantId?.cnic || '',
+      phone: tx.tenantId?.phone || '',
+    },
+    drAccount: {
+      id: tx.drAccountId?._id || null,
+      name: resolvedDrName,
+      type: tx.drAccountId?.type || '',
+      bankName: tx.drAccountId?.bankName || '',
+      accountNumber: tx.drAccountId?.accountNumber || '',
+      cashHolder: tx.drAccountId?.cashHolder || '',
+    },
+    crAccount: {
+      id: tx.crAccountId?._id || null,
+      name: resolvedCrName,
+      type: tx.crAccountId?.type || '',
+      bankName: tx.crAccountId?.bankName || '',
+      accountNumber: tx.crAccountId?.accountNumber || '',
+      cashHolder: tx.crAccountId?.cashHolder || '',
+    },
+    category: {
+      id: tx.categoryId?._id || null,
+      name: categoryTitle,
+      type: tx.categoryId?.type || (isRent ? 'INCOME' : 'EXPENSE'),
+      isRentalHead: tx.categoryId?.isRentalHead || isRent,
+    },
+    preparedBy: tx.createdBy?.name || 'Sarfraz Khan (Accountant - Data Entry)',
+    checkedBy: tx.checkedBy || 'Khurshid Anwar',
+    attachments: tx.attachments || [],
+  };
+};
+
+export const getVoucherPrintDetail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return apiError(res, 'Invalid transaction or voucher ID.', 400);
     }
 
-    const printDetail = {
-      _id: tx._id,
-      voucherNo: tx.voucherNo,
-      date: tx.date,
-      documentTitle,
-      transactionType: tx.transactionType,
-      sourceModule: tx.sourceModule,
-      reportCategory: tx.reportCategory,
-      status: tx.status || 'POSTED',
-      detail: tx.detail,
-      amount: round2(tx.amount),
-      reference: tx.reference || '',
-      rentMonth: tx.rentMonth || null,
-      expenseClassification,
-      property: {
-        id: tx.propertyId?._id || null,
-        name: propertyName,
-        code: propertyCode,
-        city: tx.propertyId?.city || 'Lahore',
-        address: tx.propertyId?.address || '',
-      },
-      unit: {
-        id: tx.unitId || null,
-        name: unitName,
-        number: unitNumber,
-      },
-      tenant: {
-        id: tx.tenantId?._id || null,
-        name: tx.tenantId?.tenantName || tx.tenantId?.name || '',
-        cnic: tx.tenantId?.cnic || '',
-        phone: tx.tenantId?.phone || '',
-      },
-      drAccount: {
-        id: tx.drAccountId?._id || null,
-        name: resolvedDrName,
-        type: tx.drAccountId?.type || '',
-        bankName: tx.drAccountId?.bankName || '',
-        accountNumber: tx.drAccountId?.accountNumber || '',
-        cashHolder: tx.drAccountId?.cashHolder || '',
-      },
-      crAccount: {
-        id: tx.crAccountId?._id || null,
-        name: resolvedCrName,
-        type: tx.crAccountId?.type || '',
-        bankName: tx.crAccountId?.bankName || '',
-        accountNumber: tx.crAccountId?.accountNumber || '',
-        cashHolder: tx.crAccountId?.cashHolder || '',
-      },
-      category: {
-        id: tx.categoryId?._id || null,
-        name: categoryTitle,
-        type: tx.categoryId?.type || (isRent ? 'INCOME' : 'EXPENSE'),
-        isRentalHead: tx.categoryId?.isRentalHead || isRent,
-      },
-      preparedBy: tx.createdBy?.name || 'Sarfraz Khan (Accountant - Data Entry)',
-      checkedBy: tx.checkedBy || 'Khurshid Anwar',
-      attachments: tx.attachments || [],
-    };
+    const tx = await resolveTransactionForVoucher(id);
+    if (!tx) {
+      return apiError(res, 'Transaction/Voucher record not found.', 404);
+    }
 
+    const printDetail = formatPrintDetail(tx);
     return apiSuccess(res, printDetail, 'Print voucher detail retrieved successfully.');
   } catch (error) {
     console.error('[Get Voucher Print Detail Error]:', error);
@@ -448,164 +625,12 @@ export const downloadSingleVoucherPDF = async (req, res) => {
       return apiError(res, 'Invalid transaction or voucher ID.', 400);
     }
 
-    // 1. Try finding in Transaction model
-    let tx = await Transaction.findById(id)
-      .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
-      .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
-      .populate('categoryId', 'name type isRentalHead')
-      .populate('propertyId', 'propertyName plazaName propertyCode city address units')
-      .populate('tenantId', 'tenantName name cnic phone')
-      .populate('createdBy', 'name email role')
-      .lean();
-
-    // 2. If not found in Transaction, try finding in Voucher model
-    if (!tx) {
-      const vHeader = await Voucher.findById(id).lean();
-      if (vHeader) {
-        tx = await Transaction.findOne({
-          $or: [{ voucherId: vHeader._id }, { voucherNo: vHeader.voucherNumber }],
-        })
-          .populate('drAccountId', 'name type bankName accountNumber cashHolder ownerName')
-          .populate('crAccountId', 'name type bankName accountNumber cashHolder ownerName')
-          .populate('categoryId', 'name type isRentalHead')
-          .populate('propertyId', 'propertyName plazaName propertyCode city address units')
-          .populate('tenantId', 'tenantName name cnic phone')
-          .populate('createdBy', 'name email role')
-          .lean();
-      }
-    }
-
+    const tx = await resolveTransactionForVoucher(id);
     if (!tx) {
       return apiError(res, 'Transaction/Voucher record not found.', 404);
     }
 
-    // Resolve property and unit details
-    let propertyName = tx.propertyId?.propertyName || tx.propertyId?.plazaName || '';
-    let propertyCode = tx.propertyId?.propertyCode || '';
-    let unitName = '';
-    let unitNumber = '';
-
-    if (tx.propertyId?.units && tx.unitId) {
-      const foundUnit = tx.propertyId.units.find(
-        (u) => u._id?.toString() === tx.unitId.toString()
-      );
-      if (foundUnit) {
-        unitName = foundUnit.unitName || '';
-        unitNumber = foundUnit.unitNumber || foundUnit.unitName || '';
-      }
-    }
-
-    let expenseClassification = 'GENERAL_EXPENSE';
-    if (unitName) {
-      expenseClassification = 'UNIT_EXPENSE';
-    } else if (propertyName) {
-      expenseClassification = 'PROPERTY_OWN_EXPENSE';
-    }
-
-    // Derive Document Title & Accounts
-    const isRent = tx.reportCategory === 'Rent' || tx.sourceModule === 'RENT_RECEIVED';
-    const isOtherIncome = tx.reportCategory === 'Other Income' || tx.sourceModule === 'OTHER_INCOME';
-    const isTransfer = tx.transactionType === 'TRANSFER';
-    const documentTitle = isRent
-      ? 'RENT RECEIPT / VOUCHER'
-      : isOtherIncome
-      ? 'OTHER INCOME RECEIPT / VOUCHER'
-      : isTransfer
-      ? 'TRANSFER VOUCHER'
-      : 'EXPENSE VOUCHER';
-    const locationName = [propertyName, unitName].filter(Boolean).join(' - ');
-    const categoryTitle = tx.categoryId?.name || (isRent ? 'Rental Income' : (isTransfer ? 'Internal Transfer' : 'General'));
-
-    let resolvedDrName = tx.drAccountId?.name || '';
-    let resolvedCrName = tx.crAccountId?.name || '';
-
-    if (isRent) {
-      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
-        resolvedDrName = 'Cash Custodian / Bank';
-      }
-      resolvedCrName = locationName || 'Rental Income';
-    } else if (isOtherIncome) {
-      if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
-        resolvedDrName = 'Receiving Account (Bank/Cash)';
-      }
-      resolvedCrName = categoryTitle || 'Other Income';
-    } else if (isTransfer) {
-      resolvedDrName = resolvedDrName || 'Destination Account';
-      resolvedCrName = resolvedCrName || 'Source Account';
-    } else {
-      const isPropertyExpense =
-        tx.expenseClassification === 'PROPERTY_OWN_EXPENSE' ||
-        tx.expenseClassification === 'UNIT_EXPENSE' ||
-        Boolean(tx.propertyId) ||
-        Boolean(tx.unitId);
-      if (isPropertyExpense && locationName) {
-        resolvedDrName = locationName;
-      } else if (!resolvedDrName || /Clearing|External Parties/i.test(resolvedDrName)) {
-        resolvedDrName = categoryTitle;
-      }
-      if (!resolvedCrName || /Clearing|External Parties/i.test(resolvedCrName)) {
-        resolvedCrName = 'Payment Account (Bank/Cash)';
-      }
-    }
-
-    const printDetail = {
-      _id: tx._id,
-      voucherNo: tx.voucherNo,
-      date: tx.date,
-      documentTitle,
-      transactionType: tx.transactionType,
-      sourceModule: tx.sourceModule,
-      reportCategory: tx.reportCategory,
-      status: tx.status || 'POSTED',
-      detail: tx.detail,
-      amount: round2(tx.amount),
-      reference: tx.reference || '',
-      rentMonth: tx.rentMonth || null,
-      expenseClassification,
-      property: {
-        id: tx.propertyId?._id || null,
-        name: propertyName,
-        code: propertyCode,
-        city: tx.propertyId?.city || 'Lahore',
-        address: tx.propertyId?.address || '',
-      },
-      unit: {
-        id: tx.unitId || null,
-        name: unitName,
-        number: unitNumber,
-      },
-      tenant: {
-        id: tx.tenantId?._id || null,
-        name: tx.tenantId?.tenantName || tx.tenantId?.name || '',
-        cnic: tx.tenantId?.cnic || '',
-        phone: tx.tenantId?.phone || '',
-      },
-      drAccount: {
-        id: tx.drAccountId?._id || null,
-        name: resolvedDrName,
-        type: tx.drAccountId?.type || '',
-        bankName: tx.drAccountId?.bankName || '',
-        accountNumber: tx.drAccountId?.accountNumber || '',
-        cashHolder: tx.drAccountId?.cashHolder || '',
-      },
-      crAccount: {
-        id: tx.crAccountId?._id || null,
-        name: resolvedCrName,
-        type: tx.crAccountId?.type || '',
-        bankName: tx.crAccountId?.bankName || '',
-        accountNumber: tx.crAccountId?.accountNumber || '',
-        cashHolder: tx.crAccountId?.cashHolder || '',
-      },
-      category: {
-        id: tx.categoryId?._id || null,
-        name: categoryTitle,
-        type: tx.categoryId?.type || (isRent ? 'INCOME' : 'EXPENSE'),
-        isRentalHead: tx.categoryId?.isRentalHead || isRent,
-      },
-      preparedBy: tx.createdBy?.name || 'Sarfraz Khan (Accountant - Data Entry)',
-      checkedBy: tx.checkedBy || 'Khurshid Anwar',
-    };
-
+    const printDetail = formatPrintDetail(tx);
     const pdfBuffer = await generateSingleVoucherPDF(printDetail);
     const filename = `Voucher_${tx.voucherNo || tx._id}.pdf`;
 

@@ -583,6 +583,7 @@ export const getLedgerReportData = async (queryParams = {}) => {
         const propLabel = d.propertyId?.propertyName || d.propertyId?.plazaName || '';
         const unitLabel = d.unitId?.unitNumber || d.unitId?.floorName || '';
         combined.push({
+          _id: d._id,
           date: d.dueDate || d.createdAt || new Date(),
           voucherNo: `INV-${d.rentMonth}`,
           type: 'RENT_DUE',
@@ -599,8 +600,11 @@ export const getLedgerReportData = async (queryParams = {}) => {
       rentReceipts.forEach((r) => {
         const propLabel = r.propertyId?.propertyName || r.propertyId?.plazaName || '';
         combined.push({
+          _id: r.transactionId || r._id,
+          transactionId: r.transactionId || null,
+          rentReceivedId: r._id,
           date: r.receiptDate || r.createdAt,
-          voucherNo: r.receiptNumber || `RCV-${r.rentMonth}`,
+          voucherNo: r.voucherNo || r.receiptNumber || `RCV-${r.rentMonth}`,
           type: 'RENT_RECEIVED',
           detail: r.description || `Rent Payment — ${r.rentMonth}${propLabel ? ` | ${propLabel}` : ''}`,
           rentMonth: r.rentMonth,
@@ -621,7 +625,9 @@ export const getLedgerReportData = async (queryParams = {}) => {
         totalCredit += entry.receivedAmount;
 
         return {
-          _id: `TENANT-${idx}`,
+          _id: entry._id || `TENANT-${idx}`,
+          transactionId: entry.transactionId || null,
+          rentReceivedId: entry.rentReceivedId || null,
           date: entry.date,
           voucherNo: entry.voucherNo,
           detail: entry.detail,
@@ -653,7 +659,7 @@ export const getLedgerReportData = async (queryParams = {}) => {
       ledgerTitle = 'Rent Receipts & Collection Ledger';
       entitySubtext = 'Official Rent Allocation &amp; Payments Journal';
 
-      const rentQuery = { status: { $ne: 'REVERSED' } };
+      const rentQuery = { status: { $nin: ['REVERSED', 'VOID', 'DRAFT'] } };
       if (periodStart && periodEnd) rentQuery.receiptDate = { $gte: periodStart, $lte: periodEnd };
       else if (periodStart) rentQuery.receiptDate = { $gte: periodStart };
       else if (periodEnd) rentQuery.receiptDate = { $lte: periodEnd };
@@ -682,9 +688,11 @@ export const getLedgerReportData = async (queryParams = {}) => {
         const locationLabel = [propLabel, unitLabel].filter(Boolean).join(' — ');
 
         return {
-          _id: r._id,
+          _id: r.transactionId || r._id,
+          transactionId: r.transactionId || null,
+          rentReceivedId: r._id,
           date: r.receiptDate,
-          voucherNo: r.receiptNumber || `RCV-${r._id.toString().slice(-6)}`,
+          voucherNo: r.voucherNo || r.receiptNumber || `RCV-${r._id.toString().slice(-6)}`,
           detail: r.description || `Rent Collected — ${r.rentMonth}`,
           transactionType: 'RENT_RECEIVED',
           rentMonth: r.rentMonth,
@@ -814,7 +822,7 @@ export const getLedgerReportData = async (queryParams = {}) => {
     // 6. OTHER INCOME LEDGER
     // =========================================================================
     else if (type === 'OTHER_INCOME') {
-      const incQuery = { status: { $ne: 'REVERSED' } };
+      const incQuery = { status: { $nin: ['REVERSED', 'VOID', 'DRAFT'] } };
 
       if (entityId && entityId !== 'ALL' && mongoose.Types.ObjectId.isValid(entityId)) {
         incQuery.incomeHeadId = entityId;
@@ -867,9 +875,11 @@ export const getLedgerReportData = async (queryParams = {}) => {
         const headDisplay = inc.headName || inc.incomeHeadId?.name || 'Other Income';
 
         return {
-          _id: inc._id,
+          _id: inc.transactionId || inc._id,
+          transactionId: inc.transactionId || null,
+          otherIncomeId: inc._id,
           date: inc.receiptDate,
-          voucherNo: inc.receiptNumber || inc.referenceNumber || `INC-${inc._id.toString().slice(-6)}`,
+          voucherNo: inc.voucherNo || inc.receiptNumber || inc.referenceNumber || `INC-${inc._id.toString().slice(-6)}`,
           detail: inc.transactionDetail || inc.description || 'Other Income Receipt',
           transactionType: 'OTHER_INCOME',
           categoryName: headDisplay,

@@ -690,13 +690,15 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
                         </td>
                         <td className="p-3 whitespace-nowrap text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => setPrintVoucherId(tx._id)}
-                              className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-900 transition"
-                              title="Print A4 Voucher"
-                            >
-                              <Printer size={14} />
-                            </button>
+                            {tx.transactionType !== 'RENT_DUE' && (
+                              <button
+                                onClick={() => setPrintVoucherId(tx.transactionId || tx._id)}
+                                className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-900 transition"
+                                title="Print A4 Voucher"
+                              >
+                                <Printer size={14} />
+                              </button>
+                            )}
                             <button
                               onClick={() => setActiveModalTx(tx)}
                               className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-800 transition"
@@ -798,13 +800,15 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
             </div>
 
             <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-              <button
-                onClick={() => setPrintVoucherId(activeModalTx._id)}
-                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition"
-              >
-                <Printer size={14} />
-                Print A4 Voucher
-              </button>
+              {activeModalTx.transactionType !== 'RENT_DUE' ? (
+                <button
+                  onClick={() => setPrintVoucherId(activeModalTx.transactionId || activeModalTx._id)}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition"
+                >
+                  <Printer size={14} />
+                  Print A4 Voucher
+                </button>
+              ) : <div />}
               <button
                 onClick={() => setActiveModalTx(null)}
                 className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs"
@@ -820,6 +824,7 @@ export function LedgersPage({ currentUser, initialType, initialEntityId }) {
       {printVoucherId && (
         <SingleVoucherPrintModal
           voucherId={printVoucherId}
+          initialData={activeModalTx && (activeModalTx.transactionId === printVoucherId || activeModalTx._id === printVoucherId) ? activeModalTx : null}
           onClose={() => setPrintVoucherId(null)}
         />
       )}
