@@ -78,7 +78,8 @@ export const computeMonthRentalSummary = (properties, agreementsByUnitId, rentTr
       const matchingTransactions = rentTransactions.filter(
         (transaction) =>
           transaction.propertyId?.toString() === plaza._id.toString() &&
-          transaction.unitId?.toString() === uId
+          transaction.unitId?.toString() === uId &&
+          transaction.transactionType !== 'EXPENSE'
       );
       const received = round2(
         matchingTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
@@ -190,8 +191,10 @@ export const computeMonthRentalSummary = (properties, agreementsByUnitId, rentTr
  * Loads rental summary for any month with automatic dynamic carry forward from 2026-09 onwards
  */
 export const getRentalSummaryWithCarryForward = async (targetMonthStr, { rentOnly = false } = {}) => {
-  // Optional strict scope for assistant reports; existing report behavior is preserved.
-  const rentScope = rentOnly ? { transactionType: 'INCOME', reportCategory: 'Rent' } : {};
+  // Exclude expenses so that unit utility/maintenance payments are never treated as rent collections.
+  const rentScope = rentOnly
+    ? { transactionType: 'INCOME', reportCategory: 'Rent' }
+    : { transactionType: { $ne: 'EXPENSE' } };
   const properties = await Property.find({})
     .populate('units.defaultReceivingAccountId', 'name type currentBalance')
     .sort({ plazaName: 1 })
