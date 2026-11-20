@@ -13,7 +13,7 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/:id', getUnitById);
-router.put('/:id', requireRole('ADMIN'), validateUnit, updateUnit);
-router.patch('/:id/status', requireRole('ADMIN'), toggleUnitStatus);
+router.put('/:id', requireRole('ADMIN', 'VERIFIER', 'DATA_ENTRY'), validateUnit, updateUnit);
+router.patch('/:id/status', requireRole('ADMIN', 'VERIFIER', 'DATA_ENTRY'), toggleUnitStatus);
 
 export default router;

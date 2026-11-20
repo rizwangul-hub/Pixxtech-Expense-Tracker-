@@ -319,6 +319,10 @@ export const agreementsAPI = {
     const res = await api.patch(`/agreements/${id}/status`, statusData);
     return res.data;
   },
+  deleteAgreement: async (id) => {
+    const res = await api.delete(`/agreements/${id}`);
+    return res.data;
+  },
 };
 
 export const rentDueAPI = {

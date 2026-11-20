@@ -18,15 +18,15 @@ router.use(protect);
 
 // Collection routes
 router.get('/', getProperties);
-router.post('/', requireRole('ADMIN', 'VERIFIER'), validateProperty, createProperty);
+router.post('/', requireRole('ADMIN', 'VERIFIER', 'DATA_ENTRY'), validateProperty, createProperty);
 
 // Single property routes
 router.get('/:id', getPropertyById);
-router.put('/:id', requireRole('ADMIN', 'VERIFIER'), validateProperty, updateProperty);
-router.patch('/:id/status', requireRole('ADMIN', 'VERIFIER'), togglePropertyStatus);
+router.put('/:id', requireRole('ADMIN', 'VERIFIER', 'DATA_ENTRY'), validateProperty, updateProperty);
+router.patch('/:id/status', requireRole('ADMIN', 'VERIFIER', 'DATA_ENTRY'), togglePropertyStatus);
 
 // Property units routes
 router.get('/:id/units', getPropertyUnits);
-router.post('/:id/units', requireRole('ADMIN', 'VERIFIER'), validateUnit, addUnit);
+router.post('/:id/units', requireRole('ADMIN', 'VERIFIER', 'DATA_ENTRY'), validateUnit, addUnit);
 
 export default router;

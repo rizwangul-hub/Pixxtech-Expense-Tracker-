@@ -15,13 +15,15 @@ import {
   RefreshCw,
   Calendar,
   Layers,
+  Trash2,
 } from 'lucide-react';
 import { agreementsAPI, propertiesAPI, tenantsAPI } from '../services/api.js';
 import { formatPKR, formatDate } from '../utils/formatters.js';
-import { isAdmin } from '../utils/permissions.js';
+import { isAdmin, isDataEntry, isVerifier } from '../utils/permissions.js';
 
 export function AgreementsPage({ currentUser, onSelectTenant }) {
   const userIsAdmin = isAdmin(currentUser);
+  const canManage = userIsAdmin || isDataEntry(currentUser) || isVerifier(currentUser);
 
   const [agreements, setAgreements] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -237,6 +239,20 @@ export function AgreementsPage({ currentUser, onSelectTenant }) {
     }
   };
 
+  const handleDeleteAgreement = async (agr) => {
+    const confirmMsg = `Are you sure you want to permanently delete agreement "${agr.agreementNumber}" for ${agr.propertyId?.plazaName || 'property'} (${agr.unitId?.unitName || 'unit'})?\n\nThis will remove the agreement and update the unit occupancy status.`;
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    try {
+      await agreementsAPI.deleteAgreement(agr._id);
+      loadAgreements();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete agreement.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -254,7 +270,7 @@ export function AgreementsPage({ currentUser, onSelectTenant }) {
         </div>
 
         <div className="flex items-center gap-2">
-          {userIsAdmin && (
+          {canManage && (
             <button
               onClick={handleOpenCreateModal}
               className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg text-sm transition flex items-center gap-2 shadow-lg shadow-emerald-900/30"
@@ -499,7 +515,7 @@ export function AgreementsPage({ currentUser, onSelectTenant }) {
 
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right">
-                      {userIsAdmin && (
+                      {canManage && (
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => handleOpenEditModal(agr)}
@@ -526,6 +542,14 @@ export function AgreementsPage({ currentUser, onSelectTenant }) {
                               <CheckCircle2 size={14} />
                             </button>
                           )}
+
+                          <button
+                            onClick={() => handleDeleteAgreement(agr)}
+                            className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition"
+                            title="Delete Agreement"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       )}
                     </td>

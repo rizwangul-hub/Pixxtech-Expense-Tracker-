@@ -24,7 +24,7 @@ import {
   UNIT_STATUS_CONFIG,
   UNIT_TYPE_CONFIG,
 } from '../constants/propertyTypes.js';
-import { isAdmin } from '../utils/permissions.js';
+import { isAdmin, isDataEntry, isVerifier } from '../utils/permissions.js';
 
 export function PropertyDetailPage({ propertyId, currentUser, onBack }) {
   const [property, setProperty] = useState(null);
@@ -63,6 +63,7 @@ export function PropertyDetailPage({ propertyId, currentUser, onBack }) {
   const [statusChanging, setStatusChanging] = useState(false);
 
   const userIsAdmin = isAdmin(currentUser);
+  const canManageUnits = userIsAdmin || isDataEntry(currentUser) || isVerifier(currentUser);
 
   const fetchPropertyAndUnits = async () => {
     setLoading(true);
@@ -335,7 +336,7 @@ export function PropertyDetailPage({ propertyId, currentUser, onBack }) {
             )}
           </div>
 
-          {userIsAdmin && (
+          {canManageUnits && (
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={handleOpenAddUnit}
@@ -539,12 +540,12 @@ export function PropertyDetailPage({ propertyId, currentUser, onBack }) {
                       {/* Status */}
                       <td className="px-4 py-3.5">
                         <button
-                          disabled={!userIsAdmin}
+                          disabled={!canManageUnits}
                           onClick={() => setStatusModalUnit(u)}
                           className={`text-[10px] font-semibold px-2 py-0.5 rounded border flex items-center gap-1.5 ${statusConf.badgeColor} ${
-                            userIsAdmin ? 'hover:brightness-125 cursor-pointer' : ''
+                            canManageUnits ? 'hover:brightness-125 cursor-pointer' : ''
                           }`}
-                          title={userIsAdmin ? 'Click to change status' : ''}
+                          title={canManageUnits ? 'Click to change status' : ''}
                         >
                           <span className={`h-1.5 w-1.5 rounded-full ${statusConf.dotColor}`} />
                           <span>{statusConf.label}</span>
@@ -562,7 +563,7 @@ export function PropertyDetailPage({ propertyId, currentUser, onBack }) {
 
                       {/* Actions */}
                       <td className="px-4 py-3.5 text-right">
-                        {userIsAdmin ? (
+                        {canManageUnits ? (
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => handleOpenEditUnit(u)}

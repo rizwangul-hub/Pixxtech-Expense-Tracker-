@@ -1,4 +1,5 @@
 import Property from '../models/Property.js';
+import RentalAgreement from '../models/RentalAgreement.js';
 import RentDue from '../models/RentDue.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { recordAuditLog } from '../services/auditService.js';
@@ -625,6 +626,10 @@ export const updateUnit = async (req, res) => {
       await RentDue.updateMany(
         { unitId: unit._id, rentMonth: { $gte: currentMonthStr }, paidAmount: { $lte: 0 } },
         { $set: { expectedRentAmount: unit.agreedRent, remainingAmount: unit.agreedRent } }
+      );
+      await RentalAgreement.updateMany(
+        { unitId: unit._id, status: 'ACTIVE' },
+        { $set: { monthlyRent: unit.agreedRent } }
       );
     }
     if (dueDay !== undefined) unit.dueDay = Math.min(31, Math.max(1, Number(dueDay) || 1));

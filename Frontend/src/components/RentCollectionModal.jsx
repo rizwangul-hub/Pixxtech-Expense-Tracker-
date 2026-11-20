@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { rentAPI, uploadAPI } from '../services/api.js';
+import { rentAPI, uploadAPI, unitsAPI } from '../services/api.js';
 import { EvidenceImageUpload } from './EvidenceImageUpload.jsx';
 import { AiNarrationButton } from './AiNarrationButton.jsx';
 import {
@@ -14,6 +14,7 @@ import {
   Receipt,
   FileText,
   Sparkles,
+  Edit2,
 } from 'lucide-react';
 
 const formatPKR = (val) => {
@@ -52,6 +53,34 @@ export const RentCollectionModal = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+
+  // Property Unit Rent Editing State (for Sarfraz Khan / Data Entry)
+  const [isEditingRent, setIsEditingRent] = useState(false);
+  const [newAgreedRent, setNewAgreedRent] = useState('');
+  const [savingRent, setSavingRent] = useState(false);
+  const [rentUpdateSuccess, setRentUpdateSuccess] = useState('');
+
+  const handleSaveRent = async () => {
+    if (!selectedUnit || newAgreedRent === '' || isNaN(Number(newAgreedRent))) return;
+    setSavingRent(true);
+    setRentUpdateSuccess('');
+    try {
+      const parsedRent = Math.max(0, Number(newAgreedRent));
+      await unitsAPI.updateUnit(selectedUnit._id, { agreedRent: parsedRent });
+      setSelectedUnit((prev) => ({ ...prev, agreedRent: parsedRent }));
+      setUnits((prev) =>
+        prev.map((u) => (u._id === selectedUnit._id ? { ...u, agreedRent: parsedRent } : u))
+      );
+      setAmountPaid(String(parsedRent));
+      setRentUpdateSuccess(`Rent updated to Rs. ${parsedRent.toLocaleString()} successfully!`);
+      setIsEditingRent(false);
+      setTimeout(() => setRentUpdateSuccess(''), 4000);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update agreed rent.');
+    } finally {
+      setSavingRent(false);
+    }
+  };
 
   // Helper to generate clear default narration
   const generateDefaultNarration = (propId, unitObj, month, noteVal) => {
@@ -298,11 +327,60 @@ export const RentCollectionModal = ({
               <div className="p-2 bg-slate-800 rounded text-slate-400">
                 <CreditCard className="w-4 h-4" />
               </div>
-              <div>
-                <span className="text-[11px] text-slate-400 block">Agreed Monthly Rent</span>
-                <span className="text-sm font-mono font-bold text-emerald-400">
-                  {formatPKR(selectedUnit.agreedRent)}
-                </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] text-slate-400 block">Agreed Monthly Rent</span>
+                  {!isEditingRent && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewAgreedRent(String(selectedUnit.agreedRent || ''));
+                        setIsEditingRent(true);
+                      }}
+                      className="text-[10px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-0.5 cursor-pointer transition"
+                      title="Edit agreed rent for this unit"
+                    >
+                      <Edit2 className="w-2.5 h-2.5" /> Edit Rent
+                    </button>
+                  )}
+                </div>
+                {isEditingRent ? (
+                  <div className="mt-1 flex items-center gap-1">
+                    <input
+                      type="number"
+                      step="any"
+                      value={newAgreedRent}
+                      onChange={(e) => setNewAgreedRent(e.target.value)}
+                      className="w-24 bg-slate-900 border border-blue-500 rounded px-1.5 py-0.5 text-xs text-white font-mono font-bold focus:outline-none"
+                      placeholder="New Rent"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      disabled={savingRent}
+                      onClick={handleSaveRent}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded transition disabled:opacity-50"
+                    >
+                      {savingRent ? '...' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingRent(false)}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-bold px-1.5 py-0.5 rounded transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-sm font-mono font-bold text-emerald-400">
+                    {formatPKR(selectedUnit.agreedRent)}
+                  </span>
+                )}
+                {rentUpdateSuccess && (
+                  <span className="text-[10px] text-emerald-400 block mt-0.5 font-semibold">
+                    {rentUpdateSuccess}
+                  </span>
+                )}
               </div>
             </div>
 

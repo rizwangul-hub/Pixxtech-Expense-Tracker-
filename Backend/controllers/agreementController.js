@@ -477,11 +477,55 @@ export const toggleAgreementStatus = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Delete rental agreement
+ * @route   DELETE /api/agreements/:id
+ * @access  Private (ADMIN, VERIFIER, DATA_ENTRY)
+ */
+export const deleteAgreement = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return apiError(res, 'Invalid agreement ID format.', 400);
+    }
+
+    const agreement = await RentalAgreement.findById(id);
+    if (!agreement) {
+      return apiError(res, 'Rental agreement not found.', 404);
+    }
+
+    const { propertyId, unitId, agreementNumber } = agreement;
+
+    // Delete future or unpaid RentDue records associated strictly with this agreement
+    await RentDue.deleteMany({
+      agreementId: id,
+      paidAmount: { $lte: 0 },
+    });
+
+    // Delete the agreement
+    await RentalAgreement.findByIdAndDelete(id);
+
+    // Re-synchronize unit occupancy state
+    await syncUnitOccupancy(propertyId, unitId);
+
+    return apiSuccess(
+      res,
+      { id, agreementNumber },
+      `Rental Agreement '${agreementNumber}' deleted successfully.`
+    );
+  } catch (error) {
+    console.error('[Delete Agreement Error]:', error);
+    return apiError(res, error.message || 'Failed to delete rental agreement.', 500);
+  }
+};
+
 export default {
   getAgreements,
   getAgreementById,
   createAgreement,
   updateAgreement,
   toggleAgreementStatus,
+  deleteAgreement,
   getNextNumber,
 };

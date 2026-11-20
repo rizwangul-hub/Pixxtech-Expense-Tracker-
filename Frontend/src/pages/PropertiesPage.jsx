@@ -20,7 +20,7 @@ import {
   PROPERTY_STATUS_LIST,
   PROPERTY_TYPE_CONFIG,
 } from '../constants/propertyTypes.js';
-import { isAdmin } from '../utils/permissions.js';
+import { isAdmin, isDataEntry, isVerifier } from '../utils/permissions.js';
 
 let propertiesPageCache = {
   properties: [],
@@ -72,6 +72,7 @@ export function PropertiesPage({ currentUser, onSelectProperty }) {
   });
 
   const userIsAdmin = isAdmin(currentUser);
+  const canManage = userIsAdmin || isDataEntry(currentUser) || isVerifier(currentUser);
 
   const fetchProperties = async (silent = false) => {
     if (!silent && !propertiesPageCache.isLoaded) {
@@ -240,7 +241,7 @@ export function PropertiesPage({ currentUser, onSelectProperty }) {
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
-          {userIsAdmin && (
+          {canManage && (
             <button
               onClick={handleOpenAddModal}
               className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm"
@@ -508,7 +509,7 @@ export function PropertiesPage({ currentUser, onSelectProperty }) {
                             Units ({total})
                           </button>
 
-                          {userIsAdmin && (
+                          {canManage && (
                             <>
                               <button
                                 onClick={() => handleOpenEditModal(prop)}
