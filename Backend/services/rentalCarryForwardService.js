@@ -1,5 +1,7 @@
+import mongoose from 'mongoose';
 import Property from '../models/Property.js';
 import RentalAgreement from '../models/RentalAgreement.js';
+import RentDue from '../models/RentDue.js';
 import Transaction from '../models/Transaction.js';
 import { getAgreedMonthlyRent } from './rentPricing.js';
 import { round2 } from './ledgerService.js';
@@ -32,10 +34,19 @@ export const getPreviousMonthStr = (monthStr) => {
  * Calculates rental summary for a single month given prior balances
  * @param {Array} properties
  * @param {Map} agreementsByUnitId
+ * @param {Array} rentTransactions
  * @param {string} periodString YYYY-MM
  * @param {Map} [priorBalanceMap] Optional map of unitId -> prior balance number
+ * @param {Map} [rentDuesByUnitAndMonth] Optional map of `${unitId}_${periodString}` -> expectedRentAmount
  */
-export const computeMonthRentalSummary = (properties, agreementsByUnitId, rentTransactions, periodString, priorBalanceMap = null) => {
+export const computeMonthRentalSummary = (
+  properties,
+  agreementsByUnitId,
+  rentTransactions,
+  periodString,
+  priorBalanceMap = null,
+  rentDuesByUnitAndMonth = null
+) => {
   let grandTotalAgreed = 0;
   let grandTotalPrior = 0;
   let grandTotalCurrentDue = 0;
@@ -54,7 +65,15 @@ export const computeMonthRentalSummary = (properties, agreementsByUnitId, rentTr
     const units = (plaza.units || []).map((unit) => {
       const uId = unit._id.toString();
       const agreement = agreementsByUnitId.get(uId);
-      const agreed = round2(getAgreedMonthlyRent(unit, agreement));
+      let agreed = round2(getAgreedMonthlyRent(unit, agreement));
+
+      // Use month-specific agreed rent from RentDue if present to ensure past months retain historical rent
+      if (rentDuesByUnitAndMonth) {
+        const periodKey = `${uId}_${periodString}`;
+        if (rentDuesByUnitAndMonth.has(periodKey)) {
+          agreed = round2(rentDuesByUnitAndMonth.get(periodKey));
+        }
+      }
 
       // Prior receivable calculation:
       let prior = 0;
@@ -211,6 +230,22 @@ export const getRentalSummaryWithCarryForward = async (targetMonthStr, { rentOnl
     activeAgreements.map((agreement) => [agreement.unitId.toString(), agreement])
   );
 
+  // Load historical month-specific RentDue expectations so prior months retain their billed rent
+  const validUnitObjectIds = allUnitIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+  let allRentDues = [];
+  if (validUnitObjectIds.length > 0) {
+    allRentDues = await RentDue.find({
+      unitId: { $in: validUnitObjectIds }
+    }).select('unitId rentMonth expectedRentAmount').lean();
+  }
+
+  const rentDuesByUnitAndMonth = new Map();
+  for (const rd of allRentDues) {
+    if (rd.unitId && rd.rentMonth) {
+      rentDuesByUnitAndMonth.set(`${rd.unitId.toString()}_${rd.rentMonth}`, rd.expectedRentAmount);
+    }
+  }
+
   // If viewing 2026-09 or earlier, 2026-09 uses baseline julyReceivable directly
   if (targetMonthStr <= '2026-09') {
     const [y, m] = targetMonthStr.split('-').map(Number);
@@ -229,7 +264,7 @@ export const getRentalSummaryWithCarryForward = async (targetMonthStr, { rentOnl
       .populate('drAccountId', 'name type')
       .lean();
 
-    return computeMonthRentalSummary(properties, agreementsByUnitId, rentTransactions, targetMonthStr, null);
+    return computeMonthRentalSummary(properties, agreementsByUnitId, rentTransactions, targetMonthStr, null, rentDuesByUnitAndMonth);
   }
 
   // If viewing month > 2026-09 (e.g. 2026-10, 2026-11), chain forward from 2026-09!
@@ -248,7 +283,7 @@ export const getRentalSummaryWithCarryForward = async (targetMonthStr, { rentOnl
     .populate('drAccountId', 'name type')
     .lean();
 
-  let currentSummary = computeMonthRentalSummary(properties, agreementsByUnitId, sepTxs, '2026-09', null);
+  let currentSummary = computeMonthRentalSummary(properties, agreementsByUnitId, sepTxs, '2026-09', null, rentDuesByUnitAndMonth);
   let currentMonthCursor = '2026-09';
 
   // Build closing balance map from 2026-09
@@ -284,7 +319,7 @@ export const getRentalSummaryWithCarryForward = async (targetMonthStr, { rentOnl
       .populate('drAccountId', 'name type')
       .lean();
 
-    currentSummary = computeMonthRentalSummary(properties, agreementsByUnitId, nextTxs, nextMonthStr, closingBalanceMap);
+    currentSummary = computeMonthRentalSummary(properties, agreementsByUnitId, nextTxs, nextMonthStr, closingBalanceMap, rentDuesByUnitAndMonth);
     currentMonthCursor = nextMonthStr;
 
     // Update closing balance map for next iteration

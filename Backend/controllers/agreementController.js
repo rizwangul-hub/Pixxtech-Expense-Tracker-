@@ -369,7 +369,16 @@ export const updateAgreement = async (req, res) => {
     if (endDate !== undefined) agreement.endDate = new Date(endDate);
     if (renewalDate !== undefined) agreement.renewalDate = renewalDate ? new Date(renewalDate) : null;
     if (dueDay !== undefined) agreement.dueDay = Number(dueDay);
-    if (monthlyRent !== undefined) agreement.monthlyRent = Number(monthlyRent);
+    if (monthlyRent !== undefined) {
+      agreement.monthlyRent = Number(monthlyRent);
+      if (Number(monthlyRent) !== oldMonthlyRent) {
+        const currentMonthStr = new Date().toISOString().slice(0, 7);
+        await RentDue.updateMany(
+          { agreementId: agreement._id, rentMonth: { $gte: currentMonthStr }, paidAmount: { $lte: 0 } },
+          { $set: { expectedRentAmount: Number(monthlyRent), remainingAmount: Number(monthlyRent) } }
+        );
+      }
+    }
     if (previousRent !== undefined) agreement.previousRent = Number(previousRent);
     if (securityDeposit !== undefined) agreement.securityDeposit = Number(securityDeposit);
     if (rentIncreaseAmount !== undefined) agreement.rentIncreaseAmount = Number(rentIncreaseAmount);

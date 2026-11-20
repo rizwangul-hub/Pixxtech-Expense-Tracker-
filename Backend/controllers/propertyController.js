@@ -1,4 +1,5 @@
 import Property from '../models/Property.js';
+import RentDue from '../models/RentDue.js';
 import { apiSuccess, apiError } from '../utils/apiResponse.js';
 import { recordAuditLog } from '../services/auditService.js';
 
@@ -618,7 +619,14 @@ export const updateUnit = async (req, res) => {
     if (description !== undefined) unit.description = description.trim();
     if (notes !== undefined) unit.notes = notes.trim();
     if (tenantName !== undefined) unit.tenantName = tenantName ? tenantName.trim() : null;
-    if (agreedRent !== undefined) unit.agreedRent = Math.max(0, Number(agreedRent) || 0);
+    if (agreedRent !== undefined) {
+      unit.agreedRent = Math.max(0, Number(agreedRent) || 0);
+      const currentMonthStr = new Date().toISOString().slice(0, 7);
+      await RentDue.updateMany(
+        { unitId: unit._id, rentMonth: { $gte: currentMonthStr }, paidAmount: { $lte: 0 } },
+        { $set: { expectedRentAmount: unit.agreedRent, remainingAmount: unit.agreedRent } }
+      );
+    }
     if (dueDay !== undefined) unit.dueDay = Math.min(31, Math.max(1, Number(dueDay) || 1));
     if (renewalDate !== undefined) unit.renewalDate = renewalDate ? new Date(renewalDate) : null;
     unit.updatedBy = req.user._id;
