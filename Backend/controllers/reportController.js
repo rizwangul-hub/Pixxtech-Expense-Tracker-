@@ -146,7 +146,15 @@ export const getMonthlyFinancialSummary = async (req, res) => {
       receivedAmount: plaza.subtotals.receivedAmount,
       outstanding: plaza.subtotals.outstandingReceivable,
       collectionRate: plaza.subtotals.collectionRate,
-      units: plaza.units.map((u) => ({
+      units: (plaza.units || [])
+        .filter((u) => !(
+          (Number(u.agreedRent) || 0) === 0 &&
+          (Number(u.receivedAmount) || 0) === 0 &&
+          (Number(u.outstandingReceivable) || 0) === 0 &&
+          (Number(u.priorMonthReceivable) || 0) === 0 &&
+          (Number(u.advanceRentReceived) || 0) === 0
+        ))
+        .map((u) => ({
         unitId: u.unitId,
         unitName: u.unitName,
         tenantName: u.tenantName,

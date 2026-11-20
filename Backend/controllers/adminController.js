@@ -610,11 +610,22 @@ export const getRentalIncomeSummary = async (req, res) => {
     const { periodString } = parseMonthQuery(req.query.month);
     const summary = await getRentalSummaryWithCarryForward(periodString);
 
+    const filteredPlazas = (summary.plazas || []).map((plaza) => ({
+      ...plaza,
+      units: (plaza.units || []).filter((u) => !(
+        (Number(u.agreedRent) || 0) === 0 &&
+        (Number(u.receivedAmount) || 0) === 0 &&
+        (Number(u.outstandingReceivable) || 0) === 0 &&
+        (Number(u.priorMonthReceivable) || 0) === 0 &&
+        (Number(u.advanceRentReceived) || 0) === 0
+      )),
+    }));
+
     return res.status(200).json({
       success: true,
       period: periodString,
       grandTotals: summary.grandTotals,
-      plazas: summary.plazas,
+      plazas: filteredPlazas,
     });
   } catch (error) {
     console.error('Error in getRentalIncomeSummary:', error);

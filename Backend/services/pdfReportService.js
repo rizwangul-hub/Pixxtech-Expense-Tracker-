@@ -442,7 +442,15 @@ export const generateMonthlyFundsReport = async (monthYear) => {
   const rentalSummary = await getRentalSummaryWithCarryForward(periodName);
 
   const plazaList = rentalSummary.plazas.map((plaza) => {
-    const units = (plaza.units || []).map((u) => {
+    const units = (plaza.units || [])
+      .filter((u) => !(
+        (Number(u.agreedRent) || 0) === 0 &&
+        (Number(u.receivedAmount) || 0) === 0 &&
+        (Number(u.outstandingReceivable) || 0) === 0 &&
+        (Number(u.priorMonthReceivable) || 0) === 0 &&
+        (Number(u.advanceRentReceived) || 0) === 0
+      ))
+      .map((u) => {
       const prior = round2(u.priorMonthReceivable || 0);
       return {
         unitName: `${u.unitName}${u.tenantName && u.tenantName !== 'Unassigned' ? ` - ${u.tenantName}` : ''}`,

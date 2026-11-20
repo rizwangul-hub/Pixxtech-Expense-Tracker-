@@ -1056,7 +1056,13 @@ export const AdminPublisherDashboard = ({ user, onLogout, onSwitchToDataEntry })
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-800/60 font-sans">
-                                {plaza.units?.map((u) => (
+                                {plaza.units?.filter((u) => !(
+                                  (Number(u.agreedRent) || 0) === 0 &&
+                                  (Number(u.receivedAmount) || 0) === 0 &&
+                                  (Number(u.outstandingReceivable) || 0) === 0 &&
+                                  (Number(u.priorMonthReceivable) || 0) === 0 &&
+                                  (Number(u.advanceRentReceived) || 0) === 0
+                                )).map((u) => (
                                   <tr key={u.unitId} className="hover:bg-slate-800/30 text-slate-300">
                                     <td className="py-2 px-3 font-semibold text-white">
                                       {u.unitName}

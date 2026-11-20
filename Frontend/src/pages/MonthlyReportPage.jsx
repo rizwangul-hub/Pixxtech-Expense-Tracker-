@@ -169,7 +169,13 @@ function PropertySection({ plaza }) {
               </tr>
             </thead>
             <tbody>
-              {plaza.units.map((unit) => (
+              {(plaza.units || []).filter((u) => !(
+                (Number(u.agreedRent) || 0) === 0 &&
+                (Number(u.receivedAmount) || 0) === 0 &&
+                (Number(u.outstanding) || 0) === 0 &&
+                (Number(u.priorMonthReceivable) || 0) === 0 &&
+                (Number(u.advanceRentReceived) || 0) === 0
+              )).map((unit) => (
                 <tr
                   key={unit.unitId}
                   className="border-t border-slate-800/60 hover:bg-slate-800/30 transition"

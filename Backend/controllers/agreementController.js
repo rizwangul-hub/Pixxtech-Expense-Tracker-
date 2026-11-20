@@ -373,10 +373,20 @@ export const updateAgreement = async (req, res) => {
       agreement.monthlyRent = Number(monthlyRent);
       if (Number(monthlyRent) !== oldMonthlyRent) {
         const currentMonthStr = new Date().toISOString().slice(0, 7);
-        await RentDue.updateMany(
-          { agreementId: agreement._id, rentMonth: { $gte: currentMonthStr }, paidAmount: { $lte: 0 } },
-          { $set: { expectedRentAmount: Number(monthlyRent), remainingAmount: Number(monthlyRent) } }
-        );
+        const currentDues = await RentDue.find({ agreementId: agreement._id, rentMonth: { $gte: currentMonthStr } });
+        for (const rd of currentDues) {
+          rd.expectedRentAmount = Number(monthlyRent);
+          const paid = rd.paidAmount || 0;
+          rd.remainingAmount = Math.max(0, Number(monthlyRent) - paid);
+          if (paid >= Number(monthlyRent)) {
+            rd.status = 'PAID';
+          } else if (paid > 0) {
+            rd.status = 'PARTIAL';
+          } else {
+            rd.status = 'OVERDUE';
+          }
+          await rd.save();
+        }
       }
     }
     if (previousRent !== undefined) agreement.previousRent = Number(previousRent);

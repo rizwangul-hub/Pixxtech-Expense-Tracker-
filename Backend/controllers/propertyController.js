@@ -623,10 +623,20 @@ export const updateUnit = async (req, res) => {
     if (agreedRent !== undefined) {
       unit.agreedRent = Math.max(0, Number(agreedRent) || 0);
       const currentMonthStr = new Date().toISOString().slice(0, 7);
-      await RentDue.updateMany(
-        { unitId: unit._id, rentMonth: { $gte: currentMonthStr }, paidAmount: { $lte: 0 } },
-        { $set: { expectedRentAmount: unit.agreedRent, remainingAmount: unit.agreedRent } }
-      );
+      const currentDues = await RentDue.find({ unitId: unit._id, rentMonth: { $gte: currentMonthStr } });
+      for (const rd of currentDues) {
+        rd.expectedRentAmount = unit.agreedRent;
+        const paid = rd.paidAmount || 0;
+        rd.remainingAmount = Math.max(0, unit.agreedRent - paid);
+        if (paid >= unit.agreedRent) {
+          rd.status = 'PAID';
+        } else if (paid > 0) {
+          rd.status = 'PARTIAL';
+        } else {
+          rd.status = 'OVERDUE';
+        }
+        await rd.save();
+      }
       await RentalAgreement.updateMany(
         { unitId: unit._id, status: 'ACTIVE' },
         { $set: { monthlyRent: unit.agreedRent } }
